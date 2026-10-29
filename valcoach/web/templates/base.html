@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}valcoach{% endblock %}</title>
+<style>
+:root{--bg:#0f1218;--panel:#171c25;--panel2:#11151c;--line:#262d3a;--text:#e8ebf0;--muted:#8a93a6;--red:#ff4655;--win:#35d0a0;--amber:#f2b84b;--blue:#5aa9ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--text)}
+nav.top{display:flex;align-items:center;gap:20px;padding:12px 24px;border-bottom:1px solid var(--line);background:#0c0f14;position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.brand{font-weight:800;letter-spacing:.08em;text-decoration:none;font-size:16px}.brand b{color:var(--red)}
+.ver{font-size:11px;font-weight:600;color:var(--muted);text-decoration:none;margin-left:-14px;position:relative;padding:2px 4px;border-radius:5px}
+.ver:hover{color:var(--text);background:#1d2330}.newdot{position:absolute;top:0;right:-4px;width:7px;height:7px;border-radius:50%;background:var(--red)}
+.navlinks{display:flex;gap:4px;flex-wrap:wrap;flex:1}.navlinks a{text-decoration:none;color:var(--muted);padding:5px 10px;border-radius:6px}
+.navlinks a:hover,.navlinks a.active{color:var(--text);background:#1d2330}.navlinks .spacer{flex:1}
+.navlinks a.navteams{display:inline-flex;align-items:center;gap:6px;color:var(--text);font-weight:600;border:1px solid #3a4458;background:#161b24}
+.navlinks a.navteams:hover,.navlinks a.navteams.active{border-color:var(--red);background:rgba(255,70,85,.12)}
+.navsep{width:1px;align-self:stretch;background:var(--line);margin:2px 6px}
+.page{max-width:1180px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:22px;margin:0 0 4px;letter-spacing:.02em}h1 .tag{color:var(--muted);font-weight:500}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 12px}
+.sub{color:var(--muted);margin:0 0 20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:18px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.row.between{justify-content:space-between}
+.muted{color:var(--muted)}.small{font-size:12px}
+.btn{display:inline-flex;align-items:center;gap:6px;background:#222938;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn:hover{border-color:#3a4458}.btn.primary{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent}.btn.danger{color:var(--red)}.btn.sm{padding:3px 9px;font-size:12px}
+table{border-collapse:collapse;width:100%}td,th{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.06em}tr:last-child td{border-bottom:0}
+.tablewrap{overflow-x:auto}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+.pill.done{background:rgba(53,208,160,.15);color:var(--win)}.pill.error{background:rgba(255,70,85,.15);color:var(--red)}
+.pill.running{background:rgba(90,169,255,.15);color:var(--blue)}.pill.queued{background:rgba(242,184,75,.15);color:var(--amber)}
+.res{font-weight:700}.res.W{color:var(--win)}.res.L{color:var(--red)}.res.D{color:var(--muted)}
+label{display:block;font-size:12px;color:var(--muted);margin:0 0 4px}
+input[type=text],input[type=password],input[type=number],select,textarea{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--red)}
+textarea{font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;min-height:120px;resize:vertical}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:720px){.grid2{grid-template-columns:1fr}}
+.field{margin-bottom:14px}.hint{font-size:12px;color:var(--muted);margin-top:4px}
+.flash{padding:10px 14px;border-radius:8px;margin-bottom:14px;border:1px solid var(--line)}
+.flash.ok{background:rgba(53,208,160,.08);border-color:rgba(53,208,160,.35)}.flash.error{background:rgba(255,70,85,.08);border-color:rgba(255,70,85,.4)}
+.banner{background:rgba(242,184,75,.08);border:1px solid rgba(242,184,75,.35);padding:10px 14px;border-radius:8px;margin-bottom:16px}
+.player{display:block;text-decoration:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;transition:border-color .15s}
+.player:hover{border-color:var(--red)}
+.sortable .player{position:relative;touch-action:pan-y}.sortable .player .grip{position:absolute;top:8px;right:8px;width:30px;height:30px;display:grid;place-items:center;border-radius:6px;color:var(--muted);cursor:grab;touch-action:none;user-select:none;font-size:16px;letter-spacing:-2px}
+.sortable .player .grip:hover,.sortable .player .grip:focus-visible{color:var(--text);background:#232a38;outline:none}
+.sortable .player.dragging{opacity:.9;border-color:var(--red);box-shadow:0 12px 32px rgba(0,0,0,.45);z-index:3;cursor:grabbing;pointer-events:none}
+.sortable .player.placeholder{border-style:dashed;border-color:var(--red);background:transparent}
+.sortable .player .pos{display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:6px;background:#232a38;color:var(--muted);font-size:12px;font-weight:700;margin-right:8px;vertical-align:2px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1f2633;border:1px solid var(--line);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}.toast.show{opacity:1}.player .name{font-size:17px;font-weight:700}.player.add{display:grid;place-items:center;color:var(--muted);border-style:dashed;min-height:96px}
+.choice{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;cursor:pointer;background:var(--panel2)}
+.choice:hover{border-color:#3a4458}.choice input{margin-top:3px;accent-color:var(--red)}.choice.suggest{border-color:rgba(53,208,160,.5)}
+.choice b{display:block}.choices{max-height:320px;overflow:auto;padding-right:4px}
+pre.log{background:#0b0e13;border:1px solid var(--line);border-radius:8px;padding:12px;font:12px/1.5 ui-monospace,Menlo,monospace;color:#b9c1d0;max-height:460px;overflow:auto;white-space:pre-wrap;margin:0}
+details summary{cursor:pointer;color:var(--muted)}
+.progress{height:6px;background:var(--panel2);border-radius:99px;overflow:hidden;margin-top:10px;display:none}.progress div{height:100%;width:0;background:var(--red);transition:width .2s}
+.empty{color:var(--muted);text-align:center;padding:24px}
+.linkbtn{background:none;border:0;color:var(--muted);font:inherit;cursor:pointer;padding:5px 10px;border-radius:6px}.linkbtn:hover{color:var(--text);background:#1d2330}
+@media(max-width:720px){.hide-sm{display:none}td,th{padding:7px 5px}.page{padding:18px 12px 48px}.btn.sm{padding:3px 7px}}
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="{{ url_for('index') if user else '#' }}">VAL<b>COACH</b> </a><a class="ver" href="{{ url_for('changelog') if user else '#' }}" title="What's new">v{{ app_version }}{% if new_version %}<span class="newdot"></span>{% endif %}</a>
+  {% if user %}
+  <div class="navlinks">
+    <a href="{{ url_for('teams') }}" class="navteams {{ 'active' if request.endpoint in ('teams', 'team', 'team_settings') }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2c3 .2 5.5 2.6 5.5 5.8"/></svg>Teams</a>
+    <span class="navsep"></span>
+    {% for np in nav_profiles %}<a href="{{ url_for('profile', pid=np.id) }}" data-pid="{{ np.id }}" class="{{ 'active' if active_pid == np.id }}">{{ np.name }}</a>{% endfor %}
+    <a href="{{ url_for('profile_new') }}" data-nav="new">+ Player</a>
+    <span class="spacer"></span>
+    {% if user.is_admin %}
+    <a href="{{ url_for('users') }}" class="{{ 'active' if request.endpoint in ('users', 'user_edit') }}">Users</a>
+    <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint == 'settings' }}">Settings</a>
+    {% endif %}
+    <a href="{{ url_for('account') }}" class="{{ 'active' if request.endpoint == 'account' }}">{{ user.username }}</a>
+    <form method="post" action="{{ url_for('logout') }}" style="display:inline"><button class="linkbtn">Log out</button></form>
+  </div>
+  {% endif %}
+</nav>
+<main class="page">
+  {% if user and not has_api_key and request.endpoint != 'settings' %}
+  <div class="banner">No HenrikDev API key yet. {% if user.is_admin %}<a href="{{ url_for('settings') }}">Add it in Settings</a> so matches can be loaded.{% else %}Ask the admin to add one so matches can be loaded.{% endif %}</div>
+  {% endif %}
+  {% if new_version and request.endpoint != 'changelog' %}
+  <div class="flash ok">valcoach was updated to <b>{{ app_version }}</b>. <a href="{{ url_for('changelog') }}">See what's new</a></div>
+  {% endif %}
+  {% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}{% endwith %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

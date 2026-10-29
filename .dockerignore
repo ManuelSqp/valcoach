@@ -1,0 +1,11 @@
+.venv/
+data/
+output/
+notes/
+tests/
+**/__pycache__/
+*.egg-info/
+.pytest_cache/
+*.mp4
+*.mkv
+config.toml

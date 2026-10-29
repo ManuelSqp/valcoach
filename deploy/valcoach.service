@@ -1,0 +1,39 @@
+# systemd service for valcoach (no Docker).
+#
+# Install:
+#   sudo cp deploy/valcoach.service /etc/systemd/system/valcoach.service
+#   sudo nano /etc/systemd/system/valcoach.service   # check User= and the paths below
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now valcoach
+# Logs:     journalctl -u valcoach -f
+# Restart:  sudo systemctl restart valcoach   (after an update or a "workers" change)
+
+[Unit]
+Description=valcoach - Valorant coach web app
+Wants=network-online.target
+After=network-online.target ollama.service
+
+[Service]
+Type=simple
+User=sysadmin
+Group=sysadmin
+WorkingDirectory=/home/sysadmin/valcoach-v2
+ExecStart=/home/sysadmin/valcoach-v2/.venv/bin/valcoach web --host 0.0.0.0 --port 10070 --data /home/sysadmin/valcoach-v2/data
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=5
+
+# Hardening: the app may only write to its data folder; everything else is read-only.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/sysadmin/valcoach-v2/data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

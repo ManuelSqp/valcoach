@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}{{ t.name }} · valcoach{% endblock %}
+{% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% block head %}
+<style>
+.ai{border-radius:50%;vertical-align:middle;background:#0b0e13;object-fit:cover;flex:none}
+.agentcell{display:flex;align-items:center;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 12px 5px 10px;text-decoration:none;font-size:13px}
+.chip:hover{border-color:#3a4458}.chip .k{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.chip.sub{border-style:dashed}.chip .warn{color:var(--amber)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--win)}.dot.thin{background:var(--amber)}.dot.none{background:var(--red)}.dot.run{background:var(--blue)}
+/* overview matrix */
+.matrix{width:100%;border-collapse:separate;border-spacing:0}
+.matrix th,.matrix td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:center}
+.matrix th:first-child,.matrix td:first-child{text-align:left;position:sticky;left:0;background:var(--panel);z-index:1}
+.matrix thead th{text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);font-weight:700}
+.matrix thead th a{text-decoration:none;display:block;padding:4px 8px;border-radius:6px}
+.matrix thead th a:hover{background:#1d2330}
+.matrix th.sel a{background:rgba(255,70,85,.12);color:#fff}
+.matrix td.sel{background:rgba(255,70,85,.05)}
+.cell{display:inline-flex;flex-direction:column;align-items:center;gap:3px;min-width:70px}
+.cell span{font-size:12px}.cell.low .ai{outline:2px dashed var(--amber);outline-offset:1px}
+.matrix tfoot td{font-size:12px;color:var(--muted);border-bottom:0}
+.matrix .who{font-weight:700;white-space:nowrap}
+.warnc{color:var(--amber)}
+/* map detail */
+.picks{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:14px 0}
+@media(max-width:900px){.picks{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.pick{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 10px;text-align:center}
+.pick .ai{display:block;margin:0 auto 6px}
+.pick .who{font-weight:700}.pick .ag{font-size:15px}.pick .num{font-size:12px;color:var(--muted)}
+.pick.low{border-style:dashed;border-color:rgba(242,184,75,.6)}
+.role{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.maptabs{display:flex;gap:4px;flex-wrap:wrap}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+
+{% if meta_error %}<div class="flash error">Map meta can't be read: {{ meta_error }}. Fix it under <a href="{{ url_for('team_settings', tid=t.id) }}">Members &amp; maps</a>.</div>{% endif %}
+
+{% if member_info %}
+<div class="chips" style="margin-bottom:18px">
+  {% for m in member_info %}
+  {% set running = m.status and m.status.status in ('queued', 'running') %}
+  <a class="chip {{ 'sub' if m.kind == 'sub' }}" href="{{ url_for('stats', pid=m.p.id) }}"
+     title="{{ m.games }} games ({{ m.full }} with round data)">
+    <span class="dot {{ 'run' if running else ('none' if not m.games else ('thin' if m.games < 20 else '')) }}"></span>
+    <b>{{ m.p.name }}</b>{% if m.me %} <span class="k" style="color:var(--win)">you</span>{% elif m.user %} <span class="k" title="linked account">· {{ m.user.username }}</span>{% endif %}
+    <span class="k">{{ 'sub' if m.kind == 'sub' else 'starter' }}</span>
+    <span class="muted">{% if running %}importing…{% elif m.games %}{{ m.games }} games{% else %}<span class="warn">no games</span>{% endif %}</span>
+  </a>
+  {% endfor %}
+  <span class="muted small" style="align-self:center">comps from {{ dict(queues)[t.queue] }} games</span>
+  <form method="post" action="{{ url_for('team_me', tid=t.id) }}" class="row" style="gap:6px;margin-left:auto">
+    <label for="me" class="small" style="margin:0">{{ 'You are' if linked else 'Which one is you?' }}</label>
+    <select id="me" name="pid" onchange="this.form.submit()" style="width:auto;padding:4px 8px">
+      <option value="">{{ '—' if not linked else 'not me / unlink' }}</option>
+      {% for m in member_info %}{% if not m.user or m.me %}<option value="{{ m.p.id }}" {{ 'selected' if m.me }}>{{ m.p.name }}</option>{% endif %}{% endfor %}
+    </select></form>
+</div>
+{% endif %}
+
+{% if n_starters != 5 %}
+<section class="card">
+  <h2>Almost there</h2>
+  <p>A team needs exactly 5 starters for comps (now {{ n_starters }}{% if n_subs %}, plus {{ n_subs }} sub{{ 's' if n_subs != 1 }}{% endif %}).</p>
+  <a class="btn primary" href="{{ url_for('team_settings', tid=t.id) }}">Choose members &amp; maps</a>
+</section>
+{% elif plan %}
+
+<section class="card">
+  <div class="row between" style="margin-bottom:6px"><h2 style="margin:0">Comps at a glance</h2>
+    <span class="muted small">click a map for the details · <span class="warnc">dashed</span> = little data</span></div>
+  <div class="tablewrap"><table class="matrix">
+    <thead><tr><th></th>
+      {% for m in plan %}<th class="{{ 'sel' if m.map == sel }}"><a href="{{ url_for('team', tid=t.id, map=m.map) }}#detail">{{ m.map }}</a></th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for name in starters %}{% set i = loop.index0 %}
+      <tr><td class="who">{{ name }}</td>
+        {% for m in plan %}<td class="{{ 'sel' if m.map == sel }}">
+          {% if m.main.ok %}{% set pk = m.main.picks[i] %}
+          <span class="cell {{ 'low' if pk.low_sample }}" title="{{ pk.agent }} · {{ pk.n_map }} games here{% if pk.wr_map is not none %}, {{ pk.wr_map|pct }} won{% endif %} · {{ pk.n_all }} overall">{{ ai(pk.agent, 30) }}<span>{{ pk.agent }}</span></span>
+          {% else %}<span class="muted">–</span>{% endif %}
+        </td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td>Roles</td>
+      {% for m in plan %}<td class="{{ 'sel' if m.map == sel }}">{% if m.main.ok %}{{ m.main.pattern }}{% if m.main.missing_roles %}<br><span class="warnc">missing {{ m.main.missing_roles|join(', ') }}</span>{% endif %}{% else %}<span class="warnc">no data</span>{% endif %}</td>{% endfor %}</tr></tfoot>
+  </table></div>
+</section>
+
+{% if detail %}{% set m = detail %}
+<section class="card" id="detail">
+  <div class="row between">
+    <div class="maptabs">{% for x in plan %}<a class="btn sm {{ 'primary' if x.map == sel else 'ghost' }}" href="{{ url_for('team', tid=t.id, map=x.map) }}#detail">{{ x.map }}</a>{% endfor %}</div>
+    {% if m.main.ok %}<span class="muted small">{{ m.main.pattern }}{% if m.meta and m.meta.roles %} · role mix from your meta{% endif %}</span>{% endif %}
+  </div>
+  {% if not m.main.ok %}
+    <p class="warnc" style="margin-top:12px">{% if m.main.no_data %}No games for {{ m.main.no_data|join(', ') }} yet. Update their stats.{% else %}{{ m.main.reason }}{% endif %}</p>
+  {% else %}
+  <div class="picks">
+    {% for pk in m.main.picks %}
+    <div class="pick {{ 'low' if pk.low_sample }}">
+      {{ ai(pk.agent, 48) }}
+      <div class="ag">{{ pk.agent }}</div><div class="role">{{ pk.role }}</div>
+      <div class="who" style="margin-top:6px">{{ pk.player }}</div>
+      <div class="num">{% if pk.n_map %}{{ pk.n_map }} here · {{ pk.wr_map|pct }} won · ACS {{ pk.acs_map|num }}{% else %}not played here yet{% endif %}</div>
+      <div class="num">{{ pk.n_all }} games on it overall{% if pk.wr_all is not none %} · {{ pk.wr_all|pct }}{% endif %}</div>
+      {% if pk.why %}<div class="num">{{ pk.why|join(', ') }}</div>{% endif %}
+      {% if pk.alternatives %}<div class="num" style="margin-top:4px">or {{ pk.alternatives|join(', ') }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% if m.main.missing_roles %}<p class="warnc">Missing {{ m.main.missing_roles|join(', ') }}: nobody in the lineup plays {{ 'one' if m.main.missing_roles|length == 1 else 'them' }} yet. Worth practicing for this map.</p>{% endif %}
+
+  {% if alts %}
+  <h2 style="margin-top:18px">Other options</h2>
+  {% for c in alts if c.ok %}<div class="row" style="gap:12px;margin-bottom:6px;font-size:13px"><b class="muted">{{ loop.index + 1 }}.</b>
+    {% for pk in c.picks %}<span class="agentcell">{{ ai(pk.agent, 22) }}{{ pk.agent }} <span class="muted">{{ pk.player }}</span></span>{% endfor %}<span class="muted">{{ c.pattern }}</span></div>{% endfor %}
+  {% endif %}
+  <h2 style="margin-top:18px">If someone is missing</h2>
+  {% if m.fills %}
+  <div class="tablewrap"><table>
+    <tr><th>Out</th><th>In</th><th>Other changes</th><th class="hide-sm">Comp</th></tr>
+    {% for f in m.fills %}
+    <tr><td>{{ f.out }}</td><td><span class="agentcell">{{ ai(f.sub_agent, 22) }}<b>{{ f.sub }}</b> on {{ f.sub_agent }}</span></td>
+      <td class="small">{{ f.changes|join('; ') if f.changes else 'none' }}</td>
+      <td class="hide-sm"><span class="agentcell">{% for pk in f.comp.picks %}<span title="{{ pk.player }}: {{ pk.agent }}">{{ ai(pk.agent, 22) }}</span>{% endfor %}</span></td></tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="muted small">Add substitutes under <a href="{{ url_for('team_settings', tid=t.id) }}">Members &amp; maps</a> to see who fills in.</p>{% endif %}
+
+  {% if m.local and m.local.games >= 5 %}
+  <h2 style="margin-top:18px">Played at your level <span class="muted" style="text-transform:none;letter-spacing:0">({{ m.local.games }} matches)</span></h2>
+  <div class="row" style="gap:14px">{% for a in m.local.agents[:8] %}<span class="agentcell small">{{ ai(a.agent, 22) }}{{ a.agent }} <span class="muted">{{ a.share|pct }}</span></span>{% endfor %}</div>
+  {% if m.local.patterns %}<p class="muted small" style="margin:8px 0 0">Most common role mix: {{ m.local.patterns[0].pattern }} ({{ m.local.patterns[0].n }}×, {{ m.local.patterns[0].wr|pct }} won)</p>{% endif %}
+  {% endif %}
+  {% endif %}
+</section>
+{% endif %}
+
+<p class="muted small">How picks are chosen: each player's win rate and ACS with the agent on that map (pulled towards their overall numbers when there are few games),
+  how many games they have on it at all, how often it's played at your level, and your map meta. Every comp needs a Controller, an Initiator and a Sentinel unless your meta sets a role mix.</p>
+{% else %}
+<section class="card"><p class="muted">No maps yet: choose a map pool under <a href="{{ url_for('team_settings', tid=t.id) }}">Members &amp; maps</a>, or update everyone's stats.</p></section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}{{ p.riot_id }} · valcoach{% endblock %}
+{% block content %}
+<div class="row between" style="margin-bottom:18px">
+  <div><h1>{{ p.name }}<span class="tag">#{{ p.tag }}</span></h1>
+    <div class="muted">{{ p.region|upper }} · default coaching: {{ p.mode|mode_label }} · {{ p.language }}{% if p.playbook.strip() %} · playbook set{% else %} · no playbook yet{% endif %}</div></div>
+  <div class="row"><a class="btn primary" href="{{ url_for('stats', pid=p.id) }}">Stats &amp; agents</a>
+  <a class="btn" href="{{ url_for('profile_edit', pid=p.id) }}">Edit player / playbook</a></div>
+</div>
+
+<section class="card">
+  <div class="row between" style="margin-bottom:12px">
+    <div class="row" style="gap:4px">
+      <a class="btn sm {{ 'primary' if source == 'recent' else 'ghost' }}" href="{{ url_for('profile', pid=p.id, queue=queue) }}">Recent matches</a>
+      <a class="btn sm {{ 'primary' if source == 'stored' else 'ghost' }}" href="{{ url_for('profile', pid=p.id, queue=queue, source='stored') }}"
+         title="HenrikDev's stored archive: goes further back, summaries only, may have gaps">Older history</a>
+    </div>
+    <form class="row" method="get">
+      {% if source == 'stored' %}<input type="hidden" name="source" value="stored">{% endif %}
+      <select name="queue" onchange="this.form.submit()" style="width:auto">
+        {% for val, label in queues %}<option value="{{ val }}" {{ 'selected' if queue == val }}>{{ label }}</option>{% endfor %}
+      </select>
+      <button class="btn sm" name="refresh" value="1">Refresh</button>
+    </form>
+  </div>
+  {% if source == 'stored' %}<p class="hint" style="margin-top:-4px">From HenrikDev's stored archive{% if total %} ({{ total }} matches){% endif %}. Very old matches may no longer have full round data at Riot; coaching them can fail.</p>{% endif %}
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  {% if rows %}
+  <div class="tablewrap"><table>
+    <tr><th>Date</th><th class="hide-sm">Queue</th><th>Map</th><th class="hide-sm">Agent</th><th>Score</th><th class="hide-sm">K/D/A</th><th></th></tr>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.started_at|localtime }}</td>
+      <td class="muted hide-sm">{{ r.queue }}</td>
+      <td>{{ r.map }}</td>
+      <td class="hide-sm">{{ r.agent }}</td>
+      <td style="white-space:nowrap"><span class="res {{ r.result }}">{{ r.result }}</span> {{ r.score }}</td>
+      <td class="hide-sm">{{ r.kda }}</td>
+      <td style="text-align:right;white-space:nowrap">
+        {% if r.get('coachable', True) %}
+        <a class="btn sm ghost hide-sm" href="{{ url_for('notes', pid=p.id, match_id=r.match_id) }}">{{ 'Notes ✓' if r.match_id in noted else 'Notes' }}</a>
+        {% if r.match_id in latest_done %}
+        <a class="btn sm" href="{{ url_for('job_report', jid=latest_done[r.match_id].id) }}" target="_blank">Report</a>
+        {% endif %}
+        <a class="btn sm primary" href="{{ url_for('coach', pid=p.id, match_id=r.match_id) }}">Coach</a>
+        {% else %}
+        <span class="muted small" title="Deathmatch, Team Deathmatch and similar modes have no rounds to coach">not coachable</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% elif not error %}
+  <div class="empty">{% if source == 'recent' and page > 0 %}No older matches in the recent history. Try <a href="{{ url_for('profile', pid=p.id, queue=queue, source='stored') }}">Older history</a>.{% else %}No matches found for this queue.{% endif %}</div>
+  {% endif %}
+  {% set first = 0 if source == 'recent' else 1 %}
+  {% if page > first or has_older %}
+  <div class="row between" style="margin-top:12px">
+    <div>{% if page > first %}<a class="btn sm" href="{{ url_for('profile', pid=p.id, queue=queue, source=source if source == 'stored' else None, page=page - 1) }}">← Newer</a>{% endif %}</div>
+    <span class="muted small">Page {{ page - first + 1 }}</span>
+    <div>{% if has_older %}<a class="btn sm" href="{{ url_for('profile', pid=p.id, queue=queue, source=source if source == 'stored' else None, page=page + 1) }}">Older →</a>
+      {% elif source == 'recent' %}<a class="btn sm ghost" href="{{ url_for('profile', pid=p.id, queue=queue, source='stored') }}">Older history →</a>{% endif %}</div>
+  </div>
+  {% endif %}
+  <form class="row" method="get" action="{{ url_for('profile_open', pid=p.id) }}" style="margin-top:14px">
+    <input type="text" name="match_id" placeholder="…or paste a match ID" style="max-width:360px">
+    <button class="btn sm">Open</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Reports</h2>
+  {% if jobs %}
+  <div class="tablewrap"><table>
+    <tr><th>Match</th><th>Score</th><th class="hide-sm">Mode</th><th class="hide-sm">VOD</th><th>Status</th><th class="hide-sm">Created</th><th></th></tr>
+    {% for j in jobs %}
+    <tr>
+      <td>{{ j.map or '…' }} <span class="muted small">{{ j.started_at_match|localtime }}</span></td>
+      <td>{{ j.score }}</td>
+      <td class="hide-sm">{{ j.mode|mode_label }}{% if j.opts.no_llm %} <span class="muted small">(facts only)</span>{% endif %}</td>
+      <td class="muted small hide-sm">{{ j.vod_name or '—' }}</td>
+      <td><span class="pill {{ j.status }}">{{ j.status }}</span></td>
+      <td class="muted small hide-sm">{{ j.created_at|localtime }}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <a class="btn sm hide-sm" href="{{ url_for('job', jid=j.id) }}">Details</a>
+        {% if j.status == 'done' %}<a class="btn sm primary" href="{{ url_for('job_report', jid=j.id) }}" target="_blank">Open report</a>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}
+  <div class="empty">No reports for {{ p.name }} yet.</div>
+  {% endif %}
+</section>
+{% endblock %}

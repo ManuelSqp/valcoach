@@ -1,0 +1,41 @@
+# Team playbook. Copy to knowledge/playbook.yaml and fill in.
+# The coach judges every round against this, so the more concrete, the better.
+# Only the current map's section is sent to the model, plus everything outside `maps`.
+
+team: "Your Premier team name"
+roles:
+  adv1ce: "IGL / initiator"
+  teammate2: "duelist (entry)"
+  teammate3: "controller"
+  teammate4: "sentinel"
+  teammate5: "flex"
+
+principles:
+  - "Trade every entry: second player is within 1-2 s of the entry."
+  - "No dry peeks on defense in the first 20 s; play for info and utility."
+  - "Don't give up first death on attack before utility is used."
+  - "After a man advantage on attack: slow down, group, take space with utility."
+
+economy:
+  - "Pistol won: bonus round with spectres/sheriffs + armor, then full buy."
+  - "Pistol lost: full save round 2 unless we got 2+ kills and the plant."
+  - "Never force when team credits < 15000 and next round can be a full buy."
+  - "Last round of the half: force everything."
+
+maps:
+  Ascent:
+    attack_defaults:
+      - "Default: 2 A main, 1 mid, 2 B main; lurk mid with Sova recon at 0:20."
+    executes:
+      - name: "A split"
+        how: "Controller smokes heaven + tree, 2 from A main, 2 through mid catwalk, flash at 0:45"
+      - name: "B fast"
+        how: "All 5 B main, Sova dart lobby, flash market, plant default"
+    defense:
+      setup: "2 A (gen + heaven), 1 mid (market), 2 B (boat + site)"
+      retake_rules: "Retake A from heaven + CT together, never one by one"
+    notes: "Opponents often stack B on pistols"
+  Bind:
+    attack_defaults: []
+    executes: []
+    defense: {}

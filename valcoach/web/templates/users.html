@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Users · valcoach{% endblock %}
+{% block content %}
+<h1>Users</h1>
+<p class="sub">Every user has a private workspace. Admins also manage users and the server settings.
+  Sign-up is <b style="color:var(--text)">{{ 'on' if signup_enabled else 'off' }}</b> (<a href="{{ url_for('settings') }}">change</a>).</p>
+
+<section class="card">
+  <div class="tablewrap"><table>
+    <tr><th>User</th><th>Role</th><th class="hide-sm">Players</th><th class="hide-sm">Reports</th><th class="hide-sm">Recordings folder</th><th class="hide-sm">Last login</th><th></th></tr>
+    {% for u in users %}
+    <tr>
+      <td><b>{{ u.username }}</b>{% if u.display_name %} <span class="muted small">{{ u.display_name }}</span>{% endif %}{% if u.id == user.id %} <span class="muted small">(you)</span>{% endif %}</td>
+      <td>{% if u.disabled %}<span class="pill error">disabled</span>{% elif u.is_admin %}<span class="pill running">admin</span>{% else %}<span class="muted">user</span>{% endif %}</td>
+      <td class="hide-sm">{{ usage.get(u.id, {}).get('profiles', 0) }}</td>
+      <td class="hide-sm">{{ usage.get(u.id, {}).get('jobs', 0) }}</td>
+      <td class="muted small hide-sm">{{ u.vod_dir or '— (uploads only)' }}</td>
+      <td class="muted small hide-sm">{{ u.last_login|localtime or 'never' }}</td>
+      <td style="text-align:right"><a class="btn sm" href="{{ url_for('user_edit', uid=u.id) }}">Edit</a></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+</section>
+
+<form method="post" class="card" autocomplete="off">
+  <h2>Add user</h2>
+  <div class="grid2">
+    <div class="field"><label>Username</label><input type="text" name="username" required pattern="[A-Za-z0-9._\-]{3,32}" title="3–32 letters, digits, . _ -" autocapitalize="none"></div>
+    <div class="field"><label>In-game name <span class="muted">(optional)</span></label><input type="text" name="display_name" placeholder="Name#TAG" maxlength="40">
+    <div class="hint">What teammates see, e.g. <code>adv1ce#LFT</code>. If it matches a player in a team you're added to, you're linked to it.</div></div>
+    <div class="field"><label>Initial password</label><input type="text" name="password" required minlength="{{ min_password }}" autocomplete="off">
+      <div class="hint">Give it to them; they can change it under their account.</div></div>
+    <div class="field"><label>Recordings folder on this server (optional)</label><input type="text" name="vod_dir" placeholder="/Volumes/recordings/teammate">
+      <div class="hint">Their VODs are listed from here. Without it they upload VODs instead.</div></div>
+    <div class="field"><label>&nbsp;</label><label class="choice"><input type="checkbox" name="is_admin" value="1"><span><b>Admin</b><span class="muted small">Can manage users and server settings.</span></span></label></div>
+  </div>
+  <button class="btn primary" type="submit">Add user</button>
+</form>
+{% endblock %}

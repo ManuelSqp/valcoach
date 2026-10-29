@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Teams · valcoach{% endblock %}
+{% block content %}
+<h1>Teams</h1>
+<p class="sub">Comps per map from everyone's stats, who fills in when someone's missing, and team roles.</p>
+<div class="grid" style="margin-bottom:24px">
+  {% for t in teams %}
+  <a class="player" href="{{ url_for('team', tid=t.id) }}">
+    <div class="name">{{ t.name }}{% if t.premier_info.tag %} <span class="muted">#{{ t.premier_info.tag }}</span>{% endif %}</div>
+    <div class="muted small">{{ t.member_list|selectattr('kind', 'equalto', 'starter')|list|length }} starters ·
+      {{ t.member_list|selectattr('kind', 'equalto', 'sub')|list|length }} subs{% if t.premier_info.tag %} · Premier {{ t.premier_info.region|upper }}{% endif %}</div>
+  </a>
+  {% endfor %}
+</div>
+<div class="grid2">
+  <section class="card">
+    <h2>From your Premier team</h2>
+    <p class="small muted" style="margin-top:-4px">Loads the roster from HenrikDev, adds every player, picks the starters from who played the
+      latest Premier matches and imports everyone's stats in the background.</p>
+    <form method="post" class="row" style="align-items:flex-end;flex-wrap:wrap">
+      <div style="flex:2;min-width:180px"><label>Premier team</label><input type="text" name="premier_name" placeholder="Team name#TAG" required></div>
+      <div style="flex:1;min-width:90px"><label>Region</label><select name="premier_region">
+        {% for r in ('eu', 'na', 'ap', 'kr', 'latam', 'br') %}<option value="{{ r }}">{{ r|upper }}</option>{% endfor %}</select></div>
+      <button class="btn primary">Load team</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Or by hand</h2>
+    <p class="small muted" style="margin-top:-4px">For a team that isn't a Premier team (scrims, 5-stack ranked). You choose the players yourself.</p>
+    <form method="post" class="row" style="align-items:flex-end">
+      <div style="flex:1"><label>Team name</label><input type="text" name="name" maxlength="60" required></div>
+      <button class="btn">Create</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

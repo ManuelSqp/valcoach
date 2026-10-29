@@ -1,0 +1,45 @@
+<div class="row between" style="margin-bottom:6px">
+  <div><div class="muted small"><a href="{{ url_for('teams') }}">Teams</a> ›</div>
+    <h1>{{ t.name }}</h1></div>
+  <div class="row">
+    {% if g.team_owner %}{% if t.premier_info.tag %}<form method="post" action="{{ url_for('team_premier_sync', tid=t.id) }}"><button class="btn ghost" title="Reload the roster from Premier">Sync Premier roster</button></form>{% endif %}
+    <form method="post" action="{{ url_for('team_import', tid=t.id) }}"><button class="btn">Update everyone's stats</button></form>
+    {% else %}<span class="muted small">shared with you by the team owner</span>{% endif %}
+    {% set sy = t.sync_info %}{% if sy.nightly %}<span class="muted small" title="{% if sy.last_at %}last automatic sync {{ sy.last_at|epoch }}{% else %}hasn't run yet{% endif %}">⟳ syncs nightly {{ '%02d' % sy.hour|int }}:00</span>{% endif %}
+  </div>
+</div>
+{% if t.premier_info.tag %}<div class="muted small" style="margin-top:-2px">Premier {{ t.premier_info.name }}#{{ t.premier_info.tag }} · {{ t.premier_info.region|upper }}{% if t.premier_info.placement and t.premier_info.placement.division is defined %} · division {{ t.premier_info.placement.division }}, {{ t.premier_info.placement.points }} points{% endif %}{% if t.premier_info.stats and t.premier_info.stats.matches %} · {{ t.premier_info.stats.wins }}–{{ t.premier_info.stats.losses }}{% endif %}</div>{% endif %}
+{% if premier_status and premier_status.status in ('queued', 'running', 'error') %}
+<div class="card" style="margin-top:12px" data-key="premier:{{ t.id }}" data-state="{{ premier_status.status }}">
+  <span class="pill {{ 'running' if premier_status.status != 'error' else 'error' }}">{{ 'loading Premier team' if premier_status.status != 'error' else 'Premier lookup failed' }}</span>
+  <pre class="log" style="margin-top:8px">{{ premier_status.log|join('\n') }}</pre>
+</div>
+<script>
+(function () {
+  const el = document.querySelector('[data-key^="premier:"]');
+  if (!el || !['queued', 'running'].includes(el.dataset.state)) return;
+  const tick = async () => {
+    try {
+      const s = await (await fetch('{{ url_for("stats_status") }}?key=' + encodeURIComponent(el.dataset.key))).json();
+      if (s.log) el.querySelector('pre').textContent = s.log.join('\n');
+      if (s.status === 'done' || s.status === 'error') { location.reload(); return; }
+    } catch (e) {}
+    setTimeout(tick, 2000);
+  };
+  setTimeout(tick, 1200);
+})();
+</script>
+{% endif %}
+<div class="tabs" style="display:flex;gap:4px;margin:10px 0 18px;border-bottom:1px solid var(--line)">
+  <a class="ttab {{ 'on' if tab == 'comps' }}" href="{{ url_for('team', tid=t.id) }}">Comps</a>
+  <a class="ttab {{ 'on' if tab == 'plans' }}" href="{{ url_for('team_plans', tid=t.id) }}">Game plans</a>
+  <a class="ttab {{ 'on' if tab == 'strats' }}" href="{{ url_for('team_strats', tid=t.id) }}">Strat book</a>
+  <a class="ttab {{ 'on' if tab == 'focus' }}" href="{{ url_for('team_focus', tid=t.id) }}">Weekly focus</a>
+  <a class="ttab {{ 'on' if tab == 'roles' }}" href="{{ url_for('team_roles_page', tid=t.id) }}">Roles</a>
+  <a class="ttab {{ 'on' if tab == 'notes' }}" href="{{ url_for('team_notes', tid=t.id) }}">Notes</a>
+  {% if g.team_owner %}<a class="ttab {{ 'on' if tab == 'settings' }}" href="{{ url_for('team_settings', tid=t.id) }}">Members, maps &amp; Discord</a>{% endif %}
+</div>
+<style>
+.ttab{padding:8px 14px;text-decoration:none;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:600}
+.ttab:hover{color:var(--text)}.ttab.on{color:var(--text);border-bottom-color:var(--red)}
+</style>

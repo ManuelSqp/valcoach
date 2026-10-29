@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Strat book · {{ t.name }} · valcoach{% endblock %}
+{% block head %}
+<style>
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.scard{display:block;text-decoration:none;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.scard:hover{border-color:var(--red)}.scard b{font-size:15px}
+.side{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}.side.attack{color:var(--red)}.side.defense{color:var(--blue)}
+.mapblock{margin-bottom:18px}.mapblock h3{margin:0 0 8px}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+<section class="card">
+  <h2>New strat</h2>
+  <form method="post" class="row" style="align-items:flex-end;flex-wrap:wrap">
+    <div style="flex:2;min-width:200px"><label>Name</label><input type="text" name="name" maxlength="80" placeholder="e.g. B split with mid lurk"></div>
+    <div><label>Map</label><select name="map">{% for m in maps %}<option {{ 'selected' if m == sel }}>{{ m }}</option>{% endfor %}</select></div>
+    <div><label>Side</label><select name="side"><option value="attack">Attack</option><option value="defense">Defense</option></select></div>
+    <button class="btn primary">Create &amp; draw</button>
+  </form>
+  <p class="hint">Everyone in the team can open and change strats. On the <a href="{{ url_for('team_plans', tid=t.id) }}">Game plans</a> tab, <i>Draw it</i> turns a plan into a strat with its steps as notes.</p>
+</section>
+{% for m, ss in by_map|dictsort %}
+<div class="mapblock" id="map-{{ m }}">
+  <h3>{{ m }} <span class="muted small">{{ ss|length }}</span></h3>
+  <div class="sgrid">{% for s in ss %}
+    <a class="scard" href="{{ url_for('strat_edit', tid=t.id, sid=s.id) }}">
+      <div class="side {{ s.side }}">{{ s.side }}</div><b>{{ s.name }}</b>
+      <div class="muted small">changed {{ s.updated_at|localtime }}{% if s.author %} by {{ s.author }}{% endif %}</div></a>
+  {% endfor %}</div>
+</div>
+{% else %}
+<section class="card"><p class="muted">No strats yet. Create one above: drag agents and their abilities onto the map, draw arrows and walls, and split the play into steps.</p></section>
+{% endfor %}
+{% endblock %}

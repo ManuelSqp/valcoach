@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Settings · valcoach{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+<p class="muted small" style="margin:0 0 4px">valcoach {{ app_version }}</p>
+<p class="sub">Server-wide settings, shared by all users. Only admins see this page.</p>
+<form method="post" autocomplete="off">
+
+<section class="card">
+  <h2>HenrikDev API</h2>
+  <div class="field">
+    <label>API key {% if key_set %}<span style="color:var(--win)">✓ set ({{ key_hint }})</span>{% endif %}</label>
+    <input type="password" name="henrik_api_key" placeholder="{{ 'Leave empty to keep the current key' if key_set else 'HDEV-…' }}">
+    <div class="hint">Get one instantly in the HenrikDev Discord: verify, go to <b>#get-a-key</b>, choose <b>VALORANT (Basic Key)</b>.</div>
+    {% if key_set %}<label class="choice" style="margin-top:8px"><input type="checkbox" name="clear_api_key" value="1"><span>Remove the key</span></label>{% endif %}
+  </div>
+  <details><summary>Advanced</summary>
+    <div class="field" style="margin-top:10px"><label>API base URL</label><input type="text" name="henrik_base_url" value="{{ s.henrik_base_url }}"></div>
+  </details>
+</section>
+
+<section class="card">
+  <h2>Ollama</h2>
+  {% if ollama_error %}<div class="flash error">Ollama is not reachable at {{ s.ollama_url }}: {{ ollama_error }}</div>
+  {% else %}<div class="flash ok">Ollama is reachable · {{ models|length }} model{{ '' if models|length == 1 else 's' }} installed</div>{% endif %}
+  <div class="grid2">
+    <div class="field"><label>Ollama URL</label><input type="text" name="ollama_url" value="{{ s.ollama_url }}"></div>
+    <div class="field"><label>Model</label>
+      <input type="text" name="ollama_model" value="{{ s.ollama_model }}" list="models">
+      <datalist id="models">{% for m in models %}<option value="{{ m }}">{% endfor %}</datalist>
+      {% if models and s.ollama_model not in models %}<div class="hint" style="color:var(--amber)">This model is not installed: <code>ollama pull {{ s.ollama_model }}</code></div>{% endif %}</div>
+    <div class="field"><label>Temperature</label><input type="number" step="0.05" name="ollama_temperature" value="{{ s.ollama_temperature }}"></div>
+    <div class="field"><label>Context size (num_ctx)</label><input type="number" name="ollama_num_ctx" value="{{ s.ollama_num_ctx }}"></div>
+    <div class="field"><label>Rounds coached in parallel</label><input type="number" name="ollama_parallel" value="{{ s.ollama_parallel }}" min="1">
+      <div class="hint">Keep at or below OLLAMA_NUM_PARALLEL.</div></div>
+    <div class="field"><label>Timeout per request (s)</label><input type="number" name="ollama_timeout_s" value="{{ s.ollama_timeout_s }}"></div>
+    <div class="field"><label>Reasoning ("thinking")</label>
+      <select name="ollama_think">
+        <option value="off" {{ 'selected' if s.ollama_think == 'off' }}>Off (fast, recommended)</option>
+        <option value="on" {{ 'selected' if s.ollama_think == 'on' }}>On (slower, may be more thorough)</option>
+        <option value="" {{ 'selected' if s.ollama_think == '' }}>Model default (don't send the setting)</option>
+      </select>
+      <div class="hint">For reasoning models such as Qwen 3.8 and Gemma 4. If a model rejects this setting, choose "Model default".</div></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Video analysis</h2>
+  <p class="hint" style="margin-top:-6px">Each user's recordings folder is set under <a href="{{ url_for('users') }}">Users</a>.</p>
+  <div class="grid2">
+    <div class="field"><label>Minimap area (x, y, width, height)</label><input type="text" name="minimap_roi" value="{{ s.minimap_roi }}">
+      <div class="hint">Fractions of the frame. The default fits 1920×1080 with the minimap top-left at default size.</div></div>
+    <div class="field"><label>Kill-feed area (x, y, width, height)</label><input type="text" name="killfeed_roi" value="{{ s.killfeed_roi }}"></div>
+    <div class="field"><label>Minimap samples per second</label><input type="number" step="0.5" name="sample_fps" value="{{ s.sample_fps }}"></div>
+  </div>
+</section>
+
+<section class="card" id="pros">
+  <h2>Pro players &amp; videos</h2>
+  <div class="field">
+    <label>YouTube Data API key (optional) {% if yt_hint %}<span style="color:var(--win)">✓ set ({{ yt_hint }})</span>{% endif %}</label>
+    <input type="password" name="youtube_api_key" placeholder="{{ 'Leave empty to keep the current key' if yt_hint else 'AIza…' }}">
+    <div class="hint">Without a key the <i>Pro &amp; videos</i> page shows YouTube search links. With one it shows the videos themselves
+      (Google Cloud console → enable <b>YouTube Data API v3</b> → Credentials → API key; free quota ≈ 100 searches a day, results are cached for a day).</div>
+    {% if yt_hint %}<label class="choice" style="margin-top:8px"><input type="checkbox" name="clear_youtube_key" value="1"><span>Remove the key</span></label>{% endif %}
+  </div>
+  <div class="field">
+    <label>Pro players to compare with {% if pros_custom %}<span class="muted">(edited)</span>{% else %}<span class="muted">(built-in list)</span>{% endif %}</label>
+    <textarea name="pros_yaml" rows="14">{{ pros_text }}</textarea>
+    <div class="hint">Rosters change: remove who's no longer relevant and add who you like. Style values are 0–1, relative to other pros.</div>
+    {% if pros_custom %}<label class="choice" style="margin-top:8px"><input type="checkbox" name="reset_pros" value="1"><span>Reset to the built-in list</span></label>{% endif %}
+  </div>
+</section>
+
+<section class="card">
+  <h2>Server</h2>
+  <div class="grid2">
+    <div class="field"><label>Coaching jobs at the same time</label><input type="number" name="workers" value="{{ s.workers }}" min="1" max="8">
+      <div class="hint">Currently running with {{ running_workers }}. Other jobs wait in a queue. 1 is best on one machine; changes apply after a restart.</div></div>
+    <div class="field"><label>Max reports per user at once</label><input type="number" name="max_jobs_per_user" value="{{ s.max_jobs_per_user }}" min="1" max="50">
+      <div class="hint">Queued + running. Stops one user from filling the shared queue.</div></div>
+    <div class="field"><label>Max VOD upload size (GB)</label><input type="number" step="0.5" name="max_upload_gb" value="{{ s.max_upload_gb }}" min="0.1" max="64">
+      <div class="hint">Uploads are also refused if less than 1 GB of disk would stay free.</div></div>
+  </div>
+  <label class="choice"><input type="checkbox" name="allow_signup" value="1" {{ 'checked' if s.allow_signup == '1' }}>
+    <span><b>Allow sign-up</b><span class="muted small">Anyone who can reach this page can create an account (as a normal user). Off: only admins create accounts under Users.</span></span></label>
+</section>
+
+<button class="btn primary" type="submit">Save settings</button>
+</form>
+{% endblock %}

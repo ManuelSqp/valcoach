@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit ' ~ profile.riot_id if profile else 'Add player' }} · valcoach{% endblock %}
+{% block content %}
+<h1>{{ 'Edit ' ~ profile.riot_id if profile else 'Add player' }}</h1>
+<p class="sub">The Riot ID is used to load this player's matches from the HenrikDev API.</p>
+<form method="post" class="card">
+  <div class="grid2">
+    <div class="field"><label>Riot name</label><input type="text" name="name" value="{{ v.name }}" placeholder="adv1ce" required autofocus></div>
+    <div class="field"><label>Tag (without #)</label><input type="text" name="tag" value="{{ v.tag }}" placeholder="LFT" required></div>
+    <div class="field"><label>Region</label>
+      <select name="region">{% for r in regions %}<option value="{{ r }}" {{ 'selected' if v.region == r }}>{{ r|upper }}</option>{% endfor %}</select>
+      <div class="hint">Switzerland / Europe = EU</div></div>
+    <div class="field"><label>Platform</label>
+      <select name="platform">{% for pl in platforms %}<option value="{{ pl }}" {{ 'selected' if v.platform == pl }}>{{ pl|upper }}</option>{% endfor %}</select></div>
+    <div class="field"><label>Default coaching</label>
+      <select name="mode">
+        <option value="both" {{ 'selected' if v.mode == 'both' }}>Team + me</option>
+        <option value="team" {{ 'selected' if v.mode == 'team' }}>Team / IGL only</option>
+        <option value="player" {{ 'selected' if v.mode == 'player' }}>Only me</option>
+      </select></div>
+    <div class="field"><label>Coaching language</label><input type="text" name="language" value="{{ v.language }}" placeholder="English or German">
+      <div class="hint">The language the coach writes in, e.g. English or German.</div></div>
+  </div>
+  <div class="field">
+    <div class="row between"><label style="margin:0">Team playbook (YAML, optional)</label>
+      <button type="button" class="btn sm ghost" onclick="loadExample()">Insert example</button></div>
+    <textarea name="playbook" id="playbook" rows="16" placeholder="Your team's defaults, executes, setups and economy rules. The coach judges every round against it.">{{ v.playbook }}</textarea>
+    <div class="hint">Only the section for the map being coached is sent to the model, plus everything outside <code>maps</code>.</div>
+  </div>
+  <div class="row between">
+    <button class="btn primary" type="submit">Save</button>
+    {% if profile %}<a class="btn ghost" href="{{ url_for('profile', pid=profile.id) }}">Cancel</a>{% endif %}
+  </div>
+</form>
+{% if profile %}
+<form method="post" action="{{ url_for('profile_delete', pid=profile.id) }}" onsubmit="return confirm('Delete {{ profile.riot_id }} and all of their reports?')">
+  <button class="btn danger ghost" type="submit">Delete player and all reports</button>
+</form>
+{% endif %}
+<textarea id="example" hidden>{{ example }}</textarea>
+<script>
+function loadExample(){
+  const ta=document.getElementById('playbook');
+  if(ta.value.trim() && !confirm('Replace the current playbook with the example?')) return;
+  ta.value=document.getElementById('example').value;
+}
+</script>
+{% endblock %}

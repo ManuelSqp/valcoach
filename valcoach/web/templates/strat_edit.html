@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}{{ s.name }} · valcoach{% endblock %}
+{% block head %}
+<style>
+.page{max-width:1500px}
+.sb{display:grid;grid-template-columns:250px minmax(0,1fr) 290px;gap:14px;align-items:start}
+@media(max-width:1150px){.sb{grid-template-columns:220px minmax(0,1fr)}.sb-right{grid-column:1/-1}}
+.sb-palette,.sb-right{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;max-height:calc(100vh - 150px);overflow:auto;position:sticky;top:64px}
+.sb-role{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:10px 2px 5px;width:100%}
+#sb-agents,#sb-abilities,#sb-shapes,.sb-abar{display:flex;flex-wrap:wrap;gap:5px}
+#sb-abilities{display:block}.sb-abar{margin-top:4px}
+.sb-pal{position:relative;width:42px;height:42px;border-radius:50%;border:2px solid #333b4a;background:#0b0e13;padding:0;cursor:grab;touch-action:none;display:grid;place-items:center;color:#fff;font:700 14px/1 inherit;overflow:hidden}
+.sb-pal:hover,.sb-pal.on{border-color:var(--red)}
+.sb-pal img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
+.sb-pal.ab{width:58px;height:62px;border-radius:10px;align-content:start;padding-top:4px}.sb-pal.ab img{position:static;width:30px;height:30px;object-fit:contain}
+.sb-pal.ab .ini{position:absolute;top:10px}.sb-pal.ab small,.sb-pal.shape small{font:500 9.5px/1.1 inherit;color:var(--muted);padding:0 2px;text-align:center;max-height:22px;overflow:hidden}
+.sb-pal.shape{width:58px;height:54px;border-radius:10px;align-content:center;gap:2px}.sb-pal.shape i{width:22px;height:22px;border-radius:50%;display:block;margin:0 auto}
+.sb-pal.smoke i{background:#c8d0dc}.sb-pal.molly i{background:#ff8a3d}.sb-pal.zone i{background:#a78bfa}.sb-pal.mark i{background:#f2b84b}.sb-pal.num i{background:#2dd4bf}
+.sb-ghost{position:fixed;pointer-events:none;z-index:50;transform:translate(-50%,-50%);opacity:.9;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.sb-tools{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.sb-tool{width:38px;height:34px;border-radius:7px;border:1px solid var(--line);background:#222938;color:var(--text);font-size:16px;cursor:pointer}
+.sb-tool.on{border-color:var(--red);background:rgba(255,70,85,.15)}
+.sb-team{display:flex;gap:4px;margin:6px 0}.sb-team button{flex:1}
+.sb-center{min-width:0}
+#sb-stage{position:relative;max-width:calc(100vh - 150px);margin:0 auto}
+.sb-svg image{-webkit-user-drag:none;user-select:none}
+.sb-svg{width:100%;aspect-ratio:1/1;display:block;background:#11151c;border:1px solid var(--line);border-radius:10px;touch-action:none;user-select:none}
+.sb-item{cursor:move}.sb-item.sel>*:first-child{filter:drop-shadow(0 0 6px #fff)}
+.sb-zoom{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px}
+.sb-zoom button{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:rgba(23,28,37,.92);color:var(--text);font-size:16px;cursor:pointer}
+.sb-top{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.sb-top input#sb-name{flex:1;min-width:180px;font-size:16px;font-weight:700}
+.sb-status{font-size:12px;color:var(--muted);min-width:90px}.sb-status.unsaved,.sb-status.not{color:var(--amber)}.sb-status.saved,.sb-status.posted{color:var(--win)}
+#sb-steps{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.sb-step{display:flex;gap:8px;align-items:center;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:6px 9px;color:var(--text);font:inherit;font-size:13px;cursor:pointer}
+.sb-step b{color:var(--muted)}.sb-step .muted{margin-left:auto;font-size:11px}.sb-step.on{border-color:var(--red)}
+.sb-right label{font-size:12px;color:var(--muted);margin:8px 0 3px;display:block}
+.sb-ph{display:flex;justify-content:space-between;align-items:center}
+.sb-check{display:flex!important;gap:6px;align-items:center}
+.sb-right h2{margin:12px 0 6px}
+kbd{background:#0b0e13;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px}
+#sb-notes{min-height:130px;font-family:inherit;font-size:13px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="muted small" style="margin-bottom:6px"><a href="{{ url_for('team_strats', tid=t.id, map=s.map) }}">{{ t.name }} · Strat book</a> › {{ s.map }}</div>
+<div id="strat">
+<div class="sb-top">
+  <input type="text" id="sb-name" maxlength="80" aria-label="Name">
+  <select id="sb-side" style="width:auto"><option value="attack">Attack</option><option value="defense">Defense</option></select>
+  <span id="sb-status" class="sb-status">saved</span>
+  <button class="btn sm ghost" id="sb-undo" title="Undo (Ctrl+Z)">↶</button><button class="btn sm ghost" id="sb-redo" title="Redo (Ctrl+Y)">↷</button>
+  <button class="btn sm" id="sb-png" title="Download this step as a picture">PNG</button>
+  {% if t.discord_info.prep_url or t.discord_info.focus_url %}<button class="btn sm" id="sb-discord" title="Post this step to #match-prep">Post to Discord</button>{% endif %}
+</div>
+<div class="sb">
+  <aside class="sb-palette">
+    <div class="sb-tools" id="sb-tools"></div>
+    <div class="sb-team"><button class="btn sm primary" data-team="us">Us</button><button class="btn sm ghost" data-team="them">Enemy</button></div>
+    <div class="sb-role">Drag onto the map</div>
+    <div id="sb-shapes"></div>
+    <div id="sb-abilities" style="margin-top:6px"></div>
+    <div id="sb-agents"></div>
+  </aside>
+  <div class="sb-center">
+    <div id="sb-stage">
+      <div class="sb-zoom"><button id="sb-zin" title="Zoom in">+</button><button id="sb-zout" title="Zoom out">−</button><button id="sb-zfit" title="Whole map">⤢</button></div>
+    </div>
+    <p class="muted small" id="sb-nomap" hidden>The map picture couldn't be loaded (no internet on the server?). The callouts still show where things are.</p>
+    <p class="muted small" style="text-align:center;margin:8px 0 0">Drag agents and abilities onto the map (or click an ability to place it at that agent; drag the yellow handle to aim lines like Fault Line) · tools: <kbd>V</kbd> select <kbd>A</kbd> arrow <kbd>P</kbd> path <kbd>W</kbd> wall <kbd>T</kbd> text ·
+      <kbd>Del</kbd> delete · <kbd>Ctrl</kbd>+<kbd>D</kbd> copy · <kbd>←</kbd><kbd>→</kbd> steps · <kbd>Ctrl</kbd>+wheel zoom · saves by itself</p>
+  </div>
+  <aside class="sb-right">
+    <h2 style="margin-top:0">Steps</h2>
+    <div id="sb-steps"></div>
+    <div class="row" style="gap:4px;flex-wrap:nowrap"><input type="text" id="sb-stepname" maxlength="40" placeholder="Step name" style="flex:1">
+      <button class="btn sm ghost" id="sb-left" title="Move step earlier">◀</button><button class="btn sm ghost" id="sb-right" title="Move step later">▶</button></div>
+    <div class="row" style="gap:4px;margin-top:6px"><button class="btn sm" id="sb-stepadd" title="New step, starting as a copy of this one">+ Step</button>
+      <button class="btn sm ghost danger" id="sb-stepdel">Delete step</button><button class="btn sm ghost" id="sb-clear" title="Remove everything in this step">Clear</button></div>
+    <label class="sb-check" style="margin-top:10px"><input type="checkbox" id="sb-prev" checked> show the step before (faded)</label>
+    <label class="sb-check"><input type="checkbox" id="sb-callouts" checked> callouts</label>
+    <h2>Selected</h2>
+    <div id="sb-props"></div>
+    <h2>Notes</h2>
+    <textarea id="sb-notes" maxlength="4000" placeholder="Calls, timings, who does what…"></textarea>
+    <div class="row between" style="margin-top:12px">
+      <form method="post" action="{{ url_for('strat_copy', tid=t.id, sid=s.id) }}"><button class="btn sm ghost">Duplicate</button></form>
+      {% if can_delete %}<form method="post" action="{{ url_for('strat_delete', tid=t.id, sid=s.id) }}" onsubmit="return confirm('Delete this strat?')"><button class="btn sm ghost danger">Delete strat</button></form>{% endif %}
+    </div>
+  </aside>
+</div>
+</div>
+<script type="application/json" id="strat-boot">{{ boot|safe }}</script>
+<script src="{{ url_for('static', filename='strat.js') }}?v={{ app_version }}"></script>
+{% endblock %}

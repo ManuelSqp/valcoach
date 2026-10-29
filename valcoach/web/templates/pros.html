@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Pro & videos · {{ p.riot_id }} · valcoach{% endblock %}
+{% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% block head %}
+<style>
+.ai{border-radius:50%;vertical-align:middle;background:#0b0e13;object-fit:cover;flex:none}
+.agentcell{display:inline-flex;align-items:center;gap:6px}
+.dims{display:grid;gap:10px}
+.dim{display:grid;grid-template-columns:110px 1fr 60px;gap:10px;align-items:center;font-size:13px}
+.dim .track{position:relative;height:10px;background:var(--panel2);border-radius:99px}
+.dim .fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--red)}
+.dim .pro{position:absolute;top:-4px;width:3px;height:18px;background:#fff;border-radius:2px;transform:translateX(-1px)}
+.dim .v{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.pros{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media(max-width:900px){.pros{grid-template-columns:1fr}}
+.procard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px}
+.procard.first{border-color:var(--red)}
+.procard .nm{font-size:18px;font-weight:800}
+.procard .pct{float:right;font-size:13px;font-weight:700;color:var(--win)}
+.procard ul{margin:8px 0 0;padding-left:18px;font-size:13px}
+.procard .gap{font-size:12px;color:var(--amber);margin-top:6px}
+.vids{display:grid;gap:12px}
+.vid{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;grid-template-columns:1fr auto;gap:8px 16px}
+.vid .kind{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.vid .kind.pro{color:var(--red)}.vid .kind.fix{color:var(--amber)}.vid .kind.map{color:var(--blue)}
+.vid h3{margin:2px 0 4px;font-size:15px}
+.vid .why{font-size:12px;color:var(--muted)}
+.vid .watch{grid-column:1/-1;font-size:13px;background:rgba(53,208,160,.06);border-left:3px solid var(--win);padding:8px 10px;border-radius:0 6px 6px 0}
+.vid .thumbs{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.thumb{text-decoration:none;font-size:12px}.thumb img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:6px;display:block;margin-bottom:4px;background:#0b0e13}
+.thumb b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:600}
+.status{font-size:12px;color:var(--muted)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="row between" style="margin-bottom:14px">
+  <div><h1>{{ p.name }}<span class="tag">#{{ p.tag }}</span> · pro &amp; videos</h1>
+    <div class="muted">{{ prof.games }} games · {{ prof.reference or '' }}</div></div>
+  <div class="row" style="gap:4px">{% for val, label in queues %}<a class="btn sm {{ 'primary' if queue == val else 'ghost' }}" href="{{ url_for('pros', pid=p.id, queue=val) }}">{{ label }}</a>{% endfor %}</div>
+</div>
+{% include "_player_tabs.html" %}
+
+{% if pros_error %}<div class="flash error">The edited pro list in Settings can't be read ({{ pros_error }}); using the built-in list.</div>{% endif %}
+
+{% if not prof.games %}
+<section class="card"><h2>No games yet</h2><p>Import your history on the <a href="{{ url_for('stats', pid=p.id) }}">Stats &amp; agents</a> tab first.</p></section>
+{% else %}
+
+<div class="grid2">
+  <section class="card">
+    <h2>Your playstyle</h2>
+    <div class="dims">
+      {% set top = matches[0] if matches else none %}
+      {% for k, label in (('opening', 'Opening duels'), ('kills', 'Kills'), ('assists', 'Assists'), ('survive', 'Survival')) %}
+      <div class="dim"><span>{{ label }}</span>
+        <span class="track"><span class="fill" style="width:{{ (prof.dims[k] * 100)|round }}%"></span>
+          {% if top %}<span class="pro" style="left:{{ (top.style[k] * 100)|round }}%" title="{{ top.name }}"></span>{% endif %}</span>
+        <span class="v">{{ prof.dims[k]|pct }}</span></div>
+      {% endfor %}
+    </div>
+    <p class="small muted" style="margin:10px 0 0">Percentile among the players in your matches (50% = average).
+      {% if top %}The white mark is {{ top.name }}.{% endif %}{% if prof.no_openings %} No round data yet, so opening duels show as average.{% endif %}</p>
+    <p class="small" style="margin:10px 0 0">Per round: {{ prof.raw.kpr|num(2) }} kills · {{ prof.raw.apr|num(2) }} assists · {{ prof.raw.dpr|num(2) }} deaths{% if prof.raw.opr is not none %} · in the first duel {{ prof.raw.opr|pct }} of rounds{% endif %}{% if prof.opening_wr is not none %}, won {{ prof.opening_wr|pct }}{% endif %}</p>
+    {% if prof.traits %}<p class="small" style="margin:6px 0 0">In short: {{ prof.traits|join(', ') }}.</p>{% endif %}
+  </section>
+  <section class="card">
+    <h2>Your pool</h2>
+    <div class="row" style="gap:14px">{% for a, share in prof.agents.items() %}{% if loop.index <= 6 %}<span class="agentcell small">{{ ai(a, 26) }}{{ a }} <span class="muted">{{ share|pct }}</span></span>{% endif %}{% endfor %}</div>
+    <p class="small muted" style="margin:12px 0 0">Roles: {% for r, share in prof.roles.items() %}{{ r }} {{ share|pct }}{{ ', ' if not loop.last }}{% endfor %}</p>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Pros with a similar style</h2>
+  {% if matches %}
+  <div class="pros">
+    {% for m in matches %}
+    <div class="procard {{ 'first' if loop.first }}">
+      <span class="pct">{{ (m.score * 100)|round|int }}% match</span>
+      <div class="nm">{{ m.name }}</div>
+      <div class="small muted">{{ m.role }} · {% for a in m.agents %}<span class="agentcell">{{ ai(a, 18) }}{{ a }}</span>{{ ' ' }}{% endfor %}</div>
+      <p class="small" style="margin:8px 0 0">{{ m.known_for }}</p>
+      {% if m.why %}<ul>{% for w in m.why %}<li>{{ w }}</li>{% endfor %}</ul>{% endif %}
+      {% if m.gap %}<div class="gap">{{ m.gap }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <p class="small muted" style="margin:10px 0 0">Half of the match is style (the four bars), a quarter role, a quarter shared agents. Out of {{ n_pros }} pros{% if user.is_admin %}: edit the list under <a href="{{ url_for('settings') }}#pros">Settings</a>{% endif %}. The list is a starting point; rosters change.</p>
+  {% endif %}
+  {% if guide and guide.pro_summary %}<p style="margin:14px 0 0">{{ guide.pro_summary }}</p>{% endif %}
+  {% if guide and guide.habits %}<ul style="margin:8px 0 0">{% for h in guide.habits %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
+</section>
+
+<section class="card">
+  <div class="row between" style="margin-bottom:12px">
+    <h2 style="margin:0">What to watch</h2>
+    {% if can_edit %}<form method="post" action="{{ url_for('pros_build', pid=p.id) }}"><input type="hidden" name="queue" value="{{ queue }}">
+      <button class="btn sm {{ 'primary' if not guide }}" {{ 'disabled' if status and status.status in ('queued', 'running') }}>
+        {{ (('Find videos + ' if yt else '') ~ 'Write what to watch for') if not guide else 'Update' }}</button></form>{% endif %}
+  </div>
+  {% if status and status.status in ('queued', 'running') %}
+  <div class="status" data-key="{{ status_key }}" data-state="{{ status.status }}" style="margin-bottom:10px"><span class="pill running">working</span> <span class="log">{{ status.log[-1] if status.log else '' }}</span></div>
+  {% endif %}
+  {% for e in errors %}<div class="flash error small">{{ e }}</div>{% endfor %}
+  <div class="vids">
+    {% for q in queries %}
+    <div class="vid">
+      <div>
+        <div class="kind {{ q.kind }}">{{ {'pro': 'Pro to copy', 'map': 'Weak map', 'fix': 'Fix a habit'}[q.kind] }}</div>
+        <h3>{{ q.title }}</h3>
+        <div class="why">{{ q.why }}</div>
+      </div>
+      <div><a class="btn sm" href="{{ q.url }}" target="_blank" rel="noopener">Search YouTube ↗</a></div>
+      {% if q.watch_for %}<div class="watch"><b>Watch for:</b> {{ q.watch_for }}</div>{% endif %}
+      {% if q.videos %}<div class="thumbs">{% for v in q.videos %}
+        <a class="thumb" href="{{ v.url }}" target="_blank" rel="noopener"><img src="{{ v.thumb }}" alt="" loading="lazy"><b>{{ v.title }}</b><span class="muted">{{ v.channel }} · {{ v.published }}</span></a>
+      {% endfor %}</div>{% endif %}
+    </div>
+    {% else %}<p class="muted">Not enough games for suggestions yet.</p>{% endfor %}
+  </div>
+  <p class="small muted" style="margin:12px 0 0">
+    {% if yt %}Videos come from the YouTube Data API (recent uploads, cached for a day).{% else %}The buttons open a YouTube search built from your numbers.{% if user.is_admin %} Add a YouTube API key under <a href="{{ url_for('settings') }}#pros">Settings</a> to see the videos here.{% endif %}{% endif %}
+    {% if guide %}"Watch for" written by {{ guide._model }}{% if created %} on {{ created|epoch }}{% endif %}.{% endif %}</p>
+</section>
+{% endif %}
+
+<script>
+(function () {
+  const el = document.querySelector('[data-key]');
+  if (!el || !['queued', 'running'].includes(el.dataset.state)) return;
+  const tick = async () => {
+    try {
+      const s = await (await fetch('{{ url_for("stats_status") }}?key=' + encodeURIComponent(el.dataset.key))).json();
+      if (s.log && s.log.length) el.querySelector('.log').textContent = s.log[s.log.length - 1];
+      if (s.status === 'done' || s.status === 'error') { location.reload(); return; }
+    } catch (e) {}
+    setTimeout(tick, 2500);
+  };
+  setTimeout(tick, 1500);
+})();
+</script>
+{% endblock %}

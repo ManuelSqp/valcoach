@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row between" style="margin-bottom:10px"><h1 style="margin:0">Your teams</h1>
+  <a class="btn sm" href="{{ url_for('teams') }}">{{ 'Manage teams' if teams else '+ New team' }}</a></div>
+<div class="grid" style="margin-bottom:28px">
+  {% for x in teams %}
+  <a class="player teamcard" href="{{ url_for('team', tid=x.t.id) }}">
+    <div class="name">{{ x.t.name }}</div>
+    <div class="small" style="margin-top:4px">{{ x.starters|join(' · ') or 'no starters yet' }}</div>
+    <div class="muted small">{% if x.subs %}subs: {{ x.subs|join(', ') }} · {% endif %}{{ x.t.map_list|length or 'auto' }} maps{% if x.shared %} · shared with you{% endif %}</div>
+    {% if x.focus %}<div class="small" style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(53,208,160,.08)">
+      <span class="muted">Your focus this week:</span> <b>{{ x.focus.focus }}</b></div>{% endif %}
+  </a>
+  {% else %}
+  <a class="player add" href="{{ url_for('teams') }}">+ Create a team<br><span class="small">comps per map from everyone's stats</span></a>
+  {% endfor %}
+</div>
+
+<h1>Your players</h1>
+<p class="sub">Your workspace: only you see these players, their notes, playbooks and reports.
+  {% if profiles|length > 1 %}Drag <b style="color:var(--text)">⋮⋮</b> to change the order.{% endif %}</p>
+<div class="grid sortable" id="players" style="margin-bottom:28px">
+  {% for p in profiles %}
+  <a class="player" href="{{ url_for('profile', pid=p.id) }}" data-pid="{{ p.id }}">
+    {% if profiles|length > 1 %}<span class="grip" tabindex="0" role="button" title="Drag to reorder"
+      aria-label="Move {{ p.name }}. Use the arrow keys to move it.">⋮⋮</span>{% endif %}
+    <div class="name"><span class="pos">{{ loop.index }}</span>{{ p.name }}<span class="muted">#{{ p.tag }}</span></div>
+    <div class="muted small">{{ p.region|upper }} · coaching: {{ p.mode|mode_label }} · {{ counts[p.id] }} report{{ '' if counts[p.id] == 1 else 's' }}</div>
+  </a>
+  {% endfor %}
+  <a class="player add" href="{{ url_for('profile_new') }}">+ Add player</a>
+</div>
+
+<section class="card">
+  <h2>Your recent reports</h2>
+  {% if jobs %}
+  <div class="tablewrap"><table>
+    <tr><th>Player</th><th>Match</th><th>Score</th><th class="hide-sm">Mode</th><th class="hide-sm">VOD</th><th>Status</th><th class="hide-sm">Created</th><th></th></tr>
+    {% for j in jobs %}
+    <tr>
+      <td>{{ names.get(j.profile_id, '?') }}</td>
+      <td>{{ j.map or '…' }} <span class="muted small">{{ j.started_at_match|localtime }}</span></td>
+      <td>{{ j.score }}</td>
+      <td class="hide-sm">{{ j.mode|mode_label }}</td>
+      <td class="muted small hide-sm">{{ 'yes' if j.vod_path else '—' }}</td>
+      <td><span class="pill {{ j.status }}">{{ j.status }}</span></td>
+      <td class="muted small hide-sm">{{ j.created_at|localtime }}</td>
+      <td style="text-align:right">
+        {% if j.status == 'done' %}<a class="btn sm primary" href="{{ url_for('job_report', jid=j.id) }}" target="_blank">Open report</a>
+        {% else %}<a class="btn sm" href="{{ url_for('job', jid=j.id) }}">View</a>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}
+  <div class="empty">No reports yet. Open a player, pick a match and press <b>Coach</b>.</div>
+  {% endif %}
+</section>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  const grid = document.getElementById('players');
+  const cards = () => [...grid.querySelectorAll('.player[data-pid]')];
+  const order = () => cards().map(c => Number(c.dataset.pid));
+  let drag = null;
+
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600);
+  }
+
+  function renumber() {
+    cards().forEach((c, i) => { const p = c.querySelector('.pos'); if (p) p.textContent = i + 1; });
+    // keep the top-bar tabs in the same order
+    const nav = document.querySelector('.navlinks');
+    const anchor = nav && nav.querySelector('a[data-nav="new"]');
+    if (anchor) order().forEach(id => {
+      const link = nav.querySelector(`a[data-pid="${id}"]`);
+      if (link) nav.insertBefore(link, anchor);
+    });
+  }
+
+  async function save(before) {
+    const now = order();
+    if (JSON.stringify(now) === JSON.stringify(before)) return;
+    renumber();
+    try {
+      const r = await fetch('/api/profiles/order', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({order: now}),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || r.status);
+      toast('Order saved');
+    } catch (e) {
+      toast('Could not save the order, reloading…');
+      setTimeout(() => location.reload(), 1200);
+    }
+  }
+
+  // ---- mouse / touch / pen (pointer events) ----
+  function onDown(e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    const card = e.currentTarget.closest('.player');
+    const r = card.getBoundingClientRect();
+    const ph = document.createElement('div');
+    ph.className = 'player placeholder';
+    ph.style.height = r.height + 'px';
+    card.after(ph);
+    Object.assign(card.style, {position: 'fixed', left: r.left + 'px', top: r.top + 'px',
+                               width: r.width + 'px', height: r.height + 'px', margin: 0});
+    card.classList.add('dragging');
+    drag = {card, ph, dx: e.clientX - r.left, dy: e.clientY - r.top, before: order(), grip: e.currentTarget};
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onMove(e) {
+    if (!drag) return;
+    drag.card.style.left = (e.clientX - drag.dx) + 'px';
+    drag.card.style.top = (e.clientY - drag.dy) + 'px';
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const target = el && el.closest('#players .player[data-pid]:not(.dragging)');
+    if (!target) return;
+    const t = target.getBoundingClientRect();
+    // one card per row (phone): above/below decides; several per row: left/right decides
+    const oneColumn = t.width > grid.clientWidth * 0.6;
+    const sameRow = e.clientY >= t.top && e.clientY <= t.bottom;
+    const before = (oneColumn || !sameRow) ? e.clientY < t.top + t.height / 2
+                                           : e.clientX < t.left + t.width / 2;
+    before ? target.before(drag.ph) : target.after(drag.ph);
+  }
+
+  function onUp() {
+    if (!drag) return;
+    const {card, ph, before} = drag;
+    ph.replaceWith(card);
+    card.removeAttribute('style');
+    card.classList.remove('dragging');
+    drag = null;
+    save(before);
+  }
+
+  // ---- keyboard: focus the handle, then arrow keys ----
+  function onKey(e) {
+    const card = e.currentTarget.closest('.player');
+    const before = order();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      const prev = card.previousElementSibling;
+      if (prev && prev.dataset.pid) prev.before(card);
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      const next = card.nextElementSibling;
+      if (next && next.dataset.pid) next.after(card);
+    } else return;
+    e.preventDefault();
+    e.currentTarget.focus();
+    save(before);
+  }
+
+  grid.querySelectorAll('.grip').forEach(h => {
+    h.addEventListener('pointerdown', onDown);
+    h.addEventListener('pointermove', onMove);
+    h.addEventListener('pointerup', onUp);
+    h.addEventListener('pointercancel', onUp);
+    h.addEventListener('keydown', onKey);
+    // the handle sits inside the card link: don't open the player when dragging
+    h.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
+  });
+})();
+</script>
+{% endblock %}

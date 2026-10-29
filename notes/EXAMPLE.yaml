@@ -1,0 +1,9 @@
+# Example notes file. Create a real one with:  valcoach notes-template <match_id>
+# Notes for the match being coached are passed to that round's review.
+# Notes from other matches are used as style examples ("this is the feedback I want").
+match_id: example-not-a-real-match
+player: adv1ce#LFT
+rounds:
+  3: "We gave up first death in A main again without any utility; I should have called for the Sova dart before swinging."
+  7: "Won 2v4 retake because we played off the Killjoy ult together instead of one by one. Keep doing this."
+  11: "Forced with 1400 average after losing the bonus; that cost us the full-buy round 12. Should have saved."

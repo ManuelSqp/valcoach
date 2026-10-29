@@ -1,0 +1,44 @@
+# Used by the CLI. The web app keeps its settings in data/valcoach.db and only reads
+# this file once on first start (to pre-fill Settings and create your profile).
+# Copy to config.toml and fill in. config.toml is git-ignored.
+
+[player]
+name = "adv1ce"          # Riot name (without tag)
+tag = "LFT"              # Riot tag
+region = "eu"            # eu | na | ap | kr | latam | br
+platform = "pc"
+
+[henrik]
+# Get a key instantly: HenrikDev Discord -> #get-a-key -> "VALORANT (Basic Key)"
+# You can also set the env var HENRIK_API_KEY instead.
+api_key = ""
+base_url = "https://api.henrikdev.xyz"
+
+[ollama]
+url = "http://127.0.0.1:11434"
+model = "qwen3.8:27b"            # or gemma4:26b (faster MoE), gemma4:31b; any Ollama model works
+temperature = 0.3
+num_ctx = 16384
+parallel = 4                     # concurrent round requests (keep <= OLLAMA_NUM_PARALLEL)
+timeout_s = 300
+think = "off"                    # reasoning models: "off" (fast), "on", or "" = model default
+
+[coach]
+# "team", "player" or "both"
+mode = "both"
+language = "English"             # language of the coaching output
+playbook = "knowledge/playbook.yaml"
+notes_dir = "notes"              # your own round notes, used as few-shot examples
+
+[video]
+# Minimap region as fractions of the frame (x, y, w, h). Default fits a
+# 1920x1080 recording with the minimap top-left at default HUD size.
+# Run `valcoach calibrate-minimap <vod>` to check / adjust it.
+minimap_roi = [0.012, 0.025, 0.215, 0.382]
+# Kill feed region (top-right) as fractions of the frame.
+killfeed_roi = [0.70, 0.08, 0.29, 0.25]
+sample_fps = 4                   # frames per second analysed for minimap tracking
+
+[paths]
+cache_dir = "data/cache"
+output_dir = "output"

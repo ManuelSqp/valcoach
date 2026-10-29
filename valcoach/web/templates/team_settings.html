@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Members & maps · {{ t.name }} · valcoach{% endblock %}
+{% block head %}
+<style>
+.members td{padding:8px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg label{margin:0;padding:5px 12px;cursor:pointer;color:var(--muted);font-size:12px}
+.seg input{display:none}
+.seg label:has(input:checked){background:#232a38;color:var(--text)}
+.seg label:has(input[value=starter]:checked){background:rgba(255,70,85,.15);color:#fff}
+.mapgrid{display:flex;flex-wrap:wrap;gap:6px}.mapgrid label{display:flex;gap:6px;align-items:center;margin:0;padding:6px 12px;border:1px solid var(--line);border-radius:6px;color:var(--text);cursor:pointer;font-size:13px}
+.mapgrid label:has(input:checked){border-color:var(--red);background:rgba(255,70,85,.08)}
+.count{font-variant-numeric:tabular-nums}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+<form method="post">
+  <div class="grid2">
+    <section class="card">
+      <h2>Players <span class="count muted" id="sc"></span></h2>
+      <div class="field"><label>Team name</label><input type="text" name="name" value="{{ t.name }}" maxlength="60"></div>
+      {% if own %}
+      <table class="members">
+        {% for p in own %}
+        <tr><td>{{ p.name }} <span class="muted small">#{{ p.tag }}</span><div class="muted small">{{ games.get(p.id, 0) or 'no' }} games stored</div></td>
+          <td style="text-align:right"><span class="seg">
+            {% for val, label in (('starter', 'Starter'), ('sub', 'Sub'), ('', '—')) %}
+            <label><input type="radio" name="kind_{{ p.id }}" value="{{ val }}" {{ 'checked' if kinds.get(p.id, '') == val }}>{{ label }}</label>
+            {% endfor %}</span></td></tr>
+        {% endfor %}
+      </table>
+      <p class="hint">Teammates are players in your workspace. Add them with <a href="{{ url_for('profile_new') }}">+ Player</a>, then press <i>Update everyone's stats</i>.</p>
+      {% else %}<p class="muted">Add your teammates as players first.</p>{% endif %}
+      <div class="field" style="margin-top:12px"><label>Use games from</label>
+        <select name="queue">{% for val, label in queues %}<option value="{{ val }}" {{ 'selected' if t.queue == val }}>{{ label }}</option>{% endfor %}</select>
+        <div class="hint">"All ranked" uses Competitive + Premier: more data per agent. "Premier" only counts your Premier games.</div></div>
+    </section>
+    <section class="card">
+      <h2>Map pool</h2>
+      <div class="mapgrid">{% for mp in map_choices %}<label><input type="checkbox" name="maps" value="{{ mp }}" {{ 'checked' if mp in t.map_list }}>{{ mp }}</label>{% endfor %}</div>
+      <p class="hint">None selected = your most played maps.</p>
+      <div class="field" style="margin-top:16px"><label>Map meta (optional)</label>
+        <textarea name="meta" rows="10" placeholder="{{ meta_example }}">{{ t.meta }}</textarea>
+        <div class="hint">Per map: <code>prefer</code> / <code>avoid</code> agents and a fixed role mix like <code>1D 2I 1C 1S</code>. Overrides what the stats suggest.</div></div>
+    </section>
+  </div>
+  <div class="row"><button class="btn primary">Save</button><a class="btn ghost" href="{{ url_for('team', tid=t.id) }}">Cancel</a></div>
+</form>
+{% set sy = t.sync_info %}
+<form method="post" action="{{ url_for('team_sync_settings', tid=t.id) }}" class="card" id="sync" style="margin-top:22px">
+  <h2>Automatic sync</h2>
+  <label class="choice"><input type="checkbox" name="nightly" value="1" {{ 'checked' if sy.nightly }}>
+    <span><b>Sync every night</b><span class="muted small">Does what the two buttons at the top do:
+      {% if t.premier_info.tag %}reloads the Premier roster, then everyone's stats{% else %}updates everyone's stats{% endif %}. Server time. The buttons still work any time.</span></span></label>
+  <div class="row" style="margin-top:8px">
+    <span class="small">at</span>
+    <select name="hour" style="width:auto">{% for h in range(24) %}<option value="{{ h }}" {{ 'selected' if sy.hour|int == h }}>{{ '%02d' % h }}:00</option>{% endfor %}</select>
+    <button class="btn sm">Save</button>
+    {% if sy.last_at %}<span class="muted small">last automatic sync {{ sy.last_at|epoch }}</span>{% endif %}
+  </div>
+</form>
+<form method="post" action="{{ url_for('team_discord', tid=t.id) }}" class="card" id="discord" style="margin-top:22px">
+  <h2>Discord</h2>
+  <p class="small muted" style="margin-top:-4px">In your Discord server: channel settings → Integrations → Webhooks → New Webhook → Copy URL.
+    Two channels work well: one for match prep (comps + game plans), one for the weekly focus. With only one URL, everything goes there.</p>
+  <div class="grid2">
+    <div class="field"><label>#match-prep webhook {% if discord.prep_url %}<span style="color:var(--win)">✓ set</span>{% endif %}</label>
+      <input type="password" name="prep_url" placeholder="{{ 'Leave empty to keep it' if discord.prep_url else 'https://discord.com/api/webhooks/…' }}" autocomplete="off">
+      {% if discord.prep_url %}<label class="small" style="display:flex;gap:6px;margin-top:6px"><input type="checkbox" name="clear_prep_url" value="1">remove</label>{% endif %}</div>
+    <div class="field"><label>#weekly-focus webhook {% if discord.focus_url %}<span style="color:var(--win)">✓ set</span>{% endif %}</label>
+      <input type="password" name="focus_url" placeholder="{{ 'Leave empty to keep it' if discord.focus_url else 'https://discord.com/api/webhooks/…' }}" autocomplete="off">
+      {% if discord.focus_url %}<label class="small" style="display:flex;gap:6px;margin-top:6px"><input type="checkbox" name="clear_focus_url" value="1">remove</label>{% endif %}</div>
+  </div>
+  <label class="choice"><input type="checkbox" name="weekly" value="1" {{ 'checked' if discord.weekly }}>
+    <span><b>Post the weekly focus automatically</b><span class="muted small">Writes everyone's focus and posts it once a week (server time).</span></span></label>
+  <div class="row" style="margin:8px 0 12px">
+    <select name="weekly_day" style="width:auto">{% for d in ('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday') %}<option value="{{ loop.index0 }}" {{ 'selected' if (discord.weekly_day|default(0))|int == loop.index0 }}>{{ d }}</option>{% endfor %}</select>
+    <span class="small">from</span>
+    <select name="weekly_hour" style="width:auto">{% for h in range(24) %}<option value="{{ h }}" {{ 'selected' if (discord.weekly_hour|default(18))|int == h }}>{{ '%02d' % h }}:00</option>{% endfor %}</select>
+  </div>
+  <div class="row"><button class="btn primary">Save Discord settings</button><button class="btn ghost" name="test" value="1">Save and send a test message</button></div>
+</form>
+
+<section class="card" id="access" style="margin-top:22px">
+  <h2>Teammates with access</h2>
+  <p class="small muted" style="margin-top:-4px">People you add here see this team (comps, roles, game plans, weekly focus, notes) and their teammates' stats,
+    and can add notes. Only you change members, maps and settings. Each of them picks "which one is you" on the team page;
+    an in-game name that matches a player links them automatically.</p>
+  {% if access %}<table>{% for u in access %}<tr><td><b>{{ u.label }}</b> <span class="muted small">{{ u.username }}</span></td>
+    <td style="text-align:right"><form method="post" action="{{ url_for('team_access_edit', tid=t.id) }}"><button class="btn sm ghost danger" name="remove" value="{{ u.id }}">Remove</button></form></td></tr>{% endfor %}</table>
+  {% else %}<p class="muted">Nobody yet.</p>{% endif %}
+  {% if others %}
+  <form method="post" action="{{ url_for('team_access_edit', tid=t.id) }}" class="row" style="margin-top:12px">
+    <select name="add" style="max-width:320px">{% for u in others %}<option value="{{ u.id }}">{{ u.label }}{% if u.display_name %} ({{ u.username }}){% endif %}</option>{% endfor %}</select>
+    <button class="btn">Add</button>
+  </form>
+  {% else %}<p class="hint">Everyone with an account is already added. Teammates without an account: {% if user.is_admin %}create one under <a href="{{ url_for('users') }}">Users</a> or turn on sign-up in Settings{% else %}ask the admin for one{% endif %}.</p>{% endif %}
+</section>
+
+<form method="post" action="{{ url_for('team_delete', tid=t.id) }}" onsubmit="return confirm('Delete this team? Players and their stats stay.')" style="margin-top:28px">
+  <button class="btn sm danger ghost">Delete team</button></form>
+<script>
+(function () {
+  const sc = document.getElementById('sc');
+  const upd = () => { const n = document.querySelectorAll('input[value=starter]:checked').length;
+    sc.textContent = `· ${n}/5 starters`; sc.style.color = n === 5 ? 'var(--win)' : (n > 5 ? 'var(--red)' : ''); };
+  document.querySelectorAll('.seg input').forEach(i => i.addEventListener('change', upd)); upd();
+})();
+</script>
+{% endblock %}

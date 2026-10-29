@@ -1,0 +1,87 @@
+# Pro players to compare playstyles with. Admins can edit this under Settings -> Pro players.
+#
+# This is a starting list written from public play styles as of mid-2026: rosters change,
+# players retire or switch roles. Check it, remove who's no longer relevant, add who you like.
+#
+# style values are 0..1 and relative to other pros:
+#   opening   how often they take the first duel of a round (entry vs. holding back)
+#   kills     kills per round
+#   assists   assists per round (utility, flashes, trading for others)
+#   survive   how often they're alive at the end of rounds (opposite of dying a lot)
+# role is one of Duelist, Initiator, Controller, Sentinel; agents are their main agents.
+pros:
+  - name: aspas
+    role: Duelist
+    agents: [Jett, Raze, Neon]
+    style: {opening: 0.95, kills: 0.9, assists: 0.25, survive: 0.45}
+    known_for: very aggressive entry, wins opening duels with movement and aim
+  - name: Derke
+    role: Duelist
+    agents: [Jett, Raze, Yoru]
+    style: {opening: 0.9, kills: 0.85, assists: 0.25, survive: 0.45}
+    known_for: entry who creates space and converts first kills into rounds
+  - name: Demon1
+    role: Duelist
+    agents: [Jett, Raze, Neon]
+    style: {opening: 0.85, kills: 0.9, assists: 0.2, survive: 0.4}
+    known_for: aggressive duelist on rifle and Operator, high-risk peeks
+  - name: TenZ
+    role: Duelist
+    agents: [Jett, Raze, Reyna]
+    style: {opening: 0.85, kills: 0.85, assists: 0.25, survive: 0.45}
+    known_for: mechanical duelist; no longer a full-time pro but has a huge library of POV videos
+  - name: Zekken
+    role: Duelist
+    agents: [Raze, Yoru, Jett]
+    style: {opening: 0.75, kills: 0.85, assists: 0.3, survive: 0.5}
+    known_for: duelist who also plays for late-round impact and clutches
+  - name: yay
+    role: Sentinel
+    agents: [Chamber, Jett]
+    style: {opening: 0.55, kills: 0.85, assists: 0.2, survive: 0.65}
+    known_for: Operator anchor who wins long-range duels and holds space alone
+  - name: Alfajer
+    role: Sentinel
+    agents: [Cypher, Killjoy, Vyse]
+    style: {opening: 0.4, kills: 0.75, assists: 0.35, survive: 0.65}
+    known_for: sentinel with a lot of frags, punishes flanks and lurks
+  - name: nAts
+    role: Sentinel
+    agents: [Cypher, Killjoy, Viper]
+    style: {opening: 0.2, kills: 0.6, assists: 0.35, survive: 0.75}
+    known_for: lurker and anchor, plays for information and late-round clutches
+  - name: Chronicle
+    role: Initiator
+    agents: [Fade, Breach, Viper, Killjoy]
+    style: {opening: 0.35, kills: 0.65, assists: 0.6, survive: 0.65}
+    known_for: flex player who fills what the comp needs, very solid trading
+  - name: Leo
+    role: Initiator
+    agents: [Sova, Fade, KAY/O]
+    style: {opening: 0.3, kills: 0.55, assists: 0.8, survive: 0.6}
+    known_for: information initiator who sets up his teammates' fights
+  - name: Sacy
+    role: Initiator
+    agents: [Sova, Fade, Skye]
+    style: {opening: 0.35, kills: 0.55, assists: 0.85, survive: 0.55}
+    known_for: support initiator, flashes and recons for the entry
+  - name: crashies
+    role: Initiator
+    agents: [Sova, Fade, KAY/O, Breach]
+    style: {opening: 0.5, kills: 0.6, assists: 0.7, survive: 0.5}
+    known_for: aggressive initiator who goes in with his own utility
+  - name: Boaster
+    role: Controller
+    agents: [Astra, Brimstone, Viper]
+    style: {opening: 0.2, kills: 0.4, assists: 0.7, survive: 0.55}
+    known_for: in-game leader on controllers, smokes and mid-round calls
+  - name: Less
+    role: Controller
+    agents: [Viper, Omen]
+    style: {opening: 0.3, kills: 0.65, assists: 0.5, survive: 0.65}
+    known_for: Viper specialist who also gets a lot of kills
+  - name: mindfreak
+    role: Controller
+    agents: [Omen, Astra, Viper]
+    style: {opening: 0.25, kills: 0.5, assists: 0.65, survive: 0.65}
+    known_for: controller who supports with smokes and stays alive for retakes

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Report {{ j.map }} · valcoach{% endblock %}
+{% block content %}
+<div class="row between" style="margin-bottom:18px">
+  <div>
+    <h1>{{ j.map or 'Match' }} {% if j.score %}<span style="color:var(--red)">{{ j.score }}</span>{% endif %}</h1>
+    <div class="muted">{{ p.riot_id if p else '' }} · {{ j.mode|mode_label }} · {{ j.vod_name or 'no VOD' }}{% if j.opts.no_llm %} · facts only{% endif %} · <span class="small">{{ j.match_id }}</span></div>
+  </div>
+  <div class="row">
+    {% if p %}<a class="btn ghost" href="{{ url_for('profile', pid=p.id) }}">← {{ p.name }}</a>{% endif %}
+    <form method="post" action="{{ url_for('job_retry', jid=j.id) }}" id="retry" style="display:{{ 'inline' if j.status in ('error','done') else 'none' }}"><button class="btn">Run again</button></form>
+    <form method="post" action="{{ url_for('job_delete', jid=j.id) }}" onsubmit="return confirm('Delete this report?')"><button class="btn danger ghost">Delete</button></form>
+  </div>
+</div>
+
+<section class="card">
+  <div class="row between">
+    <div class="row"><span class="pill {{ j.status }}" id="pill">{{ j.status }}</span><span class="muted" id="msg"></span></div>
+    <a class="btn primary" id="open" href="{{ url_for('job_report', jid=j.id) }}" target="_blank" style="display:{{ 'inline-flex' if j.status == 'done' else 'none' }}">Open report</a>
+  </div>
+  <div class="flash error" id="err" style="display:{{ 'block' if j.error else 'none' }};margin:14px 0 0">{{ j.error }}</div>
+</section>
+
+<section class="card">
+  <h2>Progress</h2>
+  <pre class="log" id="log">{{ j.log or 'Waiting…' }}</pre>
+</section>
+
+<script>
+const jid = {{ j.id|tojson }};
+const initialStatus = {{ j.status|tojson }};
+const els = {pill: document.getElementById('pill'), msg: document.getElementById('msg'), log: document.getElementById('log'),
+             open: document.getElementById('open'), err: document.getElementById('err'), retry: document.getElementById('retry')};
+const MSG = {queued: n => n > 1 ? `In the queue, ${n - 1} job${n > 2 ? 's' : ''} ahead.` : 'Starting…',
+             running: () => 'Working. Video analysis and coaching take a few minutes.',
+             done: () => 'Done.', error: () => 'Failed.'};
+async function poll() {
+  try {
+    const r = await fetch(`/api/jobs/${jid}`);
+    if (r.status === 401) { location.reload(); return; }
+    const d = await r.json();
+    els.pill.textContent = d.status; els.pill.className = 'pill ' + d.status;
+    els.msg.textContent = MSG[d.status](d.queue_position);
+    const atBottom = els.log.scrollTop + els.log.clientHeight >= els.log.scrollHeight - 30;
+    els.log.textContent = d.log || 'Waiting…';
+    if (atBottom) els.log.scrollTop = els.log.scrollHeight;
+    els.err.style.display = d.error ? 'block' : 'none'; els.err.textContent = d.error || '';
+    els.open.style.display = d.status === 'done' ? 'inline-flex' : 'none';
+    els.retry.style.display = (d.status === 'done' || d.status === 'error') ? 'inline' : 'none';
+    if (d.status === 'done' && initialStatus !== 'done') { location.reload(); return; }
+    if (d.status === 'queued' || d.status === 'running') setTimeout(poll, 2000);
+  } catch (e) { setTimeout(poll, 4000); }
+}
+els.log.scrollTop = els.log.scrollHeight;
+poll();
+</script>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ {'login': 'Log in', 'signup': 'Create account', 'setup': 'Set up'}[mode] }} · valcoach{% endblock %}
+{% block content %}
+<form method="post" class="card" style="max-width:400px;margin:48px auto" autocomplete="on">
+  {% if mode == 'setup' %}
+    <h1>Create the admin account</h1>
+    <p class="muted" style="margin:6px 0 18px">The admin manages user accounts and the server settings (API key, Ollama).
+      Everyone, including the admin, gets their own private workspace.
+      {% if orphans %}<br><br><b style="color:var(--text)">Your existing {{ orphans }} player{{ '' if orphans == 1 else 's' }} and their reports will move into this account.</b>{% endif %}</p>
+  {% elif mode == 'signup' %}
+    <h1>Create account</h1>
+    <p class="muted" style="margin:6px 0 18px">You get your own workspace for your players, notes and reports.</p>
+  {% else %}
+    <h1 style="margin-bottom:18px">Log in</h1>
+  {% endif %}
+
+  <div class="field"><label>Username</label>
+    <input type="text" name="username" value="{{ username or '' }}" required autofocus autocapitalize="none" autocomplete="username"
+           {% if mode != 'login' %}pattern="[A-Za-z0-9._\-]{3,32}" title="3–32 letters, digits, . _ -"{% endif %}></div>
+  <div class="field"><label>Password</label>
+    <input type="password" name="password" required autocomplete="{{ 'current-password' if mode == 'login' else 'new-password' }}"
+           {% if mode != 'login' %}minlength="{{ min_password }}"{% endif %}>
+    {% if mode != 'login' %}<div class="hint">At least {{ min_password }} characters.</div>{% endif %}</div>
+  {% if mode != 'login' %}
+  <div class="field"><label>In-game name <span class="muted">(optional)</span></label><input type="text" name="display_name" placeholder="Name#TAG" maxlength="40" value="{{ display_name or '' }}">
+    <div class="hint">What teammates see, e.g. <code>adv1ce#LFT</code>. If it matches a player in a team you're added to, you're linked to it.</div></div>
+  <div class="field"><label>Repeat password</label><input type="password" name="password2" required autocomplete="new-password" minlength="{{ min_password }}"></div>
+  {% endif %}
+
+  <button class="btn primary" type="submit" style="width:100%;justify-content:center">
+    {{ {'login': 'Log in', 'signup': 'Create account', 'setup': 'Create admin and continue'}[mode] }}</button>
+
+  {% if mode == 'login' and signup_enabled %}
+  <p class="muted small" style="text-align:center;margin:14px 0 0">No account? <a href="{{ url_for('signup') }}">Create one</a></p>
+  {% elif mode == 'login' %}
+  <p class="muted small" style="text-align:center;margin:14px 0 0">No account? Ask the admin to create one for you.</p>
+  {% elif mode == 'signup' %}
+  <p class="muted small" style="text-align:center;margin:14px 0 0">Already have an account? <a href="{{ url_for('login') }}">Log in</a></p>
+  {% endif %}
+</form>
+{% endblock %}

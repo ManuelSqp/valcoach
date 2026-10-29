@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Notes · {{ t.name }} · valcoach{% endblock %}
+{% block head %}
+<style>
+.note{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.note .meta{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center;margin-bottom:4px}
+.note .about{font-size:11px;font-weight:700;padding:1px 8px;border-radius:99px;background:#232a38;color:var(--text)}
+.note p{margin:0;white-space:pre-wrap}
+.tip{border-left:3px solid var(--amber);background:rgba(242,184,75,.06);padding:9px 12px;border-radius:0 8px 8px 0;margin-bottom:8px}
+.tip.duo{border-color:var(--win);background:rgba(53,208,160,.06)}
+.tip small{display:block;color:var(--muted);margin-top:2px}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+<div class="grid2" style="align-items:start">
+  <div>
+    <section class="card">
+      <h2>Add a note</h2>
+      <form method="post">
+        <div class="row" style="gap:8px;margin-bottom:8px">
+          <select name="about" style="width:auto"><option value="">About the team</option>
+            {% for m in members %}<option value="{{ m.pid }}">About {{ players[m.pid].name }}</option>{% endfor %}</select>
+          <select name="map" style="width:auto"><option value="">Any map</option>{% for mp in maps %}<option>{{ mp }}</option>{% endfor %}</select>
+        </div>
+        <textarea name="text" rows="3" style="min-height:70px;font-family:inherit;font-size:14px" placeholder="e.g. Burn gets pushed by 2 on B every time: whoever's on C rotates early to play with him." required maxlength="2000"></textarea>
+        <div class="row between" style="margin-top:8px"><span class="hint">Everyone in the team sees notes. The coach doesn't change them.</span><button class="btn primary">Add note</button></div>
+      </form>
+    </section>
+    <section class="card">
+      <h2>Notes ({{ notes|length }})</h2>
+      {% for n in notes %}
+      <div class="note">
+        <div class="meta">
+          {% if n.about_pid and players.get(n.about_pid) %}<span class="about">{{ players[n.about_pid].name }}</span>{% else %}<span class="about">team</span>{% endif %}
+          {% if n.map %}<span class="about">{{ n.map }}</span>{% endif %}
+          <span>{{ n.author or 'someone' }} · {{ n.created_at|localtime }}</span>
+          {% if n.author_id == user.id or g.team_owner %}<form method="post" action="{{ url_for('team_note_delete', tid=t.id, nid=n.id) }}" style="margin-left:auto"><button class="linkbtn small" title="Delete">✕</button></form>{% endif %}
+        </div>
+        <p>{{ n.text }}</p>
+      </div>
+      {% else %}<p class="muted">No notes yet. Write what you notice about each other, per map if it's map-specific.</p>{% endfor %}
+    </section>
+  </div>
+  <section class="card">
+    <h2>From your matches together</h2>
+    <p class="small muted" style="margin-top:-4px">From the {{ n_matches }} recent match{{ 'es' if n_matches != 1 }} with full round data where at least 3 starters played together.</p>
+    {% for tp in tips %}
+    <div class="tip {{ 'duo' if tp.kind == 'duo' }}">{{ tp.text }}<small>{{ {'outnumbered': 'dies outnumbered', 'alone': 'dies alone', 'duo': 'works well together'}[tp.kind] }}{% if tp.map %} · {{ tp.map }}{% endif %}</small></div>
+    {% else %}<p class="muted">Nothing that stands out yet{% if n_matches < 5 %} (needs a few more matches together){% endif %}.</p>{% endfor %}
+  </section>
+</div>
+{% endblock %}

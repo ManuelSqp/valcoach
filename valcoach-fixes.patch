@@ -1,0 +1,1335 @@
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/CHANGES.md b/CHANGES.md
+--- a/CHANGES.md	1970-01-01 01:00:00.000000000 +0100
++++ b/CHANGES.md	2026-10-29 14:29:10.400000000 +0100
+@@ -0,0 +1,92 @@
++# Review fixes on top of 2.15.0 (29.10.2026)
++
++Ich han da Changes nid gschwriebe es het mich agschiese das formuliere dorum AI text wos suber zämmefast
++
++These fixes were made on 2.2.0 and 2.7.0 and lost twice when a new version was unzipped over them. To keep
++them: apply `valcoach-fixes.patch` to your source **before** building the next version
++(`patch -p1 < valcoach-fixes.patch` in the project folder, or `git apply valcoach-fixes.patch`).
++
++## Coaching quality
++
++**`parse.py`, `analysis/player.py`, `pipeline.py`: "zero utility" coaching (`has_utility`)**
++The live API fills the match totals (`players[].ability_casts`, e.g. `grenade: 30`) but sends `null` for every
++per-round cast. `_utility_present()` also checked the match totals, so `has_utility` was `True` for every real match,
++and the round prompts said `utility_casts: none` ("your utility usage is zero"). The check now only looks at the
++per-round casts. If they're missing, the match stats fall back to the real match totals (`utility_per_round`,
++new `ults_used`). The new `test_live_api_utility_shape` covers the real data shape.
++
++**`coach/prompts.py`, `coach/engine.py`, `coach/teamreview.py`, `stats/weekly.py`, `stats/gameplans.py`,
++`stats/tips.py`: the model never saw the field descriptions**
++Ollama uses the JSON schema only to force the output format; `description` texts in a schema are not shown to
++the model. That's why "headline: one sentence, no player name" still produced "Post-Match Review: BurnTheGoat#NOW",
++summaries were "Round 3 Review: …", and `better_option` was "N/A". New `field_guide(schema)` turns the descriptions
++into an "Output fields" section of the system prompt. It is used by the round and match review **and by the 2.12+
++features** (team review, weekly focus, game plans, map tips, pro watch list), which had the same problem.
++Descriptions were added for `better_option`, `went_well`, `mistakes`, `key_moment`, `strengths`, issues and IGL notes.
++
++**`coach/prompts.py`, `coach/engine.py`, `report.py`: "check the VOD" without a VOD**
++The prompt told the model to "check the VOD at 0:42" when facts were missing, so it put this into `better_option`
++even when no VOD existed. Now: without a VOD the model is told there is no recording. With a VOD, these
++hints go into a new optional field `check_in_vod`, shown in the report as "Check in the VOD". `clean_feedback()`
++drops filler (`N/A`, `None. …`), so the report hides the box instead of showing it.
++On the live model (gemma4:26b, Sunset match): title-only summaries went from 23 of 23 to 0, "N/A" from 3 to 0,
++and VOD mentions without a VOD from 20 to 0.
++
++**`pipeline.py`, `parse.py`, `models.py`, `web/__init__.py`, `profile.html`: deathmatch etc. could be coached**
++History includes Deathmatch, Team Deathmatch (`hurm`) and Gauntlet (`abilitydraftarena`). These have no sides or economy,
++so the analysis was nonsense. New `Match.mode_type` and `coachable()` check: the match list (recent and stored
++archive) shows "not coachable", and the coach/notes pages and `pipeline.run` refuse these matches.
++
++**`analysis/team.py`: time-outs were never detected**
++The check looked for a result like "Round timer…", but the API only sends `Elimination`, `Defuse`, `Detonate` or `""`.
++A time-out is now worked out from the data (no plant, attackers still alive, defenders won): result "Time expired"
++plus a flag for both sides.
++
++## Security and stability
++
++**`web/static/strat.js`, `web/strats.py`: a team member could plant code in a strat board (stored XSS)** *(new in 2.13+)*
++The properties panel builds HTML from `i.n`, `i.r`, `i.len`, `i.ang` without escaping, and `strat_save` stored any
++JSON. A teammate could save e.g. `"n": "\"><img src=x onerror=…>"`, and it would run in the browser of everyone who
++opens the board, including the owner/admin. Now the editor forces these values to numbers (`num()`), and the server
++keeps only well-typed item fields (`clean_board()`: numbers for `x y x2 y2 r len ang n size`, length-limited strings
++for `t id a s label c`, `dash` as bool, `pts` as number pairs). **If you add a new item field, add it to
++`ITEM_NUMBERS` / `ITEM_STRINGS`, or it will be dropped on save.**
++
++**`web/__init__.py`: forms could be sent from other websites (CSRF)**
++Only `SameSite=Lax` cookies protected the forms. Every POST now checks the browser's `Origin` (or `Referer`) header.
++A form from another site gets 403. Requests without these headers (CLI, scripts) are unaffected, and
++`X-Forwarded-Host` is accepted for a reverse proxy.
++
++**`web/__init__.py`, `store.py`, `settings.html`: no limits per user**
++With sign-up enabled, anyone could fill the disk or flood the shared queue. New settings: *Max reports per user at
++once* (default 3, also applies to *Run again*) and *Max VOD upload size* (default 20 GB). Uploads are also refused if
++less than 1 GB of disk would stay free. All of this is checked before the upload body is read.
++
++**`web/jobs.py`, `store.py`: the same job could run twice**
++A double click on *Run again* submitted the job twice. The queued → running switch is now one atomic update (`claim_job`).
++
++**`web/__init__.py`: deleting a player during a running report**
++The profile and its folder were deleted under the running job. This is now refused until the job finishes.
++
++**`web/__init__.py`, `pipeline.py`, `coach/engine.py`: crashes (500) on bad input**
++A non-numeric anchor round/kill crashed the coach form. It's now validated before an upload is stored. Hand-edited
++notes YAML with bad keys, a list, or broken syntax crashed the notes page and coaching. Those entries are now skipped.
++
++**`pipeline.py`, `web/__init__.py`: match ID not validated**
++`load_match` accepts file paths (`*.json`), and the web passed the URL's match ID straight in. Web match IDs must now be
++letters, digits and dashes (anything else returns 404), and the CLI rejects malformed IDs.
++
++**`web/__init__.py`: in-memory lists without a limit**
++The failed-login table and the match-list cache grew forever. Expired lockouts are pruned above 1,000 entries,
++and the cache keeps at most 200 entries.
++
++## Other
++- `pyproject.toml`: Flask ≥ 3.1 (per-request upload limit).
++- `README.md`: known limits updated (live API works, video not yet tested on a real recording, no per-round
++  utility, replay estimates without a VOD, teams are shared now). The user limits, non-coachable modes and
++  the origin check are documented.
++- Tests: 12 new (97 total, all passing).
++
++## Not changed (for you to decide)
++- Team members can rebuild a team's game plans (`/teams/<tid>/plans/build` uses `get_team(tid)`, not
++  `manage=True`), although the changelog calls members read-only. This overwrites the plans and uses the model.
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/pyproject.toml b/pyproject.toml
+--- a/pyproject.toml	2026-10-29 13:39:26.000000000 +0100
++++ b/pyproject.toml	2026-10-29 14:23:52.896000000 +0100
+@@ -14,7 +14,7 @@
+   "opencv-python-headless>=4.9",   # no GUI parts: works on servers without libGL
+   "pyyaml>=6.0",
+   "jinja2>=3.1",
+-  "flask>=3.0",
++  "flask>=3.1",
+   "waitress>=3.0",
+ ]
+ 
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/README.md b/README.md
+--- a/README.md	2026-10-29 13:39:28.000000000 +0100
++++ b/README.md	2026-10-29 14:28:41.788000000 +0100
+@@ -26,7 +26,7 @@
+ /opt/homebrew/opt/python@3.11/bin/python3.11 -m venv .venv
+ source .venv/bin/activate
+ pip install -e ".[dev]"
+-pytest -q                     # 60 tests, ~3 min, builds a synthetic match + VOD
++pytest -q                     # 97 tests, ~3 min, builds a synthetic match + VOD
+ ollama pull qwen3.8:27b       # default; alternatives below
+ ```
+ 
+@@ -219,9 +219,16 @@
+ - Drag the **⋮⋮** handle on a player card to set the order of your players (dashboard and top bar).
+   It's saved per account. On a phone drag the handle; with the keyboard, focus it and use the arrow keys.
+ - All coaching jobs share **one queue** (*Settings → Coaching jobs at the same
+-  time*, 1 is right for one Mac).
++  time*, 1 is right for one Mac). Each user can have at most 3 reports queued or
++  running (*Max reports per user at once*), and an uploaded VOD may be at most
++  20 GB (*Max VOD upload size*); both are admin settings.
++- Only round-based modes can be coached (Competitive, Premier, Unrated, Swiftplay,
++  Custom). Deathmatch, Team Deathmatch and Gauntlet show as *not coachable*.
+ - Passwords have at least 8 characters. Changing a password logs out the other
+   devices. 5 wrong logins lock that username from that address for 10 minutes.
++- Forms are only accepted from the app's own pages (checked via the browser's
++  `Origin` header). Behind a reverse proxy, keep the original `Host` header or
++  set `X-Forwarded-Host`.
+ - Forgotten admin password: run
+   `python -c "from valcoach.web.store import Store; s=Store('data'); s.set_password(s.user_by_name('manuel').id, 'new-password')"`
+   in the project folder.
+@@ -335,12 +342,18 @@
+ 
+ ## 6. Known limits
+ 
+-- Tested on synthetic data in the exact v4 schema (sync within 0.05 s,
+-  calibration within 1–2 px). **Not yet run against a live API response or a
+-  real recording**. Expect to adjust the screen areas and maybe `COLOR_RANGES` once.
++- Match data and coaching run on live HenrikDev data. The **video part** (sync,
++  minimap) is only tested on synthetic recordings (sync within 0.05 s,
++  calibration within 1–2 px), **not yet on a real recording**. Expect to adjust
++  the screen areas and maybe `COLOR_RANGES` once.
++- The live API has no per-round utility (ability casts are `null` per round), so
++  round coaching leaves utility out; match totals are still used.
++- Without a VOD, positions are only known at kills, plants and defuses; the round
++  replay estimates everything in between.
+ - Ally counts from the minimap are approximate, because stacked icons merge.
+ - Teammate tracking is tuned on synthetic recordings (95 % coverage, ~1.7 m median error there).
+   Real minimaps have agent portraits, utility icons and pings, so expect less until it's checked
+   on a real recording.
+ - After you die, the minimap shows your spectated teammate's view, so your own path ends at your death.
+-- No shared team workspaces yet: teammates each keep their own copy of the playbook.
++- Teams are shared (comps, game plans, notes, strats), but each player's coaching playbook
++  is still a separate copy per profile.
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/tests/test_pipeline.py b/tests/test_pipeline.py
+--- a/tests/test_pipeline.py	2026-10-29 08:28:51.000000000 +0100
++++ b/tests/test_pipeline.py	2026-10-29 14:26:02.312000000 +0100
+@@ -76,7 +76,7 @@
+     assert att_ot[24:] == ["Red", "Blue", "Red", "Blue"]
+ 
+ 
+-def _mini_match(kills):
++def _mini_match(kills, winner="Red", result="Elimination"):
+     """Two-kill round to test trades / isolation precisely."""
+     def pl(pu, team):
+         return {"puuid": pu, "name": pu, "tag": "x", "team": team}
+@@ -93,7 +93,7 @@
+     return parse_match({"data": {
+         "metadata": {"match_id": "mini", "map": {"id": "", "name": "x"}, "queue": {"id": "premier"}},
+         "players": players, "teams": [{"team_id": "Red", "rounds": {"won": 1}}, {"team_id": "Blue", "rounds": {"won": 0}}],
+-        "rounds": [{"id": 0, "winning_team": "Red", "result": "Elimination", "stats": []}],
++        "rounds": [{"id": 0, "winning_team": winner, "result": result, "stats": []}],
+         "kills": ks}})
+ 
+ 
+@@ -583,3 +583,100 @@
+     by_name = {d["name"]: d for d in f["players"].values()}
+     for name, d in by_name.items():
+         assert d["trades"] == sum(t["times"] for t in f["trade_pairs"] if t["traded_by"] == name)
++
++
++# ---------------------------------------------------------------------------
++# review fixes (see CHANGES.md)
++def test_live_api_utility_shape():
++    """Live API: match totals filled, every per-round cast null. Rounds must not claim "no utility"."""
++    from valcoach.coach.summarize import match_stats_block, round_summary
++    raw = synth.build_match(n_rounds=4)
++    for r in raw["data"]["rounds"]:
++        for st in r["stats"]:
++            st["ability_casts"] = {"grenade": None, "ability_1": None, "ability_2": None, "ultimate": None}
++    m = parse_match(raw)
++    assert m.has_utility is False
++    me = m.find_player("adv1ce", "LFT").puuid
++    an = analyse(m, me, None)
++    txt = round_summary(an.team_facts[0], an.player_facts[0])
++    assert "utility_casts" not in txt and "ult_used" not in txt
++    # match totals (grenade 3 + ability1 5 + ability2 4 over 4 rounds) are still used
++    assert an.player_stats.utility_per_round == 3.0 and an.player_stats.ults_used == 1
++    assert "utility_per_round: 3.0" in match_stats_block(None, an.player_stats)
++
++
++def test_non_round_modes_are_not_coachable():
++    from valcoach.pipeline import coachable
++    assert coachable(parse_match(synth.build_match(n_rounds=4))) is None
++    for mode_type in ("Deathmatch", "Team Deathmatch", "Gauntlet: Glitched"):
++        raw = synth.build_match(n_rounds=4)
++        raw["data"]["metadata"]["queue"]["mode_type"] = mode_type
++        assert "can't be coached" in coachable(parse_match(raw))
++    one_round = synth.build_match(n_rounds=1)
++    one_round["data"]["metadata"]["queue"]["mode_type"] = ""
++    assert coachable(parse_match(one_round)) is not None
++
++
++def test_time_out_detected_without_result_text():
++    from valcoach.analysis.team import analyse_team_round
++    # Red attacks round 1, loses with 1 player left, no plant, API result empty -> time ran out
++    m = _mini_match([("b1", "Blue", "r1", "Red", 10_000, 0, [])], winner="Blue", result="")
++    att = analyse_team_round(m, m.rounds[0], "Red", None)
++    dfn = analyse_team_round(m, m.rounds[0], "Blue", None)
++    assert att.result == "Time expired" and "failed to plant before time ran out" in att.notable
++    assert "held until time ran out (no plant)" in dfn.notable
++    # attackers all dead = elimination even without result text
++    m = _mini_match([("b1", "Blue", "r1", "Red", 10_000, 0, []), ("b1", "Blue", "r2", "Red", 12_000, 0, [])],
++                    winner="Blue", result="")
++    assert analyse_team_round(m, m.rounds[0], "Red", None).result == ""
++
++
++def test_match_ids_and_broken_notes(tmp_path):
++    from valcoach.config import CoachCfg, Config, PathsCfg
++    from valcoach.pipeline import load_match, read_notes
++    cfg = Config(coach=CoachCfg(notes_dir=str(tmp_path)), paths=PathsCfg(cache_dir=str(tmp_path)), root=tmp_path)
++    for bad in ("..", "../../etc/passwd", "a b", "x" * 65):
++        with pytest.raises(ValueError):
++            load_match(cfg, bad)
++    (tmp_path / "m1.yaml").write_text("rounds: {1: ok, two: bad, 3: ''}\n")
++    assert read_notes(cfg, "m1") == {1: "ok"}
++    (tmp_path / "m2.yaml").write_text("- just\n- a list\n")
++    assert read_notes(cfg, "m2") == {}
++    (tmp_path / "m3.yaml").write_text("rounds: [unclosed\n")
++    assert read_notes(cfg, "m3") == {}
++
++
++def test_prompts_show_field_rules_to_the_model():
++    """Ollama only enforces the schema; the field descriptions must be in the prompt text."""
++    from valcoach.coach import prompts
++    from valcoach.coach.engine import clean_feedback
++    s = prompts.round_schema("both", ["A Main"], has_vod=False)
++    guide = prompts.field_guide(s)
++    assert "player.better_option:" in guide and "Never 'None' or 'N/A'" in guide
++    assert "summary:" in guide and "check_in_vod" not in guide
++    assert "check_in_vod" in prompts.round_schema("player", None, has_vod=True)["properties"]
++    assert "never tell the user to check a VOD" in prompts.EVIDENCE_NO_VOD
++    assert "headline:" in prompts.field_guide(prompts.match_schema("team"))
++    fb = clean_feedback({"summary": "x", "check_in_vod": "", "player": {"better_option": "N/A"},
++                         "team": {"better_option": "None. The round went fine."}})
++    assert "better_option" not in fb["player"] and "better_option" not in fb["team"] and "check_in_vod" not in fb
++    keep = clean_feedback({"player": {"better_option": "Hold B Main with the team instead of peeking alone."}})
++    assert keep["player"]["better_option"].startswith("Hold")
++
++
++def test_new_llm_features_send_their_field_rules(monkeypatch):
++    """Weekly focus, map tips, game plans and the team review also tell the model what each field means."""
++    from valcoach.coach.prompts import field_guide
++    from valcoach.stats import gameplans, tips, weekly
++    for sch in (weekly.schema(), tips.schema()):
++        assert field_guide(sch).count("\n- ") >= 2
++    seen = []
++
++    class FakeLLM:
++        model = "fake"
++
++        def chat_json(self, system, user, schema):
++            seen.append(system)
++            return {}
++    weekly.write_focus(FakeLLM(), {"player": "x"})
++    assert "Output fields:" in seen[-1] and "focus:" in seen[-1]
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/tests/test_web.py b/tests/test_web.py
+--- a/tests/test_web.py	2026-10-29 13:37:04.000000000 +0100
++++ b/tests/test_web.py	2026-10-29 14:26:02.312000000 +0100
+@@ -982,3 +982,103 @@
+     page = c.get(f"/teams/{tid}/roles").data.decode()
+     assert 'class="sorth"' in page and "<tbody>" in page
+     sr.shutdown()
++
++
++# ---------------------------------------------------------------------------
++# review fixes (see CHANGES.md)
++def test_bad_ids_and_anchor_inputs(app):
++    c = setup_admin(app)
++    pid = add_profile(c)
++    for mid in ("..", "x.json", "valcoach.db"):
++        assert c.get(f"/profiles/{pid}/coach/{mid}").status_code == 404, mid
++        assert c.get(f"/profiles/{pid}/notes/{mid}").status_code == 404, mid
++    r = c.get(f"/profiles/{pid}/open?match_id=../x")
++    assert b"look like a match ID" in c.get(r.headers["Location"]).data
++    for rnd, kill in (("abc", "1"), ("99", "1"), ("1", "0")):
++        r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}",
++                   data={"mode": "team", "vod": "", "anchor_round": rnd, "anchor_kill": kill})
++        assert r.status_code == 302 and b"Anchor round must be" in c.get(r.headers["Location"]).data
++
++
++def test_deathmatch_is_not_coachable(app, synthetic):
++    raw = json.loads(Path(synthetic["match"]).read_text())
++    raw["data"]["metadata"]["queue"] = {"id": "deathmatch", "name": "Deathmatch", "mode_type": "Deathmatch"}
++    store = app.extensions["valcoach"]["store"]
++    (store.data_dir / "cache" / "matches" / "dm-match-1.json").write_text(json.dumps(raw))
++    c = setup_admin(app)
++    pid = add_profile(c)
++    for url in (f"/profiles/{pid}/coach/dm-match-1", f"/profiles/{pid}/notes/dm-match-1"):
++        r = c.get(url)
++        assert r.status_code == 302 and b"can&#39;t be coached" in c.get(r.headers["Location"]).data
++
++
++def test_job_quota_upload_limit_and_running_delete(app):
++    c = setup_admin(app)
++    pid = add_profile(c)
++    store = app.extensions["valcoach"]["store"]
++    # a job that sits in the queue (never submitted) counts against the quota
++    store.create_job("held1", pid, MATCH_ID, "team")
++    store.set("max_jobs_per_user", "1")
++    r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}", data={"mode": "team", "vod": "", "no_llm": "1"})
++    assert b"already have 1 report" in c.get(r.headers["Location"]).data
++    store.set("max_jobs_per_user", "3")
++    # upload over the size limit is refused before it is stored
++    store.set("max_upload_gb", "0.000001")          # ~1 KB
++    r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}",
++               data={"mode": "team", "vod": "upload", "vod_file": (io.BytesIO(b"x" * 5000), "big.mp4")},
++               content_type="multipart/form-data")
++    assert b"upload is too big" in c.get(r.headers["Location"]).data
++    assert not list(store.upload_dir(store.user_by_name("manuel").id).glob("*"))
++    # a player with a running report can't be deleted
++    store.update_job("held1", status="running")
++    r = c.post(f"/profiles/{pid}/delete")
++    assert b"being made right now" in c.get(r.headers["Location"]).data
++    assert store.profile(pid) is not None
++    store.update_job("held1", status="done")
++    assert c.post(f"/profiles/{pid}/delete").status_code == 302 and store.profile(pid) is None
++
++
++def test_forms_from_other_sites_are_blocked(app):
++    c = setup_admin(app)
++    evil = {"Origin": "http://evil.example"}
++    r = c.post("/profiles/new", headers=evil, data={"name": "x", "tag": "y", "region": "eu", "platform": "pc",
++                                                     "mode": "both", "language": "English", "playbook": ""})
++    assert r.status_code == 403 and b"another website" in r.data
++    assert c.post("/logout", headers={"Referer": "http://evil.example/page"}).status_code == 403
++    # the app's own pages (same host) and non-browser clients still work
++    assert c.post("/profiles/new", headers={"Origin": "http://localhost"},
++                  data={"name": "a", "tag": "b", "region": "eu", "platform": "pc", "mode": "both",
++                        "language": "English", "playbook": ""}).status_code == 302
++
++
++def test_job_is_claimed_once(app):
++    c = setup_admin(app)
++    pid = add_profile(c)
++    store = app.extensions["valcoach"]["store"]
++    store.create_job("twice1", pid, MATCH_ID, "team")
++    assert store.claim_job("twice1") is True
++    assert store.claim_job("twice1") is False          # second submit of the same job does nothing
++    assert store.job("twice1").status == "running"
++
++
++def test_strat_board_only_stores_typed_fields(app):
++    """A team member can't plant HTML in fields the editor shows as numbers."""
++    c = setup_admin(app)
++    store = app.extensions["valcoach"]["store"]
++    me = add_profile(c)
++    tid = store.create_team(store.user_by_name("manuel").id, "Squad")
++    store.update_team(tid, members=[{"pid": me, "kind": "starter"}], maps=["Testmap"])
++    r = c.post(f"/teams/{tid}/strats", data={"name": "B split", "map": "Testmap", "side": "attack"})
++    sid = int(r.headers["Location"].rsplit("/", 1)[1])
++    evil = '"><img src=x onerror=alert(1)>'
++    items = [{"id": "a1", "t": "num", "x": 10, "y": 20, "n": evil, "r": evil, "ang": evil, "len": "5"},
++             {"id": "a2", "t": "arrow", "x": 1, "y": 2, "x2": 30, "y2": 40, "c": "us", "dash": 1},
++             {"id": "a3", "t": "pen", "pts": [[1, 2], ["x", 3], [4, 5]]}, "junk", {"no": "type"}]
++    r = c.post(f"/api/teams/{tid}/strats/{sid}", json={"data": {"steps": [{"name": "S", "items": items}]}})
++    assert r.status_code == 200
++    saved = store.strat(sid)["data"]["steps"][0]["items"]
++    assert saved[0] == {"id": "a1", "t": "num", "x": 10, "y": 20, "len": 5}
++    assert saved[1]["x2"] == 30 and saved[1]["dash"] is True
++    assert saved[2]["pts"] == [[1, 2], [4, 5]] and len(saved) == 3
++    assert "onerror" not in json.dumps(store.strat(sid)["data"])
++
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/analysis/player.py b/valcoach/analysis/player.py
+--- a/valcoach/analysis/player.py	2026-10-28 08:17:33.000000000 +0100
++++ b/valcoach/analysis/player.py	2026-10-29 14:22:15.564000000 +0100
+@@ -216,6 +216,7 @@
+     deaths_without_damage: int = 0
+     duels_by_range: dict[str, dict[str, int]] = field(default_factory=dict)   # range -> {kills, deaths}
+     shots_by_weapon: dict[str, dict] = field(default_factory=dict)            # main weapon of the round
++    ults_used: int | None = None
+ 
+ 
+ def player_match_stats(match: Match, puuid: str, facts: list[PlayerRoundFacts],
+@@ -235,7 +236,14 @@
+     weapons = Counter(d["weapon"] for f in facts for d in f.kill_duels)
+     att = [f for f in facts if f.side == "attack"]
+     dfn = [f for f in facts if f.side == "defense"]
+-    util = sum(sum(v for k, v in f.utility_casts.items() if k != "ultimate") for f in facts)
++    util = ults = None
++    if match.has_utility:
++        util = sum(sum(v for k, v in f.utility_casts.items() if k != "ultimate") for f in facts)
++        ults = sum(f.utility_casts.get("ultimate", 0) for f in facts)
++    elif any(me.ability_casts.values()):
++        # no per-round casts (live API): the match totals are still real numbers
++        util = sum(v for k, v in me.ability_casts.items() if k != "ultimate")
++        ults = me.ability_casts.get("ultimate", 0)
+ 
+     by_range: dict[str, dict[str, int]] = {}
+     for f in facts:
+@@ -283,7 +291,8 @@
+         avg_death_time_s=round(sum(death_secs) / len(death_secs), 1) if death_secs else None,
+         top_death_areas=Counter(f.death_area for f in deaths if f.death_area).most_common(3),
+         kills_by_weapon=weapons.most_common(5),
+-        utility_per_round=round(util / n, 2) if match.has_utility else None,
++        utility_per_round=round(util / n, 2) if util is not None else None,
++        ults_used=ults,
+         attack_adr=round(sum(f.damage for f in att) / len(att), 1) if att else 0.0,
+         defense_adr=round(sum(f.damage for f in dfn) / len(dfn), 1) if dfn else 0.0,
+         view_analysis=bool(vm and vm.ok),
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/analysis/team.py b/valcoach/analysis/team.py
+--- a/valcoach/analysis/team.py	2026-10-28 08:17:33.000000000 +0100
++++ b/valcoach/analysis/team.py	2026-10-29 14:22:15.564000000 +0100
+@@ -72,6 +72,10 @@
+     max_adv, max_dis = max(diffs), min(diffs)
+     won = rnd.winning_team == team
+     progression = " > ".join(f"{a}v{b}" for _, a, b in prog)
++    # the API has no "time ran out" result: no plant, attackers still alive, defenders won
++    attackers_left = prog[-1][1] if side == "attack" else prog[-1][2]
++    timed_out = (not rnd.plant and attackers_left > 0 and bool(rnd.winning_team)
++                 and rnd.winning_team != rnd.attacking_team)
+ 
+     plant_site = plant_time = None
+     alive_plant = None
+@@ -109,8 +113,10 @@
+             notable.append("planted but lost post-plant (eliminated)")
+     if rnd.plant and side == "defense" and won and rnd.defuse:
+         notable.append("successful retake + defuse")
+-    if not rnd.plant and side == "attack" and not won and rnd.result.lower().startswith(("round timer", "time")):
++    if timed_out and side == "attack":
+         notable.append("failed to plant before time ran out")
++    if timed_out and side == "defense":
++        notable.append("held until time ran out (no plant)")
+     if our_avg and opp_avg and our_avg < 1500 and opp_avg > 3500 and won:
+         notable.append("won an eco/force vs full buy")
+     if our_avg > 3500 and opp_avg and opp_avg < 1500 and not won:
+@@ -132,7 +138,7 @@
+         round=rnd.number,
+         side=side,
+         won=won,
+-        result=rnd.result,
++        result=rnd.result or ("Time expired" if timed_out else ""),
+         score_before=match.score_before(rnd.index, team),
+         our_buy=buy_type(our_avg, pistol),
+         our_loadout_avg=int(our_avg),
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/coach/engine.py b/valcoach/coach/engine.py
+--- a/valcoach/coach/engine.py	2026-10-29 08:44:04.000000000 +0100
++++ b/valcoach/coach/engine.py	2026-10-29 14:22:52.540000000 +0100
+@@ -14,6 +14,7 @@
+ from ..analysis.view import ViewModel, calibrate
+ from ..maps import MapInfo
+ from ..models import Match
++from ..pipeline import note_rounds
+ from . import prompts
+ from .ollama import Ollama
+ from .replay import build_replay
+@@ -81,8 +82,8 @@
+             d = yaml.safe_load(p.read_text()) or {}
+         except yaml.YAMLError:
+             continue
+-        rounds = {int(k): str(v) for k, v in (d.get("rounds") or {}).items()}
+-        if d.get("match_id") == match_id:
++        rounds = note_rounds(d)
++        if isinstance(d, dict) and d.get("match_id") == match_id:
+             this = rounds
+         else:
+             examples.extend(rounds.values())
+@@ -116,6 +117,26 @@
+         path.write_text(json.dumps(asdict(self), indent=2, default=str))
+ 
+ 
++PLACEHOLDERS = {"", "n/a", "na", "none", "-", "nothing", "null"}
++
++
++def _is_filler(text) -> bool:
++    """'N/A', 'None.' or 'None. The round went fine' - nothing to act on."""
++    first = str(text or "").strip().split(".")[0].split(" - ")[0].strip().lower()
++    return first in PLACEHOLDERS
++
++
++def clean_feedback(fb: dict) -> dict:
++    """Drop filler the model writes into required fields ('N/A', '-'), so the report hides them."""
++    for side in ("team", "player"):
++        part = fb.get(side)
++        if isinstance(part, dict) and _is_filler(part.get("better_option")):
++            part.pop("better_option", None)
++    if _is_filler(fb.get("check_in_vod")):
++        fb.pop("check_in_vod", None)
++    return fb
++
++
+ def run_coach(an: Analysis, llm: Ollama | None, mode: str = "both", language: str = "English",
+               playbook_path: Path | None = None, notes_dir: Path | None = None,
+               parallel: int = 4, sync=None, progress=None) -> CoachReport:
+@@ -126,10 +147,13 @@
+     playbook = load_playbook(playbook_path, m.map_name) if playbook_path else ""
+     own_notes, examples = load_notes(notes_dir, m.match_id) if notes_dir else ({}, [])
+ 
+-    round_sys = prompts.ROUND_SYSTEM.format(who=who, language=language, playbook=playbook,
+-                                            examples=_examples_block(examples))
+     callouts = sorted({c.label for c in an.map_info.callouts}) if an.map_info else None
+-    schema = prompts.round_schema(mode, callouts)
++    has_vod = sync is not None
++    schema = prompts.round_schema(mode, callouts, has_vod)
++    round_sys = prompts.ROUND_SYSTEM.format(
++        who=who, language=language, playbook=playbook, examples=_examples_block(examples),
++        evidence_rule=prompts.EVIDENCE_WITH_VOD if has_vod else prompts.EVIDENCE_NO_VOD,
++        fields=prompts.field_guide(schema))
+ 
+     inputs = []
+     for i, r in enumerate(m.rounds):
+@@ -141,7 +165,7 @@
+         if llm is None:
+             return {}
+         try:
+-            return llm.chat_json(round_sys, inputs[i], schema)
++            return clean_feedback(llm.chat_json(round_sys, inputs[i], schema))
+         except Exception as e:  # keep the report usable if one round fails
+             return {"error": str(e)}
+ 
+@@ -170,10 +194,12 @@
+             digest.append(line)
+         user = ("MATCH STATS\n" + stats_txt + "\nROUND REVIEWS\n" +
+                 yaml.safe_dump(digest, sort_keys=False, allow_unicode=True, width=120))
++        mschema = prompts.match_schema(mode)
+         try:
+             match_review = llm.chat_json(
+-                prompts.MATCH_SYSTEM.format(who=who, language=language, playbook=playbook),
+-                user, prompts.match_schema(mode))
++                prompts.MATCH_SYSTEM.format(who=who, language=language, playbook=playbook,
++                                            fields=prompts.field_guide(mschema)),
++                user, mschema)
+         except Exception as e:
+             match_review = {"error": str(e)}
+ 
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/coach/prompts.py b/valcoach/coach/prompts.py
+--- a/valcoach/coach/prompts.py	2026-10-28 08:57:18.000000000 +0100
++++ b/valcoach/coach/prompts.py	2026-10-29 14:22:40.528000000 +0100
+@@ -8,7 +8,7 @@
+ - Use ONLY the facts in the round data. Never invent positions, utility, comms or timings that are not there.
+ - A missing field means the data doesn't have it, NOT that it didn't happen. If there is no utility_casts
+   field, utility usage is unknown: don't praise or criticise utility usage at all.
+-- If the data cannot support a conclusion, say what you would need to see (e.g. "check the VOD at 0:42").
++{evidence_rule}
+ - Be concrete: name callouts, times (m:ss round time), player names/agents, player counts (4v5 etc.).
+ - Prioritise decisions over mechanics: positioning, trades, timing, economy, utility usage, mid-round calls.
+ - Judge against the team playbook when one is given; call out deviations from the plan.
+@@ -27,7 +27,13 @@
+ - shots_hit per round: low head share with many leg hits points at crosshair placement too low.
+ - better_position (if asked for): the callout where the player should have been at that moment, only
+   when the facts show the position caused the death or a lost fight; otherwise "position was fine".
+-{playbook}{examples}"""
++{playbook}{examples}{fields}"""
++
++# where the model may send the user when the facts can't settle a question
++EVIDENCE_WITH_VOD = ('- If the data cannot support a conclusion, don\'t guess: put the moment to re-watch '
++                     'in check_in_vod (m:ss + what to look for), never in better_option.')
++EVIDENCE_NO_VOD = ('- If the data cannot support a conclusion, leave it out. There is no recording of this match: '
++                   'never tell the user to check a VOD or recording.')
+ 
+ MATCH_SYSTEM = """You are a professional Valorant coach writing the post-match review.
+ You coach {who}. Use only the stats and round reviews given. Find PATTERNS across rounds, not single events.
+@@ -35,7 +41,7 @@
+ Be concrete and prioritised: the top issues are the ones that cost the most rounds.
+ Each practice item must be something doable in a scrim, custom game or the range.
+ Write in {language}.
+-{playbook}"""
++{playbook}{fields}"""
+ 
+ # ---------------------------------------------------------------------------
+ # JSON schemas (Ollama structured outputs)
+@@ -43,31 +49,61 @@
+ _feedback = {
+     "type": "object",
+     "properties": {
+-        "went_well": {"type": "array", "items": {"type": "string"}, "maxItems": 3},
+-        "mistakes": {"type": "array", "items": {"type": "string"}, "maxItems": 3},
+-        "better_option": {"type": "string"},
++        "went_well": {"type": "array", "items": {"type": "string"}, "maxItems": 3,
++                      "description": "what was right in this round and why; empty list if nothing was"},
++        "mistakes": {"type": "array", "items": {"type": "string"}, "maxItems": 3,
++                     "description": "decisions that cost the fight or the round, with time and place"},
++        "better_option": {"type": "string",
++                          "description": "the ONE concrete thing to do differently next time: what, where, "
++                                         "when (1-2 sentences). Never 'None' or 'N/A', never a VOD reference. Also in "
++                                         "a won round: the one thing that would have made it safer or cheaper"},
+     },
+     "required": ["went_well", "mistakes", "better_option"],
+ }
+ 
+ 
++def field_guide(schema: dict) -> str:
++    """The field descriptions as prompt text. Ollama only uses the schema to constrain the output
++    format; the model never sees its descriptions unless they are also in the prompt."""
++    lines: list[str] = []
++
++    def walk(props: dict, prefix: str) -> None:
++        for name, spec in props.items():
++            if spec.get("type") == "array" and spec.get("items", {}).get("type") == "object":
++                if spec.get("description"):
++                    lines.append(f"- {prefix}{name}: {spec['description']}")
++                walk(spec["items"].get("properties", {}), f"{prefix}{name}[].")
++            elif spec.get("type") == "object":
++                walk(spec.get("properties", {}), f"{prefix}{name}.")
++            elif spec.get("description"):
++                lines.append(f"- {prefix}{name}: {spec['description']}")
++
++    walk(schema.get("properties", {}), "")
++    return "\nOutput fields:\n" + "\n".join(lines) + "\n" if lines else ""
++
++
+ NO_CHANGE = "position was fine"
+ 
+ 
+-def round_schema(mode: str, callouts: list[str] | None = None) -> dict:
++def round_schema(mode: str, callouts: list[str] | None = None, has_vod: bool = False) -> dict:
+     props = {
+         "summary": {"type": "string",
+                     "description": "1-2 sentences on what decided this round: which fight, where, why. "
+                                    "Not a heading: never write 'Round N', 'review' or the player's name."},
+         "key_moment": {
+             "type": "object",
+-            "properties": {"time": {"type": "string"}, "what": {"type": "string"}},
++            "properties": {"time": {"type": "string", "description": "round time m:ss of the moment that decided the round"},
++                           "what": {"type": "string", "description": "what happened there, one sentence"}},
+             "required": ["time", "what"],
+         },
+         "importance": {"type": "integer", "minimum": 1, "maximum": 3,
+                        "description": "3 = round with a big lesson, 1 = nothing notable"},
+     }
+     req = ["summary", "key_moment", "importance"]
++    if has_vod:
++        props["check_in_vod"] = {"type": "string",
++                                 "description": "m:ss + what to look for in the recording, when the facts can't "
++                                                "answer a question; empty string if nothing"}
+     if mode in ("team", "both"):
+         props["team"] = _feedback
+         req.append("team")
+@@ -93,9 +129,9 @@
+     issue = {
+         "type": "object",
+         "properties": {
+-            "issue": {"type": "string"},
++            "issue": {"type": "string", "description": "the pattern, one sentence"},
+             "evidence": {"type": "string", "description": "rounds / numbers that show it"},
+-            "fix": {"type": "string"},
++            "fix": {"type": "string", "description": "what to do instead, concrete"},
+         },
+         "required": ["issue", "evidence", "fix"],
+     }
+@@ -114,13 +150,15 @@
+         "headline": {"type": "string",
+                      "description": "ONE sentence with the most important takeaway of this match "
+                                     "(not a title, no player name)"},
+-        "strengths": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 3},
++        "strengths": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 3,
++                      "description": "what to keep doing, each with the rounds / numbers that show it"},
+         "practice_plan": {"type": "array", "items": drill, "minItems": 2, "maxItems": 4},
+     }
+     req = ["headline", "strengths", "practice_plan"]
+     if mode in ("team", "both"):
+         props["team_issues"] = {"type": "array", "items": issue, "maxItems": 3}
+-        props["igl_notes"] = {"type": "array", "items": {"type": "string"}, "maxItems": 4}
++        props["igl_notes"] = {"type": "array", "items": {"type": "string"}, "maxItems": 4,
++                              "description": "calls / mid-round adjustments for the IGL, one per item"}
+         req += ["team_issues", "igl_notes"]
+     if mode in ("player", "both"):
+         props["player_issues"] = {"type": "array", "items": issue, "maxItems": 3}
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/coach/teamreview.py b/valcoach/coach/teamreview.py
+--- a/valcoach/coach/teamreview.py	2026-10-29 08:28:51.000000000 +0100
++++ b/valcoach/coach/teamreview.py	2026-10-29 14:23:12.144000000 +0100
+@@ -14,6 +14,7 @@
+ from ..analysis.core import death_infos
+ from ..maps import MapInfo
+ from ..models import Match
++from .prompts import field_guide
+ 
+ CLOSE_UNITS = 1500         # enemies within ~15 m count as "in the fight"
+ ALONE_UNITS = 2000
+@@ -132,7 +133,7 @@
+             role_line = (f"This player's team role(s): {', '.join(r)}. Judge them against what that role needs.\n"
+                          if r else "")
+             try:
+-                entry["feedback"] = llm.chat_json(SYSTEM.format(roles=role_line, language=language),
++                entry["feedback"] = llm.chat_json(SYSTEM.format(roles=role_line, language=language) + field_guide(schema()),
+                                                   "Facts (YAML):\n" + yaml.safe_dump(payload, sort_keys=False, allow_unicode=True),
+                                                   schema())
+             except Exception as e:
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/models.py b/valcoach/models.py
+--- a/valcoach/models.py	2026-10-28 08:17:33.000000000 +0100
++++ b/valcoach/models.py	2026-10-29 14:22:15.564000000 +0100
+@@ -138,6 +138,7 @@
+     raw_premier: dict | None = None
+     # Riot's match data often has no ability casts (all null). Then utility can't be judged.
+     has_utility: bool = True
++    mode_type: str = ""             # "Standard", "Swiftplay", "Deathmatch", ...
+ 
+     # ---- helpers -------------------------------------------------------
+     def team_of(self, puuid: str) -> str:
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/parse.py b/valcoach/parse.py
+--- a/valcoach/parse.py	2026-10-28 08:17:33.000000000 +0100
++++ b/valcoach/parse.py	2026-10-29 14:22:15.564000000 +0100
+@@ -219,15 +219,15 @@
+         kills=kills,
+         raw_premier=meta.get("premier"),
+         has_utility=_utility_present(data),
++        mode_type=_g(meta, "queue", "mode_type", default="") or "",
+     )
+ 
+ 
+ def _utility_present(data: dict) -> bool:
+-    """True if any player has any ability cast > 0 anywhere in the match.
+-    All null/0 means the data is missing (not that nobody used utility)."""
+-    for p in data.get("players", []) or []:
+-        if any((v or 0) > 0 for v in (p.get("ability_casts") or {}).values()):
+-            return True
++    """True if any player has any per-round ability cast > 0.
++    All null/0 means the data is missing (not that nobody used utility). Only the rounds count:
++    the live API fills the match totals (players[].ability_casts) but sends null for every round,
++    and the round prompts are built from the per-round casts."""
+     for r in data.get("rounds", []) or []:
+         for s in r.get("stats", []) or []:
+             if any((v or 0) > 0 for v in (s.get("ability_casts") or {}).values()):
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/pipeline.py b/valcoach/pipeline.py
+--- a/valcoach/pipeline.py	2026-10-29 08:26:07.000000000 +0100
++++ b/valcoach/pipeline.py	2026-10-29 14:22:15.564000000 +0100
+@@ -7,6 +7,7 @@
+ 
+ import hashlib
+ import json
++import re
+ from dataclasses import dataclass
+ from pathlib import Path
+ from typing import Callable
+@@ -29,6 +30,26 @@
+ # ---------------------------------------------------------------------------
+ # match data
+ # ---------------------------------------------------------------------------
++MATCH_ID_RE = re.compile(r"[A-Za-z0-9-]{1,64}")
++# modes with rounds, sides and an economy; deathmatch / TDM / Gauntlet have none of these
++COACHABLE_MODE_TYPES = {"standard", "swiftplay", "spike rush"}
++# queue ids / names (history lists have no mode_type) that are never coachable
++NON_ROUND_QUEUES = {"deathmatch", "team deathmatch", "teamdeathmatch", "hurm", "abilitydraftarena"}
++
++
++def valid_match_id(ref: str) -> bool:
++    return bool(MATCH_ID_RE.fullmatch(ref))
++
++
++def coachable(match: Match) -> str | None:
++    """None if the match can be coached, else the reason why not."""
++    mt = (match.mode_type or "").lower()
++    if (mt and mt not in COACHABLE_MODE_TYPES) or match.queue.lower() in NON_ROUND_QUEUES or len(match.rounds) < 2:
++        return (f"{match.mode_type or match.queue or 'This mode'} can't be coached: "
++                "the coach needs a round-based mode (Competitive, Premier, Unrated, Swiftplay, Custom).")
++    return None
++
++
+ def get_client(cfg: Config) -> HenrikClient:
+     return HenrikClient(cfg.henrik.api_key, cfg.path(cfg.paths.cache_dir), cfg.henrik.base_url)
+ 
+@@ -38,6 +59,8 @@
+     p = Path(ref)
+     if p.suffix == ".json" and p.exists():
+         return parse_match(load_match_file(p))
++    if ref != "latest" and not valid_match_id(ref):
++        raise ValueError(f"Not a valid match ID: {ref!r}")
+     cached = cfg.path(cfg.paths.cache_dir) / "matches" / f"{ref}.json"
+     if cached.exists():
+         return parse_match(json.loads(cached.read_text()))
+@@ -72,6 +95,7 @@
+             "agent": me.agent if me else "?",
+             "kda": f"{me.kills}/{me.deaths}/{me.assists}" if me else "",
+             "rounds": len(m.rounds),
++            "coachable": coachable(m) is None,
+         })
+     return rows
+ 
+@@ -101,6 +125,7 @@
+             "agent": (st.get("character") or {}).get("name", "?"),
+             "kda": f"{st.get('kills', 0)}/{st.get('deaths', 0)}/{st.get('assists', 0)}",
+             "rounds": (own or 0) + (opp or 0),
++            "coachable": (meta.get("mode") or "").lower() not in NON_ROUND_QUEUES,
+         })
+     return rows, int(results.get("total") or 0)
+ 
+@@ -269,8 +294,19 @@
+     p = notes_path(cfg, match_id)
+     if not p.exists():
+         return {}
+-    d = yaml.safe_load(p.read_text()) or {}
+-    return {int(k): str(v) for k, v in (d.get("rounds") or {}).items() if v}
++    try:
++        d = yaml.safe_load(p.read_text()) or {}
++    except yaml.YAMLError:
++        return {}
++    return note_rounds(d)
++
++
++def note_rounds(doc) -> dict[int, str]:
++    """{round number: note} from a notes YAML doc; ignores entries a hand edit broke."""
++    rounds = doc.get("rounds") if isinstance(doc, dict) else None
++    if not isinstance(rounds, dict):
++        return {}
++    return {int(k): str(v) for k, v in rounds.items() if v and str(k).strip().isdigit()}
+ 
+ 
+ def write_notes(cfg: Config, match: Match, puuid: str, notes: dict[int, str]) -> Path:
+@@ -319,6 +355,8 @@
+     from .report import render_report
+ 
+     match = load_match(cfg, req.match, req.queue)
++    if why := coachable(match):
++        raise ValueError(why)
+     puuid = focus_player(cfg, match, req.player)
+     map_info = get_map_info(cfg, match, log)
+     mode = req.mode or cfg.coach.mode
+@@ -365,7 +403,8 @@
+     report.map = map_meta(map_info, MapRegistry(cfg.path(cfg.paths.cache_dir)))
+     report.agents = agent_icons(match, AgentRegistry(cfg.path(cfg.paths.cache_dir)))
+     if not match.has_utility:
+-        log("· This match's data has no ability casts; utility usage is left out of the coaching")
++        log("· This match's data has no per-round ability casts; round coaching leaves utility out "
++            "(match totals are still used)")
+     if an.view.ok:
+         log(f"· View directions calibrated (killers face victims within {an.view.median_error_deg:.0f} deg median)")
+     else:
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/report.py b/valcoach/report.py
+--- a/valcoach/report.py	2026-10-29 08:44:04.000000000 +0100
++++ b/valcoach/report.py	2026-10-29 14:22:52.540000000 +0100
+@@ -214,6 +214,7 @@
+ {% if r.summary_ok %}<p class="lead">{{ r.summary_ok }}</p>{% endif %}
+ {% if f.error %}<p class="err">LLM failed for this round: {{ f.error }}</p>{% endif %}
+ {% if f.key_moment %}<p><b>Key moment {{ f.key_moment.time }}:</b> {{ f.key_moment.what }}</p>{% endif %}
++{% if f.check_in_vod %}<p class="muted"><b>Check in the VOD:</b> {{ f.check_in_vod }}</p>{% endif %}
+ {% if r.vod %}<div>{% if r.vod.start is not none %}<button class="jump" onclick="seek({{ r.vod.start }})">▶ round start</button>{% endif %}
+ {% if r.vod.first_kill is defined %}<button class="jump" onclick="seek({{ r.vod.first_kill - 3 }})">first kill</button>{% endif %}
+ {% if r.vod.your_death is defined %}<button class="jump" onclick="seek({{ r.vod.your_death - 5 }})">your death</button>{% endif %}
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/stats/gameplans.py b/valcoach/stats/gameplans.py
+--- a/valcoach/stats/gameplans.py	2026-10-29 11:10:16.000000000 +0100
++++ b/valcoach/stats/gameplans.py	2026-10-29 14:23:12.144000000 +0100
+@@ -8,6 +8,8 @@
+ 
+ import yaml
+ 
++from ..coach.prompts import field_guide
++
+ SYSTEM = """You are the coach of a Valorant Premier team preparing tonight's match on {map}.
+ Write concrete plans the team can run in the next match. Rules:
+ - Base every plan on the numbers given (your sites, timings, where you get flanked, mid control,
+@@ -45,8 +47,9 @@
+     user = ("Team and map (YAML):\n" + yaml.safe_dump(payload, sort_keys=False, allow_unicode=True) +
+             "\nWrite 3 plans: 2 for attack and 1 for defense.")
+     players = [p["player"] for p in lineup]
++    sch = schema(players)
+     out = llm.chat_json(SYSTEM.format(map=map_name, callouts=", ".join(callouts) or "the map's usual callouts",
+-                                      language=language), user, schema(players))
++                                      language=language) + field_guide(sch), user, sch)
+     # keep each plan's steps in lineup order, one per player
+     for p in out.get("plans", []):
+         by = {s.get("player"): s for s in p.get("steps", [])}
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/stats/tips.py b/valcoach/stats/tips.py
+--- a/valcoach/stats/tips.py	2026-10-28 15:56:11.000000000 +0100
++++ b/valcoach/stats/tips.py	2026-10-29 14:23:12.148000000 +0100
+@@ -8,6 +8,8 @@
+ 
+ import yaml
+ 
++from ..coach.prompts import field_guide
++
+ from .aggregate import local_meta, map_detail
+ 
+ SYSTEM = """You are a Valorant coach looking at one player's long-term stats on one map.
+@@ -68,7 +70,7 @@
+     f = facts(rows, map_name, all_rows)
+     user = ("Stats for this map (YAML):\n" + yaml.safe_dump(f, sort_keys=False, allow_unicode=True) +
+             "\nGive the agent pool verdicts, up to 3 tips each for attack and defense, and one focus.")
+-    out = llm.chat_json(SYSTEM.format(language=language), user, schema())
++    out = llm.chat_json(SYSTEM.format(language=language) + field_guide(schema()), user, schema())
+     out["_facts"] = f
+     out["_model"] = getattr(llm, "model", "")
+     return out
+@@ -110,6 +112,7 @@
+                     **({"found": [v["title"] for v in q.get("videos", [])]} if q.get("videos") else {})} for q in queries],
+     }
+     user = "Player and videos (YAML):\n" + yaml.safe_dump(facts, sort_keys=False, allow_unicode=True)
+-    out = llm.chat_json(WATCH_SYSTEM.format(language=language), user, watch_schema([q["id"] for q in queries]))
++    sch = watch_schema([q["id"] for q in queries])
++    out = llm.chat_json(WATCH_SYSTEM.format(language=language) + field_guide(sch), user, sch)
+     out["_model"] = getattr(llm, "model", "")
+     return out
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/stats/weekly.py b/valcoach/stats/weekly.py
+--- a/valcoach/stats/weekly.py	2026-10-29 10:55:11.000000000 +0100
++++ b/valcoach/stats/weekly.py	2026-10-29 14:23:12.144000000 +0100
+@@ -5,6 +5,8 @@
+ 
+ import yaml
+ 
++from ..coach.prompts import field_guide
++
+ from .aggregate import by_map, map_detail, summary
+ 
+ SYSTEM = """You are a Valorant coach giving one player ONE focus for this week of matches.
+@@ -61,6 +63,6 @@
+ 
+ def write_focus(llm, facts: dict, language: str = "English") -> dict:
+     user = "Player (YAML):\n" + yaml.safe_dump(facts, sort_keys=False, allow_unicode=True)
+-    out = llm.chat_json(SYSTEM.format(language=language), user, schema())
++    out = llm.chat_json(SYSTEM.format(language=language) + field_guide(schema()), user, schema())
+     out["_model"] = getattr(llm, "model", "")
+     return out
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/web/__init__.py b/valcoach/web/__init__.py
+--- a/valcoach/web/__init__.py	2026-10-29 13:36:14.000000000 +0100
++++ b/valcoach/web/__init__.py	2026-10-29 14:23:52.892000000 +0100
+@@ -13,6 +13,7 @@
+ import sqlite3
+ import time
+ import uuid
++from urllib.parse import urlsplit
+ from datetime import datetime
+ from pathlib import Path
+ 
+@@ -38,6 +39,9 @@
+ PUBLIC_ENDPOINTS = {"login", "signup", "setup", "static"}
+ MAX_LOGIN_FAILS = 5
+ LOCKOUT_S = 600
++MIN_FREE_DISK = 1024 ** 3              # keep this much disk free after an upload
++MAX_CACHE_ENTRIES = 200                # match-list cache (one entry per player / queue / page)
++MAX_TRACKED_LOGINS = 1000              # failed-login records kept for the lockout
+ 
+ 
+ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: bool = True) -> Flask:
+@@ -138,6 +142,24 @@
+         nxt = request.args.get("next", default)
+         return nxt if nxt.startswith("/") and not nxt.startswith("//") else default
+ 
++    def form_int(name: str, default: int, lo: int, hi: int) -> int | None:
++        """Integer form field in [lo, hi]; None if it isn't one."""
++        raw = request.form.get(name, "").strip()
++        if not raw:
++            return default
++        try:
++            val = int(raw)
++        except ValueError:
++            return None
++        return val if lo <= val <= hi else None
++
++    def job_quota_error(uid: int) -> str | None:
++        limit = int(store.get("max_jobs_per_user") or 3)
++        if store.active_jobs_for_owner(uid) >= limit:
++            return (f"You already have {limit} reports queued or running. "
++                    "Wait until one finishes before starting another.")
++        return None
++
+     def signup_enabled() -> bool:
+         return store.get("allow_signup") == "1"
+ 
+@@ -190,6 +212,20 @@
+ 
+     # ------------------------------------------------------------------- auth
+     @app.before_request
++    def same_origin_only():
++        """Forms may only be sent from this site (CSRF). Browsers add Origin (or at least Referer) to
++        every POST; a form on another site carries that site's address and is refused."""
++        if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
++            return None
++        src = request.headers.get("Origin") or request.headers.get("Referer")
++        if not src:
++            return None                        # not a browser (CLI, scripts): SameSite cookies still apply
++        if urlsplit(src).netloc not in {request.host, request.headers.get("X-Forwarded-Host", "")}:
++            return render_template("error.html", code=403,
++                                   msg="This form was sent from another website and was blocked."), 403
++        return None
++
++    @app.before_request
+     def load_user():
+         g.user = None
+         if store.user_count() == 0:
+@@ -242,6 +278,10 @@
+         if request.method == "POST":
+             username = request.form.get("username", "").strip()
+             key = f"{request.remote_addr}|{username.lower()}"
++            if len(login_fails) > MAX_TRACKED_LOGINS:
++                # forget expired lockouts so the table can't grow without end
++                for k in [k for k, ts in login_fails.items() if not ts or time.time() - ts[-1] >= LOCKOUT_S]:
++                    del login_fails[k]
+             recent = [t for t in login_fails.get(key, []) if time.time() - t < LOCKOUT_S]
+             login_fails[key] = recent
+             if len(recent) >= MAX_LOGIN_FAILS:
+@@ -397,6 +437,9 @@
+     @app.post("/profiles/<int:pid>/delete")
+     def profile_delete(pid: int):
+         p = get_profile(pid)
++        if any(j.status == "running" for j in store.jobs(pid, 100_000)):
++            flash(f"A report for {p.riot_id} is being made right now; delete the player when it's done.", "error")
++            return redirect(url_for("profile", pid=pid))
+         for j in store.jobs(pid, 100_000):
+             runner.delete(j.id)
+         store.delete_profile(pid)
+@@ -439,6 +482,8 @@
+                     rows = pipeline.history(cfg, queue=queue or None, size=HISTORY_PAGE, start=page * HISTORY_PAGE)
+                 else:
+                     rows, total = pipeline.stored_history(cfg, queue=queue or None, page=page, size=STORED_PAGE)
++                if len(history_cache) >= MAX_CACHE_ENTRIES:
++                    del history_cache[min(history_cache, key=lambda k: history_cache[k][0])]
+                 history_cache[key] = (time.time(), (rows, total))
+             except HenrikError as e:
+                 error = str(e)
+@@ -463,10 +508,15 @@
+         mid = request.args.get("match_id", "").strip()
+         if not mid:
+             return redirect(url_for("profile", pid=pid))
++        if not pipeline.valid_match_id(mid):
++            flash("That doesn't look like a match ID (letters, digits and dashes only).", "error")
++            return redirect(url_for("profile", pid=pid))
+         return redirect(url_for("coach", pid=pid, match_id=mid))
+ 
+     # ------------------------------------------------------------------ coach
+     def _load(p, match_id):
++        if not pipeline.valid_match_id(match_id):
++            abort(404)                         # web: match IDs only, never file paths
+         cfg = store.build_config(p)
+         match = pipeline.load_match(cfg, match_id)
+         puuid = pipeline.focus_player(cfg, match)
+@@ -480,12 +530,42 @@
+         except (HenrikError, ValueError, requests.RequestException) as e:
+             flash(str(e), "error")
+             return redirect(url_for("profile", pid=pid))
++        if why := pipeline.coachable(match):
++            flash(why, "error")
++            return redirect(url_for("profile", pid=pid))
+ 
+         if request.method == "POST":
++            # limits are checked before the (possibly huge) upload body is read
++            if err := job_quota_error(g.user.id):
++                flash(err, "error")
++                return redirect(request.url)
++            max_bytes = int(float(store.get("max_upload_gb") or 20) * 1024 ** 3)
++            request.max_content_length = max_bytes
++            size = request.content_length or 0
++            if size > max_bytes:
++                flash(f"The upload is too big (limit {store.get('max_upload_gb')} GB, set by the admin).", "error")
++                return redirect(request.url)
++            if size and request.mimetype == "multipart/form-data":
++                free = shutil.disk_usage(store.data_dir).free
++                if free - size < MIN_FREE_DISK:
++                    flash("Not enough free disk space on the server for this upload.", "error")
++                    return redirect(request.url)
+             f = request.form
+             mode = f.get("mode", p.mode)
+             if mode not in MODES:
+                 mode = p.mode
++            anchor_round = form_int("anchor_round", 1, 1, len(match.rounds))
++            anchor_kill = form_int("anchor_kill", 1, 1, 50)
++            if anchor_round is None or anchor_kill is None:
++                flash(f"Anchor round must be 1-{len(match.rounds)} and anchor kill a number from 1.", "error")
++                return redirect(request.url)
++            anchor_time = f.get("anchor_time", "").strip()
++            if anchor_time:
++                try:
++                    pipeline.parse_ts(anchor_time)
++                except ValueError:
++                    flash("Anchor time must look like 2:13.4", "error")
++                    return redirect(request.url)
+             choice = f.get("vod", "")
+             vod_path = vod_name = ""
+             uploaded = False
+@@ -508,13 +588,6 @@
+                     flash("That recording is not in your recordings folder anymore.", "error")
+                     return redirect(request.url)
+                 vod_path, vod_name = str(path), path.name
+-            anchor_time = f.get("anchor_time", "").strip()
+-            if anchor_time:
+-                try:
+-                    pipeline.parse_ts(anchor_time)
+-                except ValueError:
+-                    flash("Anchor time must look like 2:13.4", "error")
+-                    return redirect(request.url)
+             opts = {
+                 "no_llm": bool(f.get("no_llm")),
+                 "no_minimap": bool(f.get("no_minimap")),
+@@ -522,8 +595,8 @@
+                 "recalibrate": bool(f.get("recalibrate")),
+                 "uploaded": uploaded,
+                 "anchor_time": anchor_time,
+-                "anchor_round": int(f.get("anchor_round") or 1),
+-                "anchor_kill": int(f.get("anchor_kill") or 1),
++                "anchor_round": anchor_round,
++                "anchor_kill": anchor_kill,
+             }
+             jid = uuid.uuid4().hex[:12]
+             store.create_job(jid, pid, match.match_id, mode, vod_path, vod_name, opts,
+@@ -553,6 +626,9 @@
+         except (HenrikError, ValueError, requests.RequestException) as e:
+             flash(str(e), "error")
+             return redirect(url_for("profile", pid=pid))
++        if why := pipeline.coachable(match):
++            flash(why, "error")
++            return redirect(url_for("profile", pid=pid))
+         if request.method == "POST":
+             data = {int(k.split("_", 1)[1]): v for k, v in request.form.items()
+                     if k.startswith("round_") and k.split("_", 1)[1].isdigit()}
+@@ -614,6 +690,9 @@
+     def job_retry(jid: str):
+         j = get_job(jid)
+         if j.status in ("error", "done"):
++            if err := job_quota_error(g.user.id):
++                flash(err, "error")
++                return redirect(url_for("job", jid=jid))
+             store.update_job(jid, status="queued", log="", error="", started_at="", finished_at="")
+             runner.submit(jid)
+         return redirect(url_for("job", jid=jid))
+@@ -706,6 +785,7 @@
+                 "ollama_temperature": (float, 0, 2), "ollama_num_ctx": (int, 2048, 262144),
+                 "ollama_parallel": (int, 1, 64), "ollama_timeout_s": (int, 10, 3600),
+                 "sample_fps": (float, 0.5, 30), "workers": (int, 1, 8),
++                "max_upload_gb": (float, 0.1, 64), "max_jobs_per_user": (int, 1, 50),
+             }
+             for key, (conv, lo, hi) in numeric.items():
+                 raw = f.get(key, "").strip()
+@@ -763,6 +843,11 @@
+     def forbidden(_):
+         return render_template("error.html", code=403, msg="You can't do this here: it's for admins or the team owner."), 403
+ 
++    @app.errorhandler(413)
++    def too_large(_):
++        return render_template("error.html", code=413,
++                               msg=f"The upload is too big (limit {store.get('max_upload_gb')} GB)."), 413
++
+     @app.errorhandler(404)
+     def not_found(_):
+         return render_template("error.html", code=404, msg="Not found."), 404
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/web/jobs.py b/valcoach/web/jobs.py
+--- a/valcoach/web/jobs.py	2026-10-29 08:26:07.000000000 +0100
++++ b/valcoach/web/jobs.py	2026-10-29 14:23:52.892000000 +0100
+@@ -37,14 +37,14 @@
+ 
+     def _run(self, job_id: str) -> None:
+         st = self.store
+-        job = st.job(job_id)
+-        if job is None or job.status != "queued":
++        # atomic queued -> running: a job submitted twice (double "Run again") runs only once
++        if not st.claim_job(job_id):
+             return
+-        profile = st.profile(job.profile_id)
++        job = st.job(job_id)
++        profile = st.profile(job.profile_id) if job else None
+         if profile is None:
+             st.update_job(job_id, status="error", error="Profile was deleted", finished_at=now())
+             return
+-        st.update_job(job_id, status="running", started_at=now())
+ 
+         def log(msg: str) -> None:
+             st.append_log(job_id, msg)
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/web/static/strat.js b/valcoach/web/static/strat.js
+--- a/valcoach/web/static/strat.js	2026-10-29 13:08:51.000000000 +0100
++++ b/valcoach/web/static/strat.js	2026-10-29 14:24:48.104000000 +0100
+@@ -32,8 +32,10 @@
+   const R2D = 180 / Math.PI;
+   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+   // the size an ability is drawn at: the item's own value, else the catalog's
+-  const abR = (i, sh) => i.r !== undefined && i.r !== null ? i.r : (sh && sh.r) || 0;
+-  const abLen = (i, sh) => i.len !== undefined && i.len !== null ? i.len : (sh && sh.len) || 10;
++  // board data comes from any team member: numbers that end up in HTML are forced to be numbers
++  const num = (v, d) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
++  const abR = (i, sh) => i.r !== undefined && i.r !== null ? num(i.r, 0) : (sh && sh.r) || 0;
++  const abLen = (i, sh) => i.len !== undefined && i.len !== null ? num(i.len, 10) : (sh && sh.len) || 10;
+   const abEnd = (i, sh) => { const d = ((sh.off || 0) + abLen(i, sh)) * PER_M, a = (i.ang || 0) / R2D; return [i.x + Math.cos(a) * d, i.y + Math.sin(a) * d]; };
+ 
+   // ------------------------------------------------------------------ state
+@@ -400,12 +402,12 @@
+                                  <input type="text" id="sb-label-custom" placeholder="name" value="${esc(i.label && !B.lineup.includes(i.label) ? i.label : '')}" ${i.label && !B.lineup.includes(i.label) ? '' : 'hidden'} maxlength="20">`;
+     if (i.t === 'text') html += `<label>Text</label><input type="text" id="sb-text" value="${esc(i.s)}" maxlength="60">`;
+     if (i.t === 'mark') html += `<label>Symbol</label><select id="sb-mark">${['!', '?', 'X', '★', '👁'].map(s => `<option ${s === i.s ? 'selected' : ''}>${s}</option>`).join('')}</select>`;
+-    if (i.t === 'num') html += `<label>Number</label><input type="number" id="sb-num" value="${i.n || 1}" min="1" max="99">`;
++    if (i.t === 'num') html += `<label>Number</label><input type="number" id="sb-num" value="${num(i.n, 1) || 1}" min="1" max="99">`;
+     if (['smoke', 'molly', 'zone'].includes(i.t) || (i.t === 'ab' && (!sh || sh.k === 'smoke' || sh.k === 'area')))
+-      html += `<label>${i.t === 'ab' && !sh ? 'Show area (radius m, 0 = icon only)' : 'Radius (m)'}</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input type="number" id="sb-r" value="${i.t === 'ab' ? abR(i, sh) : (i.r || 0)}" step="0.1" min="0" max="60">${sh && i.r != null && i.r !== sh.r ? `<button class="btn sm ghost" id="sb-reset" title="Back to ${sh.r} m">↺ ${sh.r} m</button>` : ''}</div>`;
++      html += `<label>${i.t === 'ab' && !sh ? 'Show area (radius m, 0 = icon only)' : 'Radius (m)'}</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input type="number" id="sb-r" value="${i.t === 'ab' ? abR(i, sh) : num(i.r, 0)}" step="0.1" min="0" max="60">${sh && i.r != null && i.r !== sh.r ? `<button class="btn sm ghost" id="sb-reset" title="Back to ${sh.r} m">↺ ${sh.r} m</button>` : ''}</div>`;
+     if (sh && 'len' in sh) {
+       html += `<label>${sh.min === sh.max ? 'Length' : `Length (${sh.min}–${sh.max} m)`}</label><input type="number" id="sb-len" value="${abLen(i, sh)}" step="0.5" min="${sh.min}" max="${sh.max}" ${sh.min === sh.max ? 'disabled' : ''}>
+-               <label>Direction (°)</label><input type="number" id="sb-ang" value="${i.ang || 0}" step="5">
++               <label>Direction (°)</label><input type="number" id="sb-ang" value="${num(i.ang, 0)}" step="5">
+                <div class="muted small" style="margin-top:4px">Drag the yellow handle to aim${sh.min === sh.max ? '' : ' and stretch'} it.</div>`;
+     }
+     if (i.t === 'ab') html += `<div class="muted small" style="margin-top:6px">${sh ? `${KIND[sh.k]}${sh.w ? `, ${sh.w} m wide` : ''}${sh.off ? `, starts ${sh.off} m ahead` : ''} · ${sh.approx ? 'size ≈ estimated, adjust if needed' : 'size from the Valorant wiki'}` : 'no size data: icon only'}</div>`;
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/web/store.py b/valcoach/web/store.py
+--- a/valcoach/web/store.py	2026-10-29 13:35:57.000000000 +0100
++++ b/valcoach/web/store.py	2026-10-29 14:23:52.892000000 +0100
+@@ -134,6 +134,8 @@
+     "sample_fps": "4",
+     "workers": "1",
+     "allow_signup": "0",
++    "max_upload_gb": "20",         # per uploaded VOD
++    "max_jobs_per_user": "3",      # queued + running at the same time
+     "youtube_api_key": "",         # optional: inline videos on the Pro & videos page
+     "pros_yaml": "",               # optional: edited pro list (empty = built-in stats/pros.yaml)
+     "secret_key": "",
+@@ -593,6 +595,10 @@
+                          "WHERE p.owner_id = ? ORDER BY j.created_at DESC LIMIT ?", (owner_id, limit))
+         return [_load(Job, r) for r in rows]
+ 
++    def active_jobs_for_owner(self, owner_id: int) -> int:
++        return int(self._all("SELECT COUNT(*) AS n FROM jobs j JOIN profiles p ON p.id = j.profile_id "
++                             "WHERE p.owner_id = ? AND j.status IN ('queued', 'running')", (owner_id,))[0]["n"])
++
+     def jobs_for_match(self, profile_id: int, match_id: str) -> list[Job]:
+         rows = self._all("SELECT * FROM jobs WHERE profile_id = ? AND match_id = ? ORDER BY created_at DESC",
+                          (profile_id, match_id))
+@@ -612,6 +618,12 @@
+         cols = ", ".join(f"{k} = ?" for k in fields)
+         self._exec(f"UPDATE jobs SET {cols} WHERE id = ?", (*fields.values(), job_id))
+ 
++    def claim_job(self, job_id: str) -> bool:
++        """queued -> running in one statement; False if it wasn't queued (already taken, deleted)."""
++        cur = self._exec("UPDATE jobs SET status = 'running', started_at = ? WHERE id = ? AND status = 'queued'",
++                         (now(), job_id))
++        return cur.rowcount == 1
++
+     def append_log(self, job_id: str, line: str) -> None:
+         self._exec("UPDATE jobs SET log = log || ? WHERE id = ?", (line.rstrip() + "\n", job_id))
+ 
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/web/strats.py b/valcoach/web/strats.py
+--- a/valcoach/web/strats.py	2026-10-29 13:07:35.000000000 +0100
++++ b/valcoach/web/strats.py	2026-10-29 14:25:11.476000000 +0100
+@@ -15,6 +15,49 @@
+ 
+ SIDES = ("attack", "defense")
+ MAX_BOARD_BYTES = 400_000          # JSON of one board (items are tiny; this is plenty)
++ITEM_NUMBERS = ("x", "y", "x2", "y2", "r", "len", "ang", "n", "size")
++ITEM_STRINGS = {"t": 20, "id": 20, "a": 40, "s": 80, "label": 40, "c": 10}
++
++
++def _number(v):
++    try:
++        x = float(v)
++    except (TypeError, ValueError):
++        return None
++    return x if x == x and abs(x) < 1e6 else None          # no NaN / inf
++
++
++def clean_board(data: dict) -> dict:
++    """Board JSON as saved by any team member: keep only well-typed item fields, so another
++    member's browser never gets text where the editor expects a number (it builds HTML from them)."""
++    steps = []
++    for st in data.get("steps") or []:
++        if not isinstance(st, dict):
++            continue
++        items = []
++        for it in st.get("items") or []:
++            if not isinstance(it, dict):
++                continue
++            out = {}
++            for k in ITEM_NUMBERS:
++                if k in it and (x := _number(it[k])) is not None:
++                    out[k] = x
++            for k, n in ITEM_STRINGS.items():
++                if isinstance(it.get(k), str):
++                    out[k] = it[k][:n]
++            if "dash" in it:
++                out["dash"] = bool(it["dash"])
++            if isinstance(it.get("pts"), list):
++                pts = [[_number(p[0]), _number(p[1])] for p in it["pts"][:2000] if isinstance(p, list) and len(p) >= 2]
++                out["pts"] = [p for p in pts if None not in p]
++            if "t" in out:
++                items.append(out)
++        steps.append({"name": str(st.get("name") or "")[:40], "items": items})
++    out = dict(data)
++    out["steps"] = steps
++    if "notes" in out:
++        out["notes"] = str(out["notes"] or "")[:5000]
++    return out
+ MAX_PNG_BYTES = 8_000_000
+ SLOT_ORDER = {"grenade": 0, "ability1": 1, "ability2": 2, "ultimate": 3}
+ 
+@@ -175,6 +218,9 @@
+             data = body["data"]
+             if not isinstance(data, dict) or not isinstance(data.get("steps"), list) or not data["steps"]:
+                 return jsonify(error="data.steps must be a non-empty list"), 400
++            data = clean_board(data)
++            if not data["steps"]:
++                return jsonify(error="data.steps must be a non-empty list"), 400
+             raw = json.dumps(data)
+             if len(raw) > MAX_BOARD_BYTES:
+                 return jsonify(error="board too big"), 413
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/web/templates/profile.html b/valcoach/web/templates/profile.html
+--- a/valcoach/web/templates/profile.html	2026-10-28 15:05:41.000000000 +0100
++++ b/valcoach/web/templates/profile.html	2026-10-29 14:24:05.912000000 +0100
+@@ -37,11 +37,15 @@
+       <td style="white-space:nowrap"><span class="res {{ r.result }}">{{ r.result }}</span> {{ r.score }}</td>
+       <td class="hide-sm">{{ r.kda }}</td>
+       <td style="text-align:right;white-space:nowrap">
++        {% if r.get('coachable', True) %}
+         <a class="btn sm ghost hide-sm" href="{{ url_for('notes', pid=p.id, match_id=r.match_id) }}">{{ 'Notes ✓' if r.match_id in noted else 'Notes' }}</a>
+         {% if r.match_id in latest_done %}
+         <a class="btn sm" href="{{ url_for('job_report', jid=latest_done[r.match_id].id) }}" target="_blank">Report</a>
+         {% endif %}
+         <a class="btn sm primary" href="{{ url_for('coach', pid=p.id, match_id=r.match_id) }}">Coach</a>
++        {% else %}
++        <span class="muted small" title="Deathmatch, Team Deathmatch and similar modes have no rounds to coach">not coachable</span>
++        {% endif %}
+       </td>
+     </tr>
+     {% endfor %}
+diff -ruN '--exclude=.venv' '--exclude=data' '--exclude=__pycache__' '--exclude=*.egg-info' '--exclude=.pytest_cache' '--exclude=valcoach-fixes.patch' a/valcoach/web/templates/settings.html b/valcoach/web/templates/settings.html
+--- a/valcoach/web/templates/settings.html	2026-10-29 08:44:04.000000000 +0100
++++ b/valcoach/web/templates/settings.html	2026-10-29 14:24:05.912000000 +0100
+@@ -77,6 +77,10 @@
+   <div class="grid2">
+     <div class="field"><label>Coaching jobs at the same time</label><input type="number" name="workers" value="{{ s.workers }}" min="1" max="8">
+       <div class="hint">Currently running with {{ running_workers }}. Other jobs wait in a queue. 1 is best on one machine; changes apply after a restart.</div></div>
++    <div class="field"><label>Max reports per user at once</label><input type="number" name="max_jobs_per_user" value="{{ s.max_jobs_per_user }}" min="1" max="50">
++      <div class="hint">Queued + running. Stops one user from filling the shared queue.</div></div>
++    <div class="field"><label>Max VOD upload size (GB)</label><input type="number" step="0.5" name="max_upload_gb" value="{{ s.max_upload_gb }}" min="0.1" max="64">
++      <div class="hint">Uploads are also refused if less than 1 GB of disk would stay free.</div></div>
+   </div>
+   <label class="choice"><input type="checkbox" name="allow_signup" value="1" {{ 'checked' if s.allow_signup == '1' }}>
+     <span><b>Allow sign-up</b><span class="muted small">Anyone who can reach this page can create an account (as a normal user). Off: only admins create accounts under Users.</span></span></label>

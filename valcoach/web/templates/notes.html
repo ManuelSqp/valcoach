@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Notes {{ map }} · valcoach{% endblock %}
+{% block content %}
+<div class="row between" style="margin-bottom:8px">
+  <div><h1>Round notes · {{ map }} <span style="color:var(--red)">{{ score }}</span></h1>
+    <div class="muted">{{ p.riot_id }}</div></div>
+  <a class="btn ghost" href="{{ url_for('profile', pid=p.id) }}">← {{ p.name }}</a>
+</div>
+<p class="sub">Write what actually went wrong or right, the way you'd tell a teammate. Notes for this match are given to the coach,
+and your notes from other matches show it what kind of feedback you want. Leave rounds you have nothing to say about empty.</p>
+<form method="post">
+<section class="card">
+  <div class="tablewrap"><table>
+    <tr><th style="width:60px">Round</th><th style="width:190px">Context</th><th>Your note</th></tr>
+    {% for r in rounds %}
+    <tr>
+      <td><b>{{ r.number }}</b></td>
+      <td class="small"><span class="res {{ 'W' if r.won else 'L' }}">{{ 'W' if r.won else 'L' }}</span> {{ r.side }} · {{ r.score_before }}<br>
+        <span class="muted">{{ r.result }}{% if r.plant %} · plant {{ r.plant }}{% endif %}</span></td>
+      <td><textarea name="round_{{ r.number }}" rows="2" style="min-height:44px" placeholder="">{{ existing.get(r.number, '') }}</textarea></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+</section>
+<div class="row">
+  <button class="btn" type="submit">Save</button>
+  <button class="btn primary" type="submit" name="then" value="coach">Save and coach this match</button>
+</div>
+</form>
+{% endblock %}

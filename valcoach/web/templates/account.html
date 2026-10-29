@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Account · valcoach{% endblock %}
+{% block content %}
+<h1>{{ user.username }}</h1>
+<p class="sub">{{ 'Admin' if user.is_admin else 'User' }} · {{ usage.profiles }} player{{ '' if usage.profiles == 1 else 's' }} · {{ usage.jobs }} report{{ '' if usage.jobs == 1 else 's' }} · member since {{ user.created_at|localtime }}</p>
+
+<form method="post" class="card">
+  <h2>In-game name</h2>
+  <div class="row" style="align-items:flex-end">
+    <div style="flex:1;max-width:360px"><input type="text" name="display_name" value="{{ user.display_name }}" placeholder="Name#TAG" maxlength="40"></div>
+    <button class="btn">Save</button></div>
+  <div class="hint">Teammates see this instead of your username, e.g. when the team owner adds you to a team.</div>
+</form>
+
+<div class="grid2">
+<form method="post" class="card" autocomplete="off">
+  <h2>Change password</h2>
+  <div class="field"><label>Current password</label><input type="password" name="current" required autocomplete="current-password"></div>
+  <div class="field"><label>New password</label><input type="password" name="password" required minlength="{{ min_password }}" autocomplete="new-password">
+    <div class="hint">At least {{ min_password }} characters. Your other devices get logged out.</div></div>
+  <div class="field"><label>Repeat new password</label><input type="password" name="password2" required minlength="{{ min_password }}" autocomplete="new-password"></div>
+  <button class="btn primary" type="submit">Change password</button>
+</form>
+
+<section class="card">
+  <h2>Recordings</h2>
+  {% if vod_root %}
+  <p>VODs are picked from <code>{{ vod_root }}</code> on the server.</p>
+  {% else %}
+  <p class="muted">No recordings folder is set for your account, so upload VODs on the coach page.</p>
+  {% endif %}
+  <p class="hint">{% if user.is_admin %}Change it under <a href="{{ url_for('user_edit', uid=user.id) }}">Users</a>.{% else %}Only the admin can change this, because it's a folder on the server.{% endif %}</p>
+</section>
+</div>
+{% endblock %}

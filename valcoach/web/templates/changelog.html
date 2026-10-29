@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}What's new · valcoach{% endblock %}
+{% block head %}
+<style>
+.ver-block{border-left:3px solid var(--line);padding:2px 0 2px 16px;margin-bottom:22px}
+.ver-block.current{border-color:var(--red)}
+.ver-block h3{margin:0 0 6px;font-size:17px}.ver-block h3 .tag{font-size:11px;font-weight:700;background:rgba(255,70,85,.15);color:var(--red);border-radius:99px;padding:2px 8px;margin-left:8px;vertical-align:2px}
+.ver-block ul{margin:0;padding-left:18px}.ver-block li{margin:4px 0}
+code{background:#0b0e13;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:12.5px}
+</style>
+{% endblock %}
+{% block content %}
+<h1>What's new</h1>
+<p class="sub">You're on <b>{{ app_version }}</b>. Updating: unzip the new version over your install (keep <code>data/</code>),
+  <code>pip install -e .</code>, <code>sudo systemctl restart valcoach</code>.</p>
+<section class="card">
+  {% for v in versions %}
+  <div class="ver-block {{ 'current' if v.version == app_version }}">
+    <h3>{{ v.version }}{% if v.version == app_version %}<span class="tag">running</span>{% endif %}</h3>
+    <ul>{% for i in v['items'] %}<li>{{ i|safe }}</li>{% endfor %}</ul>
+  </div>
+  {% else %}<p class="muted">No changelog found next to the app (CHANGELOG.md).</p>{% endfor %}
+</section>
+{% endblock %}

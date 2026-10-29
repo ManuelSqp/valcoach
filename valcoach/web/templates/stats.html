@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Stats · {{ p.riot_id }} · valcoach{% endblock %}
+{% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% macro wr(v, n=None) %}<span class="wr {{ 'hi' if v is not none and v >= 0.55 else ('lo' if v is not none and v < 0.45 else '') }}">{{ v|pct }}</span>{% endmacro %}
+{% block head %}
+<style>
+.tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.tile b{display:block;font-size:22px;font-variant-numeric:tabular-nums}.tile>span{color:var(--muted);font-size:12px}
+.ai{border-radius:50%;vertical-align:middle;background:#0b0e13;object-fit:cover}
+.wr.hi{color:var(--win)}.wr.lo{color:var(--red)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.click{cursor:pointer}tr.click:hover td{background:#1b212c}tr.sel td{background:rgba(255,70,85,.08)}
+.agentcell{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.minis{display:flex;gap:3px}
+.obs{list-style:none;padding:0;margin:0}.obs li{padding:9px 12px;border-left:3px solid var(--line);background:var(--panel2);border-radius:0 8px 8px 0;margin-bottom:6px}
+.obs li.good{border-color:var(--win)}.obs li.bad{border-color:var(--red)}.obs small{display:block;color:var(--muted)}
+.bars{display:grid;gap:6px}.bar{display:grid;grid-template-columns:minmax(90px,140px) 1fr 74px;gap:8px;align-items:center;font-size:13px}
+.bar .track{height:10px;background:var(--panel2);border-radius:99px;overflow:hidden;display:flex}
+.bar .track i{display:block;height:100%}.bar .track i.a{background:var(--win)}.bar .track i.b{background:var(--red)}.bar .track i.c{background:#4a5468}
+.bar .v{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.sidebox{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px}
+.sidebox h3{margin:0 0 10px;font-size:13px}
+.grid3{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}@media(max-width:820px){.grid3{grid-template-columns:1fr}}
+.status{font-size:12px;color:var(--muted)}.status pre{max-height:140px}
+.tip{padding:8px 0;border-bottom:1px solid var(--line)}.tip:last-child{border:0}.tip small{color:var(--muted);display:block}
+.verdict{font-size:11px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:99px;margin-left:6px}
+.verdict.main{background:rgba(53,208,160,.15);color:var(--win)}.verdict.backup{background:rgba(90,169,255,.15);color:var(--blue)}.verdict.drop{background:rgba(255,70,85,.15);color:var(--red)}
+.pickform{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;align-items:end}
+.pickres{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:14px}
+.pickres .opt{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px}
+.pickres .opt.first{border-color:var(--win)}
+.pickres .opt .agentcell{font-weight:700;font-size:15px}
+.tag2{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:0 7px;margin-left:4px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="row between" style="margin-bottom:14px">
+  <div><h1>{{ p.name }}<span class="tag">#{{ p.tag }}</span> · stats</h1>
+    <div class="muted">{{ data.games|length }} games stored{% if data.updated %} · updated {{ data.updated|localtime }}{% endif %}</div></div>
+  {% if can_edit %}<form method="post" action="{{ url_for('stats_import', pid=p.id) }}" class="row">
+    <input type="hidden" name="queue" value="{{ queue }}"><input type="hidden" name="map" value="{{ sel or '' }}">
+    <button class="btn {{ 'primary' if not data.games }}" {{ 'disabled' if import_status and import_status.status in ('queued','running') }}>
+      {{ 'Import match history' if not data.games else 'Update' }}</button>
+  </form>{% else %}<span class="muted small">a teammate's stats (view only)</span>{% endif %}
+</div>
+
+{% include "_player_tabs.html" %}
+
+{% if import_status %}
+<div class="card status" id="import-status" data-key="import:{{ p.id }}" data-state="{{ import_status.status }}">
+  <span class="pill {{ 'running' if import_status.status in ('queued','running') else import_status.status }}">{{ 'importing' if import_status.status in ('queued','running') else import_status.status }}</span>
+  <pre class="log" style="margin-top:8px">{{ import_status.log|join('\n') }}</pre>
+</div>
+{% endif %}
+
+{% if not data.games %}
+<section class="card">
+  <h2>No stats yet</h2>
+  <p>Import loads your Competitive and Premier history from HenrikDev: the last ~60 matches per queue with full round data
+    (10 per request), plus up to 300 older ones per queue from the stored archive (summaries only, 20 per request).
+    It runs in the background and takes a minute or two; later updates only fetch what's new.</p>
+</section>
+{% else %}
+
+<div class="tabs">{% for val, label in queues %}<a class="btn sm {{ 'primary' if queue == val else 'ghost' }}" href="{{ url_for('stats', pid=p.id, queue=val) }}">{{ label }}</a>{% endfor %}</div>
+
+{% if total.games %}
+<div class="tiles">
+  <div class="tile"><b>{{ total.games }}</b><span>games ({{ total.full }} with round data)</span></div>
+  <div class="tile"><b>{{ wr(total.wr) }}</b><span>win rate</span></div>
+  <div class="tile"><b>{{ total.acs|num }}</b><span>ACS</span></div>
+  <div class="tile"><b>{{ total.kd|num(2) }}</b><span>K/D</span></div>
+  <div class="tile"><b>{{ total.kast|pct }}</b><span>KAST</span></div>
+  <div class="tile"><b>{{ total.opening_wr|pct }}</b><span>opening duels won{% if total.fk is defined %} ({{ total.fk }}–{{ total.fd }}){% endif %}</span></div>
+</div>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Maps</h2>
+    <div class="tablewrap"><table>
+      <tr><th>Map</th><th class="n">Games</th><th class="n">Win</th><th class="n hide-sm">ACS</th><th class="n hide-sm">K/D</th><th>Most played</th></tr>
+      {% for m in maps %}
+      <tr class="click {{ 'sel' if m.map == sel }}" onclick="location='{{ url_for('stats', pid=p.id, queue=queue, map=m.map) }}#map'">
+        <td><a href="{{ url_for('stats', pid=p.id, queue=queue, map=m.map) }}#map">{{ m.map }}</a></td>
+        <td class="n">{{ m.games }}</td><td class="n">{{ wr(m.wr) }}</td>
+        <td class="n hide-sm">{{ m.acs|num }}</td><td class="n hide-sm">{{ m.kd|num(2) }}</td>
+        <td><span class="minis">{% for a in m.agents %}<span title="{{ a.agent }}: {{ a.games }} games, {{ a.wr|pct }}">{{ ai(a.agent, 20) }}</span>{% endfor %}</span></td>
+      </tr>
+      {% endfor %}
+    </table></div>
+  </section>
+  <section class="card">
+    <h2>Agents</h2>
+    <div class="tablewrap"><table>
+      <tr><th>Agent</th><th class="n">Games</th><th class="n">Win</th><th class="n">ACS</th><th class="n hide-sm">K/D</th></tr>
+      {% for a in agents[:10] %}
+      <tr><td><span class="agentcell">{{ ai(a.agent) }}{{ a.agent }} <span class="tag2">{{ a.role }}</span></span></td>
+        <td class="n">{{ a.games }}</td><td class="n">{{ wr(a.wr) }}</td><td class="n">{{ a.acs|num }}</td><td class="n hide-sm">{{ a.kd|num(2) }}</td></tr>
+      {% endfor %}
+    </table></div>
+    <div class="row small muted" style="margin-top:10px;gap:14px">{% for r in roles_t %}<span>{{ r.role }}: {{ r.games }} games, {{ r.wr|pct }}</span>{% endfor %}</div>
+  </section>
+</div>
+
+{% if detail %}
+<section class="card" id="map">
+  <div class="row between"><h2 style="margin:0">{{ detail.map }} <span class="muted">· {{ detail.summary.games }} games, {{ detail.n_full }} with round data</span></h2>
+    <span class="muted small">{{ wr(detail.summary.wr) }} win · ACS {{ detail.summary.acs|num }} · K/D {{ detail.summary.kd|num(2) }} · KAST {{ detail.summary.kast|pct }}</span></div>
+
+  {% if detail.observations %}
+  <ul class="obs" style="margin-top:14px">{% for o in detail.observations %}<li class="{{ o.kind }}">{{ o.text }}<small>{{ o.evidence }}</small></li>{% endfor %}</ul>
+  {% elif detail.n_full < 5 %}<p class="muted">Not enough games with round data on {{ detail.map }} for patterns yet ({{ detail.n_full }}).</p>{% endif %}
+
+  <div class="grid3" style="margin-top:14px">
+    <div class="sidebox"><h3>Your agents here</h3>
+      <table>{% for a in detail.agents %}<tr><td><span class="agentcell">{{ ai(a.agent, 20) }}{{ a.agent }}</span></td><td class="n">{{ a.games }}</td><td class="n">{{ wr(a.wr) }}</td><td class="n">{{ a.acs|num }}</td></tr>{% endfor %}</table>
+    </div>
+    <div class="sidebox"><h3>Sides (team rounds won)</h3>
+      <div class="bars">{% for side in ('attack', 'defense') %}{% set s = detail.sides[side] %}
+        <div class="bar"><span>{{ side|capitalize }}</span><span class="track">{% if s.rounds %}<i class="a" style="width:{{ (s.wr * 100)|round }}%"></i><i class="b" style="width:{{ 100 - (s.wr * 100)|round }}%"></i>{% endif %}</span><span class="v">{{ s.wr|pct }} of {{ s.rounds }}</span></div>
+      {% endfor %}</div>
+      {% if meta %}<h3 style="margin-top:16px">Played at your level <span class="muted small">({{ meta.games }} matches)</span></h3>
+      <table>{% for a in meta.agents[:6] %}<tr><td><span class="agentcell">{{ ai(a.agent, 20) }}{{ a.agent }}</span></td><td class="n">{{ a.share|pct }} picked</td><td class="n">{{ wr(a.wr) }}</td></tr>{% endfor %}</table>
+      {% if meta.patterns %}<p class="small muted" style="margin:8px 0 0">Most common role mix: {{ meta.patterns[0].pattern }} ({{ meta.patterns[0].n }}×, {{ meta.patterns[0].wr|pct }} won)</p>{% endif %}{% endif %}
+    </div>
+    {% for side in ('attack', 'defense') %}
+    <div class="sidebox"><h3>{{ side|capitalize }}: opening duels</h3>
+      {% if detail.openings[side] %}<div class="bars">{% for o in detail.openings[side][:5] %}
+        <div class="bar"><span>{{ o.area }}</span><span class="track"><i class="a" style="width:{{ (o.rate * 100)|round }}%"></i><i class="b" style="width:{{ 100 - (o.rate * 100)|round }}%"></i></span><span class="v">{{ o.good }}–{{ o.n - o.good }}</span></div>
+      {% endfor %}</div>{% else %}<p class="muted small">No opening duels recorded.</p>{% endif %}
+      <h3 style="margin-top:14px">{{ side|capitalize }}: where you die</h3>
+      {% if detail.deaths[side] %}<div class="bars">{% for o in detail.deaths[side][:5] %}
+        <div class="bar"><span>{{ o.area }}</span><span class="track"><i class="c" style="width:{{ (o.share * 100)|round }}%"></i></span><span class="v">{{ o.n }} · {{ o.rate|pct }} traded</span></div>
+      {% endfor %}</div>{% else %}<p class="muted small">No deaths recorded.</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div id="tips" style="margin-top:18px">
+    <div class="row between"><h2 style="margin:0">Coach tips for {{ detail.map }}</h2>
+      {% if can_edit %}<form method="post" action="{{ url_for('stats_tips', pid=p.id) }}"><input type="hidden" name="map" value="{{ detail.map }}"><input type="hidden" name="queue" value="{{ queue }}">
+        <button class="btn sm {{ 'primary' if not tips }}" {{ 'disabled' if tips_status and tips_status.status in ('queued','running') }}>{{ 'Write tips' if not tips else 'Write again' }}</button></form>{% endif %}</div>
+    {% if tips_status and tips_status.status in ('queued', 'running', 'error') %}
+    <div class="status" id="tips-status" data-key="{{ tips_key }}" data-state="{{ tips_status.status }}" style="margin-top:8px">
+      <span class="pill {{ 'running' if tips_status.status != 'error' else 'error' }}">{{ 'writing' if tips_status.status != 'error' else 'error' }}</span>
+      {% if tips_status.error %}<span class="small">{{ tips_status.error }}</span>{% endif %}</div>
+    {% endif %}
+    {% if tips %}
+    <p style="margin:12px 0">{{ tips.summary }}</p>
+    {% if tips.agent_pool %}<div class="row" style="gap:16px;margin-bottom:10px">{% for a in tips.agent_pool %}<span title="{{ a.why }}" class="agentcell">{{ ai(a.agent, 20) }}{{ a.agent }}<span class="verdict {{ a.verdict }}">{{ a.verdict }}</span></span>{% endfor %}</div>
+    <ul class="small muted" style="margin:0 0 10px;padding-left:18px">{% for a in tips.agent_pool %}<li><b>{{ a.agent }}</b>: {{ a.why }}</li>{% endfor %}</ul>{% endif %}
+    <div class="grid2">{% for side in ('attack', 'defense') %}<div class="sidebox"><h3>{{ side|capitalize }}</h3>
+      {% for t in tips[side] %}<div class="tip">{{ t.tip }}<small>{{ t.evidence }}</small></div>{% else %}<p class="muted small">Nothing specific.</p>{% endfor %}</div>{% endfor %}</div>
+    {% if tips.focus_next %}<p style="margin:12px 0 0"><b>Next games:</b> {{ tips.focus_next }}</p>{% endif %}
+    <p class="small muted" style="margin:8px 0 0">Written by {{ tips._model }} {% if tips._created %}on {{ tips._created|epoch }}{% endif %} from the numbers above.</p>
+    {% elif not tips_status %}<p class="muted small" style="margin-top:8px">The model turns the numbers above into what to keep and what to change on {{ detail.map }}, per side and agent.</p>{% endif %}
+  </div>
+</section>
+{% endif %}
+{% else %}
+<div class="empty card">No {{ dict(queues)[queue] }} games stored yet.</div>
+{% endif %}
+{% endif %}
+
+<section class="card" id="pick">
+  <h2>Pick helper (solo queue)</h2>
+  <form method="get" action="{{ url_for('stats', pid=p.id) }}#pick" class="pickform">
+    <input type="hidden" name="queue" value="{{ queue }}">{% if sel %}<input type="hidden" name="map" value="{{ sel }}">{% endif %}
+    <div><label>Map</label><select name="pick_map" required><option value="">Choose…</option>
+      {% for m in map_names %}<option {{ 'selected' if m == pick_map }}>{{ m }}</option>{% endfor %}</select></div>
+    {% for i in range(4) %}<div><label>Teammate {{ i + 1 }} locked</label><select name="locked"><option value="">—</option>
+      {% for a in all_agents %}<option {{ 'selected' if a == locked[i] }}>{{ a }}</option>{% endfor %}</select></div>{% endfor %}
+    <div><button class="btn primary">Suggest</button></div>
+  </form>
+  {% if pick %}
+  <p class="small muted" style="margin:12px 0 0">{% if pick.need %}Your team still needs: <b>{{ pick.need|join(', ') }}</b>.{% else %}All roles are covered.{% endif %}
+    Based on {{ pick.games }} games and {{ pick.pool_size }} agents you've played.</p>
+  {% for r in pick.uncovered %}<p class="small" style="color:var(--amber);margin:6px 0 0">You haven't played a {{ r.role }}{% if r.suggest %}. Most picked at your level on {{ pick.map }}: {{ r.suggest|join(', ') }}{% endif %}. If nobody else takes one, it's worth learning one.</p>{% endfor %}
+  <div class="pickres">{% for o in pick.picks %}
+    <div class="opt {{ 'first' if loop.first }}">
+      <div class="agentcell">{{ ai(o.agent, 28) }}{{ o.agent }} <span class="tag2">{{ o.role }}</span>{% if o.fills %} <span class="tag2" style="color:var(--win)">fills a role</span>{% endif %}</div>
+      <div class="small" style="margin-top:6px">{% if o.n_map %}{{ o.n_map }} games on {{ pick.map }}: {{ wr(o.wr_map) }} win, ACS {{ o.acs_map|num }}{% else %}No games on {{ pick.map }} with it{% endif %}</div>
+      <div class="small muted">{{ o.n_all }} games overall, {{ o.wr_all|pct }} win{% if o.meta_share %} · picked in {{ o.meta_share|pct }} of teams at your level{% endif %}</div>
+    </div>{% endfor %}</div>
+  {% elif not data.games %}<p class="muted small">Import your history first.</p>{% endif %}
+</section>
+
+<script>
+(function () {
+  document.querySelectorAll('[data-key]').forEach(el => {
+    if (!['queued', 'running'].includes(el.dataset.state)) return;
+    const log = el.querySelector('pre');
+    const tick = async () => {
+      try {
+        const r = await fetch('{{ url_for("stats_status") }}?key=' + encodeURIComponent(el.dataset.key));
+        const s = await r.json();
+        if (log && s.log) log.textContent = s.log.join('\n');
+        if (s.status === 'done' || s.status === 'error') { location.reload(); return; }
+      } catch (e) {}
+      setTimeout(tick, 2500);
+    };
+    setTimeout(tick, 1500);
+  });
+})();
+</script>
+{% endblock %}

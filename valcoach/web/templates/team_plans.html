@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Game plans · {{ t.name }} · valcoach{% endblock %}
+{% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% block head %}
+<style>
+.ai{border-radius:50%;vertical-align:middle;background:#0b0e13;object-fit:cover;flex:none}
+.maptabs{display:flex;gap:4px;flex-wrap:wrap}
+.plans{display:grid;gap:14px}
+.plan{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.plan .side{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.plan .side.attack{color:var(--red)}.plan .side.defense{color:var(--blue)}
+.plan h3{margin:2px 0 4px;font-size:18px}
+.plan .idea{font-size:15px;margin:0 0 10px}
+.steps{display:grid;gap:6px;margin:10px 0}
+.step{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:start;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+@media(max-width:700px){.step{grid-template-columns:1fr}}
+.step .who{display:flex;align-items:center;gap:8px;font-weight:700}
+.step .who small{display:block;font-weight:400;color:var(--muted);font-size:11px}
+.meta-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}@media(max-width:800px){.meta-row{grid-template-columns:1fr}}
+.box{background:var(--panel2);border-radius:8px;padding:10px 12px;font-size:13px}
+.box b{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.box ul{margin:0;padding-left:16px}
+.why{font-size:12.5px;color:var(--muted);margin-top:10px}
+.comps3{display:grid;gap:8px}
+.comp3{display:grid;grid-template-columns:18px repeat(5,minmax(0,1fr));gap:6px;align-items:center;font-size:13px;background:var(--panel2);border-radius:8px;padding:7px 8px}
+.comp3 .n{font-weight:800;color:var(--muted)}
+.pick{display:flex;gap:6px;align-items:center;min-width:0}
+.pick div{min-width:0;line-height:1.2}.pick b,.pick span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick span{font-size:11.5px;color:var(--muted)}
+.comp3 .pat{grid-column:2/-1;font-size:11px;color:var(--muted);margin-top:-2px}
+@media(max-width:560px){.comp3{grid-template-columns:18px repeat(2,minmax(0,1fr))}}
+.factgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.fact{background:var(--panel2);border-radius:8px;padding:10px 12px;font-size:13px}.fact b{display:block;margin-bottom:4px}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+{% if not ready %}
+<section class="card"><p class="muted">Game plans need 5 starters with stats. {% if g.team_owner %}Set them under <a href="{{ url_for('team_settings', tid=t.id) }}">Members, maps &amp; Discord</a>.{% endif %}</p></section>
+{% else %}
+<div class="row between" style="margin-bottom:14px">
+  <div class="maptabs">{% for mp in maps %}<a class="btn sm {{ 'primary' if mp == sel else 'ghost' }}" href="{{ url_for('team_plans', tid=t.id, map=mp) }}">{{ mp }}</a>{% endfor %}</div>
+  <div class="row">
+    <form method="post" action="{{ url_for('team_plans_build', tid=t.id) }}" class="row" style="gap:6px">
+      <input type="hidden" name="map" value="{{ sel }}">
+      <button class="btn {{ 'primary' if not plans }}" {{ 'disabled' if status and status.status in ('queued', 'running') }}>{{ 'Write plans for ' ~ sel if not plans else 'Write ' ~ sel ~ ' again' }}</button>
+    </form>
+    <form method="post" action="{{ url_for('team_plans_build', tid=t.id) }}"><input type="hidden" name="map" value="__all">
+      <button class="btn ghost" {{ 'disabled' if status and status.status in ('queued', 'running') }} title="One model run per map">All maps</button></form>
+  </div>
+</div>
+{% if status and status.status in ('queued', 'running', 'error') %}
+<div class="card status" data-key="plans:{{ t.id }}" data-state="{{ status.status }}"><span class="pill {{ 'running' if status.status != 'error' else 'error' }}">{{ 'writing plans' if status.status != 'error' else 'failed' }}</span>
+  <pre class="log" style="margin-top:8px">{{ status.log|join('\n') }}</pre></div>
+{% endif %}
+{% if post_status and post_status.status == 'error' %}<div class="flash error">{{ post_status.error }}</div>{% endif %}
+
+<div class="grid2" style="align-items:start">
+  <section class="card">
+    <h2>Comps for {{ sel }}</h2>
+    <div class="comps3">{% for c in comps if c.ok %}
+      <div class="comp3"><span class="n">{{ loop.index }}.</span>{% for p in c.picks %}<div class="pick" title="{{ p.player }} on {{ p.agent }}">{{ ai(p.agent, 26) }}<div><b>{{ p.agent }}</b><span>{{ p.player }}</span></div></div>{% endfor %}
+        {% if c.pattern %}<div class="pat">role mix: {% for tok in c.pattern.split() if tok[:-1] != '0' %}{% set n = tok[:-1] %}{% set w = {'D': 'duelist', 'I': 'initiator', 'C': 'controller', 'S': 'sentinel'}.get(tok[-1], tok[-1]) %}{{ n }} {{ w }}{{ 's' if n not in ('1', '') }}{{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}</div>
+    {% else %}<p class="muted">No comp yet (not enough games).</p>{% endfor %}</div>
+    {% if g.team_owner %}
+    <form method="post" action="{{ url_for('team_post_prep', tid=t.id) }}" style="margin-top:12px" class="row">
+      <input type="hidden" name="next" value="{{ url_for('team_plans', tid=t.id, map=sel) }}">
+      {% for mp in maps %}<label class="small" style="display:flex;gap:4px;align-items:center;margin:0"><input type="checkbox" name="maps" value="{{ mp }}" {{ 'checked' if mp == sel }}>{{ mp }}</label>{% endfor %}
+      <button class="btn sm" {{ 'disabled' if not (discord.prep_url or discord.focus_url) }} title="{{ 'Add a webhook first' if not (discord.prep_url or discord.focus_url) else 'Post comps (+ game plans if written) to #match-prep' }}">Post to Discord</button>
+    </form>{% endif %}
+  </section>
+  <section class="card">
+    <h2>Your numbers on {{ sel }} <span class="muted" style="text-transform:none;letter-spacing:0">({{ facts.team_matches if facts else 0 }} matches together)</span></h2>
+    {% if facts and facts.team_matches %}{% set a = facts.attack %}{% set d = facts.defense %}
+    <div class="factgrid">
+      <div class="fact"><b>Attack {{ a.won or '–' }} won</b>{% for s, v in a.sites_hit.items() %}{{ s }}: {{ v.plants }} plants, {{ v.rounds_won }} won<br>{% endfor %}first fight ~{{ a.first_fight_median_s }}s{% if a.plant_median_s %}, plant ~{{ a.plant_median_s }}s{% endif %}</div>
+      <div class="fact"><b>Killed from behind on attack: {{ a.killed_from_behind.count }}</b>{% for f in a.killed_from_behind.from %}{{ f.area }} {{ f.count }}×{{ ', ' if not loop.last }}{% endfor %}{% if a.killed_from_behind.median_time_s %}<br>usually around {{ a.killed_from_behind.median_time_s }}s{% endif %}</div>
+      <div class="fact"><b>Defense {{ d.won or '–' }} won</b>{% for s, v in d.enemy_plants.items() %}they plant {{ s }} {{ v.plants }}×, retakes {{ v.retakes_won }}<br>{% endfor %}{% if d.enemy_plant_median_s %}their plant ~{{ d.enemy_plant_median_s }}s{% endif %}</div>
+      <div class="fact"><b>Early mid kill</b>yours: {{ facts.mid_control.early_mid_kill_yours.rounds }} rounds, {{ facts.mid_control.early_mid_kill_yours.won or '–' }} won<br>theirs: {{ facts.mid_control.early_mid_kill_theirs.rounds }} rounds, {{ facts.mid_control.early_mid_kill_theirs.won or '–' }} won</div>
+    </div>
+    {% else %}<p class="muted small">No matches together on {{ sel }} with round data yet: plans will lean on the general numbers.</p>{% endif %}
+  </section>
+</div>
+
+{% if plans and plans.plans %}
+<div class="plans">
+  {% for p in plans.plans %}
+  <section class="plan">
+    <div class="side {{ p.side }}">{{ '⚔ attack' if p.side == 'attack' else '🛡 defense' }}</div>
+    <div class="row between"><h3>{{ p.title }}</h3>
+      <form method="post" action="{{ url_for('team_strats', tid=t.id) }}"><input type="hidden" name="map" value="{{ sel }}"><input type="hidden" name="side" value="{{ p.side }}">
+        <input type="hidden" name="from_plan" value="{{ loop.index0 }}"><button class="btn sm" title="Open this plan on the strat board">✎ Draw it</button></form></div>
+    <p class="idea">{{ p.idea }}</p>
+    {% if p.when_to_use %}<p class="small muted" style="margin:-4px 0 6px">When: {{ p.when_to_use }}</p>{% endif %}
+    <div class="steps">{% for s in p.steps %}{% set lp = (plans._lineup|selectattr('player', 'equalto', s.player)|first) %}
+      <div class="step"><div class="who">{% if lp %}{{ ai(lp.agent, 28) }}{% endif %}<div>{{ s.player }}{% if lp %}<small>{{ lp.agent }}{% if lp.team_roles %} · {{ lp.team_roles|join(', ') }}{% endif %}</small>{% endif %}</div></div><div>{{ s.what }}</div></div>
+    {% endfor %}</div>
+    <div class="meta-row">
+      <div class="box"><b>Timing</b>{{ p.timing }}</div>
+      <div class="box"><b>If / then</b><ul>{% for x in p.if_then %}<li>{{ x }}</li>{% endfor %}</ul></div>
+    </div>
+    <p class="why">Why: {{ p.why }}</p>
+  </section>
+  {% endfor %}
+</div>
+<p class="small muted" style="margin-top:10px">Written by {{ plans._model }} {% if plans._created %}on {{ plans._created|epoch }}{% endif %} from your matches together, your notes and the comp above.</p>
+{% elif not (status and status.status in ('queued', 'running')) %}
+<section class="card"><p>No plans for {{ sel }} yet. <b>Write plans</b> turns your numbers on this map, the comp, everyone's roles and your notes into 3 plays (2 attack, 1 defense) with a step for every player.</p></section>
+{% endif %}
+{% endif %}
+<script>
+(function () {
+  const el = document.querySelector('.status[data-key]');
+  if (!el || !['queued', 'running'].includes(el.dataset.state)) return;
+  const tick = async () => {
+    try {
+      const s = await (await fetch('{{ url_for("stats_status") }}?key=' + encodeURIComponent(el.dataset.key))).json();
+      if (s.log) el.querySelector('pre').textContent = s.log.join('\n');
+      if (s.status === 'done' || s.status === 'error') { location.reload(); return; }
+    } catch (e) {}
+    setTimeout(tick, 2500);
+  };
+  setTimeout(tick, 1500);
+})();
+</script>
+{% endblock %}

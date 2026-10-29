@@ -1,0 +1,23 @@
+# Start:   UID=$(id -u) GID=$(id -g) docker compose up -d --build
+# Logs:    docker compose logs -f
+# Update:  replace the code, then the same "up -d --build" command (data/ is kept)
+services:
+  valcoach:
+    build:
+      context: .
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    image: valcoach:latest
+    container_name: valcoach
+    restart: unless-stopped
+    # Host network: the container reaches Ollama on the host at 127.0.0.1:11434 like before,
+    # and the app is on http://<host-ip>:10070. (Linux only.)
+    network_mode: host
+    volumes:
+      - ./data:/data
+      # Recordings folders: mount them at the SAME path as on the host, read-only,
+      # so the folders set under Users keep working. Example:
+      # - /srv/recordings:/srv/recordings:ro
+    environment:
+      - TZ=Europe/Zurich
