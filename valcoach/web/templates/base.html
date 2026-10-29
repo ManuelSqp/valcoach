@@ -18,6 +18,10 @@ nav.top{display:flex;align-items:center;gap:20px;padding:12px 24px;border-bottom
 .navlinks a.navteams{display:inline-flex;align-items:center;gap:6px;color:var(--text);font-weight:600;border:1px solid #3a4458;background:#161b24}
 .navlinks a.navteams:hover,.navlinks a.navteams.active{border-color:var(--red);background:rgba(255,70,85,.12)}
 .navsep{width:1px;align-self:stretch;background:var(--line);margin:2px 6px}
+.uptime{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;padding:4px 9px;border:1px solid var(--line);border-radius:99px;background:#11151c;white-space:nowrap;cursor:default}
+.uptime .dot{width:7px;height:7px;border-radius:50%;background:var(--win);box-shadow:0 0 0 0 rgba(53,208,160,.6);animation:uppulse 2.4s infinite}
+@keyframes uppulse{0%{box-shadow:0 0 0 0 rgba(53,208,160,.55)}70%{box-shadow:0 0 0 6px rgba(53,208,160,0)}100%{box-shadow:0 0 0 0 rgba(53,208,160,0)}}
+@media(prefers-reduced-motion:reduce){.uptime .dot{animation:none}}
 .page{max-width:1180px;margin:0 auto;padding:24px 16px 60px}
 h1{font-size:22px;margin:0 0 4px;letter-spacing:.02em}h1 .tag{color:var(--muted);font-weight:500}
 h2{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 12px}
@@ -75,6 +79,7 @@ details summary{cursor:pointer;color:var(--muted)}
     {% for np in nav_profiles %}<a href="{{ url_for('profile', pid=np.id) }}" data-pid="{{ np.id }}" class="{{ 'active' if active_pid == np.id }}">{{ np.name }}</a>{% endfor %}
     <a href="{{ url_for('profile_new') }}" data-nav="new">+ Player</a>
     <span class="spacer"></span>
+    <span class="uptime" id="uptime" data-start="{{ app_started }}" data-now="{{ server_now }}" {% if host_boot %}data-host="{{ host_boot|int }}"{% endif %}><span class="dot"></span><span class="t">up</span></span>
     {% if user.is_admin %}
     <a href="{{ url_for('users') }}" class="{{ 'active' if request.endpoint in ('users', 'user_edit') }}">Users</a>
     <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint == 'settings' }}">Settings</a>
@@ -94,5 +99,23 @@ details summary{cursor:pointer;color:var(--muted)}
   {% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}{% endwith %}
   {% block content %}{% endblock %}
 </main>
+<script>
+(function () {
+  // uptime clock: how long the coach has been running (tooltip: since when, and the machine's uptime)
+  const u = document.getElementById('uptime'); if (!u) return;
+  const skew = Date.now() - +u.dataset.now * 1000;            // the PC's clock vs the server's
+  const start = +u.dataset.start * 1000 + skew, host = u.dataset.host ? +u.dataset.host * 1000 + skew : null;
+  const pad = n => String(n).padStart(2, '0');
+  const fmt = ms => { let s = Math.max(0, Math.floor(ms / 1000)); const d = Math.floor(s / 86400); s %= 86400;
+    return (d ? d + 'd ' : '') + pad(Math.floor(s / 3600)) + ':' + pad(Math.floor(s % 3600 / 60)) + ':' + pad(s % 60); };
+  const when = t => new Date(t).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'});
+  const tick = () => {
+    const now = Date.now();
+    u.querySelector('.t').textContent = 'up ' + fmt(now - start);
+    u.title = `valcoach running since ${when(start)}` + (host ? `\nserver up ${fmt(now - host)} (since ${when(host)})` : '');
+  };
+  tick(); setInterval(tick, 1000);
+})();
+</script>
 </body>
 </html>

@@ -134,22 +134,28 @@ class StatsRunner:
     def watch_path(self, pid: int, queue: str) -> Path:
         return self.store.profile_dir(pid) / "stats" / f"watch_{queue}.json"
 
-    def read_watch(self, pid: int, queue: str) -> dict | None:
+    def read_watch(self, pid: int, queue: str) -> dict:
+        """{"by_pro": {pro name: {queries, guide, errors, _created}}}. Files from before 2.16 had one
+        guide for the closest pro; it's kept under the key "" (= whoever is closest)."""
         p = self.watch_path(pid, queue)
         try:
-            return json.loads(p.read_text()) if p.exists() else None
+            d = json.loads(p.read_text()) if p.exists() else {}
         except ValueError:
-            return None
+            d = {}
+        if "by_pro" not in d:
+            d = {"by_pro": {"": d}} if d.get("queries") else {"by_pro": {}}
+        return d
 
-    def submit_watch(self, pid: int, queue: str, prof: dict, matches: list[dict], queries: list[dict]) -> str:
+    def submit_watch(self, pid: int, queue: str, prof: dict, matches: list[dict], jobs: list[dict]) -> str:
+        """jobs: [{"pro": name, "queries": [...]}], one guide (and one model run) per pro."""
         key = f"watch:{pid}:{queue}"
         if not self.busy(key):
             with self._lock:
                 self._state[key] = {"status": "queued", "log": [], "error": "", "t": time.time()}
-            self.ex.submit(self._watch, key, pid, queue, prof, matches, queries)
+            self.ex.submit(self._watch, key, pid, queue, prof, matches, jobs)
         return key
 
-    def _watch(self, key: str, pid: int, queue: str, prof: dict, matches: list[dict], queries: list[dict]) -> None:
+    def _watch(self, key: str, pid: int, queue: str, prof: dict, matches: list[dict], jobs: list[dict]) -> None:
         from ..coach.ollama import Ollama
         from ..stats.tips import write_watch_guide
         from ..stats.youtube import search
@@ -158,30 +164,45 @@ class StatsRunner:
             self._set(key, status="error", error="Player was deleted")
             return
         self._set(key, status="running")
-        out = {"queries": queries, "guide": None, "errors": [], "_created": time.time()}
         yt_key = self.store.get("youtube_api_key")
-        if yt_key:
-            self._log(key, "· Searching YouTube ...")
-            for q in queries:
-                try:
-                    q["videos"] = search(yt_key, q["query"], self.store.data_dir / "cache")
-                except Exception as e:
-                    out["errors"].append(f"YouTube: {e}")
-                    break                       # same error for every query (bad key, quota)
+        llm, llm_error = None, None
         try:
             cfg = self.store.build_config(p)
             llm = Ollama(cfg.ollama.url, cfg.ollama.model, cfg.ollama.temperature, cfg.ollama.num_ctx,
                          cfg.ollama.timeout_s, cfg.ollama.think)
             llm.check()
-            self._log(key, f"· Writing what to watch for with {cfg.ollama.model} ...")
-            out["guide"] = write_watch_guide(llm, prof, matches, queries, p.language)
         except Exception as e:
-            out["errors"].append(f"Coach: {e}")
-        path = self.watch_path(pid, queue)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(out, ensure_ascii=False))
-        if out["guide"] is None and not any(q.get("videos") for q in queries):
-            self._set(key, status="error", error="; ".join(out["errors"]) or "nothing produced")
+            llm, llm_error = None, f"Coach: {e}"
+        produced = False
+        all_errors = []
+        for n, job in enumerate(jobs, 1):
+            pro, queries = job["pro"], job["queries"]
+            out = {"pro": pro, "queries": queries, "guide": None, "errors": [], "_created": time.time()}
+            if yt_key:
+                self._log(key, f"· {pro}: searching YouTube ...")
+                for q in queries:
+                    try:
+                        q["videos"] = search(yt_key, q["query"], self.store.data_dir / "cache")
+                    except Exception as e:
+                        out["errors"].append(f"YouTube: {e}")
+                        break                       # same error for every query (bad key, quota)
+            if llm:
+                self._log(key, f"· {pro} ({n}/{len(jobs)}): writing what to watch for with {cfg.ollama.model} ...")
+                try:
+                    out["guide"] = write_watch_guide(llm, prof, matches, queries, p.language, pro=pro)
+                except Exception as e:
+                    out["errors"].append(f"Coach: {e}")
+            elif llm_error:
+                out["errors"].append(llm_error)
+            produced = produced or out["guide"] is not None or any(q.get("videos") for q in queries)
+            all_errors += out["errors"]
+            saved = self.read_watch(pid, queue)              # merge: other pros' guides stay
+            saved["by_pro"][pro] = out
+            path = self.watch_path(pid, queue)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(saved, ensure_ascii=False))
+        if not produced:
+            self._set(key, status="error", error="; ".join(dict.fromkeys(all_errors)) or "nothing produced")
         else:
             self._set(key, status="done")
 

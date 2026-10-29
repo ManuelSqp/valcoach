@@ -602,7 +602,8 @@ def test_pro_and_videos_page(app, monkeypatch):
 
         def chat_json(self, system, user, schema):
             ids = schema["properties"]["items"]["items"]["properties"]["id"]["enum"]
-            return {"pro_summary": "Copy how he spaces for the entry.", "items": [{"id": i, "watch_for": f"note {i}"} for i in ids],
+            pro = system.split("The player picked ")[1].split(" as the pro")[0]
+            return {"pro_summary": f"Copy how {pro} spaces for the entry.", "items": [{"id": i, "watch_for": f"note {i}"} for i in ids],
                     "habits": ["Trade your entry within 2 s"]}
     import valcoach.coach.ollama as oll
     monkeypatch.setattr(oll, "Ollama", FakeOllama)
@@ -617,8 +618,22 @@ def test_pro_and_videos_page(app, monkeypatch):
     c.post(f"/profiles/{me}/pros/build", data={"queue": "all"})
     assert _wait_stats(app, f"watch:{me}:all")["status"] == "done"
     page = c.get(f"/profiles/{me}/pros").data.decode()
-    assert "Copy how he spaces for the entry." in page and "Watch for:</b> note v1" in page
+    from valcoach.stats.style import load_pros, match_pros, profile
+    from valcoach.stats.aggregate import filter_rows
+    sr_ = app.extensions["valcoach"]["stats"]
+    ms = match_pros(profile(filter_rows(sr_.games(me).rows(), "all")), load_pros(""))
+    first, second = ms[0]["name"], ms[1]["name"]
+    assert f"Copy how {first} spaces for the entry." in page and "Watch for:</b> note v1" in page
     assert "watch?v=x1" in page and "Trade your entry within 2 s" in page
+    # pick another pro: its own searches, and no guide until it's written for that pro
+    page2 = c.get(f"/profiles/{me}/pros?pro={second}").data.decode()
+    assert f"{second} on " in page2 and f"Copy how {first}" not in page2 and f"Write what to watch for {second}" in page2
+    c.post(f"/profiles/{me}/pros/build", data={"queue": "all", "pro": second, "all": "1"})
+    assert _wait_stats(app, f"watch:{me}:all")["status"] == "done"
+    page2 = c.get(f"/profiles/{me}/pros?pro={second}").data.decode()
+    assert f"Copy how {second} spaces for the entry." in page2
+    assert f"Copy how {first} spaces" in c.get(f"/profiles/{me}/pros?pro={first}").data.decode()   # still there
+    assert set(sr_.read_watch(me, "all")["by_pro"]) == {m["name"] for m in ms}
     app.extensions["valcoach"]["stats"].shutdown()
 
 
@@ -1082,3 +1097,8 @@ def test_strat_board_only_stores_typed_fields(app):
     assert saved[2]["pts"] == [[1, 2], [4, 5]] and len(saved) == 3
     assert "onerror" not in json.dumps(store.strat(sid)["data"])
 
+
+def test_uptime_clock_in_nav(app):
+    c = setup_admin(app)
+    page = c.get("/").data.decode()
+    assert 'id="uptime"' in page and 'data-start="' in page and 'data-now="' in page

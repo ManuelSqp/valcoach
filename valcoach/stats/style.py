@@ -172,8 +172,17 @@ def _q(*parts: str) -> str:
     return text if "valorant" in text.lower() else text + " valorant"
 
 
-def video_queries(rows: list[dict], prof: dict, matches: list[dict], limit: int = 6) -> list[dict]:
-    """Targeted YouTube searches: your pro on your agent/map, plus your weak spots."""
+PRO_STRENGTH = {   # what to search for when the pro is better than you at something
+    "opening": ("entry", "How {pro} takes opening duels on {agent}", "{pro} {opening} than you: watch how they set up the first fight."),
+    "kills": ("POV aim", "How {pro} gets kills on {agent}", "{pro} {kills} than you: watch where they fight from and when they re-peek."),
+    "assists": ("utility", "How {pro} uses {agent}'s utility", "{pro} {assists} than you: watch when the util goes out before a fight."),
+    "survive": ("positioning", "How {pro} stays alive on {agent}", "{pro} {survive} than you: watch when they fall back and how they trade."),
+}
+
+
+def video_queries(rows: list[dict], prof: dict, matches: list[dict], limit: int = 6, pro: str | None = None) -> list[dict]:
+    """Targeted YouTube searches built around ONE pro (the closest, or the one picked by name),
+    plus your weak spots."""
     out: list[dict] = []
     seen: set[str] = set()
 
@@ -186,22 +195,34 @@ def video_queries(rows: list[dict], prof: dict, matches: list[dict], limit: int 
 
     maps = [m for m in by_map(rows) if m["games"] >= 3]
     top_agent = next(iter(prof.get("agents", {})), "")
-    if matches:
-        pro = matches[0]
-        agent = (pro["shared"] or pro["agents"] or [top_agent])[0]
+    chosen = next((m for m in matches if m["name"] == pro), matches[0] if matches else None)
+    if chosen:
+        rank = matches.index(chosen) + 1
+        agents = chosen["shared"] or chosen["agents"] or [top_agent]
+        agent = agents[0]
         agent_maps = [m for m in maps if any(a["agent"] == agent for a in m["agents"])]
         m_name = agent_maps[0]["map"] if agent_maps else (maps[0]["map"] if maps else "")
-        add("pro", f"{pro['name']} on {agent}{' · ' + m_name if m_name else ''}", _q(pro["name"], agent, m_name, "POV"),
-            f"Closest pro to your style ({round(pro['score'] * 100)}% match). {_cap(pro['known_for'])}.")
-        if len(matches) > 1:
-            p2 = matches[1]
-            a2 = (p2["shared"] or p2["agents"] or [""])[0]
-            add("pro", f"{p2['name']} on {a2}", _q(p2["name"], a2, "POV"), f"Second closest pro. {_cap(p2['known_for'])}.")
+        lead = "Closest pro to your style" if rank == 1 else f"#{rank} closest pro to your style"
+        add("pro", f"{chosen['name']} on {agent}{' · ' + m_name if m_name else ''}", _q(chosen["name"], agent, m_name, "POV"),
+            f"{lead} ({round(chosen['score'] * 100)}% match). {_cap(chosen['known_for'])}.")
+        # what this pro does better than you, on your shared agent
+        better = sorted((k for k, v in (chosen.get("diff") or {}).items() if v <= -0.1), key=lambda k: chosen["diff"][k])
+        for k in better[:1]:
+            word, title, why = PRO_STRENGTH[k]
+            add("pro", title.format(pro=chosen["name"], agent=agent), _q(chosen["name"], agent, word),
+                why.format(pro=chosen["name"], **{k: GAP_MORE[k]}))
+        # their other agent you also play (or their next agent: a pool idea)
+        other = next((a for a in (chosen["shared"][1:] + [a for a in chosen["agents"] if a not in chosen["shared"]]) if a != agent), None)
+        if other:
+            add("pro", f"{chosen['name']} on {other}", _q(chosen["name"], other, "POV"),
+                f"You play {other} too." if other in chosen["shared"] else f"{other} is in {chosen['name']}'s pool: an agent to try if you want to copy them more closely.")
     weak = sorted((m for m in maps if m["games"] >= 5), key=lambda m: m["wr_s"])
     if weak and weak[0]["wr_s"] < 0.5:
         m = weak[0]
         agent = m["agents"][0]["agent"] if m["agents"] else top_agent
-        who = matches[0]["name"] if matches else ""
+        who = chosen["name"] if chosen else ""
+        if chosen and agent not in chosen["agents"]:        # search the pro on an agent they actually play
+            agent = (chosen["shared"] or chosen["agents"] or [agent])[0]
         add("map", f"{m['map']}: your weakest map", _q(who, agent, m["map"], "VOD" if who else "guide"),
             f"{m['wins']:.0f}-{m['games'] - m['wins']:.0f} on {m['map']} ({m['wr']:.0%}).")
     for m in maps[:3]:

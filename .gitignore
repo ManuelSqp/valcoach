@@ -1,16 +1,28 @@
+# runtime data: database (API keys, users, passwords), match cache, reports
+/data/
+/output/
+
+# local config with secrets
 config.toml
-data/*
-!data/cache/
-data/cache/*
-!data/cache/.gitkeep
-output/
 knowledge/playbook.yaml
+
+# python
 __pycache__/
+*.py[cod]
 *.egg-info/
 .pytest_cache/
 .venv/
+venv/
+
+# media
 *.mp4
 *.mkv
 *.mov
 *.webm
 *.avi
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

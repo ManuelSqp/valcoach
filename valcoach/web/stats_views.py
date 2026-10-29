@@ -113,7 +113,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             pick=pick, pick_map=pick_map, locked=locked + [""] * (4 - len(locked)),
             recent=rows[:12])
 
-    def pro_context(p, queue: str) -> dict:
+    def pro_context(p, queue: str, pro: str | None = None) -> dict:
         from ..stats.style import load_pros, match_pros, profile, video_queries
         roles.load(cache_dir)
         rows = filter_rows(sr.games(p.id).rows(), queue)
@@ -124,16 +124,20 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         except Exception as e:
             pros, pros_error = load_pros(""), str(e)
         matches = match_pros(prof, pros)
-        queries = video_queries(rows, prof, matches) if rows else []
+        chosen = next((m for m in matches if m["name"] == pro), matches[0] if matches else None)
+        queries = video_queries(rows, prof, matches, pro=chosen["name"] if chosen else None) if rows else []
         return {"rows": rows, "prof": prof, "matches": matches, "queries": queries, "pros_error": pros_error,
-                "n_pros": len(pros)}
+                "n_pros": len(pros), "chosen": chosen}
 
     @app.get("/profiles/<int:pid>/pros")
     def pros(pid: int):
         p, can_edit = view_profile(pid)
         queue = queue_arg()
-        c = pro_context(p, queue)
-        saved = sr.read_watch(pid, queue)
+        c = pro_context(p, queue, request.args.get("pro"))
+        by_pro = sr.read_watch(pid, queue)["by_pro"]
+        closest = c["matches"][0]["name"] if c["matches"] else ""
+        chosen = c["chosen"]["name"] if c["chosen"] else ""
+        saved = by_pro.get(chosen) or (by_pro.get("") if chosen == closest else None)
         # attach saved videos / notes to the current searches (matched by search text)
         guide, errors, created = None, [], None
         if saved:
@@ -145,19 +149,25 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
                 if old:
                     q["videos"] = old.get("videos", [])
                     q["watch_for"] = notes.get(old["id"])
+        ready = {m["name"] for m in c["matches"] if (by_pro.get(m["name"]) or (by_pro.get("") if m["name"] == closest else None) or {}).get("guide")}
         return render_template("pros.html", p=p, active_pid=pid, queue=queue, queues=QUEUE_TABS, tab="pros", can_edit=can_edit,
-                               guide=guide, errors=errors, created=created, yt=bool(store.get("youtube_api_key")),
+                               guide=guide, errors=errors, created=created, yt=bool(store.get("youtube_api_key")), ready=ready,
                                status=sr.status(f"watch:{pid}:{queue}"), status_key=f"watch:{pid}:{queue}", **c)
 
     @app.post("/profiles/<int:pid>/pros/build")
     def pros_build(pid: int):
+        from ..stats.style import video_queries
         p = get_profile(pid)
         queue = request.form.get("queue", "all")
         queue = queue if queue in dict(QUEUE_TABS) else "all"
-        c = pro_context(p, queue)
-        if c["queries"]:
-            sr.submit_watch(pid, queue, c["prof"], c["matches"], c["queries"])
-        return redirect(url_for("pros", pid=pid, queue=queue))
+        pro = request.form.get("pro") or None
+        c = pro_context(p, queue, pro)
+        if c["queries"] and c["chosen"]:
+            names = [m["name"] for m in c["matches"]] if request.form.get("all") else [c["chosen"]["name"]]
+            jobs = [{"pro": n, "queries": c["queries"] if n == c["chosen"]["name"] else video_queries(c["rows"], c["prof"], c["matches"], pro=n)}
+                    for n in names]
+            sr.submit_watch(pid, queue, c["prof"], c["matches"], jobs)
+        return redirect(url_for("pros", pid=pid, queue=queue, pro=c["chosen"]["name"] if c["chosen"] else None) + "#pros")
 
     @app.post("/profiles/<int:pid>/stats/import")
     def stats_import(pid: int):

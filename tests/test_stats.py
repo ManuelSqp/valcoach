@@ -273,6 +273,11 @@ def test_video_queries(imported):
     assert all(q["url"].startswith("https://www.youtube.com/results?search_query=") for q in qs)
     assert all("valorant" in q["query"].lower() and q["why"] for q in qs)
     assert len({q["query"] for q in qs}) == len(qs)
+    # built around the pro you pick
+    other = matches[1]["name"]
+    q2 = video_queries(rows, prof, matches, pro=other)
+    assert q2[0]["kind"] == "pro" and other in q2[0]["query"] and "#2 closest" in q2[0]["why"]
+    assert all(matches[0]["name"] not in q["query"] for q in q2)
 
 
 def test_youtube_search_and_cache(tmp_path):

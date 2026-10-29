@@ -44,7 +44,16 @@ MAX_CACHE_ENTRIES = 200                # match-list cache (one entry per player 
 MAX_TRACKED_LOGINS = 1000              # failed-login records kept for the lockout
 
 
+def _host_boot() -> float | None:
+    """When the machine itself booted (Linux), for the uptime tooltip."""
+    try:
+        return time.time() - float(Path("/proc/uptime").read_text().split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
 def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: bool = True) -> Flask:
+    started_at = time.time()
     store = Store(data_dir)
     store.seed_from_config(config_seed)
     runner = JobRunner(store, int(store.get("workers") or 1))
@@ -207,6 +216,9 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             "signup_enabled": signup_enabled(),
             "min_password": MIN_PASSWORD,
             "app_version": __version__,
+            "app_started": int(started_at),
+            "server_now": int(time.time()),
+            "host_boot": _host_boot(),
             "new_version": bool(user) and store.get(f"seen_version:{user.id}") not in ("", __version__),
         }
 

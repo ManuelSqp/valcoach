@@ -87,12 +87,14 @@ WATCH_SYSTEM = """You are a Valorant coach. A player will watch the videos liste
 For each one, say in 1-2 sentences what exactly to watch for, tied to THIS player's numbers
 (the "why" of each video and their style profile). Be concrete: positions, timing, when to
 peek or fall back, how the pro uses utility before a fight. Don't describe the video itself
-(you haven't seen it); say what to look for. Write in {language}."""
+(you haven't seen it); say what to look for. The player picked {pro} as the pro to copy: write
+pro_summary and habits about copying {pro} specifically (what {pro} does that this player should take
+over, and what to keep of their own). Write in {language}."""
 
 
 def watch_schema(ids: list[str]) -> dict:
     return {"type": "object", "properties": {
-        "pro_summary": {"type": "string", "description": "2-3 sentences: why the closest pro fits and what to copy from them."},
+        "pro_summary": {"type": "string", "description": "2-3 sentences: why the chosen pro fits and what to copy from them."},
         "items": {"type": "array", "items": {"type": "object", "properties": {
             "id": {"type": "string", "enum": ids}, "watch_for": {"type": "string"}}, "required": ["id", "watch_for"]}},
         "habits": {"type": "array", "items": {"type": "string"}, "maxItems": 3,
@@ -100,12 +102,17 @@ def watch_schema(ids: list[str]) -> dict:
     }, "required": ["pro_summary", "items", "habits"]}
 
 
-def write_watch_guide(llm, prof: dict, matches: list[dict], queries: list[dict], language: str = "English") -> dict:
+def write_watch_guide(llm, prof: dict, matches: list[dict], queries: list[dict], language: str = "English",
+                      pro: str | None = None) -> dict:
+    """pro = the pro the player picked (default: the closest). It goes first in the facts."""
+    pro = pro or (matches[0]["name"] if matches else "the closest pro")
+    matches = sorted(matches, key=lambda m: m["name"] != pro)
     facts = {
         "your_style": {"main_role": prof.get("main_role"), "agents": {a: f"{v:.0%}" for a, v in list(prof.get("agents", {}).items())[:4]},
                        "percentiles": prof.get("dims"), "per_round": prof.get("raw"),
                        "opening_duels_won": None if prof.get("opening_wr") is None else f"{prof['opening_wr']:.0%}",
                        "traits": prof.get("traits"), "reference": prof.get("reference")},
+        "chosen_pro": pro,
         "closest_pros": [{"name": m["name"], "role": m["role"], "agents": m["agents"], "known_for": m["known_for"],
                           "match": f"{m['score']:.0%}", "why": m["why"], "difference": m["gap"]} for m in matches],
         "videos": [{"id": q["id"], "title": q["title"], "search": q["query"], "why": q["why"],
@@ -113,6 +120,6 @@ def write_watch_guide(llm, prof: dict, matches: list[dict], queries: list[dict],
     }
     user = "Player and videos (YAML):\n" + yaml.safe_dump(facts, sort_keys=False, allow_unicode=True)
     sch = watch_schema([q["id"] for q in queries])
-    out = llm.chat_json(WATCH_SYSTEM.format(language=language) + field_guide(sch), user, sch)
+    out = llm.chat_json(WATCH_SYSTEM.format(language=language, pro=pro) + field_guide(sch), user, sch)
     out["_model"] = getattr(llm, "model", "")
     return out

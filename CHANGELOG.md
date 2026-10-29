@@ -4,6 +4,24 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 2.16.0
+- **Pro & videos: pick the pro.** Click any of the 3 pro cards to select it. Everything below then follows that pro:
+  - the white marks on your playstyle bars,
+  - a "Copying <pro>" box with what to take over from them and habits to practise,
+  - **What to watch**: searches built around that pro (them on your shared agent and map, how they do the thing
+    they're better at than you, their other agent, your weakest map with their VODs), plus your own habit fixes.
+  - Each pro gets its own guide. *Write what to watch for <pro>* writes the selected one; *All 3 pros* writes all
+    three in one go (one model run each) so switching is instant. Cards show "✓ guide written".
+  - Guides written before this version still show for your closest pro.
+- **Includes Manuel's review fixes on 2.15.0** (details in [CHANGES.md](CHANGES.md)): real utility numbers from the
+  live API, the model now sees the field descriptions (also for the new per-pro watch guide), no "check the VOD"
+  without a VOD, deathmatch / team deathmatch / gauntlet can't be coached, time-outs are detected, the strat board
+  only stores typed fields (stored XSS), forms from other sites are blocked (CSRF), limits per user (reports at
+  once, upload size, free disk), a job can't run twice, safer match IDs and inputs. Requires Flask 3.1+.
+- The project is a git repo now: updates come as a commit on top of `main` instead of a zip over the folder.
+- **Uptime clock** in the top bar: how long valcoach has been running, ticking live. Hover it for the start time
+  and how long the server itself has been up.
+
 ## 2.15.0
 - **Nightly sync.** Every team syncs by itself every night at 02:00 (server time): the Premier roster first (if the
   team is linked to Premier), then everyone's stats, just like pressing the two buttons. On by default; change the
