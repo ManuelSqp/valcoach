@@ -3,7 +3,7 @@
 {% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
 {% block head %}
 <style>
-.ai{border-radius:50%;vertical-align:middle;background:#0b0e13;object-fit:cover;flex:none}
+.ai{border-radius:50%;vertical-align:middle;background:var(--ink);object-fit:cover;flex:none}
 .tgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
 @media(max-width:900px){.tgrid{grid-template-columns:1fr}}
 .big3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
@@ -14,7 +14,7 @@
 .wk{border-left:3px solid var(--amber);background:var(--panel2);border-radius:0 8px 8px 0;padding:8px 12px;margin-bottom:8px}
 .wk b{display:block}.wk span{font-size:12.5px;color:var(--muted)}
 .drill{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:8px 0;border-bottom:1px solid var(--line)}
-.drill:last-child{border-bottom:0}.drill .n{width:22px;height:22px;border-radius:50%;background:#1d2330;display:grid;place-items:center;font-size:12px;font-weight:700}
+.drill:last-child{border-bottom:0}.drill .n{width:22px;height:22px;border-radius:50%;background:var(--panel3);display:grid;place-items:center;font-size:12px;font-weight:700}
 .drill .t{font-size:12px;color:var(--muted);white-space:nowrap}
 .days{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
 .days span{width:18px;height:18px;border-radius:4px;background:var(--panel2);border:1px solid var(--line)}.days span.on{background:var(--win);border-color:var(--win)}
@@ -24,10 +24,10 @@
 .path summary::after{content:"▸";float:right;color:var(--muted)}.path[open] summary::after{content:"▾"}
 .steps{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}
 .steps li{display:grid;grid-template-columns:22px 1fr;gap:8px;font-size:13px}
-.steps .ck{width:18px;height:18px;border-radius:50%;border:2px solid #3a4458;display:grid;place-items:center;font-size:11px;margin-top:1px}
-.steps li.done .ck{background:var(--win);border-color:var(--win);color:#0f1218}
+.steps .ck{width:18px;height:18px;border-radius:50%;border:2px solid var(--line2);display:grid;place-items:center;font-size:11px;margin-top:1px}
+.steps li.done .ck{background:var(--win);border-color:var(--win);color:var(--bg)}
 .steps li.opt .ck{border-style:dashed}
-.prog{height:6px;background:#1d2330;border-radius:99px;margin-top:8px;overflow:hidden}.prog i{display:block;height:100%;background:var(--win)}
+.prog{height:6px;background:var(--panel3);border-radius:99px;margin-top:8px;overflow:hidden}.prog i{display:block;height:100%;background:var(--win)}
 .ref{font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}.ref:last-child{border-bottom:0}
 </style>
 {% endblock %}
@@ -51,7 +51,7 @@
     <p class="small" style="margin:14px 0 0"><b>Fights by range</b> <span class="muted">(how many of your fights, and how many you win)</span></p>
     {% for k, label in (('close', 'under ' ~ close_m ~ ' m'), ('mid', close_m ~ '–' ~ long_m ~ ' m'), ('long', 'over ' ~ long_m ~ ' m')) %}{% set r = a.ranges[k] %}
     <div class="rng"><span>{{ label }}</span>
-      <span class="track" title="{{ r.duels }} fights"><i style="width:{{ ((r.share or 0) * 100)|round|int }}%;background:#3a4458"></i></span>
+      <span class="track" title="{{ r.duels }} fights"><i style="width:{{ ((r.share or 0) * 100)|round|int }}%;background:var(--line2)"></i></span>
       <span>{% if r.won is not none %}<b style="color:{{ 'var(--win)' if r.won >= 0.5 else 'var(--red)' }}">{{ r.won|pct }}</b> won{% else %}–{% endif %}</span></div>
     {% endfor %}
     <p class="small muted" style="margin:10px 0 0">Distances come from where you and the other player stood at each kill. Headshots from all your hits.</p>

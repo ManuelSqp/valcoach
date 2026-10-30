@@ -1416,3 +1416,52 @@ def test_progress_and_training_pages(app, monkeypatch):
     c2 = make_user(app, c, "burn")
     assert c2.post(f"/profiles/{me}/training/done").status_code == 404
     app.extensions["valcoach"]["stats"].shutdown()
+
+
+def test_look_and_feel_search_and_lineups(app):
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    me = add_profile(c)
+    page = c.get("/").data.decode()
+    assert 'class="skin-classic a-count a-lift a-tabs a-loaders a-toasts"' in page and "ui.js" in page and "styles/" not in page
+    # pick a style and switch two animations off
+    r = c.post("/account", data={"look": "1", "style": "hud", "anim_count": "1", "anim_tabs": "1", "anim_loaders": "1"})
+    assert r.status_code == 302
+    page = c.get("/").data.decode()
+    assert 'class="skin-hud a-count a-tabs a-loaders"' in page and "styles/hud.css" in page
+    assert "fonts.googleapis.com/css2?family=Rajdhani" in page
+    assert c.get("/static/styles/hud.css").status_code == 200
+    c.post("/account", data={"look": "1", "style": "<script>"})            # unknown style -> classic
+    assert "skin-classic" in c.get("/").data.decode()
+    assert "Look &amp; feel" in c.get("/account").data.decode()
+    # Ctrl+K index: players, team tabs, maps, drafts, strats
+    tid = store.create_team(store.user_by_name("manuel").id, "Squad")
+    store.update_team(tid, members=[{"pid": me, "kind": "starter"}], maps=["Bind"])
+    store.create_draft(tid, store.user_by_name("manuel").id, "Bind", "Double controller", {"slots": []})
+    idx = c.get("/api/search-index").get_json()
+    labels = {i["label"] for i in idx}
+    assert "adv1ce#LFT" in labels and "Squad · drafts" in labels and "Bind · game plans" in labels and "Double controller" in labels
+    assert "Squad · lineups" in labels and "Settings" in labels
+    assert all(i["url"].startswith("/") for i in idx)
+    # lineups: add with a YouTube link (thumbnail), refuse javascript: links, delete
+    r = c.post(f"/teams/{tid}/lineups", data={"map": "Bind", "agent": "Omen", "title": "A Short smoke", "side": "attack",
+                                              "site": "A", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=12", "notes": "from spawn"})
+    assert r.status_code == 302
+    rows = store.lineups(tid, "Bind")
+    assert len(rows) == 1 and rows[0]["agent"] == "Omen" and rows[0]["site"] == "A"
+    page = c.get(f"/teams/{tid}/lineups?map=Bind").data.decode()
+    assert "A Short smoke" in page and "i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg" in page
+    c.post(f"/teams/{tid}/lineups", data={"map": "Bind", "agent": "Omen", "title": "bad", "url": "javascript:alert(1)"})
+    assert len(store.lineups(tid, "Bind")) == 1
+    c.post(f"/teams/{tid}/lineups", data={"map": "Bind", "agent": "Nobody", "title": "x"})
+    assert len(store.lineups(tid, "Bind")) == 1
+    assert c.post(f"/teams/{tid}/lineups/{rows[0]['id']}/delete").status_code == 302 and store.lineups(tid) == []
+
+
+def test_clip_info():
+    from valcoach.web.lineups import clip_info
+    assert clip_info("https://youtu.be/abcdefghijk")["thumb"].endswith("/abcdefghijk/mqdefault.jpg")
+    assert clip_info("https://www.youtube.com/shorts/abcdefghijk")["thumb"]
+    assert clip_info("https://medal.tv/games/valorant/clips/xyz")["thumb"] is None
+    assert clip_info("https://youtube.com/watch?v=<script>")["thumb"] is None
+    assert clip_info("javascript:alert(1)") is None and clip_info("ftp://x/y") is None and clip_info("") is None

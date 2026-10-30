@@ -379,6 +379,18 @@ def test_team_matches_tips_and_map_facts(tmp_path, cache, history):
     assert all(t["kind"] in ("outnumbered", "alone", "duo") and t["text"] for t in tips)
 
 
+def test_first_contact_skips_zones_without_a_timing_window(tmp_path, monkeypatch):
+    from types import SimpleNamespace as NS
+    from valcoach.stats import teamdata
+    monkeypatch.setattr(teamdata, "_map_info", lambda *a: NS(area=lambda x, y: "A", zone=lambda x, y: x))
+    monkeypatch.setattr(teamdata, "_spawn", lambda *a: None)
+    rounds = [NS(side_of=lambda t: "defense", winning_team="Red", plant=None,
+                 kills=[NS(t_round_ms=20000, victim_x=z, victim_y=0, killer_team="Red", victim_team="Blue")])
+              for z in ["B"] * 3 + ["Mid"] * 2]             # 2 rounds is too few for a window
+    f = teamdata.map_facts([(NS(map_name="Ascent", rounds=rounds), "Red")], tmp_path, "Ascent")
+    assert [c["where"] for c in f["defense"]["first_contact"]] == ["B"]
+
+
 def test_top_comps_are_different():
     from valcoach.stats.comp import top_comps
     cs = top_comps(_pools(), "Ascent")

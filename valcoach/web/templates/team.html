@@ -3,11 +3,11 @@
 {% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
 {% block head %}
 <style>
-.ai{border-radius:50%;vertical-align:middle;background:#0b0e13;object-fit:cover;flex:none}
+.ai{border-radius:50%;vertical-align:middle;background:var(--ink);object-fit:cover;flex:none}
 .agentcell{display:flex;align-items:center;gap:8px}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 12px 5px 10px;text-decoration:none;font-size:13px}
-.chip:hover{border-color:#3a4458}.chip .k{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.chip:hover{border-color:var(--line2)}.chip .k{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .chip.sub{border-style:dashed}.chip .warn{color:var(--amber)}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--win)}.dot.thin{background:var(--amber)}.dot.none{background:var(--red)}.dot.run{background:var(--blue)}
 /* overview matrix */
@@ -16,7 +16,7 @@
 .matrix th:first-child,.matrix td:first-child{text-align:left;position:sticky;left:0;background:var(--panel);z-index:1}
 .matrix thead th{text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);font-weight:700}
 .matrix thead th a{text-decoration:none;display:block;padding:4px 8px;border-radius:6px}
-.matrix thead th a:hover{background:#1d2330}
+.matrix thead th a:hover{background:var(--panel3)}
 .matrix th.sel a{background:rgba(255,70,85,.12);color:#fff}
 .matrix td.sel{background:rgba(255,70,85,.05)}
 .cell{display:inline-flex;flex-direction:column;align-items:center;gap:3px;min-width:70px}

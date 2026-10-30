@@ -8,6 +8,7 @@ Start with:  valcoach web   (then open http://<this machine>:10070)
 from __future__ import annotations
 
 import functools
+import json
 import shutil
 import socket
 import sqlite3
@@ -43,6 +44,8 @@ LOCKOUT_S = 600
 MAX_CACHE_ENTRIES = 200                # match-list cache (one entry per player / queue / page)
 MAX_TRACKED_LOGINS = 1000              # failed-login records kept for the lockout
 
+
+from .ui import fonts_url, ui_prefs
 
 def _host_boot() -> float | None:
     """When the machine itself booted (Linux), for the uptime tooltip."""
@@ -218,6 +221,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             "signup_enabled": signup_enabled(),
             "min_password": MIN_PASSWORD,
             "app_version": __version__,
+            "ui": user.ui if user else ui_prefs({}),
+            "ui_fonts": fonts_url(user.ui["style"]) if user else "",
             "app_started": int(started_at),
             "server_now": int(time.time()),
             "host_boot": _host_boot(),
@@ -347,6 +352,14 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
 
     @app.route("/account", methods=["GET", "POST"])
     def account():
+        if request.method == "POST" and request.form.get("look"):
+            from .ui import ANIMATIONS, STYLES
+            f = request.form
+            prefs = {"style": f.get("style") if f.get("style") in STYLES else "classic",
+                     "anim": {k: bool(f.get(f"anim_{k}")) for k in ANIMATIONS}}
+            store.update_user(g.user.id, prefs=json.dumps(prefs))
+            flash(f"Style: {STYLES[prefs['style']][0]}.", "ok")
+            return redirect(url_for("account") + "#look")
         if request.method == "POST" and "display_name" in request.form:
             store.update_user(g.user.id, display_name=request.form["display_name"].strip()[:40])
             flash("Saved.", "ok")
@@ -364,7 +377,50 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                     flash("Password changed. Other devices were logged out.", "ok")
             return redirect(url_for("account"))
         usage = store.usage_by_user().get(g.user.id, {"profiles": 0, "jobs": 0})
-        return render_template("account.html", usage=usage, vod_root=vod_root(g.user))
+        from .ui import ANIMATIONS, STYLES
+        return render_template("account.html", usage=usage, vod_root=vod_root(g.user), styles=STYLES, animations=ANIMATIONS)
+
+    # -------------------------------------------------------------- quick search (Ctrl+K)
+    @app.get("/api/search-index")
+    def search_index():
+        out = []
+        add = lambda kind, label, url, sub="": out.append({"kind": kind, "label": label, "url": url, "sub": sub})  # noqa: E731
+        seen = set()
+        for p in store.profiles(g.user.id):
+            seen.add(p.id)
+            add("player", p.riot_id, url_for("stats", pid=p.id), "stats & agents")
+            for ep, lbl in (("progress", "progress"), ("training", "training"), ("pros", "pro & videos"), ("profile", "matches & reports")):
+                add("player", f"{p.name} · {lbl}", url_for(ep, pid=p.id))
+        for t in store.teams_for_user(g.user.id):
+            tabs = [("team", "comps"), ("team_premier", "premier"), ("team_division", "division & scouting"), ("team_drafts", "drafts"),
+                    ("team_plans", "game plans"), ("team_strats", "strat book"), ("team_lineups", "lineups"),
+                    ("team_focus", "weekly focus"), ("team_roles_page", "roles"), ("team_notes", "notes")]
+            if t.owner_id == g.user.id:
+                tabs.append(("team_settings", "members, maps & discord"))
+            add("team", t.name, url_for("team", tid=t.id), "comps")
+            for ep, lbl in tabs[1:]:
+                if ep in app.view_functions:
+                    add("team", f"{t.name} · {lbl}", url_for(ep, tid=t.id))
+            for m in t.map_list:
+                add("map", f"{m} · game plans", url_for("team_plans", tid=t.id, map=m), t.name)
+                add("map", f"{m} · drafts", url_for("team_drafts", tid=t.id, map=m), t.name)
+            for d in store.drafts(t.id):
+                add("draft", d["name"], url_for("team_drafts", tid=t.id, map=d["map"], d=d["id"]), f"{d['map']} · {t.name}")
+            for s in store.strats(t.id):
+                add("strat", s["name"], url_for("strat_edit", tid=t.id, sid=s["id"]), f"{s['map']} {s['side']} · {t.name}")
+            for pid in {m["pid"] for m in t.member_list} - seen:
+                p = store.profile(pid)
+                if p:
+                    seen.add(pid)
+                    add("player", p.riot_id, url_for("stats", pid=pid), f"{t.name} · stats")
+                    add("player", f"{p.name} · progress", url_for("progress", pid=pid), t.name)
+        add("page", "Account & look", url_for("account"))
+        add("page", "What's new", url_for("changelog"))
+        add("page", "Add a player", url_for("profile_new"))
+        if g.user.is_admin:
+            add("page", "Settings", url_for("settings"))
+            add("page", "Users", url_for("users"))
+        return jsonify(out)
 
     # -------------------------------------------------------------- dashboard
     @app.get("/")

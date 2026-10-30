@@ -411,6 +411,13 @@
                <div class="muted small" style="margin-top:4px">Drag the yellow handle to aim${sh.min === sh.max ? '' : ' and stretch'} it.</div>`;
     }
     if (i.t === 'ab') html += `<div class="muted small" style="margin-top:6px">${sh ? `${KIND[sh.k]}${sh.w ? `, ${sh.w} m wide` : ''}${sh.off ? `, starts ${sh.off} m ahead` : ''} · ${sh.approx ? 'size ≈ estimated, adjust if needed' : 'size from the Valorant wiki'}` : 'no size data: icon only'}</div>`;
+    if (i.t === 'ab' && B.lineups) {               // lineups from the library for this ability on this map
+      const ls = B.lineups.filter(l => l.agent === i.a && (!l.ability || !ai || l.ability === ai.name));
+      html += `<label>Lineups (${ls.length})</label>` + (ls.length
+        ? ls.slice(0, 6).map(l => /^https?:\/\//.test(l.url) ? `<a class="small" style="display:block" href="${esc(l.url)}" target="_blank" rel="noopener">▶ ${esc(l.title)}</a>`
+                                                               : `<span class="small" style="display:block">${esc(l.title)}</span>`).join('')
+        : `<a class="small" href="${esc(B.lineups_url)}" target="_blank" rel="noopener">add one to the library</a>`);
+    }
     const barAgent = i.t === 'agent' ? AG[i.a] : i.t === 'ab' ? AG[i.a] : null;
     if (barAgent && barAgent.abilities.length) html += `<label>${esc(barAgent.name)}'s abilities: drag or click</label><div id="sb-propbar"></div>`;
     if (i.t === 'arrow' || i.t === 'pen') html += `<label class="sb-check"><input type="checkbox" id="sb-dash" ${i.dash ? 'checked' : ''}> dashed (e.g. a rotate or a lurk)</label>`;

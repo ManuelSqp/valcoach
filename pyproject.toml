@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "valcoach"
-version = "2.19.1"
+version = "2.20.0"
 description = "Local Valorant coach: HenrikDev match data + VOD sync + minimap parsing + Ollama coaching, with a web app"
 requires-python = ">=3.11"
 dependencies = [
@@ -28,7 +28,7 @@ valcoach = "valcoach.cli:main"
 include = ["valcoach*"]
 
 [tool.setuptools.package-data]
-valcoach = ["web/templates/*.html", "web/static/*", "web/playbook_example.yaml", "replay.js", "stats/pros.yaml"]
+valcoach = ["web/templates/*.html", "web/static/*", "web/static/styles/*.css", "web/playbook_example.yaml", "replay.js", "stats/pros.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

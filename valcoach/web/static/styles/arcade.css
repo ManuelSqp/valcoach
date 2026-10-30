@@ -1,0 +1,28 @@
+/* Retro arcade: pixel font, CRT scanlines, bright neon colours. */
+:root{--bg:#120a2a;--panel:#1a1038;--panel2:#20144a;--panel3:#2a1b5c;--line:#4b3a8a;--line2:#ff3d7f;--text:#f2f2ff;--muted:#9b93c9;
+  --red:#ff3d7f;--win:#4dffb8;--amber:#ffe14d;--blue:#4da3ff;--ink:#0c0620;--navbg:#0c0620;--btn:#20144a;--logtext:#c9c3f0;--on-accent:#120a2a;
+  --radius:0;--radius-sm:0;--shadow:4px 4px 0 #000;--font:VT323,monospace;--font-head:"Press Start 2P",monospace;--font-num:VT323,monospace}
+body{font-size:19px;line-height:1.3}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:80;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0,rgba(0,0,0,.18) 1px,transparent 1px,transparent 3px)}
+nav.top{border-bottom:4px solid var(--red)}
+.brand{font-family:var(--font-head);font-size:13px;color:var(--red)}.brand b{color:var(--amber)}
+.navlinks a,.linkbtn{font-family:var(--font-head);font-size:9.5px;border-radius:0}
+.navlinks a.active::before,.navlinks a:hover::before{content:"> "}
+.navlinks a:hover,.navlinks a.active{background:transparent;color:var(--amber)}
+.navlinks a.navteams{border:3px solid var(--amber);border-radius:0;background:transparent}
+.uptime,.kbtn{border-radius:0;font-family:var(--font);font-size:17px;color:var(--win)}
+h1{font-family:var(--font-head);font-size:18px;color:var(--amber);text-shadow:3px 3px 0 var(--red);line-height:1.4}
+h2{font-family:var(--font-head);font-size:10px;color:var(--win)}
+.card{border:4px solid var(--line);box-shadow:var(--shadow)}
+.btn{font-family:var(--font-head);font-size:9.5px;border:3px solid var(--text);box-shadow:3px 3px 0 #000;padding:8px 12px}
+.btn:active{transform:translate(3px,3px);box-shadow:none}.btn.primary{background:var(--red);border-color:var(--amber)}
+.btn.sm{font-size:8.5px;padding:5px 8px}
+.ttab{font-family:var(--font-head);font-size:10px}.ttab.on{color:var(--amber)!important;border-bottom-color:var(--amber)!important}
+th{font-family:var(--font-head);font-size:8.5px;color:var(--win)}
+.val,.big3 b,.nums b,.mc .val,.cl b{font-family:var(--font-num)!important;font-size:38px!important;color:var(--amber)}
+.player,.procard,.ditem,.wkc,.lc,.mc,.slot,.pr,.path,.mapcard,.fcard{border-radius:0!important;border-width:3px!important;box-shadow:var(--shadow)}
+.procard.on,.ditem.on,.slot.sel,.wkc.now{border-color:var(--amber)!important}
+.pill,.st,.wl,.call,.vd{border-radius:0!important;font-family:var(--font-head);font-size:8px!important}
+input[type=text],input[type=password],input[type=number],select,textarea{border-radius:0;border-width:3px;font-size:18px}
+pre.log{font-family:var(--font);font-size:16px}
+nav.top .uptime{font-size:15px}

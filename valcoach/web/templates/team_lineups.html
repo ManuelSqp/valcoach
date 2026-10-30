@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Lineups · {{ t.name }} · valcoach{% endblock %}
+{% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% block head %}
+<style>
+.ai{border-radius:50%;vertical-align:middle;background:var(--ink);object-fit:cover;flex:none}
+.snav{display:flex;gap:6px;margin:-6px 0 14px}
+.snav a{text-decoration:none;font-size:13px;font-weight:600;padding:5px 12px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.snav a.on,.snav a:hover{color:var(--text);border-color:var(--line2)}.snav a.on{background:var(--panel3)}
+.maptabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
+.maptabs .n{font-size:10px;font-weight:700;background:rgba(255,255,255,.12);border-radius:99px;padding:0 6px;margin-left:5px}
+.lgrid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
+@media(max-width:900px){.lgrid{grid-template-columns:1fr}}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.agroup h3{display:flex;gap:8px;align-items:center;margin:14px 0 8px;font-size:16px}
+.lcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.lc{background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column}
+.lc .th{display:block;aspect-ratio:16/9;background:var(--ink) center/cover no-repeat;position:relative}
+.lc .th span{position:absolute;inset:auto 8px 8px auto;background:rgba(0,0,0,.7);color:#fff;font-size:11px;padding:2px 7px;border-radius:5px}
+.lc .nothumb{display:grid;place-items:center;aspect-ratio:16/9;background:var(--panel3);color:var(--muted);font-size:12px;text-decoration:none}
+.lc .b{padding:9px 11px;font-size:13px;display:flex;flex-direction:column;gap:4px;flex:1}
+.lc .t{font-weight:700}.lc .m{font-size:11.5px;color:var(--muted)}
+.lc .tags{display:flex;gap:4px;flex-wrap:wrap}.lc .tags span{font-size:10.5px;padding:1px 7px;border-radius:99px;background:var(--panel3);color:var(--muted)}
+.lc form{margin-top:auto;align-self:flex-end}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+<nav class="snav" aria-label="Strat book"><a href="{{ url_for('team_strats', tid=t.id, map=sel) }}">Boards</a><a class="on" href="{{ url_for('team_lineups', tid=t.id, map=sel) }}">Lineups</a></nav>
+<div class="maptabs">{% for mp in maps %}<a class="btn sm {{ 'primary' if mp == sel else 'ghost' }}" href="{{ url_for('team_lineups', tid=t.id, map=mp) }}">{{ mp }}{% if counts.get(mp) %}<span class="n">{{ counts[mp] }}</span>{% endif %}</a>{% endfor %}</div>
+<div class="lgrid">
+  <section class="card">
+    <div class="row between"><h2 style="margin:0">{{ sel }} lineups</h2>
+      <form method="get" class="filters"><input type="hidden" name="map" value="{{ sel }}">
+        <label for="fa" class="sr-only">Agent</label><select id="fa" name="agent" style="width:auto" onchange="this.form.submit()"><option value="">all agents</option>{% for a in agents_with %}<option {{ 'selected' if a == agent }}>{{ a }}</option>{% endfor %}</select>
+        <label for="fs" class="sr-only">Side</label><select id="fs" name="side" style="width:auto" onchange="this.form.submit()"><option value="">both sides</option><option value="attack" {{ 'selected' if side == 'attack' }}>attack</option><option value="defense" {{ 'selected' if side == 'defense' }}>defense</option></select>
+      </form></div>
+    {% for ag, rows in groups.items() %}
+    <div class="agroup"><h3>{{ ai(ag, 28) }} {{ ag }} <span class="muted small" style="font-weight:400">{{ rows|length }}</span></h3>
+      <div class="lcards">{% for r in rows %}
+        <div class="lc">
+          {% if r.clip and r.clip.thumb %}<a class="th" href="{{ r.clip.url }}" target="_blank" rel="noopener" style="background-image:url('{{ r.clip.thumb }}')" aria-label="Watch {{ r.title }}"><span>▶ watch</span></a>
+          {% elif r.clip %}<a class="nothumb" href="{{ r.clip.url }}" target="_blank" rel="noopener">▶ {{ r.clip.host }}</a>{% endif %}
+          <div class="b"><span class="t">{{ r.title }}</span>
+            <span class="tags">{% if r.ability %}<span>{{ r.ability }}</span>{% endif %}{% if r.side %}<span>{{ r.side }}</span>{% endif %}{% if r.site %}<span>{{ r.site }}</span>{% endif %}</span>
+            {% if r.notes %}<span class="small">{{ r.notes }}</span>{% endif %}
+            <span class="m">by {{ r.author or 'someone' }}</span>
+            {% if r.can_delete %}<form method="post" action="{{ url_for('lineup_delete', tid=t.id, lid=r.id) }}" onsubmit="return confirm('Delete this lineup?')"><button class="btn sm ghost danger">Delete</button></form>{% endif %}
+          </div>
+        </div>{% endfor %}</div></div>
+    {% else %}<p class="muted">No lineups for {{ sel }}{{ ' and ' ~ agent if agent }} yet. Add the first one on the right: a name, the agent and ability, and a link to the clip.</p>{% endfor %}
+  </section>
+  <form method="post" class="card" action="{{ url_for('team_lineups', tid=t.id) }}">
+    <h2>Add a lineup</h2>
+    <input type="hidden" name="map" value="{{ sel }}">
+    <div class="field"><label for="lt">Name</label><input id="lt" type="text" name="title" maxlength="80" required placeholder="e.g. A Main smoke from spawn"></div>
+    <div class="row" style="gap:8px;align-items:flex-start">
+      <div class="field" style="flex:1"><label for="la">Agent</label><select id="la" name="agent" required><option value="">—</option>{% for a in abilities %}<option {{ 'selected' if a == agent }}>{{ a }}</option>{% endfor %}</select></div>
+      <div class="field" style="flex:1"><label for="lb">Ability</label><select id="lb" name="ability"><option value="">—</option></select></div>
+    </div>
+    <div class="row" style="gap:8px">
+      <div class="field" style="flex:1"><label for="ls">Side</label><select id="ls" name="side"><option value="">either</option><option value="attack">attack</option><option value="defense">defense</option></select></div>
+      <div class="field" style="flex:1"><label for="lsi">Site</label><select id="lsi" name="site"><option value="">—</option>{% for s in sites if s %}<option>{{ s }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="field"><label for="lu">Clip link</label><input id="lu" type="url" name="url" maxlength="500" placeholder="https://youtu.be/… or a Medal / Outplayed link"></div>
+    <div class="field"><label for="ln">Note</label><input id="ln" type="text" name="notes" maxlength="500" placeholder="where to stand, when to throw"></div>
+    <button class="btn primary">Add</button>
+  </form>
+</div>
+<script type="application/json" id="ab-data">{{ abilities|tojson }}</script>
+<script>
+(function () {
+  const ab = JSON.parse(document.getElementById('ab-data').textContent), a = document.getElementById('la'), b = document.getElementById('lb');
+  const fill = () => { b.innerHTML = '<option value="">—</option>'; (ab[a.value] || []).forEach(n => { const o = document.createElement('option'); o.textContent = n; b.appendChild(o); }); };
+  a.addEventListener('change', fill); fill();
+})();
+</script>
+{% endblock %}

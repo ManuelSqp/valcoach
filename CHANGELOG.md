@@ -4,6 +4,24 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 2.20.0
+- **Nine styles**, picked per user under *Account › Look & feel*. Each one changes the whole look and layout, not
+  just the colours: **Classic** (as before), **Esports broadcast** (VCT overlay: condensed type, angled red bars),
+  **Clean minimal** (light, soft cards), **Neon glass** (purple and teal glow, frosted panels), **Tactical HUD**
+  (like Valorant's own interface: teal lines, cut corners, a grid), **Data terminal** (menu on the side, dense,
+  monospace numbers), **Editorial magazine** ("The Valcoach" masthead, serif headlines on paper), **Coach's
+  playbook** (a clipboard with lined paper and sticky notes) and **Retro arcade** (pixel font, CRT scanlines).
+- **Animations with a switch each** (Account › Look & feel): numbers count up, clickable cards lift on hover,
+  smooth page changes, progress bars with the current step instead of the raw log for running jobs (the log is
+  one click away), and toasts for messages like "Saved". With *reduce motion* set on your computer they stay off.
+- **Quick search:** Ctrl+K (or /, or the search button in the top bar) jumps to any player and their tabs, any team
+  tab, a map's game plans or drafts, a draft or a strat board.
+- **Lineups library** (Strat book › Lineups): one entry per lineup with the agent, ability, side, site, a clip link
+  (YouTube shows a thumbnail) and a note, per map and filterable. In the strat editor, a selected ability shows its
+  lineups for the map. Only https links are accepted.
+- **Phones:** every page checked at phone width, nothing scrolls sideways any more (wide tables scroll inside
+  their card).
+
 ## 2.19.1
 - **Premier stage schedule:** which map is played in which week, read from the Premier season data (HenrikDev),
   refreshed once a day and with the nightly sync. If the API doesn't give the maps, the current stage (V26A6: Bind,

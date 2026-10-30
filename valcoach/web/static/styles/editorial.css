@@ -1,0 +1,28 @@
+/* Editorial magazine: "The Valcoach". Big serif headlines on paper. */
+:root{--bg:#f4f0e8;--panel:#f4f0e8;--panel2:#ece6da;--panel3:#e4dccd;--line:#c9c2b4;--line2:#121212;--text:#121212;--muted:#5b574f;
+  --red:#c8102e;--win:#1f6f4a;--amber:#9a6400;--blue:#1d4e89;--ink:#e4dccd;--navbg:#f4f0e8;--btn:#f4f0e8;--logtext:#3a3833;--on-accent:#fff;
+  --radius:0;--radius-sm:0;--font:"Source Sans 3",system-ui,sans-serif;--font-head:"Playfair Display",Georgia,serif;--font-num:"Playfair Display",Georgia,serif}
+body{font-size:15.5px}
+nav.top{background:var(--bg);border-bottom:3px double var(--text);flex-direction:column;align-items:center;gap:6px;padding:16px 24px 10px;position:static}
+nav.top .brand{font-family:var(--font-head);font-weight:900;font-size:40px;letter-spacing:0;text-transform:none}
+nav.top .brand::before{content:"The "}nav.top .brand b{color:var(--text)}
+nav.top .ver{margin:0;font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+nav.top .navlinks{justify-content:center;flex:none;border-top:1px solid var(--line);padding-top:6px;width:100%}
+nav.top .navlinks .spacer{flex:0;width:20px}
+nav.top .navlinks a,nav.top .linkbtn{text-transform:uppercase;letter-spacing:.12em;font-size:11.5px;font-weight:600;border-radius:0}
+nav.top .navlinks a:hover,nav.top .navlinks a.active{background:transparent;color:var(--red)}
+nav.top .navlinks a.navteams{border:0;background:transparent}
+nav.top .uptime,nav.top .kbtn{border-radius:0;background:transparent}
+.navtoggle{position:absolute;right:14px;top:18px}
+h1{font-family:var(--font-head);font-size:42px;font-weight:900;line-height:1.05}
+h2{font-family:"Source Sans 3",sans-serif;color:var(--red);font-weight:700;letter-spacing:.16em;border-top:1px solid var(--text);padding-top:8px}
+.card{border:0;border-top:1px solid var(--line);padding:16px 0;background:transparent}
+.btn{border-radius:0;border-color:var(--text);background:transparent;font-weight:600}.btn.primary{background:var(--text);border-color:var(--text);color:#fff}
+.ttab{font-family:var(--font-head);font-size:16px;font-weight:700;color:var(--muted)}.ttab.on{border-bottom-color:var(--red)!important}
+th{color:var(--text);border-bottom:2px solid var(--text)}
+.val,.big3 b,.nums b,.mc .val,.cl b,.wkmap .big{font-family:var(--font-num)!important;font-weight:900}
+.player,.procard,.ditem,.wkc,.lc,.mc,.slot,.pr,.path,.mapcard,.fcard,.vid{border-radius:0!important;background:transparent!important;border-color:var(--line)!important}
+.procard.on,.ditem.on,.slot.sel,.wkc.now{border-color:var(--red)!important;box-shadow:inset 4px 0 0 var(--red)}
+pre.log{background:var(--panel2)!important}
+input[type=text],input[type=password],input[type=number],select,textarea{background:#fbf8f2;border-radius:0}
+.flash,.banner{border-radius:0}

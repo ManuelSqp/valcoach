@@ -219,7 +219,7 @@ def map_facts(matches: list[tuple[Match, str]], cache_dir: Path, map_name: str) 
         "your_first_deaths": [{"area": a, "count": n} for a, n in dfn["first_death_area"].most_common(3)],
         "enemy_plant_window_s": win(dfn["enemy_plant_t"]),
         "first_contact": [{"where": z, "rounds": len(ts), "window_s": win(ts)}
-                          for z, ts in sorted(dfn["contact_t"].items(), key=lambda kv: -len(kv[1])) if z != "?" and len(ts) >= 2][:4],
+                          for z, ts in sorted(dfn["contact_t"].items(), key=lambda kv: -len(kv[1])) if z != "?" and window(ts)][:4],
     }
     out["mid_control"] = {"early_mid_kill_yours": {"rounds": mid["ours"], "won": pct(mid["ours_won"], mid["ours"])},
                           "early_mid_kill_theirs": {"rounds": mid["theirs"], "won": pct(mid["theirs_won"], mid["theirs"])}}
