@@ -515,3 +515,27 @@ def test_training_aim_routine_and_learning_path(imported):
     p = tr.learn_path("Jett", rows, ["Ascent", "Bind"], load_pros(""))
     assert p["steps"][0]["done"] == (p["games"] >= 1) and p["total"] == 5 and 0 <= p["reached"] <= 5
     assert any(s.get("optional") for s in p["steps"])        # watch a pro who plays it
+
+
+def test_premier_schedule_from_api_and_builtin():
+    from datetime import datetime, timezone
+    from valcoach.stats.premier_schedule import BUILTIN, current, schedule
+    api = [{"id": "old", "events": [{"type": "LEAGUE", "starts_at": "2025-01-01T00:00:00Z", "ends_at": "2025-01-05T00:00:00Z",
+                                     "map_selection": {"maps": [{"name": "Icebox"}]}}]},
+           {"id": "S2", "events": [
+               {"type": "LEAGUE", "starts_at": "2026-10-21T00:00:00Z", "ends_at": "2026-10-26T00:00:00Z",
+                "map_selection": {"type": "RANDOM", "maps": [{"name": "Bind", "id": "x"}]},
+                "conference_schedules": [{"conference": "EU_CENTRAL", "starts_at": "2026-10-22T17:00:00Z", "ends_at": "2026-10-25T21:00:00Z"}]},
+               {"type": "LEAGUE", "starts_at": "2026-10-28T00:00:00Z", "ends_at": "2026-11-02T00:00:00Z",
+                "map_selection": {"maps": [{"name": "Corrode"}]}},
+               {"type": "TOURNAMENT", "starts_at": "2026-12-06T00:00:00Z", "ends_at": "2026-12-06T23:00:00Z",
+                "map_selection": {"type": "PICKBAN", "maps": [{"name": "Bind"}, {"name": "Corrode"}, {"name": "Lotus"}]}}]}]
+    now = datetime(2026, 10, 30, 12, tzinfo=timezone.utc)
+    s = schedule(api, "EU_CENTRAL", now)
+    assert s["id"] == "S2" and [w["map"] for w in s["weeks"]] == ["Bind", "Corrode"]
+    assert s["weeks"][0]["starts"] == "2026-10-22" and s["playoffs"]["maps"] == ["Bind", "Corrode", "Lotus"]
+    c = current(s, now)
+    assert c["week"]["map"] == "Corrode" and not c["upcoming"] and c["pool"] == ["Bind", "Corrode"]
+    assert schedule(None) is BUILTIN and schedule({"events": []}) is BUILTIN
+    assert current(BUILTIN, datetime(2026, 11, 3, tzinfo=timezone.utc))["week"]["map"] == "Sunset"   # Tuesday before week 3
+    assert current(BUILTIN, datetime(2026, 12, 6, 15, tzinfo=timezone.utc))["in_playoffs"]

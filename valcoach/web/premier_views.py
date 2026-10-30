@@ -10,6 +10,7 @@ from flask import abort, flash, g, redirect, render_template, request, url_for
 
 from ..stats import roles
 from ..stats.scouting import general_lines, map_lines, map_record, side_rates, veto
+from ..stats.premier_schedule import current
 from ..stats.weekly import week_id
 from .premierjobs import PremierJobs
 
@@ -69,9 +70,13 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
         b = brief_cfg(t)
         if b.get("map") and b.get("map_week") == week_id():
             return b["map"], "set by hand"
-        m = season_week_map(pj.scout_index(t.id).get("seasons"))
-        if m:
-            return m, "Premier schedule"
+        if t.premier_info.get("tag"):
+            sched = pj.schedule_for(t)
+            cur = current(sched)
+            if cur["week"]:
+                when = "coming week" if cur["upcoming"] else "this week"
+                return cur["week"]["map"], f"Premier week {cur['week']['week']} ({when})" + (
+                    "" if sched.get("source") == "Premier API" else ", built-in schedule")
         wk = week_id()
         for r in pj.reviews(t.id):
             d = _ts(r.get("started_at"))
@@ -195,6 +200,7 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
 
     app.extensions["valcoach"].setdefault("ticks", []).append(tick_brief)
     app.extensions["valcoach"]["premier"] = pj
+    app.extensions["valcoach"]["week_map"] = lambda t: week_map(t)[0]
 
     # ------------------------------------------------------------------ pages
     def ctx(t, tab2: str, **kw) -> dict:
@@ -203,9 +209,25 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
     @app.get("/teams/<int:tid>/premier")
     def team_premier(tid: int):
         t = get_team(tid)
+        if t.premier_info.get("tag"):
+            _, fetched = pj.read_seasons(t.premier_info.get("region") or "eu")
+            if time.time() - fetched > 86400:           # refresh the schedule in the background once a day
+                pj.submit_schedule(tid)
+            if pj.apply_pool(t):
+                t = get_team(tid)
+        sched = pj.schedule_for(t) if t.premier_info.get("tag") else None
+        cur = current(sched) if sched else None
+        results: dict[str, list] = {}
+        for r in pj.reviews(tid):
+            if sched and not r.get("tournament"):
+                day = (r.get("started_at") or "")[:10]
+                w = next((w for w in sched["weeks"] if w["starts"] <= day <= w["ends"]), None)
+                if w:
+                    results.setdefault(str(w["week"]), []).append(r)
         m, src = week_map(t)
         b = brief(t, m) if m else {"map": None}
         return render_template("premier.html", **ctx(t, "overview", week_map=m, week_src=src, b=b, cfg=brief_cfg(t),
+                                                      sched=sched, cur=cur, results=results, today=datetime.now().date().isoformat(),
                                                       reviews=pj.reviews(tid)[:8], pool=pool(t), days=DAYS,
                                                       rstatus=sr.status(f"review:{tid}"), discord=t.discord_info))
 
@@ -313,6 +335,14 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
         f = request.form
         info = t.sync_info
         b = dict(info.get("brief") or {})
+        if "follow_pool" in f:                                # team maps follow the stage's map pool
+            pi = dict(t.premier_info)
+            pi["follow_pool"] = f.get("follow_pool") == "1"
+            store.update_team(tid, premier=pi)
+            if pi["follow_pool"]:
+                pj.apply_pool(get_team(tid))
+            flash("Map pool: " + ("follows the Premier stage." if pi["follow_pool"] else "your own list (Members, maps & Discord)."), "ok")
+            return redirect(url_for("team_premier", tid=tid) + "#schedule")
         if "week_map" in f:                                   # the week's map, by hand (only for this week)
             m = f.get("week_map", "")
             if m and m not in pool(t) and m not in known_maps:

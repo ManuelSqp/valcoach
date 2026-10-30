@@ -12,10 +12,19 @@ from ..stats.aggregate import by_agent, by_map, by_role, filter_rows, local_meta
 from ..stats.comp import META_EXAMPLE, Pool, parse_meta, pick_helper, team_plan
 from .statsjobs import StatsRunner, slug
 
+def week_map_of(app, t) -> str | None:
+    """This Premier week's map for a team (None if not a Premier team or not known)."""
+    fn = app.extensions["valcoach"].get("week_map")
+    try:
+        return fn(t) if fn and t.premier_info.get("tag") else None
+    except Exception:
+        return None
+
+
 QUEUE_TABS = [("all", "All ranked"), ("competitive", "Competitive"), ("premier", "Premier")]
 # fallback when nobody has games yet; maps with games are added automatically
 KNOWN_MAPS = ["Abyss", "Ascent", "Bind", "Breeze", "Corrode", "Fracture", "Haven", "Icebox", "Lotus",
-              "Pearl", "Split", "Sunset"]
+              "Pearl", "Split", "Summit", "Sunset"]
 
 
 def register(app, store, sr: StatsRunner, get_profile) -> None:
@@ -257,7 +266,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         plan = None
         if len(starters) == 5 and maps:
             plan = team_plan(starters, subs, maps, local_meta(filter_rows(owner_rows(t.owner_id), t.queue)), meta)
-        sel = request.args.get("map")
+        sel = request.args.get("map") or week_map_of(app, t)
         if plan and sel not in [m["map"] for m in plan]:
             sel = plan[0]["map"]
         alts = []
@@ -451,7 +460,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         if pi.get("tag"):
             sr.submit_premier(t.id, t.owner_id, pi["name"], pi["tag"], pi.get("region", "eu"))
             pj = app.extensions["valcoach"].get("premier")
-            if pj:                             # queued after the roster (one worker): review new matches, scout the division
+            if pj:                             # queued after the roster (one worker): schedule, reviews, the division
+                pj.submit_schedule(t.id)
                 pj.submit_reviews(t.id, post=True)
                 pj.submit_scout(t.id, {"division": True})
         else:
@@ -583,7 +593,8 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
     def team_plans(tid: int):
         t = get_team(tid)
         b = build(t)
-        sel = request.args.get("map") or (b["maps"][0] if b["maps"] else None)
+        wm = week_map_of(app, t)
+        sel = request.args.get("map") or (wm if wm in b["maps"] else (b["maps"][0] if b["maps"] else None))
         facts = map_facts(b["matches"], cache_dir, sel) if sel else None
         return render_template("team_plans.html", t=t, tab="plans", maps=b["maps"], sel=sel, plans=sr.read_plans(tid, sel) if sel else None,
                                facts=facts, comps=b["comps"].get(sel, []), n_matches=len(b["matches"]),

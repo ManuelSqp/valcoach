@@ -56,6 +56,60 @@ class PremierJobs:
     def review(self, tid: int, match_id: str) -> dict | None:
         return _read(self.sr.team_dir(tid) / "reviews" / f"{slug(match_id)}.json")
 
+    # ---- season schedule (which map in which week) -----------------------------------------
+    def seasons_path(self, region: str) -> Path:
+        return self.cache_dir / f"premier_seasons_{slug(region or 'eu')}.json"
+
+    def read_seasons(self, region: str) -> tuple[object, float]:
+        d = _read(self.seasons_path(region), {}) or {}
+        return d.get("data"), float(d.get("fetched_at") or 0)
+
+    def schedule_for(self, team) -> dict:
+        from ..stats.premier_schedule import schedule
+        pi = team.premier_info
+        data, _ = self.read_seasons(pi.get("region") or "eu")
+        return schedule(data, (pi.get("placement") or {}).get("conference"))
+
+    def apply_pool(self, team) -> bool:
+        """Premier teams follow the stage's map pool (in week order) unless turned off."""
+        from ..stats.premier_schedule import current
+        pi = team.premier_info
+        if not pi.get("tag") or not pi.get("follow_pool", True):
+            return False
+        pool = current(self.schedule_for(team))["pool"]
+        if pool and list(team.map_list) != pool:
+            self.store.update_team(team.id, maps=pool)
+            return True
+        return False
+
+    def fetch_seasons(self, client, region: str, log=None) -> None:
+        from ..henrik import premier_seasons
+        try:
+            _write(self.seasons_path(region), {"fetched_at": time.time(), "data": premier_seasons(client, region)})
+        except Exception as e:
+            if log:
+                log(f"  ! season schedule: {e}")
+
+    def submit_schedule(self, tid: int) -> str:
+        key = f"schedule:{tid}"
+        if not self.sr.busy(key):
+            self.sr._set(key, status="queued", log=[], error="", t=time.time())
+            self.sr.ex.submit(self._schedule, key, tid)
+        return key
+
+    def _schedule(self, key: str, tid: int) -> None:
+        self.sr._set(key, status="running")
+        try:
+            team = self.store.team(tid)
+            region = team.premier_info.get("region") or "eu"
+            self.fetch_seasons(self.sr._client(), region, lambda m: self.sr._log(key, m))
+            if self.apply_pool(self.store.team(tid)):
+                self.sr._log(key, "· team maps set to this stage's map pool")
+            self.sr._set(key, status="done")
+        except Exception as e:
+            self.sr._log(key, "✗ " + str(e))
+            self.sr._set(key, status="error", error=str(e) or e.__class__.__name__)
+
     # ---- scouting -----------------------------------------------------------------------
     def submit_scout(self, tid: int, target: dict) -> str:
         """target: {"division": True} | {"name", "tag"} | {"id", "name", "tag"}"""
@@ -121,11 +175,7 @@ class PremierJobs:
                 ours = {str(pi.get("id") or ""), f"{pi.get('name', '').lower()}#{pi.get('tag', '').lower()}"}
                 idx["division"] = {"conference": conf, "division": div, "fetched_at": time.time(),
                                    "teams": teams, "ours": pi.get("id") or ""}
-                try:                                        # for this week's map (structure read tolerantly)
-                    from ..henrik import premier_seasons
-                    idx["seasons"] = premier_seasons(client, region)
-                except Exception as e:
-                    self.sr._log(key, f"  ! season schedule: {e}")
+                self.fetch_seasons(client, region, lambda m: self.sr._log(key, m))
                 todo = [t for t in teams if t["id"] not in ours and f"{t['name'].lower()}#{t['tag'].lower()}" not in ours]
                 self.sr._log(key, f"· {len(todo)} other teams in your division")
             else:

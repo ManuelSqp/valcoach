@@ -4,6 +4,17 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 2.19.1
+- **Premier stage schedule:** which map is played in which week, read from the Premier season data (HenrikDev),
+  refreshed once a day and with the nightly sync. If the API doesn't give the maps, the current stage (V26A6: Bind,
+  Corrode, Sunset, Haven, Summit, Abyss, Lotus, playoffs 6 December) is built in.
+  - The Premier tab shows the stage week by week with dates, this week highlighted, and your results per week.
+  - **A Premier team's maps follow the stage's map pool** (in week order), so Corrode and Summit show up everywhere
+    (Comps, Drafts, Game plans, Strat book). *Use my own list* on the Premier tab switches back to the maps you set.
+  - Game plans, Drafts and Comps open on this week's map.
+  - Monday/Tuesday between two weeks already counts as the coming week, so the brief and plans are for the next map.
+- **Summit** added to the known maps.
+
 ## 2.19.0
 - **Progress** (new player tab): the last 10 weeks, week by week, for win rate, ACS, K/D, KAST, first duels won,
   deaths traded, deaths far from the team, rounds survived, headshots, clutches, retakes and ADR. Each one shows
