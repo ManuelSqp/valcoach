@@ -8,7 +8,6 @@ Start with:  valcoach web   (then open http://<this machine>:10070)
 from __future__ import annotations
 
 import functools
-import os
 import shutil
 import socket
 import sqlite3
@@ -17,13 +16,11 @@ import time
 import uuid
 from urllib.parse import urlsplit
 from datetime import datetime
-from io import BytesIO
 from pathlib import Path
 
 import requests
-from flask import (Flask, Request, abort, flash, g, jsonify, redirect, render_template, request, send_file,
+from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
-from werkzeug.utils import secure_filename
 
 from .. import __version__, pipeline
 from ..henrik import HenrikError
@@ -31,6 +28,7 @@ from .jobs import JobRunner
 from .statsjobs import StatsRunner
 from .store import (MIN_PASSWORD, MODES, PLATFORMS, REGIONS, Store, parse_roi, validate_password,
                     validate_username)
+from .uploads import CHUNK_BYTES, MAX_REQUEST_BYTES, UploadError, Uploads
 
 VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm", ".avi"}
 QUEUES = [("", "All queues"), ("premier", "Premier"), ("competitive", "Competitive"),
@@ -42,7 +40,6 @@ PLAYBOOK_EXAMPLE = (Path(__file__).parent / "playbook_example.yaml").read_text()
 PUBLIC_ENDPOINTS = {"login", "signup", "setup", "static"}
 MAX_LOGIN_FAILS = 5
 LOCKOUT_S = 600
-MIN_FREE_DISK = 1024 ** 3              # keep this much disk free after an upload
 MAX_CACHE_ENTRIES = 200                # match-list cache (one entry per player / queue / page)
 MAX_TRACKED_LOGINS = 1000              # failed-login records kept for the lockout
 
@@ -55,20 +52,6 @@ def _host_boot() -> float | None:
         return None
 
 
-def save_upload(up, dest: Path) -> None:
-    """Hard-link the buffered upload into place (instant) instead of copying it: copying a 2 GB VOD
-    took over a minute, long enough for a proxy in front of the app to give up with 504."""
-    name = getattr(up.stream, "name", None)
-    if isinstance(name, str):
-        try:
-            up.stream.flush()
-            os.link(name, dest)
-            return
-        except OSError:
-            pass                    # other filesystem etc.: copy
-    up.save(dest)
-
-
 def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: bool = True) -> Flask:
     started_at = time.time()
     store = Store(data_dir)
@@ -77,29 +60,17 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
     if start_workers:
         runner.recover()
 
-    upload_tmp = store.data_dir / "tmp"
-    for left in upload_tmp.glob("*") if upload_tmp.is_dir() else []:
-        left.unlink(missing_ok=True)       # buffers of uploads cut off by a crash or restart (can be GBs)
-
-    class UploadRequest(Request):
-        def _get_file_stream(self, total_content_length, content_type, filename=None, content_length=None):
-            # Werkzeug buffers uploads in the system temp dir, which is often a small tmpfs
-            # (/tmp is RAM on Debian): a multi-GB VOD filled it and the upload failed.
-            if total_content_length is not None and total_content_length <= 500 * 1024:
-                return BytesIO()
-            upload_tmp.mkdir(parents=True, exist_ok=True)
-            return tempfile.NamedTemporaryFile("rb+", dir=upload_tmp)     # named: save_upload() can link it
+    uploads = Uploads(store.data_dir / "tmp")
 
     app = Flask(__name__)
-    app.request_class = UploadRequest
     app.secret_key = store.get("secret_key")
     app.config.update(
-        MAX_CONTENT_LENGTH=None,               # VOD uploads can be many GB
+        MAX_CONTENT_LENGTH=MAX_REQUEST_BYTES,  # VODs come in chunks (uploads.py)
         SESSION_COOKIE_SAMESITE="Lax",         # blocks cross-site form posts (CSRF) in browsers
         SESSION_COOKIE_HTTPONLY=True,
     )
     stats_runner = StatsRunner(store)
-    app.extensions["valcoach"] = {"store": store, "runner": runner, "stats": stats_runner}
+    app.extensions["valcoach"] = {"store": store, "runner": runner, "stats": stats_runner, "uploads": uploads}
     history_cache: dict[tuple, tuple[float, list[dict]]] = {}
     login_fails: dict[str, list[float]] = {}
 
@@ -556,6 +527,32 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             return redirect(url_for("profile", pid=pid))
         return redirect(url_for("coach", pid=pid, match_id=mid))
 
+    # ---------------------------------------------------------------- uploads
+    @app.errorhandler(UploadError)
+    def upload_error(e: UploadError):
+        return jsonify(error=str(e), received=e.received), e.status
+
+    @app.post("/api/uploads")
+    def upload_begin():
+        data = request.get_json(silent=True)          # JSON only: a cross-site form can't send this
+        if not isinstance(data, dict) or type(data.get("size")) is not int or data["size"] <= 0:
+            raise UploadError("expected {\"name\": file name, \"size\": bytes}")
+        name = str(data.get("name") or "")
+        if Path(name).suffix.lower() not in VIDEO_EXT:
+            raise UploadError("Unsupported video type (use mp4, mkv, mov or webm).")
+        if err := job_quota_error(g.user.id):
+            raise UploadError(err, 429)
+        if data["size"] > float(store.get("max_upload_gb") or 20) * 1024 ** 3:
+            raise UploadError(f"The upload is too big (limit {store.get('max_upload_gb')} GB, set by the admin).", 413)
+        return jsonify(id=uploads.begin(g.user.id, name, data["size"]).id, chunk=CHUNK_BYTES)
+
+    @app.put("/api/uploads/<upload_id>")
+    def upload_chunk(upload_id: str):
+        offset = request.args.get("offset", "")
+        if not offset.isdigit():
+            raise UploadError("offset missing")
+        return jsonify(received=uploads.write(g.user.id, upload_id, int(offset), request.stream, request.content_length))
+
     # ------------------------------------------------------------------ coach
     def _load(p, match_id):
         if not pipeline.valid_match_id(match_id):
@@ -578,21 +575,9 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             return redirect(url_for("profile", pid=pid))
 
         if request.method == "POST":
-            # limits are checked before the (possibly huge) upload body is read
             if err := job_quota_error(g.user.id):
                 flash(err, "error")
                 return redirect(request.url)
-            max_bytes = int(float(store.get("max_upload_gb") or 20) * 1024 ** 3)
-            request.max_content_length = max_bytes
-            size = request.content_length or 0
-            if size > max_bytes:
-                flash(f"The upload is too big (limit {store.get('max_upload_gb')} GB, set by the admin).", "error")
-                return redirect(request.url)
-            if size and request.mimetype == "multipart/form-data":
-                free = shutil.disk_usage(store.data_dir).free
-                if free - size < MIN_FREE_DISK:          # buffered in data/tmp, then linked into uploads/
-                    flash("Not enough free disk space on the server for this upload.", "error")
-                    return redirect(request.url)
             f = request.form
             mode = f.get("mode", p.mode)
             if mode not in MODES:
@@ -613,18 +598,17 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             vod_path = vod_name = ""
             uploaded = False
             if choice == "upload":
-                up = request.files.get("vod_file")
-                if not up or not up.filename:
+                if not f.get("upload_id"):
                     flash("Choose a video file to upload.", "error")
-                    return redirect(request.url)
-                if Path(up.filename).suffix.lower() not in VIDEO_EXT:
-                    flash("Unsupported video type (use mp4, mkv, mov or webm).", "error")
                     return redirect(request.url)
                 dest_dir = store.upload_dir(g.user.id)
                 dest_dir.mkdir(parents=True, exist_ok=True)
-                dest = dest_dir / f"{uuid.uuid4().hex[:8]}_{secure_filename(up.filename)}"
-                save_upload(up, dest)
-                vod_path, vod_name, uploaded = str(dest), up.filename, True
+                try:
+                    dest, vod_name = uploads.finish(g.user.id, f["upload_id"], dest_dir)
+                except UploadError as e:
+                    flash(str(e), "error")
+                    return redirect(request.url)
+                vod_path, uploaded = str(dest), True
             elif choice:
                 path = resolve_vod(g.user, choice)
                 if path is None:
@@ -888,8 +872,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
 
     @app.errorhandler(413)
     def too_large(_):
-        return render_template("error.html", code=413,
-                               msg=f"The upload is too big (limit {store.get('max_upload_gb')} GB)."), 413
+        return render_template("error.html", code=413, msg="This request is too big."), 413
 
     @app.errorhandler(404)
     def not_found(_):
@@ -946,5 +929,6 @@ def serve(app: Flask, host: str = "0.0.0.0", port: int = 10070) -> None:
     except ImportError:
         app.run(host=host, port=port, threaded=True)
         return
-    wserve(app, host=host, port=port, threads=8, channel_timeout=900,
-           max_request_body_size=64 * 1024 ** 3)   # allow big VOD uploads
+    # waitress buffers bodies in the temp dir; /tmp is often a small RAM disk
+    tempfile.tempdir = str(app.extensions["valcoach"]["uploads"].dir)
+    wserve(app, host=host, port=port, threads=8, channel_timeout=900, max_request_body_size=MAX_REQUEST_BYTES)

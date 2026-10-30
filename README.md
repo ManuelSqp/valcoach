@@ -243,7 +243,9 @@ holds your API key and serves the uploaded VODs.
 The VOD is recorded on the gaming PC, but the app runs on the Mac. Either:
 
 - **Upload** in the browser on the gaming PC (coach page → *Upload a file*). It
-  shows a progress bar; a 3–5 GB VOD takes about a minute over gigabit LAN. Or:
+  shows a progress bar; a 3–5 GB VOD takes about a minute over gigabit LAN. The file
+  goes up in 16 MB pieces (no request may be bigger than 17 MB), so a proxy in front of
+  the app must allow at least that. Or:
 - **Share the recordings folder** (SMB) from the PC or a NAS, mount it on the Mac,
   and set it as the user's recordings folder under *Users*. The coach page then lists the
   files and pre-selects the one saved right after the match.
