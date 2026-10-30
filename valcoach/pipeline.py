@@ -362,7 +362,7 @@ class CoachResult:
 
 def run(cfg: Config, req: CoachRequest, log: Log = _noop) -> CoachResult:
     from .coach.engine import analyse, run_coach
-    from .coach.ollama import Ollama
+    from .coach.ollama import Ollama, OllamaError
     from .report import render_report
 
     match = load_match(cfg, req.match, req.queue)
@@ -403,10 +403,18 @@ def run(cfg: Config, req: CoachRequest, log: Log = _noop) -> CoachResult:
         parallel=cfg.ollama.parallel, sync=sync,
         progress=lambda n, N: log(f"  coached round {n}/{N}"),
     )
+    failed = report.meta["llm_failed_rounds"]
+    if failed:
+        if len(failed) == len(report.rounds):
+            raise OllamaError(f"The model failed on all {len(failed)} rounds, so no report was made: "
+                              f"{report.rounds[0]['feedback']['error']}")
+        log(f"! The model failed on {len(failed)} of {len(report.rounds)} rounds (R{', R'.join(map(str, failed))}). "
+            "They show facts only; use Run again to retry.")
     if req.team_review:
         from .coach.teamreview import review
         log("· Reviewing every player of your team ...")
-        report.team_review = review(match, an.team, map_info, llm, cfg.coach.language, req.team_roles,
+        report.team_review = review(match, an.team, map_info, None if report.meta["llm_gave_up"] else llm,
+                                    cfg.coach.language, req.team_roles,
                                     parallel=cfg.ollama.parallel,
                                     progress=lambda n, N: log(f"  reviewed player {n}/{N}"))
     from .coach.replay import agent_icons, map_meta

@@ -4,13 +4,18 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
-## Unreleased
+## 2.17.1
 - **VOD uploads go up in 16 MB pieces.** Size limit, report limit and free disk are now checked before the first
   byte is sent, not after the whole file has arrived, and a lost connection only repeats one piece. No request may
   be bigger than 17 MB any more, so nobody can fill the disk without logging in. Temp files stay in `data/tmp`.
   A proxy in front of valcoach must allow bodies of at least 17 MB.
 - **API keys stay out of error messages.** A network error could show the YouTube key or a Discord webhook URL on
   pages teammates can open. The YouTube key now goes in a header, and Discord errors no longer contain the URL.
+- **A report no longer says "done" when the model failed.** If it fails on every round, the job ends with an error
+  and the reason. If it stops answering, the run stops waiting after a few rounds instead of timing out on all of
+  them. If only some rounds fail, the report says which ones at the top.
+- **A playbook with the wrong structure no longer breaks a run.** `maps` must list each map by name; the profile
+  form now says so when you save it.
 
 ## 2.17.0
 - **Drafts** (new team tab): roster drafts per map, made together.

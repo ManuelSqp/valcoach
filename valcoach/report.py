@@ -84,6 +84,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{padding:5px 8px;b
 <header><h1>{{ meta.map }} <b>{{ meta.score }}</b></h1>
 <span>{{ meta.player }} · {{ meta.agent }}</span><span class="muted">{{ meta.queue }} · {{ meta.started_at }} · model {{ meta.model or 'none (facts only)' }}{% if meta.llm_stats %} · {{ meta.llm_stats.avg_s_per_request }} s/request · {{ meta.llm_stats.gen_tok_per_s }} tok/s{% endif %}{% if meta.valcoach_version %} · valcoach {{ meta.valcoach_version }}{% endif %}</span></header>
 <div class="wrap"><main>
+{% if meta.llm_failed_rounds %}<section class="card err">The model failed on {{ meta.llm_failed_rounds|length }} of {{ rounds|length }} rounds (R{{ meta.llm_failed_rounds|join(', R') }}). They show facts only. Use <i>Run again</i> on the job page to retry.</section>{% endif %}
 
 <section class="card"><h2>Rounds</h2><div class="timeline">
 {% for r in rounds %}<div class="tl {{ 'w' if r.team_facts.won else 'l' }} {{ 'i3' if r.feedback.importance == 3 }} {{ 'half' if r.number in halves }}" title="R{{ r.number }} {{ r.team_facts.side }} {{ r.feedback.summary|default('') }}" onclick="openRound({{ r.number }})">{{ r.number }}</div>{% endfor %}
