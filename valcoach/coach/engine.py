@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -118,6 +119,8 @@ class CoachReport:
 
 
 PLACEHOLDERS = {"", "n/a", "na", "none", "-", "nothing", "null"}
+STOP_AFTER_FAILS = 3        # rounds failed in a row (or `parallel`, if higher): the model is down, stop waiting for it
+GAVE_UP = "Skipped: the model stopped answering"
 
 
 def _is_filler(text) -> bool:
@@ -161,13 +164,26 @@ def run_coach(an: Analysis, llm: Ollama | None, mode: str = "both", language: st
         pf = an.player_facts[i] if mode in ("player", "both") else None
         inputs.append(round_summary(tf, pf, an.minimap.get(r.index), own_notes.get(r.number)))
 
+    stop_after = max(STOP_AFTER_FAILS, parallel)
+    fails_in_a_row = 0
+    lock = threading.Lock()
+
     def _one(i: int) -> dict:
+        nonlocal fails_in_a_row
         if llm is None:
             return {}
+        with lock:
+            if fails_in_a_row >= stop_after:
+                return {"error": GAVE_UP}
         try:
-            return clean_feedback(llm.chat_json(round_sys, inputs[i], schema))
+            fb = clean_feedback(llm.chat_json(round_sys, inputs[i], schema))
         except Exception as e:  # keep the report usable if one round fails
+            with lock:
+                fails_in_a_row += 1
             return {"error": str(e)}
+        with lock:
+            fails_in_a_row = 0
+        return fb
 
     feedback: list[dict] = [{}] * len(inputs)
     if llm is not None:
@@ -179,7 +195,10 @@ def run_coach(an: Analysis, llm: Ollama | None, mode: str = "both", language: st
 
     # ---- match review -------------------------------------------------
     match_review: dict = {}
-    if llm is not None:
+    gave_up = fails_in_a_row >= stop_after
+    if gave_up:
+        match_review = {"error": GAVE_UP}
+    elif llm is not None:
         stats_txt = match_stats_block(an.team_stats if mode != "player" else None,
                                       an.player_stats if mode != "team" else None)
         digest = []
@@ -235,6 +254,7 @@ def run_coach(an: Analysis, llm: Ollama | None, mode: str = "both", language: st
         "player": me.riot_id, "agent": me.agent, "team": an.team,
         "score": f"{m.team_rounds_won.get(an.team, 0)}-{m.team_rounds_won.get(m.other_team(an.team), 0)}",
         "mode": mode, "model": llm.model if llm else None, "valcoach_version": __version__,
+        "llm_failed_rounds": [r.number for r, fb in zip(m.rounds, feedback) if "error" in fb], "llm_gave_up": gave_up,
         "roster": [{"name": p.riot_id, "agent": p.agent, "team": p.team,
                     "k": p.kills, "d": p.deaths, "a": p.assists,
                     "acs": round(p.score / max(1, len(m.rounds)), 1)} for p in m.players.values()],

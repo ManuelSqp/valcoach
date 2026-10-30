@@ -12,6 +12,10 @@ every report, and with `valcoach --version`. Update: unzip over your install (ke
 - **API keys stay out of error messages.** A network error could show the YouTube key or a Discord webhook URL on
   pages teammates can open. The YouTube key now goes in a header, and Discord errors no longer contain the URL.
 
+- **A report no longer says "done" when the model failed.** If it fails on every round, the job ends with an error
+  and the reason. If it stops answering, the run stops waiting after a few rounds instead of timing out on all of
+  them. If only some rounds fail, the report says which ones at the top.
+
 ## 2.17.0
 - **Drafts** (new team tab): roster drafts per map, made together.
   - Five player slots (starters or subs). Drag agents from the list onto a player, add a backup pick, drag between

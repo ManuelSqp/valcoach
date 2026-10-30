@@ -1237,3 +1237,49 @@ def test_roster_drafts(app):
     assert c2.post(f"/teams/{tid}/drafts/{did}/delete").status_code == 403
     # outsiders don't see it, the owner deletes
     assert c.post(f"/teams/{tid}/drafts/{did}/delete").status_code == 302 and store.draft(did) is None
+
+
+def _run_with_model(app, c, monkeypatch, answer):
+    """One coaching run; answer(n) is called for the n-th model request and may raise."""
+    from valcoach.coach.ollama import Ollama
+    pid = add_profile(c)
+    ext = app.extensions["valcoach"]
+    store = ext["store"]
+    store.set("ollama_parallel", "1")
+    calls = []
+
+    def chat_json(self, *a, **k):
+        calls.append(1)
+        return answer(len(calls))
+    monkeypatch.setattr(Ollama, "check", lambda self: None)
+    monkeypatch.setattr(Ollama, "chat_json", chat_json)
+    store.create_job("j1", pid, MATCH_ID, "both", options={"team_review": True})
+    ext["runner"]._run("j1")
+    return store.job("j1"), calls
+
+
+def test_job_fails_when_the_model_fails_on_every_round(app, monkeypatch):
+    def down(n):
+        raise RuntimeError("Ollama request failed: timed out")
+    job, calls = _run_with_model(app, setup_admin(app), monkeypatch, down)
+    assert job.status == "error" and "failed on all 6 rounds" in job.error and "timed out" in job.error
+    assert not job.html_path
+    assert len(calls) == 3        # gave up: no waiting for the other rounds, the match review or the team
+
+
+def test_report_names_the_rounds_the_model_failed_on(app, monkeypatch):
+    def flaky(n):
+        if n in (1, 2, 4, 5):     # never 3 in a row: the run goes on
+            raise RuntimeError("timed out")
+        return {"summary": "Fight at A", "importance": 1}
+    job, calls = _run_with_model(app, setup_admin(app), monkeypatch, flaky)
+    assert job.status == "done" and "failed on 4 of 6 rounds (R1, R2, R4, R5)" in job.log
+    report = json.loads(Path(job.json_path).read_text())
+    assert report["meta"]["llm_failed_rounds"] == [1, 2, 4, 5] and not report["meta"]["llm_gave_up"]
+    assert "failed on 4 of 6 rounds (R1, R2, R4, R5)" in Path(job.html_path).read_text()
+    assert len(calls) > 6         # match review and team review still ran
+
+
+def test_no_warning_in_a_report_without_model_problems(app, monkeypatch):
+    job, _ = _run_with_model(app, setup_admin(app), monkeypatch, lambda n: {"summary": "Fight at A", "importance": 1})
+    assert job.status == "done" and "The model failed" not in Path(job.html_path).read_text()
