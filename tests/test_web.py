@@ -1312,7 +1312,9 @@ def test_premier_scouting_veto_reviews_and_brief(app, monkeypatch):
     for m in store.team(tid).member_list:
         _wait_stats(app, f"import:{m['pid']}")
     page = c.get(f"/teams/{tid}/premier").data.decode()
-    assert "This week" in page and "Your Premier matches" in page and "map isn't known yet" in page
+    assert "This week" in page and "Your Premier matches" in page and "Stage schedule" in page
+    assert ">Corrode<" in page or "built-in schedule" in page or "known yet" in page     # before the API schedule is read
+    _wait_stats(app, f"schedule:{tid}")
 
     # scout the division: our own team is skipped, the rival gets a page, the empty team too
     c.post(f"/teams/{tid}/premier/scout", data={"division": "1"})
@@ -1332,7 +1334,8 @@ def test_premier_scouting_veto_reviews_and_brief(app, monkeypatch):
 
     # this week's map comes from the season schedule (Bind); the brief is built for it
     page = c.get(f"/teams/{tid}/premier").data.decode()
-    assert ">Bind<" in page and "Premier schedule" in page
+    assert ">Bind<" in page and "Premier week 2" in page and "Stage schedule" in page
+    assert store.team(tid).map_list == ["Ascent", "Bind"]                    # follows the stage map pool
     page = c.get(f"/teams/{tid}/premier/brief").data.decode()
     assert "Our numbers on Bind" in page and "Who you might meet" in page
     # by hand for this week

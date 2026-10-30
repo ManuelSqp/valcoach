@@ -149,7 +149,9 @@ def register(app, store, get_team, helpers: dict, known_maps: list[str]) -> None
         for d in store.drafts(tid):
             counts[d["map"]] = counts.get(d["map"], 0) + 1
         if sel not in maps:
-            sel = next((m for m in maps if counts.get(m)), maps[0] if maps else "")
+            fn = app.extensions["valcoach"].get("week_map")
+            wm = fn(t) if fn and t.premier_info.get("tag") else None
+            sel = wm if wm in maps else next((m for m in maps if counts.get(m)), maps[0] if maps else "")
         drafts = store.drafts(tid, sel) if sel else []
         cur = None
         if request.args.get("d", "").isdigit():
