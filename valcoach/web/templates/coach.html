@@ -96,7 +96,15 @@ document.getElementById('coachform').addEventListener('submit', function (e) {
     bar.style.width = pct + '%';
     st.textContent = `Uploading ${(ev.loaded / 1e9).toFixed(2)} / ${(ev.total / 1e9).toFixed(2)} GB`;
   };
-  xhr.onload = () => { window.location = xhr.responseURL; };
+  xhr.onload = () => {
+    // a server error used to reload this page with an empty form: the user then started a run without the VOD
+    if (xhr.status >= 400) {
+      // a proxy timeout (502/504) can come after the server already started the run
+      st.textContent = `No answer from the server (error ${xhr.status}). Reload the page and check "Earlier reports" before uploading again.`;
+      go.disabled = false; return;
+    }
+    window.location = xhr.responseURL;
+  };
   xhr.onerror = () => { st.textContent = 'Upload failed.'; go.disabled = false; };
   xhr.open('POST', window.location.href);
   xhr.send(new FormData(this));

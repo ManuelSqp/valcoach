@@ -287,8 +287,9 @@ Use one or the other, not both (both want port 10070).
 
 | Setting | Value |
 |---|---|
-| Recorder | OBS / Outplayed, **MP4 + H.264**, 1080p, ≥30 fps, full match in one file |
-| Minimap → Rotate | **Off** (fixed) |
+| Recorder | OBS / Outplayed / Medal, **MP4 + H.264**, ≥1080p, ≥30 fps, full match in one file |
+| Ultrawide monitor | fine: the black bars left/right of the 16:9 game are detected and left out |
+| Minimap → Rotate | **Fixed** (orientation *Always the same* or *Based on side*, both work) |
 | Minimap → Keep player centered | **Off** |
 | Minimap size / zoom | anything, but **keep it the same** across recordings |
 | Colour-blind mode / enemy highlight | default (otherwise adjust `COLOR_RANGES` in `valcoach/video/minimap.py`) |

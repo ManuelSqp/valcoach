@@ -86,3 +86,30 @@ and the cache keeps at most 200 entries.
   utility, replay estimates without a VOD, teams are shared now). The user limits, non-coachable modes and
   the origin check are documented.
 - Tests: 12 new (97 total, all passing).
+
+# First real VOD test (29.10.2026, Medal, 3440x1440, Bind swiftplay)
+
+**`web/__init__.py`, `coach.html`: VOD upload failed, then a run started without it**
+Werkzeug buffers uploads in `/tmp`, which is a 3.9 GB RAM disk here: the 1.8 GB VOD crashed with "No space left on
+device". The upload page then silently reloaded an empty form, and "Start coaching" ran without the VOD and with the
+default mode. Uploads are now buffered in `data/tmp` and hard-linked into `uploads/` (the old copy took 77 s, long
+enough for a 504 in front of the app). The page shows an error instead of reloading.
+
+**`video/io.py`, `sync.py`, `minimap.py`, `pipeline.py`, `cli.py`: ultrawide recordings**
+A 16:9 game on a 3440x1440 screen is recorded with black bars left and right. The minimap area (fractions of the
+frame) was half in the black bar: teammates tracked 0 % of the time. The bars are now detected (`content_box()`), and
+the minimap/kill-feed areas are fractions of the game picture (`video_roi()`).
+
+**`video/minimap.py`, `pipeline.py`: minimap orientation "Based on side"**
+With *Fixed orientation: Based on side* the map turns 180 deg when your team swaps sides, but the calibration had one
+rotation for the whole match. Now a second model (`flip_side`) is fitted too and kept when it is clearly better;
+tracking gets the side per round. On the real VOD: teammates tracked 58-91 % of the time (before: 0 %).
+
+**`video/minimap.py`, `coach/nav.py`, `pipeline.py`: minimap summary for the coach was wrong**
+- "11 allies in A": stack estimates said 5 for single icons, icon fragments and teal HUD marks / teleporter lines
+  counted too. Detections off the map floor are dropped (`NavGrid.near_floor`), and the counts per frame are capped
+  at the players still alive (extra blobs stay with count 0, the teammate tracking still uses them).
+- "Your path" went on after your death: the yellow icon is then the teammate you spectate, now an ally point.
+- On defense your own icon was found in 2-30 % of the frames: a translucent white circle makes the yellow ring
+  pale (saturation ~80, the detector wanted 120). Second colour range: pale but very bright (site markers are as
+  pale but darker). Now your path starts at 0 s in every round.

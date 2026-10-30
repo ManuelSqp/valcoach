@@ -21,8 +21,9 @@ class NavGrid:
         self.walk = walkable.astype(bool)
         self.n = self.walk.shape[0]
         # nearest walkable cell for every cell (positions slightly off the floor get snapped)
-        _, idx = ndimage.distance_transform_edt(~self.walk, return_indices=True)
+        dist, idx = ndimage.distance_transform_edt(~self.walk, return_indices=True)
         self.snap_r, self.snap_c = idx[0], idx[1]
+        self.dist = dist / self.n                       # distance to the floor, in map UV
         self._cache: dict[tuple, list] = {}
 
     # ------------------------------------------------------------------
@@ -49,6 +50,12 @@ class NavGrid:
         c = min(self.n - 1, max(0, int(u * self.n)))
         r = min(self.n - 1, max(0, int(v * self.n)))
         return int(self.snap_r[r, c]), int(self.snap_c[r, c])
+
+    def near_floor(self, u: float, v: float, tol: float = 0.03) -> bool:
+        """True if (u, v) is on the floor or within tol of it (players always stand on the floor)."""
+        if not (0.0 <= u < 1.0 and 0.0 <= v < 1.0):
+            return False
+        return bool(self.dist[int(v * self.n), int(u * self.n)] <= tol)
 
     def route(self, a: tuple[float, float], b: tuple[float, float]) -> list[tuple[float, float]]:
         """Walkable route from a to b in map UV (0..1), simplified; includes both end points."""

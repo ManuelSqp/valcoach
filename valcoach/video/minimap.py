@@ -1,7 +1,7 @@
 """Minimap parsing: icon detection, automatic calibration, position tracking.
 
 Requirements for your recording settings (Settings > General > Minimap):
-  * Rotate: OFF (fixed orientation)
+  * Rotate: OFF (fixed orientation; "Always the same" or "Based on side" both work)
   * Keep Player Centered: OFF (whole map visible)
   * Fixed minimap size / zoom across recordings (calibration is cached per map)
 
@@ -15,6 +15,9 @@ Calibration model: pixel = s * R_k * (u, v) + t, where (u, v) is the 0..1 map
 UV from valorant-api.com, R_k a rotation by k*90 deg, s a scale and t a
 translation. It is fitted automatically from moments where the API gives
 exact player positions (every kill snapshot) and the VOD shows the allies.
+With "Fixed orientation: Based on side" the map turns 180 deg around its centre
+when your team swaps sides; then `flip_side` names the side (yours) on which the
+UV is turned 180 deg before R_k. Both models are fitted and the better one kept.
 """
 from __future__ import annotations
 
@@ -28,12 +31,14 @@ from scipy.optimize import linear_sum_assignment
 
 from ..maps import MapInfo
 from ..models import Match
-from .io import crop, frame_at, iter_frames, open_video, roi_px, video_info
+from .io import crop, frame_at, iter_frames, open_video, video_info, video_roi
 from .sync import SyncResult
 
 # OpenCV HSV: H 0..180, S 0..255, V 0..255
 COLOR_RANGES: dict[str, list[tuple[tuple[int, int, int], tuple[int, int, int]]]] = {
-    "self":  [((20, 120, 150), (35, 255, 255))],
+    # second range: under the translucent white circle around you the yellow ring is pale but very bright
+    # (the yellowish site markers are as pale but much darker, V ~150)
+    "self":  [((20, 120, 150), (35, 255, 255)), ((25, 60, 200), (38, 255, 255))],
     "ally":  [((80, 90, 130), (100, 255, 255))],
     "enemy": [((0, 130, 130), (8, 255, 255)), ((170, 130, 130), (180, 255, 255))],
 }
@@ -59,14 +64,18 @@ class Calibration:
     n_points: int
     roi_frac: list[float] = field(default_factory=list)
     frame_size: list[int] = field(default_factory=list)
+    flip_side: str = ""        # "attack" | "defense": your side on which the map is turned 180 deg ("" = never)
 
-    def uv_to_px(self, u: float, v: float) -> tuple[float, float]:
-        ru, rv = _rot(np.array([[u, v]]), self.rot_k)[0]
+    def _k(self, side: str) -> int:
+        return (self.rot_k + (2 if self.flip_side and side == self.flip_side else 0)) % 4
+
+    def uv_to_px(self, u: float, v: float, side: str = "") -> tuple[float, float]:
+        ru, rv = _rot(np.array([[u, v]]), self._k(side))[0]
         return self.scale * ru + self.tx, self.scale * rv + self.ty
 
-    def px_to_uv(self, px: float, py: float) -> tuple[float, float]:
+    def px_to_uv(self, px: float, py: float, side: str = "") -> tuple[float, float]:
         ru, rv = (px - self.tx) / self.scale, (py - self.ty) / self.scale
-        u, v = _rot(np.array([[ru, rv]]), (4 - self.rot_k) % 4)[0]
+        u, v = _rot(np.array([[ru, rv]]), (4 - self._k(side)) % 4)[0]
         return float(u), float(v)
 
     def save(self, path: Path) -> None:
@@ -165,12 +174,32 @@ def _fit_similarity_fixed_rot(uv: np.ndarray, px: np.ndarray, k: int) -> tuple[f
     return s, float(t[0]), float(t[1]), rms
 
 
-def calibrate(samples: list[tuple[np.ndarray, np.ndarray]], roi_size: tuple[int, int],
+def calibrate(samples: list[tuple], roi_size: tuple[int, int],
               map_uuid: str, iterations: int = 12) -> Calibration:
     """ICP-style fit.
 
-    samples: list of (uv_points [N,2] from the API, px_points [M,2] detected allies+self)
+    samples: list of (uv_points [N,2] from the API, px_points [M,2] detected allies+self[, your side])
+    The side is optional; with it, a map that turns 180 deg when you swap sides is also tried.
     """
+    sides = {smp[2] for smp in samples if len(smp) > 2 and smp[2]}
+    best: Calibration | None = None
+    for flip in [""] + (["attack"] if len(sides) == 2 else []):
+        # turning the UV of one side by 180 deg turns the problem into a fixed-orientation fit
+        fixed = [(1.0 - smp[0] if flip and len(smp) > 2 and smp[2] == flip else smp[0], smp[1]) for smp in samples]
+        cand = _calibrate_fixed(fixed, roi_size, map_uuid, iterations)
+        if cand is None:
+            continue
+        cand.flip_side = flip
+        # the side model must clearly win: with one orientation it only fits noise
+        if best is None or cand.rms_px < 0.8 * best.rms_px:
+            best = cand
+    if best is None:
+        raise RuntimeError("Minimap calibration failed: not enough detections at kill moments")
+    return best
+
+
+def _calibrate_fixed(samples: list[tuple[np.ndarray, np.ndarray]], roi_size: tuple[int, int],
+                     map_uuid: str, iterations: int) -> Calibration | None:
     w, h = roi_size
     best: Calibration | None = None
     for k in range(4):
@@ -210,17 +239,16 @@ def calibrate(samples: list[tuple[np.ndarray, np.ndarray]], roi_size: tuple[int,
         cand = Calibration(map_uuid=map_uuid, rot_k=k, scale=s, tx=tx, ty=ty, rms_px=rms, n_points=n_used)
         if best is None or cand.rms_px < best.rms_px:
             best = cand
-    if best is None:
-        raise RuntimeError("Minimap calibration failed: not enough detections at kill moments")
     return best
 
 
 def collect_calibration_samples(match: Match, map_info: MapInfo, video_path: str, sync: SyncResult,
                                 roi_frac: list[float], focus_puuid: str,
-                                max_samples: int = 80) -> list[tuple[np.ndarray, np.ndarray]]:
-    """At each kill, compare API positions of the focus player's team with detected ally/self icons."""
+                                max_samples: int = 80) -> list[tuple[np.ndarray, np.ndarray, str]]:
+    """At each kill, compare API positions of the focus player's team with detected ally/self icons.
+    Each sample also carries the focus player's side in that round (for "Based on side" maps)."""
     info = video_info(video_path)
-    roi = roi_px(roi_frac, info.width, info.height)
+    roi = video_roi(roi_frac, info)
     team = match.team_of(focus_puuid)
     kills = [k for k in match.kills if k.player_locations]
     if len(kills) > max_samples:
@@ -241,7 +269,8 @@ def collect_calibration_samples(match: Match, map_info: MapInfo, video_path: str
                            if pl.team == team and pl.puuid != k.victim])
             px = np.array([[b.px, b.py] for b in blobs])
             if len(uv) >= 2 and len(px) >= 2:
-                samples.append((uv, px))
+                side = match.rounds[k.round].side_of(team) if 0 <= k.round < len(match.rounds) else ""
+                samples.append((uv, px, side))
     return samples
 
 
@@ -273,15 +302,22 @@ class RoundTrack:
         acc: dict[str, int] = {}
         for p in pts:
             acc[p.zone] = acc.get(p.zone, 0) + p.count
-        return {z: round(c / len(times), 1) for z, c in sorted(acc.items(), key=lambda kv: -kv[1])}
+        avg = {z: round(c / len(times), 1) for z, c in sorted(acc.items(), key=lambda kv: -kv[1])}
+        return {z: n for z, n in avg.items() if n > 0}
 
 
 def track_round(match: Match, round_index: int, map_info: MapInfo, cal: Calibration,
                 video_path: str, sync: SyncResult, roi_frac: list[float],
-                sample_fps: float = 4.0, round_len_s: float | None = None) -> RoundTrack:
+                sample_fps: float = 4.0, round_len_s: float | None = None, side: str = "",
+                focus: str = "", floor=None) -> RoundTrack:
+    """side: the focus player's side this round (needed when the minimap turns by side).
+    focus: the focus player; then the icon counts per frame are capped at the players still alive
+    (stack estimates and icon fragments over-counted), and after your death the yellow icon is the
+    teammate you spectate, so it becomes an ally point. floor(u, v) -> bool drops detections off the map
+    (HUD marks, teleporter lines)."""
     rnd = match.rounds[round_index]
     info = video_info(video_path)
-    roi = roi_px(roi_frac, info.width, info.height)
+    roi = video_roi(roi_frac, info)
     if rnd.start_match_ms is None:
         return RoundTrack(round_index)
     start_vod = sync.vod_time(rnd.start_match_ms, round_index)
@@ -297,19 +333,55 @@ def track_round(match: Match, round_index: int, map_info: MapInfo, cal: Calibrat
     # single-icon size from the whole round (one frame may only contain merged blobs)
     all_blobs = [b for _, bs in frames for b in bs if b.kind != "self"]
     unit = estimate_icon_area(all_blobs) if all_blobs else None
+    alive = _alive_counts(match, rnd, focus) if focus else None
     for t, blobs in frames:
         if unit:
             _estimate_counts(blobs, unit)
+        kept = []
         for b in blobs:
-            u, v = cal.px_to_uv(b.px, b.py)
+            u, v = cal.px_to_uv(b.px, b.py, side)
             if not (-0.05 <= u <= 1.05 and -0.05 <= v <= 1.05):
                 continue
+            if floor is not None and not floor(u, v):
+                continue
+            kept.append((b, u, v))
+        if alive:
+            me_alive, n_mates, n_enemies = alive(t - start_vod)
+            if not me_alive:
+                for b, _, _ in kept:
+                    if b.kind == "self":
+                        b.kind = "ally"
+            _cap_counts([b for b, _, _ in kept], n_mates, n_enemies)
+        for b, u, v in kept:
             x, y = map_info.from_uv(u, v)
             track.points.append(TrackPoint(
                 t_round_s=round(t - start_vod, 2), kind=b.kind, x=x, y=y,
                 area=map_info.area(x, y), zone=map_info.zone(x, y), count=b.count,
             ))
     return track
+
+
+def _alive_counts(match: Match, rnd, focus: str):
+    """t_round_s -> (you alive, teammates alive, enemies alive)."""
+    team = match.team_of(focus)
+    mates = [p.puuid for p in match.players_on(team) if p.puuid != focus]
+    enemies = [p.puuid for p in match.players_on(match.other_team(team))]
+    died = {k.victim: k.t_round_ms / 1000 for k in rnd.kills}
+
+    def at(t: float) -> tuple[bool, int, int]:
+        def n_alive(ps):
+            return sum(1 for pu in ps if died.get(pu, float("inf")) > t)
+        return died.get(focus, float("inf")) > t, n_alive(mates), n_alive(enemies)
+    return at
+
+
+def _cap_counts(blobs: list[Blob], n_mates: int, n_enemies: int) -> None:
+    """Counts add up to at most the living players; the biggest blobs keep theirs. Extra blobs stay
+    (count 0) because a teammate often shows as several fragments and the path tracking needs them."""
+    for kind, left in (("ally", n_mates), ("enemy", n_enemies)):
+        for b in sorted((b for b in blobs if b.kind == kind), key=lambda b: -b.area):
+            b.count = min(b.count, left)
+            left -= b.count
 
 
 def describe_track(track: RoundTrack, bucket_s: float = 10.0) -> dict:

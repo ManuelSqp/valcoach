@@ -184,8 +184,11 @@ def parse_ts(s: str) -> float:
     return out
 
 
-def calib_path(cfg: Config, map_uuid: str, width: int, height: int) -> Path:
-    h = hashlib.sha1(json.dumps(cfg.video.minimap_roi).encode()).hexdigest()[:8]
+def calib_path(cfg: Config, map_uuid: str, width: int, height: int,
+               content: tuple[int, int, int, int] | None = None) -> Path:
+    # the game picture's place in the frame (black bars) is part of the key: same size, other layout
+    key = cfg.video.minimap_roi if content is None or content == (0, 0, width, height) else [cfg.video.minimap_roi, list(content)]
+    h = hashlib.sha1(json.dumps(key).encode()).hexdigest()[:8]
     return cfg.path(cfg.paths.cache_dir) / "minimap_calib" / f"{map_uuid}_{width}x{height}_{h}.json"
 
 
@@ -211,36 +214,44 @@ def do_minimap(cfg: Config, match: Match, map_info: MapInfo, vod: str, sync, puu
                log: Log = _noop, paths: dict | None = None,
                others: dict | None = None) -> tuple[dict[int, dict], object | None]:
     from .video.allies import ally_paths, coverage, enemy_sightings
-    from .video.io import roi_px, video_info
+    from .video.io import video_info, video_roi
     from .video.minimap import (Calibration, calibrate, collect_calibration_samples,
                                 describe_track, track_round)
     info = video_info(vod)
-    cp = calib_path(cfg, map_info.uuid, info.width, info.height)
+    cp = calib_path(cfg, map_info.uuid, info.width, info.height, info.content)
+    if info.content != (0, 0, info.width, info.height):
+        x, y, w, h = info.content
+        log(f"· Video {info.width}x{info.height}: game picture is {w}x{h} at x={x}, y={y} (black bars left out)")
     if cp.exists() and not recalibrate:
         cal = Calibration.load(cp)
         log(f"· Using cached minimap calibration ({cp.name}, rms {cal.rms_px:.1f}px)")
     else:
         log("· Calibrating minimap from kill snapshots ...")
         samples = collect_calibration_samples(match, map_info, vod, sync, cfg.video.minimap_roi, puuid)
-        roi = roi_px(cfg.video.minimap_roi, info.width, info.height)
+        roi = video_roi(cfg.video.minimap_roi, info)
         try:
             cal = calibrate(samples, (roi[2], roi[3]), map_info.uuid)
         except RuntimeError as e:
             log(f"! {e}. Skipping minimap tracking.")
             return {}, None
         cal.roi_frac, cal.frame_size = list(cfg.video.minimap_roi), [info.width, info.height]
-        log(f"· Calibration: rot {cal.rot_k * 90} deg, scale {cal.scale:.1f}px, rms {cal.rms_px:.1f}px "
+        turn = f" (+180 deg when you're on {cal.flip_side}: map orientation based on side)" if cal.flip_side else ""
+        log(f"· Calibration: rot {cal.rot_k * 90} deg{turn}, scale {cal.scale:.1f}px, rms {cal.rms_px:.1f}px "
             f"from {cal.n_points} points")
         if cal.rms_px > 0.03 * cal.scale:
             log("! Calibration error is high; minimap positions may be unreliable "
-                "(check Minimap settings: rotate OFF, keep player centered OFF).")
+                "(check Minimap settings: rotate = Fixed, keep player centered OFF).")
         cal.save(cp)
     if not track:
         return {}, cal
+    from .coach.replay import nav_grid
+    nav = nav_grid(map_info, MapRegistry(cfg.path(cfg.paths.cache_dir)))
+    floor = nav.near_floor if nav else None          # drops HUD marks and map lines next to the map
     out = {}
     for r in match.rounds:
         tr = track_round(match, r.index, map_info, cal, vod, sync, cfg.video.minimap_roi,
-                         sample_fps=cfg.video.sample_fps)
+                         sample_fps=cfg.video.sample_fps, side=r.side_of(match.team_of(puuid)),
+                         focus=puuid, floor=floor)
         d = describe_track(tr)
         if d:
             out[r.index] = d

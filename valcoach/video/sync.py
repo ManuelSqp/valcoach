@@ -23,7 +23,7 @@ import cv2
 import numpy as np
 
 from ..models import Match
-from .io import crop, iter_frames, open_video, roi_px, video_info
+from .io import crop, iter_frames, open_video, video_info, video_roi
 
 
 @dataclass
@@ -72,7 +72,7 @@ def detect_killfeed_onsets(video_path: str, roi_frac: list[float], step_s: float
                            t_start: float = 0.0, t_end: float | None = None,
                            min_rise: float | None = None, progress=None) -> list[float]:
     info = video_info(video_path)
-    roi = roi_px(roi_frac, info.width, info.height)
+    roi = video_roi(roi_frac, info)
     t_end = info.duration_s if t_end is None else min(t_end, info.duration_s)
     counts: list[tuple[float, int]] = []
     with open_video(video_path) as cap:

@@ -290,8 +290,10 @@ KF_ROI = [0.70, 0.08, 0.29, 0.25]
 
 
 def render_vod(match: dict, path: Path, fps: int = 10, w: int = 1280, h: int = 720,
-               self_puuid: str = "red-1") -> dict:
-    """Draw minimap icons + kill feed. Returns ground truth transform."""
+               self_puuid: str = "red-1", bars: int = 0, flip_from_round: int | None = None) -> dict:
+    """Draw minimap icons + kill feed. Returns ground truth transform.
+    bars: black bars of this width left and right (16:9 game on an ultrawide screen).
+    flip_from_round: from this round on the minimap is turned 180 deg (orientation based on side)."""
     data = match["data"]
     n_rounds = len(data["rounds"])
     duration = TRUE_OFFSET_S + n_rounds * ROUND_LEN_S + 5
@@ -299,9 +301,9 @@ def render_vod(match: dict, path: Path, fps: int = 10, w: int = 1280, h: int = 7
     side = min(mw, mh) * 0.92
     gt = {"scale": side, "tx": (mw - side) / 2 + 3, "ty": (mh - side) / 2 - 2, "rot_k": TRUE_ROT_K}
 
-    def uv_px(u, v):
+    def uv_px(u, v, k=TRUE_ROT_K):
         c = np.array([u - 0.5, v - 0.5])
-        for _ in range(TRUE_ROT_K):
+        for _ in range(k):
             c = np.array([-c[1], c[0]])
         c = c + 0.5
         return gt["scale"] * c[0] + gt["tx"], gt["scale"] * c[1] + gt["ty"]
@@ -313,7 +315,7 @@ def render_vod(match: dict, path: Path, fps: int = 10, w: int = 1280, h: int = 7
         dead_at[(k["round"], k["victim"]["puuid"])] = k["time_in_round_in_ms"] / 1000
     target = {r["id"]: target_site(r["id"]) for r in data["rounds"]}
 
-    vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
+    vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (w + 2 * bars, h))
     team_of = {p["puuid"]: p["team_id"] for p in data["players"]}
     my_team = team_of[self_puuid]
     n_frames = int(duration * fps)
@@ -326,6 +328,7 @@ def render_vod(match: dict, path: Path, fps: int = 10, w: int = 1280, h: int = 7
         if 0 <= rid < n_rounds:
             tr = tm - rid * ROUND_LEN_S
             att = attackers_for(rid)
+            k = TRUE_ROT_K + (2 if flip_from_round is not None and rid >= flip_from_round else 0)
             # draw your own icon last: in game it renders on top of the others
             for pu in [p for p in RED + BLUE if p != self_puuid] + [self_puuid]:
                 if (rid, pu) in dead_at and dead_at[(rid, pu)] <= tr:
@@ -333,7 +336,7 @@ def render_vod(match: dict, path: Path, fps: int = 10, w: int = 1280, h: int = 7
                 team = team_of[pu]
                 x, y = player_pos(pu, rid, tr, att, target[rid])
                 u, v = to_uv(x, y)
-                px, py = uv_px(u, v)
+                px, py = uv_px(u, v, k)
                 c = (int(mx + px), int(my + py))
                 if pu == self_puuid:
                     cv2.circle(frame, c, 6, (0, 230, 255), 3)            # yellow
@@ -350,7 +353,7 @@ def render_vod(match: dict, path: Path, fps: int = 10, w: int = 1280, h: int = 7
             cv2.rectangle(frame, (kx + 20, y0), (kx + 340, y0 + 24), (25, 25, 25), -1)
             cv2.rectangle(frame, (kx + 20, y0), (kx + 340, y0 + 24), col, 3)
             cv2.putText(frame, "Vandal", (kx + 150, y0 + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
-        vw.write(frame)
+        vw.write(np.pad(frame, ((0, 0), (bars, bars), (0, 0))) if bars else frame)
     vw.release()
     return gt
 

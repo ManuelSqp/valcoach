@@ -1102,3 +1102,24 @@ def test_uptime_clock_in_nav(app):
     c = setup_admin(app)
     page = c.get("/").data.decode()
     assert 'id="uptime"' in page and 'data-start="' in page and 'data-now="' in page
+
+
+def test_large_upload_is_buffered_in_data_dir(app, monkeypatch):
+    """Werkzeug buffered uploads in /tmp (a small tmpfs): a real VOD filled it and the upload crashed.
+    The buffer is then linked into uploads/, not copied (a 2 GB copy ran into a proxy's 504)."""
+    import tempfile
+    c = setup_admin(app)
+    pid = add_profile(c)
+    store = app.extensions["valcoach"]["store"]
+    dirs = []
+    real = tempfile.NamedTemporaryFile
+    monkeypatch.setattr(tempfile, "NamedTemporaryFile", lambda *a, **kw: dirs.append(kw.get("dir")) or real(*a, **kw))
+    r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}",
+               data={"mode": "player", "vod": "upload", "no_llm": "1", "no_minimap": "1",
+                     "vod_file": (io.BytesIO(b"\x00" * 600_000), "match.mp4")},
+               content_type="multipart/form-data")
+    job = store.job(r.headers["Location"].split("/")[-1])
+    assert job.vod_path and job.mode == "player"
+    assert dirs == [store.data_dir / "tmp"]
+    assert Path(job.vod_path).stat().st_size == 600_000
+    assert not list((store.data_dir / "tmp").iterdir())        # buffer removed after the request

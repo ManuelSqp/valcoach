@@ -680,3 +680,70 @@ def test_new_llm_features_send_their_field_rules(monkeypatch):
             return {}
     weekly.write_focus(FakeLLM(), {"player": "x"})
     assert "Output fields:" in seen[-1] and "focus:" in seen[-1]
+
+
+def test_ultrawide_bars_and_map_turning_by_side(tmp_path, data, match, map_info, focus):
+    """16:9 game recorded on an ultrawide screen (black bars left/right), minimap orientation
+    'Based on side' (turns 180 deg when the player's team swaps sides). Both broke a real VOD."""
+    import copy
+    from valcoach.video.io import video_info, video_roi
+    from valcoach.video.minimap import calibrate, collect_calibration_samples, track_round
+    from valcoach.video.sync import SyncResult
+    vod = tmp_path / "wide.mp4"
+    gt = synth.render_vod(json.loads(Path(data["match"]).read_text()), vod, bars=200, flip_from_round=4)
+    info = video_info(str(vod))
+    assert info.content == (200, 0, 1280, 720)
+    m = copy.deepcopy(match)
+    for r in m.rounds[4:]:
+        r.attacking_team = "Blue"                  # the focus player (Red) defends from round 5 on
+    sync = SyncResult(global_offset_s=synth.TRUE_OFFSET_S)
+    roi = video_roi(synth.MM_ROI, info)
+    samples = collect_calibration_samples(m, map_info, str(vod), sync, synth.MM_ROI, focus)
+    cal = calibrate(samples, (roi[2], roi[3]), map_info.uuid)
+    assert cal.flip_side and cal._k("attack") == gt["rot_k"] and cal._k("defense") == (gt["rot_k"] + 2) % 4
+    assert cal.rms_px < 3
+    r = 6
+    tr = track_round(m, r, map_info, cal, str(vod), sync, synth.MM_ROI, side=m.rounds[r].side_of(m.team_of(focus)))
+    errs = sorted(math.hypot(p.x - x, p.y - y) for p in tr.points if p.kind == "self"
+                  for x, y in [synth.player_pos("red-1", r, p.t_round_s, synth.attackers_for(r), synth.target_site(r))])
+    assert len(errs) > 20 and errs[len(errs) // 2] < 400
+    # a fixed-orientation recording keeps the plain model
+    assert calibrate([(uv, px, "attack" if i % 2 else "defense") for i, (uv, px, _) in
+                      enumerate(collect_calibration_samples(match, map_info, str(data["vod"]), sync, synth.MM_ROI, focus))],
+                     (roi[2], roi[3]), map_info.uuid).flip_side == ""
+
+
+def test_track_counts_capped_and_own_path_ends_at_death(data, match, map_info, calibration, sync, focus, tmp_path):
+    """Real VOD: the minimap summary said '11 allies in A' (stack estimates, fragments, HUD marks), and
+    'your path' went on after your death (the yellow icon then is the teammate you spectate)."""
+    from valcoach.coach.nav import NavGrid
+    from valcoach.video.minimap import track_round
+    nav = NavGrid.from_image(synth.write_map_image(tmp_path))
+    r = 2
+    death = next(k.t_round_ms / 1000 for k in match.rounds[r].kills if k.victim == focus)
+    tr = track_round(match, r, map_info, calibration, str(data["vod"]), sync, synth.MM_ROI,
+                     focus=focus, floor=nav.near_floor)
+    selfs = [p.t_round_s for p in tr.points if p.kind == "self"]
+    assert selfs and max(selfs) <= death + 0.3
+    assert any(p.kind == "ally" and p.t_round_s > death + 1 for p in tr.points)    # spectated mate
+    died = {k.victim: k.t_round_ms / 1000 for k in match.rounds[r].kills}
+    mates = [p.puuid for p in match.players_on(match.team_of(focus)) if p.puuid != focus]
+    by_t: dict[float, int] = {}
+    for p in tr.points:
+        if p.kind == "ally":
+            by_t[p.t_round_s] = by_t.get(p.t_round_s, 0) + p.count
+    for t, n in by_t.items():
+        assert n <= sum(1 for m in mates if died.get(m, 1e9) > t)
+    assert not nav.near_floor(0.01, 0.01) and not nav.near_floor(1.5, 0.5)
+
+
+def test_pale_own_icon_is_detected():
+    """On defense a translucent white circle lies over your icon: the yellow ring is pale but bright."""
+    import cv2
+    import numpy as np
+    from valcoach.video.minimap import detect_blobs
+    img = np.full((200, 200, 3), (150, 152, 155), np.uint8)
+    cv2.circle(img, (100, 100), 7, (170, 235, 240), 3)          # BGR: pale yellow, S ~75, V ~240
+    cv2.rectangle(img, (20, 20), (50, 40), (110, 150, 150), -1)  # site marker: as pale, but dark
+    kinds = [b.kind for b in detect_blobs(img)]
+    assert kinds.count("self") == 1

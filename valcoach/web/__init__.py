@@ -8,17 +8,20 @@ Start with:  valcoach web   (then open http://<this machine>:10070)
 from __future__ import annotations
 
 import functools
+import os
 import shutil
 import socket
 import sqlite3
+import tempfile
 import time
 import uuid
 from urllib.parse import urlsplit
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 
 import requests
-from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
+from flask import (Flask, Request, abort, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
 from werkzeug.utils import secure_filename
 
@@ -52,6 +55,19 @@ def _host_boot() -> float | None:
         return None
 
 
+def save_upload(up, dest: Path) -> None:
+    """Hard-link the buffered upload into place (instant) instead of copying it: copying a 2 GB VOD
+    took over a minute, long enough for a proxy in front of the app to give up with 504."""
+    name = getattr(up.stream, "name", None)
+    if isinstance(name, str):
+        try:
+            os.link(name, dest)
+            return
+        except OSError:
+            pass                    # other filesystem etc.: copy
+    up.save(dest)
+
+
 def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: bool = True) -> Flask:
     started_at = time.time()
     store = Store(data_dir)
@@ -60,7 +76,19 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
     if start_workers:
         runner.recover()
 
+    upload_tmp = store.data_dir / "tmp"
+
+    class UploadRequest(Request):
+        def _get_file_stream(self, total_content_length, content_type, filename=None, content_length=None):
+            # Werkzeug buffers uploads in the system temp dir, which is often a small tmpfs
+            # (/tmp is RAM on Debian): a multi-GB VOD filled it and the upload failed.
+            if (total_content_length or 0) <= 500 * 1024:
+                return BytesIO()
+            upload_tmp.mkdir(parents=True, exist_ok=True)
+            return tempfile.NamedTemporaryFile("rb+", dir=upload_tmp)     # named: save_upload() can link it
+
     app = Flask(__name__)
+    app.request_class = UploadRequest
     app.secret_key = store.get("secret_key")
     app.config.update(
         MAX_CONTENT_LENGTH=None,               # VOD uploads can be many GB
@@ -559,7 +587,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 return redirect(request.url)
             if size and request.mimetype == "multipart/form-data":
                 free = shutil.disk_usage(store.data_dir).free
-                if free - size < MIN_FREE_DISK:
+                if free - size < MIN_FREE_DISK:          # buffered in data/tmp, then linked into uploads/
                     flash("Not enough free disk space on the server for this upload.", "error")
                     return redirect(request.url)
             f = request.form
@@ -592,7 +620,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 dest_dir = store.upload_dir(g.user.id)
                 dest_dir.mkdir(parents=True, exist_ok=True)
                 dest = dest_dir / f"{uuid.uuid4().hex[:8]}_{secure_filename(up.filename)}"
-                up.save(dest)
+                save_upload(up, dest)
                 vod_path, vod_name, uploaded = str(dest), up.filename, True
             elif choice:
                 path = resolve_vod(g.user, choice)

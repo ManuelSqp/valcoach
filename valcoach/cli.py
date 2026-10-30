@@ -60,15 +60,15 @@ def cmd_sync(cfg: Config, args) -> None:
 
 def cmd_calibrate(cfg: Config, args) -> None:
     import cv2
-    from .video.io import crop, frame_at, open_video, roi_px, video_info
+    from .video.io import crop, frame_at, open_video, video_info, video_roi
     from .video.minimap import detect_blobs
 
     match = pipeline.load_match(cfg, args.match)
     puuid = pipeline.focus_player(cfg, match, args.player)
     map_info = pipeline.get_map_info(cfg, match, log)
     info = video_info(args.vod)
-    mm = roi_px(cfg.video.minimap_roi, info.width, info.height)
-    kf = roi_px(cfg.video.killfeed_roi, info.width, info.height)
+    mm = video_roi(cfg.video.minimap_roi, info)
+    kf = video_roi(cfg.video.killfeed_roi, info)
     sync = pipeline.do_sync(cfg, match, args.vod, _anchor(args), log)
     cal = None
     if map_info and not args.frames_only:
@@ -93,7 +93,7 @@ def cmd_calibrate(cfg: Config, args) -> None:
             if cal and map_info:
                 for pl in k.player_locations:
                     u, v = map_info.to_uv(pl.x, pl.y)
-                    px, py = cal.uv_to_px(u, v)
+                    px, py = cal.uv_to_px(u, v, match.rounds[k.round].side_of(team))
                     c = (0, 255, 0) if pl.team == team else (0, 0, 255)
                     cv2.drawMarker(frame, (int(mm[0] + px), int(mm[1] + py)), c, cv2.MARKER_CROSS, 14, 2)
             cv2.putText(frame, f"R{k.round + 1} kill @ {t:.1f}s  (circle=detected icon, cross=API position)",
