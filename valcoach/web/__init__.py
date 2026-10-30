@@ -406,9 +406,11 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         if v["playbook"].strip():
             import yaml
             try:
-                yaml.safe_load(v["playbook"])
+                doc = yaml.safe_load(v["playbook"])
             except yaml.YAMLError as e:
                 return f"Playbook is not valid YAML: {e}"
+            if isinstance(doc, dict) and doc.get("maps") and not isinstance(doc["maps"], dict):
+                return "Playbook 'maps' must list each map by name, e.g. Ascent: ..."
         return None
 
     @app.route("/profiles/new", methods=["GET", "POST"])
