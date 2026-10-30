@@ -1239,13 +1239,13 @@ def test_roster_drafts(app):
     assert c.post(f"/teams/{tid}/drafts/{did}/delete").status_code == 302 and store.draft(did) is None
 
 
-def _run_with_model(app, c, monkeypatch, answer):
+def _run_with_model(app, c, monkeypatch, answer, parallel=1):
     """One coaching run; answer(n) is called for the n-th model request and may raise."""
     from valcoach.coach.ollama import Ollama
     pid = add_profile(c)
     ext = app.extensions["valcoach"]
     store = ext["store"]
-    store.set("ollama_parallel", "1")
+    store.set("ollama_parallel", str(parallel))
     calls = []
 
     def chat_json(self, *a, **k):
@@ -1265,6 +1265,15 @@ def test_job_fails_when_the_model_fails_on_every_round(app, monkeypatch):
     assert job.status == "error" and "failed on all 6 rounds" in job.error and "timed out" in job.error
     assert not job.html_path
     assert len(calls) == 3        # gave up: no waiting for the other rounds, the match review or the team
+
+
+def test_no_match_review_when_every_round_failed_below_the_stop_limit(app, monkeypatch):
+    """With more parallel requests than rounds the stop limit is never reached."""
+    def down(n):
+        raise RuntimeError("timed out")
+    job, calls = _run_with_model(app, setup_admin(app), monkeypatch, down, parallel=8)
+    assert job.status == "error" and "failed on all 6 rounds" in job.error
+    assert len(calls) == 6
 
 
 def test_report_names_the_rounds_the_model_failed_on(app, monkeypatch):

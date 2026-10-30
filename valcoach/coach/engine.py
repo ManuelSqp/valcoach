@@ -195,7 +195,7 @@ def run_coach(an: Analysis, llm: Ollama | None, mode: str = "both", language: st
 
     # ---- match review -------------------------------------------------
     match_review: dict = {}
-    gave_up = fails_in_a_row >= stop_after
+    gave_up = fails_in_a_row >= stop_after or (llm is not None and all("error" in fb for fb in feedback))
     if gave_up:
         match_review = {"error": GAVE_UP}
     elif llm is not None:
