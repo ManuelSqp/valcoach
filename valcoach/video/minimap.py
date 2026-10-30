@@ -22,6 +22,7 @@ UV is turned 180 deg before R_k. Both models are fitted and the better one kept.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -99,7 +100,10 @@ def _rot(uv: np.ndarray, k: int) -> np.ndarray:
 # detection
 # ---------------------------------------------------------------------------
 def detect_blobs(minimap_bgr: np.ndarray, min_area: float | None = None,
-                 max_area: float | None = None, icon_area: float | None = None) -> list[Blob]:
+                 max_area: float | None = None, icon_area: float | None = None,
+                 merge_self: bool = True) -> list[Blob]:
+    """merge_self=False keeps every yellow candidate (a teammate's yellowish agent portrait looks like
+    you); track_round then picks yours from your exact positions at the kills."""
     h, w = minimap_bgr.shape[:2]
     scale_area = (w * h) / (400 * 400)            # tuned on a ~400 px minimap
     min_area = min_area if min_area is not None else 12 * scale_area
@@ -124,9 +128,10 @@ def detect_blobs(minimap_bgr: np.ndarray, min_area: float | None = None,
             if not 0.33 <= aspect <= 3.0:
                 continue
             kind_blobs.append(Blob(kind=kind, px=x + bw / 2, py=y + bh / 2, area=area))
-        if kind == "self" and len(kind_blobs) > 1:
-            kind_blobs = [_merge_self(kind_blobs)]
         out.extend(kind_blobs)
+    selfs = [b for b in out if b.kind == "self"]
+    if merge_self and len(selfs) > 1:
+        out = [b for b in out if b.kind != "self"] + [_merge_self(selfs)]
     _estimate_counts(out, icon_area)
     return out
 
@@ -329,11 +334,12 @@ def track_round(match: Match, round_index: int, map_info: MapInfo, cal: Calibrat
     frames: list[tuple[float, list[Blob]]] = []
     with open_video(video_path) as cap:
         for t, frame in iter_frames(cap, info.fps, start_vod, start_vod + round_len_s, 1.0 / sample_fps):
-            frames.append((t, detect_blobs(crop(frame, roi))))
+            frames.append((t, detect_blobs(crop(frame, roi), merge_self=not focus)))
     # single-icon size from the whole round (one frame may only contain merged blobs)
     all_blobs = [b for _, bs in frames for b in bs if b.kind != "self"]
     unit = estimate_icon_area(all_blobs) if all_blobs else None
     alive = _alive_counts(match, rnd, focus) if focus else None
+    per_frame = []
     for t, blobs in frames:
         if unit:
             _estimate_counts(blobs, unit)
@@ -344,21 +350,74 @@ def track_round(match: Match, round_index: int, map_info: MapInfo, cal: Calibrat
                 continue
             if floor is not None and not floor(u, v):
                 continue
-            kept.append((b, u, v))
+            kept.append((b, u, v, *map_info.from_uv(u, v)))
+        per_frame.append((t - start_vod, kept))
+    if focus:
+        _pick_self(per_frame, rnd, focus, alive)
+    for t, kept in per_frame:
         if alive:
-            me_alive, n_mates, n_enemies = alive(t - start_vod)
-            if not me_alive:
-                for b, _, _ in kept:
-                    if b.kind == "self":
-                        b.kind = "ally"
-            _cap_counts([b for b, _, _ in kept], n_mates, n_enemies)
-        for b, u, v in kept:
-            x, y = map_info.from_uv(u, v)
+            _, n_mates, n_enemies = alive(t)
+            _cap_counts([k[0] for k in kept], n_mates, n_enemies)
+        for b, u, v, x, y in kept:
             track.points.append(TrackPoint(
-                t_round_s=round(t - start_vod, 2), kind=b.kind, x=x, y=y,
+                t_round_s=round(t, 2), kind=b.kind, x=x, y=y,
                 area=map_info.area(x, y), zone=map_info.zone(x, y), count=b.count,
             ))
     return track
+
+
+SELF_RUN_UNITS_S = 700.0      # a bit above max run speed, world units per second
+SELF_SLACK_UNITS = 350.0      # detection noise + icon size
+SELF_ANCHOR_S = 0.3           # a frame this close to a kill is anchored to your API position
+
+
+def _pick_self(per_frame: list[tuple[float, list]], rnd, focus: str, alive) -> None:
+    """Keep one 'self' detection per frame: the one reachable from your last known position.
+    Your exact position is known at every kill (API snapshot); from there the icon is followed
+    frame by frame, forwards and (before the first kill) backwards. Other yellow candidates (a
+    teammate's yellowish portrait) are dropped. After your death the yellow icon is the teammate
+    you spectate: it becomes one ally point."""
+    anchors = sorted((k.t_round_ms / 1000, (pl.x, pl.y)) for k in rnd.kills
+                     for pl in [k.loc_of(focus)] if pl and k.victim != focus)
+    times = [t for t, _ in per_frame]
+    pick: dict[int, tuple] = {}
+
+    def follow(order):
+        state = None                                   # (x, y, t)
+        for i in order:
+            t, kept = per_frame[i]
+            near = [a for a in anchors if abs(a[0] - t) <= SELF_ANCHOR_S]
+            if near:
+                ax, ay = near[0][1]
+                state = (ax, ay, near[0][0])
+            if state is None:
+                continue
+            gate = SELF_SLACK_UNITS + SELF_RUN_UNITS_S * abs(t - state[2])
+            cands = [k for k in kept if k[0].kind == "self"
+                     and math.hypot(k[3] - state[0], k[4] - state[1]) <= gate]
+            if cands:
+                best = min(cands, key=lambda k: math.hypot(k[3] - state[0], k[4] - state[1]))
+                pick.setdefault(i, best)
+                state = (best[3], best[4], t)
+
+    if anchors:
+        follow(range(len(per_frame)))                  # forwards from each kill
+        first = min(range(len(times)), key=lambda i: abs(times[i] - anchors[0][0]))
+        follow(range(first, -1, -1))                   # before the first kill: backwards
+    for i, (t, kept) in enumerate(per_frame):
+        selfs = [k for k in kept if k[0].kind == "self"]
+        if not selfs:
+            continue
+        rest = [k for k in kept if k[0].kind != "self"]
+        if alive and not alive(t)[0]:
+            b = max(selfs, key=lambda k: k[0].area)    # spectated teammate
+            b[0].kind = "ally"
+            rest.append(b)
+        elif i in pick:
+            rest.append(pick[i])
+        elif not anchors:
+            rest.append(max(selfs, key=lambda k: k[0].area))   # no API positions: biggest yellow blob
+        kept[:] = rest
 
 
 def _alive_counts(match: Match, rnd, focus: str):

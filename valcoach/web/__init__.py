@@ -61,6 +61,7 @@ def save_upload(up, dest: Path) -> None:
     name = getattr(up.stream, "name", None)
     if isinstance(name, str):
         try:
+            up.stream.flush()
             os.link(name, dest)
             return
         except OSError:
@@ -77,12 +78,14 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         runner.recover()
 
     upload_tmp = store.data_dir / "tmp"
+    for left in upload_tmp.glob("*") if upload_tmp.is_dir() else []:
+        left.unlink(missing_ok=True)       # buffers of uploads cut off by a crash or restart (can be GBs)
 
     class UploadRequest(Request):
         def _get_file_stream(self, total_content_length, content_type, filename=None, content_length=None):
             # Werkzeug buffers uploads in the system temp dir, which is often a small tmpfs
             # (/tmp is RAM on Debian): a multi-GB VOD filled it and the upload failed.
-            if (total_content_length or 0) <= 500 * 1024:
+            if total_content_length is not None and total_content_length <= 500 * 1024:
                 return BytesIO()
             upload_tmp.mkdir(parents=True, exist_ok=True)
             return tempfile.NamedTemporaryFile("rb+", dir=upload_tmp)     # named: save_upload() can link it

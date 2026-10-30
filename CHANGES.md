@@ -113,3 +113,8 @@ tracking gets the side per round. On the real VOD: teammates tracked 58-91 % of 
 - On defense your own icon was found in 2-30 % of the frames: a translucent white circle makes the yellow ring
   pale (saturation ~80, the detector wanted 120). Second colour range: pale but very bright (site markers are as
   pale but darker). Now your path starts at 0 s in every round.
+- On attack "your path" was 20 m off (median, up to 70 m): a teammate's yellowish agent portrait was a bigger
+  yellow blob than your icon. Your icon is now followed from your exact API position at every kill (nearest
+  yellow candidate within running distance, `_pick_self`). Checked on the VOD: median 2 m on both sides.
+- Upload buffer: flushed before the hard link, Werkzeug's file buffer also for uploads without a length, and
+  leftovers in `data/tmp` (upload cut off by a restart) are deleted at start.

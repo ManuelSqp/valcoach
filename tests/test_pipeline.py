@@ -747,3 +747,22 @@ def test_pale_own_icon_is_detected():
     cv2.rectangle(img, (20, 20), (50, 40), (110, 150, 150), -1)  # site marker: as pale, but dark
     kinds = [b.kind for b in detect_blobs(img)]
     assert kinds.count("self") == 1
+
+
+def test_own_icon_picked_from_api_positions_not_a_yellow_portrait():
+    """Real VOD: a teammate's yellowish agent portrait was bigger than your (pale) yellow icon, so 'your
+    path' jumped 20-70 m. Your icon is now followed from your exact positions at the kills."""
+    from valcoach.models import Kill, PlayerLoc, Round
+    from valcoach.video.minimap import Blob, _pick_self
+    loc = PlayerLoc("me", "Red", 1000, 1000)
+    kill = Kill(0, 2000, 2000, "me", "Red", "enemy", "Blue", [], "Vandal", "Rifle", 0, 0, [loc])
+    rnd = Round(0, "Red", "Elimination", "", "Red", None, None, {}, [kill])
+    per_frame = []
+    for i in range(20):                                      # 0..4.75 s, you walk +x at 2 m/s
+        t = i * 0.25
+        me = (Blob("self", 0, 0, 30.0), 0, 0, 1000 + (t - 2) * 200, 1000)
+        portrait = (Blob("self", 0, 0, 120.0), 0, 0, 6000, 1000)   # bigger yellow blob, 50 m away
+        per_frame.append((t, [portrait, me]))
+    _pick_self(per_frame, rnd, "me", lambda t: (True, 4, 5))
+    xs = [k[3] for _, kept in per_frame for k in kept if k[0].kind == "self"]
+    assert len(xs) == 20 and max(xs) < 2000                  # the portrait was never taken
