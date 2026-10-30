@@ -4,6 +4,51 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 2.19.0
+- **Progress** (new player tab): the last 10 weeks, week by week, for win rate, ACS, K/D, KAST, first duels won,
+  deaths traded, deaths far from the team, rounds survived, headshots, clutches, retakes and ADR. Each one shows
+  the trend (last 2 weeks vs the 6 before) in green or red.
+  - **Did the weekly focus work?** For every focus you got, the number it was about, before and in the games since,
+    with the goal and a verdict (goal reached / better / no change / worse). The *Weekly focus* tab shows the same
+    for last week's focus next to every player.
+- **Clutches, retakes, post-plants** (on Progress): 1v1 to 1v5 won/played, retakes won when they planted while you
+  were alive, and post-plants won when your team planted.
+- **Training** (new player tab):
+  - **Aim fundamentals:** your headshot share, and your fights by range (under 10 m, 10–25 m, over 25 m): how many
+    you take and how many you win. Also first duels and deaths far from the team.
+  - **What to work on**, and **your warm-up**: about 20 minutes of drills in Valorant's Range and modes, picked
+    for your weak spots. *Done today* keeps a streak (last 14 days shown).
+  - **Learn from your teammates:** who in your team is best at what you're weakest at.
+  - **Agents to learn: up to 5 instead of 1**, each with a learning path: learn the kit (guide videos), watch a pro
+    who plays it, 5 unrated games, lineups for your maps, 10 ranked games, Premier-ready (15 games, 50%+ won). The
+    steps tick themselves from your games on that agent. The *Roles* tab lists the 5 too.
+- **Timing windows** (Game plans): when your first fight, your plant and the flank kills usually happen on each map,
+  and when attackers first make contact on each site on defense, on a 0–100 s timeline, plus when your lurker
+  should be in position.
+- Game data is read again from the match cache once (new numbers: shots, fight distances, clutches, retakes):
+  nothing to download.
+
+## 2.18.0
+- **Premier tab** (new team tab), built around how Premier works: the map is fixed for the week, the opponent is
+  found only when you queue, and always from your own division.
+  - **This week:** the week's map (from the Premier schedule, from your first match this week, or set by hand),
+    your comp for it (the draft marked *Our comp*, else the suggested comp), your record on the map, and who in your
+    division is strongest there.
+  - **Match-day brief:** one page (made for the phone) with the comp, your numbers on the map, the game plans,
+    everyone's weekly focus and who you might meet. Posted to #match-prep automatically before your matches: pick
+    the match days, the time and how many minutes before. *Post brief to Discord now* works any time.
+  - **Division & scouting:** every team in your division is scouted in advance from its recent Premier matches,
+    and refreshed every night. When you get matched their page is already there. Teams from outside the list
+    (playoffs) can be scouted by Name#TAG.
+  - **A team's page:** how to play them (strong and weak maps, who takes their first duels, sites they hit, fast
+    or slow executes, lost retakes, pistols), their players and agents, their comps per map.
+  - **Map veto for playoffs:** your record against theirs on every map, with which maps to ban first, which to
+    pick, and which side to start on.
+  - **Automatic match reviews:** every night, new Premier matches get a team review (MVP, the rounds that decided
+    it, one thing for each player, who traded whom), posted to #match-prep. The page shows every player's review.
+    Only new matches, never old ones; *Review new matches* runs it right away.
+- **Phones:** the top navigation turns into a menu button on small screens, and the team tabs scroll sideways.
+
 ## 2.17.1
 - **VOD uploads go up in 16 MB pieces.** Size limit, report limit and free disk are now checked before the first
   byte is sent, not after the whole file has arrived, and a lost connection only repeats one piece. No request may

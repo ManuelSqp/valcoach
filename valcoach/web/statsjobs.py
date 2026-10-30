@@ -515,7 +515,7 @@ class StatsRunner:
                 raise
 
     # ---- schedule ------------------------------------------------------------------------
-    def start_scheduler(self, weekly_job, nightly_job=None, every_s: int = 300) -> None:
+    def start_scheduler(self, weekly_job, nightly_job=None, every_s: int = 300, extra=None) -> None:
         """weekly_job(team) is called once a week per team at its Discord day/hour (server time);
         nightly_job(team) once a night at the team's sync hour (default 02:00)."""
         def loop():
@@ -527,6 +527,11 @@ class StatsRunner:
                 if nightly_job:
                     try:
                         self.tick_nightly(nightly_job)
+                    except Exception:
+                        traceback.print_exc()
+                for fn in extra or []:          # e.g. the Premier brief
+                    try:
+                        fn()
                     except Exception:
                         traceback.print_exc()
         self._stop = threading.Event()

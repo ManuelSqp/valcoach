@@ -133,13 +133,55 @@ def premier_history(client: "HenrikClient", name: str, tag: str, affinity: str |
 
 
 def account_by_puuid(client: "HenrikClient", puuid: str) -> dict:
-    """{puuid, name, tag, region, ...} of one account."""
-    return client._get(f"/valorant/v2/by-puuid/account/{puuid}").get("data", {}) or {}
-
-
-def account_by_puuid(client: "HenrikClient", puuid: str) -> dict:
     """{name, tag, region, ...} for a player id (Premier rosters often come without names)."""
     return client._get(f"/valorant/v2/by-puuid/account/{puuid}").get("data", {}) or {}
+
+
+def premier_team_by_id(client: "HenrikClient", team_id: str) -> dict:
+    from urllib.parse import quote
+    return client._get(f"/valorant/v1/premier/{quote(str(team_id), safe='')}").get("data", {}) or {}
+
+
+def premier_history_by_id(client: "HenrikClient", team_id: str) -> list[dict]:
+    """Like premier_history, by team id (what the leaderboard gives us)."""
+    from urllib.parse import quote
+    data = client._get(f"/valorant/v1/premier/{quote(str(team_id), safe='')}/history").get("data", {}) or {}
+    out = list(data.get("league_matches") or [])
+    for t in data.get("tournament_matches") or []:
+        for mid in t.get("matches") or []:
+            out.append({"id": mid, "started_at": "", "tournament": True})
+    out.sort(key=lambda m: m.get("started_at") or "", reverse=True)
+    return out
+
+
+def premier_leaderboard(client: "HenrikClient", region: str, conference: str, division: int | str) -> list[dict]:
+    """Teams of one division: [{id, name, tag, wins, losses, points, place}] (field names normalised,
+    the API's are read tolerantly)."""
+    from urllib.parse import quote
+    data = client._get(f"/valorant/v1/premier/leaderboard/{quote(region, safe='')}/{quote(str(conference), safe='')}/"
+                       f"{quote(str(division), safe='')}").get("data") or []
+    if isinstance(data, dict):
+        data = data.get("teams") or data.get("leaderboard") or []
+    out = []
+    for i, t in enumerate(data):
+        if not isinstance(t, dict):
+            continue
+        tid = t.get("id") or t.get("team_id") or t.get("roster_id")
+        name = t.get("name") or t.get("team_name")
+        if not (tid and name):
+            continue
+        num = lambda *ks: next((t[k] for k in ks if isinstance(t.get(k), (int, float))), None)  # noqa: E731
+        out.append({"id": str(tid), "name": str(name), "tag": str(t.get("tag") or t.get("team_tag") or ""),
+                    "wins": num("wins", "win"), "losses": num("losses", "loss"),
+                    "points": num("score", "points", "premier_score"),
+                    "place": num("ranking", "place", "rank", "position") or i + 1})
+    return out
+
+
+def premier_seasons(client: "HenrikClient", region: str) -> list[dict]:
+    from urllib.parse import quote
+    data = client._get(f"/valorant/v1/premier/seasons/{quote(region, safe='')}").get("data") or []
+    return data if isinstance(data, list) else [data]
 
 
 def load_match_file(path: str | Path) -> dict:

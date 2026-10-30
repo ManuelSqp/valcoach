@@ -20,7 +20,7 @@ from ..parse import parse_match
 from . import roles
 
 QUEUES = ("competitive", "premier")
-ROW_VERSION = 2            # bump when rows from full matches gain fields; old rows are rebuilt from the cache
+ROW_VERSION = 3            # bump when rows from full matches gain fields; old rows are rebuilt from the cache
 ISOLATED_UNITS = 2000      # ~20 m to the nearest living teammate
 TRADE_MS = 3000
 Log = Callable[[str], None]
@@ -69,6 +69,12 @@ def row_from_match(match: Match, puuid: str, mi: MapInfo | None) -> dict | None:
         "def_zones": [],      # where you were at your defense fights (A / B / C / Mid ...)
         "own_agents": sorted(p.agent for p in match.players_on(team)),
         "opp_agents": sorted(p.agent for p in match.players_on(opp)),
+        # v3: aim and late-round numbers
+        "shots": [me.headshots, me.bodyshots, me.legshots],
+        "duels": [],          # [distance in m, 1 = you won the fight / 0 = you died]
+        "clutch": {},         # "X" (1vX) -> [attempts, won]
+        "retake": [0, 0],     # defense rounds they planted while you were alive: [rounds, won]
+        "postplant": [0, 0],  # attack rounds your team planted while you were alive: [rounds, won]
     }
     dmg = 0
     for rnd in match.rounds:
@@ -124,6 +130,7 @@ def row_from_match(match: Match, puuid: str, mi: MapInfo | None) -> dict | None:
             if puuid in k.assistants:
                 assisted = True
             dead.add(k.victim)
+        _late_round(row, match, rnd, puuid, team, opp, side)
         for di in death_infos(match, rnd, mi):
             if di.kill.victim == puuid:
                 died = True
@@ -139,6 +146,41 @@ def row_from_match(match: Match, puuid: str, mi: MapInfo | None) -> dict | None:
     row["adr"] = round(dmg / n, 1)
     row["lobby"] = lobby_metrics(match)
     return row
+
+
+def _late_round(row: dict, match: Match, rnd, puuid: str, team: str, opp: str, side: str) -> None:
+    """Duel ranges, 1vX clutches, retakes and post-plants for one round."""
+    won = rnd.winning_team == team
+    for k in rnd.kills:
+        if k.killer == puuid and k.victim:
+            loc = k.loc_of(puuid)
+            if loc:
+                row["duels"].append([round(((loc.x - k.victim_x) ** 2 + (loc.y - k.victim_y) ** 2) ** 0.5 / 100), 1])
+        elif k.victim == puuid and k.killer:
+            loc = k.loc_of(k.killer)
+            if loc:
+                row["duels"].append([round(((loc.x - k.victim_x) ** 2 + (loc.y - k.victim_y) ** 2) ** 0.5 / 100), 0])
+    alive = {team: {p.puuid for p in match.players_on(team)}, opp: {p.puuid for p in match.players_on(opp)}}
+    my_death = None
+    clutch = None
+    for k in sorted(rnd.kills, key=lambda k: k.t_round_ms):
+        for t in alive.values():
+            t.discard(k.victim)
+        if k.victim == puuid:
+            my_death = k.t_round_ms
+            break
+        if clutch is None and alive[team] == {puuid} and alive[opp]:
+            clutch = len(alive[opp])
+    if clutch:
+        c = row["clutch"].setdefault(str(clutch), [0, 0])
+        c[0] += 1
+        c[1] += int(won)
+    if rnd.plant:
+        alive_at_plant = my_death is None or my_death > rnd.plant.t_round_ms
+        if alive_at_plant:
+            key = "retake" if side == "defense" else "postplant"
+            row[key][0] += 1
+            row[key][1] += int(won)
 
 
 def _zone(mi: MapInfo, x: float, y: float) -> str:

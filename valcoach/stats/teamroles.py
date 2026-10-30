@@ -20,6 +20,7 @@ from collections import Counter
 from scipy.optimize import linear_sum_assignment
 
 from . import roles as agent_roles
+from .training import agents_to_learn
 
 TEAM_ROLES = ["IGL", "Entry", "Second entry", "Lurker", "Anchor", "Support", "Operator", "Flex"]
 PRIMARY = ["Entry", "Second entry", "Lurker", "Anchor", "Support"]   # one each in a lineup of 5
@@ -218,7 +219,8 @@ def team_roles(members: list[dict], local: dict[str, dict], maps: list[str]) -> 
         primary = next((r for r in p["assigned"] if r in PRIMARY or r == "Flex"), None) \
             or (lineup.get("primary", {}).get(p["label"]) if p["kind"] == "starter" else (p["best"][0] if p["best"] else None))
         p["role_for_agent"] = primary
-        p["learn"] = agent_to_learn(p["label"], primary, pool, cover, meta_share)
+        p["learn_list"] = agents_to_learn(primary, pool, cover, meta_share, 5, ROLE_AGENTS, FALLBACK_AGENTS)
+        p["learn"] = p["learn_list"][0] if p["learn_list"] else agent_to_learn(p["label"], primary, pool, cover, meta_share)
         p["checks"] = []
         for r in p["assigned"]:
             s = p["scores"].get(r, {}).get("score")

@@ -883,7 +883,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
     from .stats_views import register as register_stats
     register_stats(app, store, stats_runner, get_profile)
     if start_workers:
-        stats_runner.start_scheduler(app.extensions["valcoach"]["weekly_job"], app.extensions["valcoach"]["nightly_job"])
+        stats_runner.start_scheduler(app.extensions["valcoach"]["weekly_job"], app.extensions["valcoach"]["nightly_job"],
+                                     extra=app.extensions["valcoach"].get("ticks", []))
     return app
 
 

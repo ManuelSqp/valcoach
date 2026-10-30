@@ -1,6 +1,6 @@
 # valcoach v2
 
-**Version 2.17.1** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 2.19.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -26,7 +26,7 @@ unzip valcoach-v2.zip && cd valcoach-v2
 /opt/homebrew/opt/python@3.11/bin/python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                     # 104 tests, ~3 min, builds a synthetic match + VOD
+pytest -q                     # 119 tests, ~3 min, builds a synthetic match + VOD
 ollama pull qwen3.8:27b       # default; alternatives below
 ```
 
@@ -154,6 +154,17 @@ Under *Members, maps & Discord → Teammates with access* you add them; they the
 stats (view only) and can write notes. Tabs on a team: **Comps**, **Game plans** (3 detailed plays per map with a
 step per player), **Weekly focus** (one focus per player), **Roles**, **Notes** (yours + tips from your matches
 together) and, for the owner, **Members, maps & Discord**.
+
+**Progress and Training** (player tabs). *Progress* shows your numbers week by week with trends, whether each
+weekly focus moved its number, and clutches / retakes / post-plants. *Training* has your aim fundamentals (headshots,
+fights by range), what to work on, a 20-minute warm-up with a streak, teammates to learn from, and up to five agents
+to learn with a learning path that ticks itself from your games.
+
+**Premier.** On a team linked to Premier, the *Premier* tab has this week's map, the match-day brief (also posted
+to Discord before your matches: set days, time and minutes before), reviews of your Premier matches (every night,
+posted to #match-prep), and *Division & scouting*: every team in your division scouted in advance from its recent
+Premier matches, with a page per team (how to play them, players, comps per map) and a map veto for playoffs.
+The first division scout takes a few minutes (HenrikDev rate limit); after that it's quick and runs nightly.
 
 **Drafts.** On a team, *Drafts* → pick a map → *+ New draft* (your starters in the slots) or *Use* one of the
 suggested comps. Drag agents from the list onto a player (the small box under it is a backup pick), drag between
@@ -344,6 +355,9 @@ Settings (web) or `[video]` (CLI).
 | `report.py` | single-file HTML report incl. the SVG round replay |
 | `stats/teamdata.py`, `stats/gameplans.py`, `stats/weekly.py`, `discord.py` | matches played together, teammate tips, map facts, game plans, weekly focus, Discord webhooks |
 | `web/strats.py`, `web/static/strat.js` | strat book: storage, assets (map image, ability icons), the drag-and-drop editor |
+| `stats/progress.py`, `stats/training.py`, `web/player_views.py` | Progress and Training tabs: weekly numbers, focus checks, aim, routine, learning paths |
+| `stats/scouting.py` | scouting summaries of other teams, how to play them, the map veto |
+| `web/premierjobs.py`, `web/premier_views.py` | Premier tab: division scouting, match reviews, this week's map, the brief |
 | `web/drafts.py`, `web/static/drafts.js` | roster drafts: storage (typed fields only), player numbers per agent, the drag-and-drop editor |
 | `web/abilityshapes.py` | every ability's shape and size in meters, and each agent's colour, for the strat board |
 | `coach/teamreview.py` | whole-team review of one match (facts per teammate, trades, model write-up) |

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Division · {{ t.name }} · valcoach{% endblock %}
+{% block content %}
+{% include "_premier_nav.html" %}
+{% if pi.tag %}
+{% if status and status.status in ('queued', 'running', 'error') %}
+<div class="card statusbox" data-key="scout:{{ t.id }}" data-state="{{ status.status }}"><span class="pill {{ 'running' if status.status != 'error' else 'error' }}">{{ 'scouting' if status.status != 'error' else 'scouting failed' }}</span>
+  <pre class="log" style="margin-top:8px">{{ status.log[-12:]|join('\n') }}</pre></div>
+{% endif %}
+<section class="card">
+  <div class="row between">
+    <h2 style="margin:0">{% if div.division %}Division {{ div.division }} · {{ div.conference|replace('_', ' ')|title }}{% else %}Your division{% endif %}</h2>
+    <div class="row" style="gap:6px">
+      <form method="post" action="{{ url_for('team_scout', tid=t.id) }}" class="row" style="gap:6px" role="search">
+        <label for="q" class="sr-only">Team</label>
+        <input id="q" name="q" placeholder="Opponent Name#TAG" style="width:200px" autocomplete="off">
+        <button class="btn sm" {{ 'disabled' if status and status.status in ('queued', 'running') }}>Scout</button>
+      </form>
+      <form method="post" action="{{ url_for('team_scout', tid=t.id) }}"><input type="hidden" name="division" value="1">
+        <button class="btn sm {{ 'primary' if not rows }}" {{ 'disabled' if status and status.status in ('queued', 'running') }}>{{ 'Scout whole division' if not rows else 'Scout division again' }}</button></form>
+    </div>
+  </div>
+  <p class="small muted" style="margin:6px 0 10px">Premier finds your opponent in your division when you queue. Every team here is scouted in advance (their last Premier matches, refreshed every night), so when you get matched their page is ready. Teams from outside the list (playoffs): type their name above.
+    {% if wm %}Outlined map = this week's map ({{ wm }}).{% endif %}</p>
+  {% if rows %}
+  <div class="tablewrap"><table>
+    <tr><th>#</th><th>Team</th><th>W–L</th><th>Points</th><th>Maps (their wins–games)</th><th></th></tr>
+    {% for r in rows %}
+    <tr {% if r.ours %}style="background:rgba(255,70,85,.06)"{% endif %}>
+      <td>{{ r.place or loop.index }}</td>
+      <td>{% if r.scouted_at %}<a href="{{ url_for('team_scouted', tid=t.id, team_id=r.id) }}"><b>{{ r.name }}</b></a>{% else %}<b>{{ r.name }}</b>{% endif %} <span class="muted small">#{{ r.tag }}</span>{% if r.ours %} <span class="muted small">(you)</span>{% endif %}</td>
+      <td>{% if r.wins is not none %}{{ r.wins }}–{{ r.losses }}{% endif %}</td>
+      <td>{{ r.points if r.points is not none else '' }}</td>
+      <td><div class="mrow">{% for m, x in r.maps.items() %}<span class="mchip {{ 'good' if x[1] >= 2 and x[0] / x[1] >= 0.6 else ('bad' if x[1] >= 2 and x[0] / x[1] <= 0.4 else '') }} {{ 'wk' if m == wm }}">{{ m }} {{ x[0] }}–{{ x[1] }}</span>{% endfor %}</div></td>
+      <td class="small muted">{% if r.ours %}{% elif r.scouted_at %}{{ r.matches }} matches{% else %}not yet{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="muted">Not scouted yet. <b>Scout whole division</b> reads every team's recent Premier matches (the first time takes a few minutes because of the HenrikDev rate limit; after that it's quick and runs every night).</p>{% endif %}
+  {% if others %}
+  <h2 style="margin-top:16px">Other teams you scouted</h2>
+  <div class="mrow">{% for s in others %}<a class="btn sm ghost" href="{{ url_for('team_scouted', tid=t.id, team_id=s.id) }}">{{ s.name }}#{{ s.tag }}</a>{% endfor %}</div>
+  {% endif %}
+</section>
+{% endif %}
+<script>
+(function () {
+  const el = document.querySelector('[data-key]');
+  if (!el || !['queued', 'running'].includes(el.dataset.state)) return;
+  const tick = async () => {
+    try {
+      const s = await (await fetch('{{ url_for("stats_status") }}?key=' + encodeURIComponent(el.dataset.key))).json();
+      if (s.log) el.querySelector('pre').textContent = s.log.slice(-12).join('\n');
+      if (s.status === 'done' || s.status === 'error') { location.reload(); return; }
+    } catch (e) {}
+    setTimeout(tick, 2500);
+  };
+  setTimeout(tick, 1500);
+})();
+</script>
+{% endblock %}

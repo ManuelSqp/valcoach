@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Match day · {{ t.name }} · valcoach{% endblock %}
+{% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% block head %}
+<style>
+.ai{border-radius:50%;vertical-align:middle;background:#0b0e13;object-fit:cover;flex:none}
+.brief{max-width:760px;margin:0 auto;display:grid;gap:12px}
+.brief .head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brief .head h1{margin:0;font-size:34px;letter-spacing:.02em}
+.bk{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.bk h2{margin:0 0 8px}
+.picks{display:grid;gap:6px}
+.pk{display:flex;align-items:center;gap:10px;font-size:15px}
+.pk .who{color:var(--muted);font-size:13px}
+.plan{border-left:3px solid var(--red);padding:2px 0 2px 10px;margin:6px 0}.plan.defense{border-left-color:var(--blue)}
+.fc{display:grid;grid-template-columns:minmax(90px,auto) 1fr;gap:4px 12px;font-size:14px}
+.fc .n{font-weight:700}
+.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.nums div{background:var(--panel2);border-radius:8px;padding:8px 10px}.nums b{display:block;font-size:22px}
+.nums span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+@media(max-width:600px){.brief .head h1{font-size:28px}.pk{font-size:14px}.nums b{font-size:18px}}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_premier_nav.html" %}
+<div class="brief">
+  <div class="head"><h1>{{ b.map or 'Match day' }}</h1><span class="muted">{{ t.name }} · week {{ b.week }}</span>
+    <form method="get" style="margin-left:auto" class="row"><label for="bm" class="small muted" style="margin:0">Other map</label>
+      <select id="bm" name="map" onchange="this.form.submit()" style="width:auto"><option value="">this week</option>{% for m in pool %}<option {{ 'selected' if m == b.map }}>{{ m }}</option>{% endfor %}</select></form></div>
+  {% if not b.map %}
+  <div class="bk"><p style="margin:0">This week's map isn't known yet. Pick one above, or set it on the Premier tab.</p></div>
+  {% else %}
+  <div class="bk"><h2>Comp</h2>
+    {% if b.comp %}<p class="small muted" style="margin:-4px 0 8px">from the {{ b.comp.source }}</p>
+    <div class="picks">{% for p in b.comp.picks %}<div class="pk">{{ ai(p.agent, 30) }}<b>{{ p.agent }}</b><span class="who">{{ p.player }}{% if p.alt %} · or {{ p.alt }}{% endif %}{% if p.note %} · {{ p.note }}{% endif %}</span></div>{% endfor %}</div>
+    {% else %}<p class="muted" style="margin:0">No comp yet: mark a draft as <i>Our comp</i> on the Drafts tab.</p>{% endif %}
+  </div>
+  <div class="bk"><h2>Our numbers on {{ b.map }}</h2>
+    <div class="nums">
+      <div><span>Record</span><b>{{ b.ours.wins }}–{{ b.ours.games - b.ours.wins }}</b></div>
+      <div><span>Attack rounds</span><b>{{ b.ours.attack|pct if b.ours.attack is not none else '–' }}</b></div>
+      <div><span>Defense rounds</span><b>{{ b.ours.defense|pct if b.ours.defense is not none else '–' }}</b></div>
+    </div></div>
+  {% if b.plans %}<div class="bk"><h2>Game plans</h2>
+    {% for p in b.plans %}<div class="plan {{ p.side }}"><b>{{ '⚔' if p.side == 'attack' else '🛡' }} {{ p.title }}</b><div class="small">{{ p.idea }}</div></div>{% endfor %}
+    <p class="small" style="margin:8px 0 0"><a href="{{ url_for('team_plans', tid=t.id, map=b.map) }}">All steps per player →</a></p></div>{% endif %}
+  {% if b.focus %}<div class="bk"><h2>Everyone's focus</h2>
+    <div class="fc">{% for f in b.focus %}<span class="n">{{ f.player }}</span><span>{{ f.focus }}{% if f.first %}<br><span class="small muted">{{ f.first }}</span>{% endif %}</span>{% endfor %}</div></div>{% endif %}
+  <div class="bk"><h2>Who you might meet</h2>
+    {% if b.threats %}<p class="small muted" style="margin:-4px 0 8px">Strongest teams on {{ b.map }} in your division (their Premier record there):</p>
+    {% for x in b.threats %}<div><a href="{{ url_for('team_scouted', tid=t.id, team_id=x.id) }}"><b>{{ x.name }}</b></a> <span class="muted">#{{ x.tag }}</span> · {{ x.wins }}–{{ x.games - x.wins }}</div>{% endfor %}
+    {% else %}<p class="muted" style="margin:0">Scout your division (Premier › Division) to see this.</p>{% endif %}
+    <p class="small" style="margin:10px 0 0">Got matched? <a href="{{ url_for('team_division', tid=t.id) }}">Open the opponent →</a></p></div>
+  {% endif %}
+</div>
+{% endblock %}

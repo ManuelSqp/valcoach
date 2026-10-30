@@ -22,6 +22,17 @@ nav.top{display:flex;align-items:center;gap:20px;padding:12px 24px;border-bottom
 .uptime .dot{width:7px;height:7px;border-radius:50%;background:var(--win);box-shadow:0 0 0 0 rgba(53,208,160,.6);animation:uppulse 2.4s infinite}
 @keyframes uppulse{0%{box-shadow:0 0 0 0 rgba(53,208,160,.55)}70%{box-shadow:0 0 0 6px rgba(53,208,160,0)}100%{box-shadow:0 0 0 0 rgba(53,208,160,0)}}
 @media(prefers-reduced-motion:reduce){.uptime .dot{animation:none}}
+.navtoggle{display:none;align-items:center;justify-content:center;width:40px;height:36px;border:1px solid var(--line);border-radius:8px;background:#161b24;color:var(--text);cursor:pointer;margin-left:auto}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+@media(max-width:760px){
+  nav.top{padding:10px 14px;gap:10px}
+  .navtoggle{display:inline-flex}
+  nav.top .navlinks{display:none;flex-basis:100%;flex-direction:column;align-items:stretch;gap:2px;padding-top:6px}
+  nav.top.open .navlinks{display:flex}
+  .navlinks a{padding:9px 10px}.navlinks .spacer,.navsep{display:none}
+  .navlinks .uptime{align-self:flex-start;margin:4px 0}
+  .navlinks form{padding:4px 10px}
+}
 .page{max-width:1180px;margin:0 auto;padding:24px 16px 60px}
 h1{font-size:22px;margin:0 0 4px;letter-spacing:.02em}h1 .tag{color:var(--muted);font-weight:500}
 h2{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 12px}
@@ -73,7 +84,8 @@ details summary{cursor:pointer;color:var(--muted)}
 <nav class="top">
   <a class="brand" href="{{ url_for('index') if user else '#' }}">VAL<b>COACH</b> </a><a class="ver" href="{{ url_for('changelog') if user else '#' }}" title="What's new">v{{ app_version }}{% if new_version %}<span class="newdot"></span>{% endif %}</a>
   {% if user %}
-  <div class="navlinks">
+  <button type="button" class="navtoggle" aria-expanded="false" aria-controls="navlinks" onclick="const n=this.closest('nav');n.classList.toggle('open');this.setAttribute('aria-expanded',n.classList.contains('open'))"><span class="sr-only">Menu</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <div class="navlinks" id="navlinks">
     <a href="{{ url_for('teams') }}" class="navteams {{ 'active' if request.endpoint in ('teams', 'team', 'team_settings') }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2c3 .2 5.5 2.6 5.5 5.8"/></svg>Teams</a>
     <span class="navsep"></span>
     {% for np in nav_profiles %}<a href="{{ url_for('profile', pid=np.id) }}" data-pid="{{ np.id }}" class="{{ 'active' if active_pid == np.id }}">{{ np.name }}</a>{% endfor %}
