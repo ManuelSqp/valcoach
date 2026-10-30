@@ -40,6 +40,13 @@
     <ul>{% for x in p.in_game %}<li>{{ x }}</li>{% endfor %}</ul>
     {% if p.number_to_watch %}<div class="watch">📈 <b>{{ p.number_to_watch.metric }}</b>: {{ p.number_to_watch.now }} → {{ p.number_to_watch.goal }}</div>{% endif %}
     {% endif %}
+    {% if p.last %}{% set k = p.last %}
+    <div class="small" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
+      <span class="muted">Last focus ({{ k.week }}): {{ k.focus }}</span><br>
+      {{ k.label }} {{ k.before_s }} → <b>{{ k.now_s }}</b> ·
+      <b style="color:{{ 'var(--win)' if k.ok else ('var(--red)' if k.ok == false else 'var(--muted)') }}">{{ k.verdict }}</b>
+      <a href="{{ url_for('progress', pid=p.pid) }}">progress →</a></div>
+    {% endif %}
   </div>
   {% endfor %}
 </div>

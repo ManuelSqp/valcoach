@@ -242,7 +242,7 @@ def test_lobby_backfilled_from_cache(tmp_path, cache, history):
             (cache / "matches" / f"{mid}.json").write_text(json.dumps({"status": 200, "data": copy.deepcopy(raw)}))
     gs.save(data)
     import_games(sh.FakeHenrik(history, full_depth=4), "eu", "pc", "adv1ce", "LFT", gs, cache)
-    assert all("lobby" in r and r["v"] == 2 and "iso" in r for r in gs.rows() if r["source"] == "full")
+    assert all("lobby" in r and r["v"] == 3 and "iso" in r and "clutch" in r for r in gs.rows() if r["source"] == "full")
 
 
 def test_pro_list_and_matching():
@@ -451,3 +451,67 @@ def test_secrets_stay_out_of_network_errors(tmp_path, monkeypatch):
             send()
         assert "SECRETTOKEN" not in str(e.value) and "ConnectionError" in str(e.value)
         assert e.value.__suppress_context__
+
+
+def test_rows_v3_clutch_duels_retakes(imported):
+    gs, _, _ = imported
+    full = [r for r in gs.rows() if r.get("source") == "full"]
+    assert full and all(r["v"] == 3 for r in full)
+    r = full[0]
+    assert len(r["shots"]) == 3 and all(isinstance(x, int) for x in r["shots"])
+    assert r["duels"] and all(isinstance(d[0], int) and d[1] in (0, 1) for d in r["duels"])
+    assert all(k.isdigit() and 1 <= int(k) <= 5 and v[1] <= v[0] for k, v in r["clutch"].items())
+    for key in ("retake", "postplant"):
+        assert len(r[key]) == 2 and r[key][1] <= r[key][0]
+    assert sum(d[1] for d in r["duels"]) == r["kills"] or len(r["duels"]) <= r["kills"] + r["deaths"]
+
+
+def test_progress_weeks_trend_and_focus_check():
+    from datetime import datetime, timedelta, timezone
+    from valcoach.stats import progress as prog
+    now = datetime(2026, 10, 30, 12, tzinfo=timezone.utc)
+
+    def row(days, won, kast, fk, fd):
+        return {"started_at": (now - timedelta(days=days)).isoformat(), "won": won, "acs": 200, "kills": 15, "deaths": 14,
+                "source": "full", "rounds": 20, "kast": kast, "fk": fk, "fd": fd, "traded_deaths": 4,
+                "iso": {"attack": [0, 0, 7, 3], "defense": [0, 0, 7, 2]}, "survived": {"attack": 3, "defense": 3},
+                "shots": [20, 60, 10], "clutch": {"1": [1, 1]}, "retake": [2, 1]}
+    old = [row(30 + i, 0.0, 12, 2, 4) for i in range(6)]          # KAST 60%, first duels 33%
+    new = [row(1 + i, 1.0, 15, 4, 2) for i in range(4)]           # KAST 75%, first duels 67%
+    rows = new + old
+    weeks = prog.weekly(rows, 10, now)
+    assert len(weeks) == 10 and weeks[-1]["games"] >= 1 and sum(w["games"] for w in weeks) == 10
+    t = prog.trend(rows, "kast", now)
+    assert t["better"] and round(t["now"], 2) == 0.75 and round(t["before"], 2) == 0.6
+    assert prog.metric_for("KAST") == "kast" and prog.metric_for("first duel win rate") == "first_duels"
+    assert prog.metric_for("deaths without a teammate nearby") == "alone" and prog.metric_for("vibes") is None
+    week = f"{(now - timedelta(days=6)).isocalendar()[0]}-W{(now - timedelta(days=6)).isocalendar()[1]:02d}"
+    ck = prog.focus_check(rows, week, {"focus": "Trade more", "number_to_watch": {"metric": "KAST", "now": "60%", "goal": "70%"}})
+    assert ck["metric"] == "kast" and ck["before"] == 0.6 and ck["goal"] == 0.7 and ck["verdict"] == "goal reached" and ck["ok"]
+    ck = prog.focus_check(rows, week, {"focus": "x", "number_to_watch": {"metric": "something odd", "now": "1", "goal": "2"}})
+    assert ck is None
+    assert prog.fmt("kast", 0.756) == "76%" and prog.fmt("kd", 1.234) == "1.23" and prog.fmt("acs", None) == "–"
+
+
+def test_training_aim_routine_and_learning_path(imported):
+    from valcoach.stats import training as tr
+    from valcoach.stats.style import load_pros
+    gs, _, _ = imported
+    rows = gs.rows()
+    a = tr.aim_profile(rows)
+    assert a["games"] >= 1 and a["duels"] > 0 and set(a["ranges"]) == {"close", "mid", "long"}
+    weak = {**a, "hs": 0.12, "ranges": {**a["ranges"], "close": {"duels": 30, "won": 0.3, "share": .4}},
+            "alone_deaths": 0.5}
+    d = tr.diagnose(weak)
+    assert [x["key"] for x in d][:2] == ["hs", "close"] and any(x["key"] == "alone" for x in d)
+    r = tr.routine(d)
+    assert r[0]["key"] == "crosshair" and r[-1]["key"] == "dm_warm" and len({x["key"] for x in r}) == len(r)
+    refs = tr.team_refs("me", {"me": weak, "mate": {**weak, "hs": 0.25}})
+    assert refs and refs[0]["who"] == "mate" and refs[0]["what"] == "headshots"
+    from valcoach.stats.teamroles import FALLBACK_AGENTS, ROLE_AGENTS
+    learn = tr.agents_to_learn("Support", {"Sova": 20}, {"Initiator": 2, "Controller": 0}, {"Omen": 0.3}, 5, ROLE_AGENTS, FALLBACK_AGENTS)
+    assert 3 <= len(learn) <= 5 and learn[0]["agent_role"] == "Controller" and learn[0]["agent"] == "Omen"
+    assert all(x["agent"] != "Sova" for x in learn)
+    p = tr.learn_path("Jett", rows, ["Ascent", "Bind"], load_pros(""))
+    assert p["steps"][0]["done"] == (p["games"] >= 1) and p["total"] == 5 and 0 <= p["reached"] <= 5
+    assert any(s.get("optional") for s in p["steps"])        # watch a pro who plays it

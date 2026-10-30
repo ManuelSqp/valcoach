@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Premier · {{ t.name }} · valcoach{% endblock %}
+{% block head %}
+<style>
+.pgrid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px;align-items:start}
+@media(max-width:900px){.pgrid{grid-template-columns:1fr}}
+.wkmap{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.wkmap .big{font-size:30px;font-weight:800;letter-spacing:.02em}
+.rv{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);text-decoration:none;color:inherit}
+.rv:last-child{border-bottom:0}.rv:hover .op{text-decoration:underline}
+.rv .sc{font-weight:800;font-variant-numeric:tabular-nums}
+.days{display:flex;gap:4px;flex-wrap:wrap}.days label{display:inline-flex;gap:4px;align-items:center;font-size:13px;margin:0;padding:4px 8px;border:1px solid var(--line);border-radius:7px}
+.bl{margin:0;padding-left:18px}.bl li{margin:3px 0}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_premier_nav.html" %}
+{% if pi.tag %}
+{% if rstatus and rstatus.status in ('queued', 'running', 'error') %}
+<div class="card statusbox" data-key="review:{{ t.id }}" data-state="{{ rstatus.status }}"><span class="pill {{ 'running' if rstatus.status != 'error' else 'error' }}">{{ 'reviewing matches' if rstatus.status != 'error' else 'review failed' }}</span>
+  <pre class="log" style="margin-top:8px">{{ rstatus.log|join('\n') }}</pre></div>
+{% endif %}
+<div class="pgrid">
+  <section class="card">
+    <h2>This week</h2>
+    <div class="wkmap">
+      {% if week_map %}<span class="big">{{ week_map }}</span><span class="muted small">{{ week_src }}</span>
+      {% else %}<span class="muted">This week's map isn't known yet.</span>{% endif %}
+      {% if g.team_owner %}
+      <form method="post" action="{{ url_for('team_premier_settings', tid=t.id) }}" class="row" style="gap:6px;margin-left:auto">
+        <label for="wm" class="small muted" style="margin:0">Map this week</label>
+        <select id="wm" name="week_map" style="width:auto"><option value="">auto</option>{% for m in pool %}<option {{ 'selected' if m == week_map and week_src == 'set by hand' }}>{{ m }}</option>{% endfor %}</select>
+        <button class="btn sm ghost">Set</button></form>{% endif %}
+    </div>
+    {% if b.map %}
+    <div style="margin-top:12px">
+      {% if b.comp %}<p style="margin:0 0 8px"><b>Comp</b> <span class="muted small">({{ b.comp.source }})</span><br>
+        {% for p in b.comp.picks %}<span style="white-space:nowrap"><b>{{ p.agent }}</b> {{ p.player }}{% if p.alt %} <span class="muted">or {{ p.alt }}</span>{% endif %}</span>{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+      {% if b.ours.games %}<p class="small" style="margin:0 0 8px">Your record on {{ b.map }}: <b>{{ b.ours.wins }}–{{ b.ours.games - b.ours.wins }}</b>{% if b.ours.attack is not none %} · rounds won on attack {{ b.ours.attack|pct }}, defense {{ b.ours.defense|pct }}{% endif %}</p>{% endif %}
+      {% if b.threats %}<p class="small" style="margin:0 0 8px">Strongest in your division on {{ b.map }}: {% for x in b.threats[:3] %}<a href="{{ url_for('team_scouted', tid=t.id, team_id=x.id) }}">{{ x.name }}</a> {{ x.wins }}–{{ x.games - x.wins }}{{ ', ' if not loop.last }}{% endfor %}</p>
+      {% elif not b.scouted %}<p class="small muted" style="margin:0 0 8px">Scout your division to see who's strong on {{ b.map }}.</p>{% endif %}
+    </div>
+    <div class="row" style="margin-top:10px">
+      <a class="btn primary" href="{{ url_for('team_brief', tid=t.id) }}">Open the match-day brief</a>
+      {% if g.team_owner and (discord.prep_url or discord.focus_url) %}<form method="post" action="{{ url_for('team_brief_post', tid=t.id) }}"><button class="btn ghost">Post brief to Discord now</button></form>{% endif %}
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Brief before each match</h2>
+    {% if g.team_owner %}
+    <form method="post" action="{{ url_for('team_premier_settings', tid=t.id) }}">
+      <label class="choice"><input type="checkbox" name="on" value="1" {{ 'checked' if cfg.on }}>
+        <span><b>Post the brief to Discord before our matches</b><span class="muted small">Comp, game plans, everyone's focus and who's strong on the map. Server time.</span></span></label>
+      <div class="field"><label>Match days</label>
+        <div class="days">{% for d in days %}<label><input type="checkbox" name="days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in cfg.days }}>{{ d }}</label>{% endfor %}</div></div>
+      <div class="row">
+        <div class="field" style="margin:0"><label for="bt">Match time</label><input id="bt" type="time" name="time" value="{{ cfg.time }}" style="width:auto"></div>
+        <div class="field" style="margin:0"><label for="bb">Post it … minutes before</label><input id="bb" type="number" name="before" min="10" max="240" value="{{ cfg.before }}" style="width:90px"></div>
+      </div>
+      <button class="btn sm" style="margin-top:10px">Save</button>
+      {% if not (discord.prep_url or discord.focus_url) %}<p class="small warnc">Add a Discord webhook under Members, maps &amp; Discord first.</p>{% endif %}
+    </form>
+    {% else %}<p class="muted small">{% if cfg.on %}Posted to Discord {{ cfg.before }} min before {{ cfg.time }} on {% for d in cfg.days %}{{ days[d] }}{{ ', ' if not loop.last }}{% endfor %}.{% else %}Not set up by the team owner.{% endif %}</p>{% endif %}
+  </section>
+</div>
+
+<section class="card" style="margin-top:14px">
+  <div class="row between"><h2 style="margin:0">Your Premier matches</h2>
+    {% if g.team_owner %}<form method="post" action="{{ url_for('team_reviews_run', tid=t.id) }}" class="row" style="gap:6px">
+      <label class="small" style="display:flex;gap:4px;align-items:center;margin:0"><input type="checkbox" name="post" value="1" checked> post to Discord</label>
+      <button class="btn sm" {{ 'disabled' if rstatus and rstatus.status in ('queued', 'running') }}>Review new matches</button></form>{% endif %}</div>
+  <p class="small muted" style="margin:6px 0 4px">New Premier matches are reviewed every night with the sync (and posted to #match-prep): MVP, the rounds that decided it, one thing per player.</p>
+  {% for r in reviews %}
+  <a class="rv" href="{{ url_for('team_review_page', tid=t.id, match_id=r.match_id) }}">
+    <span class="wl {{ 'w' if r.won else 'l' }}">{{ 'WIN' if r.won else 'LOSS' }}</span>
+    <span><span class="op">{{ r.map }} vs {{ r.opponent }}</span>{% if r.tournament %} <span class="muted small">playoffs</span>{% endif %}<br><span class="muted small">{{ (r.started_at or '')[:10] }}</span></span>
+    <span class="sc">{{ r.score }}</span>
+  </a>
+  {% else %}<p class="muted" style="margin:8px 0 0">No reviews yet. {% if g.team_owner %}Press <b>Review new matches</b>, or wait for tonight's sync.{% endif %}</p>{% endfor %}
+</section>
+{% endif %}
+<script>
+(function () {
+  const el = document.querySelector('[data-key]');
+  if (!el || !['queued', 'running'].includes(el.dataset.state)) return;
+  const tick = async () => {
+    try {
+      const s = await (await fetch('{{ url_for("stats_status") }}?key=' + encodeURIComponent(el.dataset.key))).json();
+      if (s.log) el.querySelector('pre').textContent = s.log.join('\n');
+      if (s.status === 'done' || s.status === 'error') { location.reload(); return; }
+    } catch (e) {}
+    setTimeout(tick, 2500);
+  };
+  setTimeout(tick, 1500);
+})();
+</script>
+{% endblock %}

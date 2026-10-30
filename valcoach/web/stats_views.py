@@ -1,6 +1,7 @@
 """Stats, pick helper and team (Premier) pages."""
 from __future__ import annotations
 
+import json
 import time
 
 from flask import abort, flash, g, jsonify, redirect, render_template, request, send_file, url_for
@@ -429,6 +430,9 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
                                           "team_data": team_data, "owner_rows": owner_rows})
     from .strats import register as register_strats
     register_strats(app, store, sr, get_team, KNOWN_MAPS)
+    from .player_views import register as register_player
+    register_player(app, store, sr, {"view_profile": view_profile, "team_context": team_context, "owner_rows": owner_rows,
+                                     "queue_arg": queue_arg, "queues": QUEUE_TABS})
     from .drafts import register as register_drafts
     register_drafts(app, store, get_team, {"team_context": team_context, "owner_rows": owner_rows}, KNOWN_MAPS)
 
@@ -446,6 +450,10 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         pi = t.premier_info
         if pi.get("tag"):
             sr.submit_premier(t.id, t.owner_id, pi["name"], pi["tag"], pi.get("region", "eu"))
+            pj = app.extensions["valcoach"].get("premier")
+            if pj:                             # queued after the roster (one worker): review new matches, scout the division
+                pj.submit_reviews(t.id, post=True)
+                pj.submit_scout(t.id, {"division": True})
         else:
             import_members(t)
 
@@ -618,6 +626,27 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
         players = []
         if f:
             players = [dict(f["players"][pid], pid=int(pid)) for pid in order if pid in f["players"]]
+        # how the focus before this one went (its number, in the games since)
+        from ..stats.progress import fmt as pfmt, focus_check
+        d = sr.team_dir(tid) / "focus"
+        files = sorted(d.glob("*.json"), reverse=True) if d.exists() else []
+        prev = None
+        for fp in files:
+            if f and fp.stem == f.get("week"):
+                continue
+            try:
+                prev = json.loads(fp.read_text())
+            except ValueError:
+                prev = None
+            break
+        for pl in players:
+            pf = ((prev or {}).get("players") or {}).get(str(pl["pid"]))
+            ck = focus_check(c["rows_by"].get(pl["pid"], []), prev.get("week", ""), pf) if pf and pf.get("focus") else None
+            if ck:
+                ck.update({f"{k}_s": pfmt(ck["metric"], ck[k]) for k in ("before", "now", "goal")})
+                ck["focus"] = pf["focus"]
+                ck["week"] = prev.get("week")
+            pl["last"] = ck
         mine = next((m["pid"] for m in t.member_list if m.get("user_id") == g.user.id), None)
         return render_template("team_focus.html", t=t, tab="focus", focus=f, players=players, mine=mine,
                                this_week=week_id(), status=sr.status(f"focus:{tid}"), discord=t.discord_info,
@@ -682,3 +711,6 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
             sr.submit_focus(t.id, week_id(), items, language(t), post=True)
 
     app.extensions["valcoach"]["weekly_job"] = weekly_job
+
+    from .premier_views import register as register_premier
+    register_premier(app, store, sr, {"get_team": get_team, "team_data": team_data, "build": build, "known_maps": KNOWN_MAPS})

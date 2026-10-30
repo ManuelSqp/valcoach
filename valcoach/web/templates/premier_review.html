@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ r.map }} vs {{ r.opponent }} · valcoach{% endblock %}
+{% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% block head %}
+<style>
+.ai{border-radius:50%;vertical-align:middle;background:#0b0e13;object-fit:cover;flex:none}
+.kr{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.kr li{background:var(--panel2);border-radius:8px;padding:7px 10px;font-size:13px;border-left:3px solid var(--muted)}
+.kr li.l{border-left-color:var(--red)}.kr li.w{border-left-color:var(--win)}
+.prs{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.pr{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.pr h3{margin:0;font-size:16px;display:flex;gap:8px;align-items:center}
+.pr .st{font-size:12px;color:var(--muted);margin:4px 0 8px}
+.pr ul{margin:4px 0 0;padding-left:18px;font-size:13px}
+.pr .help{font-size:12.5px;background:rgba(90,169,255,.07);border-radius:6px;padding:6px 8px;margin-top:8px}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_premier_nav.html" %}
+<div class="row between" style="margin-bottom:12px">
+  <div><h1 style="margin:0"><span class="wl {{ 'w' if r.won else 'l' }}" style="font-size:14px;vertical-align:middle">{{ 'WIN' if r.won else 'LOSS' }}</span> {{ r.score }} on {{ r.map }}</h1>
+    <div class="muted small">vs {% if r.opponent_id %}<a href="{{ url_for('team_scouted', tid=t.id, team_id=r.opponent_id) }}" title="Their scouting page (if scouted)">{{ r.opponent }}</a>{% else %}{{ r.opponent }}{% endif %} · {{ (r.started_at or '')[:10] }}{% if r.tournament %} · playoffs{% endif %}{% if r.model %} · written by {{ r.model }}{% endif %}</div></div>
+  {% if g.team_owner %}<form method="post" action="{{ url_for('team_reviews_run', tid=t.id) }}"><input type="hidden" name="force" value="{{ r.match_id }}"><button class="btn sm ghost">Review again</button></form>{% endif %}
+</div>
+<div class="grid2" style="align-items:start">
+  <section class="card">
+    <h2>Rounds that decided it</h2>
+    <ul class="kr">{% for k in r.key_rounds %}<li class="{{ 'w' if k.won else 'l' }}"><b>Round {{ k.round }}</b> ({{ k.side }}): {{ k.why }}</li>{% else %}<li>Nothing stands out.</li>{% endfor %}</ul>
+  </section>
+  <section class="card">
+    <h2>Who traded whom</h2>
+    {% for p in r.trade_pairs[:8] %}<div class="small">{{ p.traded_by }} traded {{ p.died }} <b>{{ p.times }}×</b></div>{% else %}<p class="muted small">No trades.</p>{% endfor %}
+  </section>
+</div>
+<section class="card" style="margin-top:14px">
+  <h2>Every player</h2>
+  <div class="prs">
+    {% for p in r.players %}{% set st = p.stats %}{% set fb = p.feedback or {} %}
+    <div class="pr">
+      <h3>{{ ai(p.agent, 26) }} {{ p.name }}{% if p.roles %} <span class="muted small" style="font-weight:400">{{ p.roles|join(', ') }}</span>{% endif %}</h3>
+      <div class="st">{{ st.kills }}/{{ st.deaths }}/{{ st.assists }} · ACS {{ st.acs }} · KAST {{ (st.kast * 100)|round|int }}% · first kills {{ st.first_kills }}, first deaths {{ st.first_deaths }} · {{ st.untraded_deaths }} deaths not traded</div>
+      {% if fb.summary %}<div style="font-size:13px">{{ fb.summary }}</div>{% endif %}
+      {% if fb.went_well %}<ul>{% for x in fb.went_well %}<li>✓ {{ x.point }}{% if x.rounds %} <span class="muted">(R{{ x.rounds|join(', R') }})</span>{% endif %}</li>{% endfor %}</ul>{% endif %}
+      {% if fb.fix %}<ul>{% for x in fb.fix %}<li><b>{{ x.issue }}</b>{% if x.rounds %} <span class="muted">(R{{ x.rounds|join(', R') }})</span>{% endif %}: {{ x.try }}</li>{% endfor %}</ul>{% endif %}
+      {% if fb.teammates_can_help %}<div class="help"><b>Teammates:</b> {{ fb.teammates_can_help }}</div>{% endif %}
+      {% if not fb and p.repeat_death_spots %}<div class="small muted">Died repeatedly at: {% for x in p.repeat_death_spots %}{{ x.where }} ({{ x.side }}, {{ x.deaths }}×){{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

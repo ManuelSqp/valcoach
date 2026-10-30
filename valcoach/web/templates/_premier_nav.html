@@ -1,0 +1,19 @@
+{% include "_team_head.html" %}
+<style>
+.pnav{display:flex;gap:6px;flex-wrap:wrap;margin:-6px 0 16px}
+.pnav a{text-decoration:none;font-size:13px;font-weight:600;padding:5px 12px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.pnav a.on,.pnav a:hover{color:var(--text);border-color:#4a5468}.pnav a.on{background:#1d2330}
+.wl{font-weight:800;font-size:11px;letter-spacing:.06em;padding:1px 7px;border-radius:5px}
+.wl.w{background:rgba(53,208,160,.15);color:var(--win)}.wl.l{background:rgba(255,70,85,.15);color:var(--red)}
+.mrow{display:flex;gap:4px;flex-wrap:wrap}
+.mchip{font-size:11px;padding:1px 7px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);white-space:nowrap}
+.mchip.good{border-color:rgba(53,208,160,.5)}.mchip.bad{border-color:rgba(255,70,85,.5)}.mchip.wk{outline:2px solid var(--amber);outline-offset:1px}
+.statusbox{margin-bottom:14px}
+</style>
+<nav class="pnav" aria-label="Premier">
+  <a class="{{ 'on' if tab2 == 'overview' }}" href="{{ url_for('team_premier', tid=t.id) }}">This week &amp; reviews</a>
+  <a class="{{ 'on' if tab2 == 'division' }}" href="{{ url_for('team_division', tid=t.id) }}">Division &amp; scouting</a>
+</nav>
+{% if not pi.tag %}
+<section class="card"><p>This team isn't linked to a Premier team yet. {% if g.team_owner %}Create the team from Premier (Teams › <i>From Premier</i>) or set the Premier name and tag under <a href="{{ url_for('team_settings', tid=t.id) }}">Members, maps &amp; Discord</a>, then <b>Sync Premier roster</b>.{% endif %}</p></section>
+{% endif %}

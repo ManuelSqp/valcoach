@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ s.name }} · scouting · valcoach{% endblock %}
+{% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="{{ agent }}" title="{{ agent }}" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% block head %}
+<style>
+.ai{border-radius:50%;vertical-align:middle;background:#0b0e13;object-fit:cover;flex:none}
+.sgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+@media(max-width:900px){.sgrid{grid-template-columns:1fr}}
+.howto{margin:0;padding-left:18px}.howto li{margin:5px 0}
+.vrow{display:grid;grid-template-columns:110px 1fr 70px 70px 90px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+@media(max-width:600px){.vrow{grid-template-columns:90px 1fr 60px 60px}.vrow .sd{display:none}}
+.vrow:last-child{border-bottom:0}
+.bar{position:relative;height:8px;background:var(--panel2);border-radius:99px}
+.bar i{position:absolute;top:0;bottom:0;border-radius:99px}
+.call{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:5px}
+.call.pick{background:rgba(53,208,160,.15);color:var(--win)}.call.ban{background:rgba(255,70,85,.15);color:var(--red)}
+.pl{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(0,1fr));gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.pl:last-child{border-bottom:0}.pl.h{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+@media(max-width:600px){.pl{grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr))}.pl .x{display:none}}
+.mapcard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.mapcard.wk{border-color:var(--amber)}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_premier_nav.html" %}
+{% if status and status.status in ('queued', 'running') %}<div class="card statusbox" data-key="scout:{{ t.id }}" data-state="{{ status.status }}"><span class="pill running">scouting</span> <span class="small muted">{{ status.log[-1] if status.log else '' }}</span></div>{% endif %}
+<div class="row between" style="margin-bottom:12px">
+  <div><h1 style="margin:0">{{ s.name }} <span class="muted" style="font-weight:400">#{{ s.tag }}</span></h1>
+    <div class="muted small">{% if s.place %}#{{ s.place }} · {% endif %}{% if s.wins is not none %}{{ s.wins }}–{{ s.losses }} · {% endif %}{% if s.points is not none %}{{ s.points }} points · {% endif %}scouted from {{ s.matches }} Premier match{{ 'es' if s.matches != 1 }}{% if s.scouted_at %}, {{ s.scouted_at|epoch }}{% endif %}</div></div>
+  <form method="post" action="{{ url_for('team_scout', tid=t.id) }}"><input type="hidden" name="id" value="{{ s.id }}"><button class="btn sm ghost">Scout again</button></form>
+</div>
+
+<div class="sgrid">
+  <section class="card">
+    <h2>How to play them</h2>
+    {% if not s.matches %}<p class="muted" style="margin:0">No Premier matches of this team found yet.</p>{% endif %}
+    {% if wm and mlines.get(wm) %}<p class="small" style="margin:0 0 6px"><b>On {{ wm }}</b> (this week)</p><ul class="howto">{% for l in mlines[wm] %}<li>{{ l }}</li>{% endfor %}</ul>{% endif %}
+    {% if lines %}{% if wm and mlines.get(wm) %}<p class="small" style="margin:12px 0 6px"><b>In general</b></p>{% endif %}<ul class="howto">{% for l in lines %}<li>{{ l }}</li>{% endfor %}</ul>
+    {% elif s.matches and not (wm and mlines.get(wm)) %}<p class="muted small" style="margin:0">Nothing stands out yet. See the maps below.</p>{% endif %}
+    {% if s.pistols.played %}<p class="small muted" style="margin:10px 0 0">Pistol rounds: won {{ s.pistols.won }} of {{ s.pistols.played }}.</p>{% endif %}
+  </section>
+  <section class="card">
+    <h2>Map veto <span class="muted" style="text-transform:none;letter-spacing:0">(playoffs)</span></h2>
+    <p class="small muted" style="margin:-4px 0 8px">Your win rate on each map against theirs (small samples pulled toward 50%). Ban from the bottom, pick from the top.
+      {% if v.pick %}Suggestion: <b>ban {{ v.bans|join(', then ') }}</b>, <b>pick {{ v.pick }}</b>.{% endif %}</p>
+    <div class="vrow" style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em"><span>Map</span><span>Edge (you vs them)</span><span>You</span><span>Them</span><span class="sd">Start on</span></div>
+    {% for r in v.rows %}
+    <div class="vrow">
+      <span><b>{{ r.map }}</b> {% if r.call %}<span class="call {{ r.call }}">{{ r.call }}</span>{% endif %}</span>
+      <span class="bar" title="{{ '%+d'|format((r.edge * 100)|round|int) }} points">{% set w = (r.edge * 100)|abs %}{% if r.edge >= 0 %}<i style="left:50%;width:{{ [w, 50]|min }}%;background:var(--win)"></i>{% else %}<i style="right:50%;width:{{ [w, 50]|min }}%;background:var(--red)"></i>{% endif %}<i style="left:50%;width:1px;background:var(--muted)"></i></span>
+      <span>{{ r.ours.wins }}–{{ r.ours.games - r.ours.wins }}</span>
+      <span>{{ r.theirs.wins }}–{{ r.theirs.games - r.theirs.wins }}</span>
+      <span class="sd small">{{ r.side or '–' }}</span>
+    </div>
+    {% endfor %}
+    <p class="small muted" style="margin:8px 0 0">"You" counts matches with 3+ of your starters together. "Start on": the side where you're relatively stronger against them (round win rates).</p>
+  </section>
+</div>
+
+<section class="card" style="margin-top:14px">
+  <h2>Players</h2>
+  <div class="pl h"><span>Player</span><span>Agents</span><span>First duels</span><span class="x">K/D</span><span class="x">ACS</span></div>
+  {% for p in s.players %}
+  <div class="pl">
+    <span><b>{{ p.name }}</b> <span class="muted small">#{{ p.tag }} · {{ p.role }} · {{ p.games }} games</span></span>
+    <span>{% for a in p.agents %}{{ ai(a.agent, 22) }}{% endfor %}</span>
+    <span>{{ (p.first_duel_share * 100)|round|int }}% of theirs{% if p.first_duels_won is not none %}, won {{ (p.first_duels_won * 100)|round|int }}%{% endif %}</span>
+    <span class="x">{{ p.kd }}</span><span class="x">{{ p.acs }}</span>
+  </div>
+  {% else %}<p class="muted">No players found.</p>{% endfor %}
+</section>
+
+<section class="card" style="margin-top:14px">
+  <h2>Maps</h2>
+  {% for m, x in s.maps.items() %}
+  <div class="mapcard {{ 'wk' if m == wm }}">
+    <div class="row between"><b>{{ m }}{% if m == wm %} <span class="muted small">this week</span>{% endif %}</b><span>{{ x.wins }}–{{ x.games - x.wins }} · rounds {{ x.rounds_won }}/{{ x.rounds }}</span></div>
+    {% if x.comps %}<div style="margin:6px 0">{% for c in x.comps %}<span style="margin-right:14px">{% for a in c.agents %}{{ ai(a, 22) }}{% endfor %} <span class="muted small">{{ c.games }}×</span></span>{% endfor %}</div>{% endif %}
+    <div class="small muted">
+      {% if x.attack.sites_hit %}Attack: {% for site, y in x.attack.sites_hit.items() %}{{ site }} {{ y.plants }}× ({{ y.rounds_won }} won){{ ', ' if not loop.last }}{% endfor %}{% endif %}
+      {% if x.attack.plant_median_s %} · plant ~{{ x.attack.plant_median_s }}s{% endif %}{% if x.attack.first_fight_median_s %} · first fight ~{{ x.attack.first_fight_median_s }}s{% endif %}
+      {% if x.defense.enemy_plants %}<br>Defense: {% for site, y in x.defense.enemy_plants.items() %}retakes on {{ site }} {{ y.retakes_won }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}
+    </div>
+    {% if mlines.get(m) %}<ul class="howto small" style="margin-top:6px">{% for l in mlines[m] %}<li>{{ l }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+  {% else %}<p class="muted">No maps yet.</p>{% endfor %}
+</section>
+{% endblock %}

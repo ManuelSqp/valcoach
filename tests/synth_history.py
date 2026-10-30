@@ -122,6 +122,22 @@ class FakeHenrikPremier(FakeHenrik):
             known = {"red-1": ("adv1ce", "LFT"), "sub-x": ("subby", "T")}
             n, t = known.get(pu, (pu, "T"))
             return {"status": 200, "data": {"puuid": pu, "name": n, "tag": t, "region": "eu"}}
+        if "/premier/leaderboard/" in path:                 # division 12: us, a scouted rival, a team without matches
+            return {"status": 200, "data": [
+                {"id": "team-1", "name": "Red Squad", "tag": "RED", "wins": 6, "losses": 3, "score": 300, "ranking": 3},
+                {"id": "team-2", "name": "Blue Bandits", "tag": "BLU", "wins": 7, "losses": 2, "score": 350, "ranking": 1},
+                {"id": "team-3", "name": "Green Goats", "tag": "GG", "wins": 1, "losses": 8, "score": 75, "ranking": 9}]}
+        if "/premier/seasons/" in path:
+            return {"status": 200, "data": [{"id": "s1", "events": [
+                {"id": "e1", "type": "LEAGUE", "starts_at": "2020-01-01T00:00:00Z", "ends_at": "2020-01-08T00:00:00Z",
+                 "map_selection": {"type": "RANDOM", "maps": [{"name": "Ascent"}]}},
+                {"id": "e2", "type": "LEAGUE", "starts_at": "2026-01-01T00:00:00Z", "ends_at": "2099-01-01T00:00:00Z",
+                 "map_selection": {"type": "RANDOM", "maps": [{"name": "Bind"}]}}]}]}
+        if path.endswith("/premier/team-3/history"):
+            return {"status": 200, "data": {"league_matches": [], "tournament_matches": []}}
+        if path.endswith("/premier/team-2"):
+            return {"status": 200, "data": {"id": "team-2", "name": "Blue Bandits", "tag": "BLU",
+                                            "member": [{"puuid": pu, "name": None, "tag": None} for pu in synth.BLUE]}}
         if path.endswith("/history"):
             prem = [d for d in self.history if d["metadata"]["queue"]["id"] == "premier"]
             if self.members_mode == "none-1match":

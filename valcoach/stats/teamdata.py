@@ -120,6 +120,15 @@ def _d(a: tuple[float, float], b: tuple[float, float]) -> float:
     return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
 
 
+def window(xs: list[float]) -> list[int] | None:
+    """The middle half of the times (25th-75th percentile), in seconds since the round started."""
+    if len(xs) < 3:
+        return None
+    s = sorted(xs)
+    q = lambda f: s[min(len(s) - 1, max(0, round(f * (len(s) - 1))))]   # noqa: E731
+    return [round(q(0.25)), round(q(0.75))]
+
+
 def map_facts(matches: list[tuple[Match, str]], cache_dir: Path, map_name: str) -> dict:
     """Numbers about how your team plays one map (only matches on that map)."""
     reg, mcache = MapRegistry(cache_dir), {}
@@ -131,7 +140,7 @@ def map_facts(matches: list[tuple[Match, str]], cache_dir: Path, map_name: str) 
            "first_t": [], "first_area": Counter(), "first_area_won": Counter(), "flanks": Counter(), "flank_t": [],
            "plant_t": []}
     dfn = {"rounds": 0, "won": 0, "enemy_plants": Counter(), "retake_won": Counter(), "first_t": [],
-           "first_death_area": Counter(), "enemy_plant_t": []}
+           "first_death_area": Counter(), "enemy_plant_t": [], "contact_t": defaultdict(list)}
     mid = {"ours": 0, "ours_won": 0, "theirs": 0, "theirs_won": 0}
     for m, team in ms:
         mi = _map_info(reg, m, mcache)
@@ -176,6 +185,12 @@ def map_facts(matches: list[tuple[Match, str]], cache_dir: Path, map_name: str) 
                     dfn["first_t"].append(k0.t_round_ms / 1000)
                     if k0.victim_team == team and mi:
                         dfn["first_death_area"][mi.area(k0.victim_x, k0.victim_y)] += 1
+                    if mi:                       # where and when the attackers make first contact
+                        try:
+                            z = mi.zone(k0.victim_x, k0.victim_y)
+                        except Exception:
+                            z = "?"
+                        dfn["contact_t"][z].append(k0.t_round_ms / 1000)
             if k0 and mi and k0.t_round_ms <= 45000 and mi.zone(k0.victim_x, k0.victim_y).lower() == "mid":
                 if k0.killer_team == team:
                     mid["ours"] += 1
@@ -185,6 +200,7 @@ def map_facts(matches: list[tuple[Match, str]], cache_dir: Path, map_name: str) 
                     mid["theirs_won"] += won
     pct = lambda a, b: None if not b else f"{a / b:.0%}"      # noqa: E731
     sec = lambda xs: None if not xs else round(median(xs))     # noqa: E731
+    win = window
     out["attack"] = {
         "rounds": att["rounds"], "won": pct(att["won"], att["rounds"]),
         "sites_hit": {s: {"plants": n, "rounds_won": pct(att["plant_won"][s], n)} for s, n in att["plants"].most_common()},
@@ -193,13 +209,17 @@ def map_facts(matches: list[tuple[Match, str]], cache_dir: Path, map_name: str) 
         "first_fight_areas": [{"area": a, "fights": n, "you_won": pct(att["first_area_won"][a], n)}
                               for a, n in att["first_area"].most_common(4)],
         "killed_from_behind": {"count": sum(att["flanks"].values()), "from": [{"area": a, "count": n} for a, n in att["flanks"].most_common(3)],
-                               "median_time_s": sec(att["flank_t"])},
+                               "median_time_s": sec(att["flank_t"]), "window_s": win(att["flank_t"])},
+        "first_fight_window_s": win(att["first_t"]), "plant_window_s": win(att["plant_t"]),
     }
     out["defense"] = {
         "rounds": dfn["rounds"], "won": pct(dfn["won"], dfn["rounds"]),
         "enemy_plants": {s: {"plants": n, "retakes_won": pct(dfn["retake_won"][s], n)} for s, n in dfn["enemy_plants"].most_common()},
         "enemy_plant_median_s": sec(dfn["enemy_plant_t"]), "first_fight_median_s": sec(dfn["first_t"]),
         "your_first_deaths": [{"area": a, "count": n} for a, n in dfn["first_death_area"].most_common(3)],
+        "enemy_plant_window_s": win(dfn["enemy_plant_t"]),
+        "first_contact": [{"where": z, "rounds": len(ts), "window_s": win(ts)}
+                          for z, ts in sorted(dfn["contact_t"].items(), key=lambda kv: -len(kv[1])) if z != "?" and len(ts) >= 2][:4],
     }
     out["mid_control"] = {"early_mid_kill_yours": {"rounds": mid["ours"], "won": pct(mid["ours_won"], mid["ours"])},
                           "early_mid_kill_theirs": {"rounds": mid["theirs"], "won": pct(mid["theirs_won"], mid["theirs"])}}

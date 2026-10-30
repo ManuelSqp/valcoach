@@ -92,7 +92,14 @@
       <ul>{% for e in p.scores[p.best[0]].evidence %}<li>{{ e }}</li>{% endfor %}</ul>
       {% for c in p.checks %}<p class="small warnc" style="margin:6px 0 0">{{ c }}</p>{% endfor %}
       {% else %}<p class="small muted">Needs at least 5 games with round data ({{ p.metrics.full }} now).</p>{% endif %}
-      {% if p.learn %}
+      {% if p.learn_list %}
+      <div class="learn" style="display:block">
+        <b>Agents to learn</b> <span class="muted small">(best first)</span>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 4px">{% for a in p.learn_list %}<span title="{{ a.why|join(' · ') }}" style="display:inline-flex;gap:5px;align-items:center">{{ ai(a.agent, 26) }}{{ a.agent }}</span>{% endfor %}</div>
+        <span class="muted small">{{ p.learn_list[0].why|join(' · ') }}.</span>
+        <a class="small" href="{{ url_for('training', pid=p.pid) }}#learn">Learning path →</a>
+      </div>
+      {% elif p.learn %}
       <div class="learn">{{ ai(p.learn.agent, 34) }}<div><b>Agent to learn: {{ p.learn.agent }}</b> <span class="muted">({{ p.learn.agent_role }})</span><br>
         <span class="muted">{{ p.learn.why|join(' · ') }}</span></div></div>
       {% endif %}

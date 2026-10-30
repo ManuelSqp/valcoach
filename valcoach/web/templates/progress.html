@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Progress · {{ p.riot_id }} · valcoach{% endblock %}
+{% block head %}
+<style>
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.mc{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.mc .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mc .lbl{font-size:12px;color:var(--muted);font-weight:600}
+.mc .val{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
+.tr{font-size:12px;font-weight:700;white-space:nowrap}.tr.up{color:var(--win)}.tr.down{color:var(--red)}.tr.flat{color:var(--muted)}
+.bars{display:flex;align-items:flex-end;gap:3px;height:56px;margin-top:8px}
+.bars span{flex:1;background:#2b3446;border-radius:3px 3px 0 0;position:relative;min-width:6px}
+.bars span.last{background:var(--red)}.bars span.none{background:transparent;border-bottom:2px dotted #333b4a}
+.wk{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:3px}
+.fc{display:grid;grid-template-columns:110px 1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+@media(max-width:600px){.fc{grid-template-columns:1fr;gap:4px}}
+.fc:last-child{border-bottom:0}
+.vd{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.vd.ok{background:rgba(53,208,160,.15);color:var(--win)}.vd.bad{background:rgba(255,70,85,.15);color:var(--red)}.vd.na{background:rgba(138,147,166,.15);color:var(--muted)}
+.cl{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+@media(max-width:600px){.cl{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.cl div{background:var(--panel2);border-radius:8px;padding:8px 10px;text-align:center}.cl b{display:block;font-size:18px}
+.cl span{font-size:11px;color:var(--muted)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="row between" style="margin-bottom:14px">
+  <div><h1>{{ p.name }}<span class="tag">#{{ p.tag }}</span> · progress</h1>
+    <div class="muted">{{ n }} games · the last 10 weeks</div></div>
+  <div class="row" style="gap:4px">{% for val, label in queues %}<a class="btn sm {{ 'primary' if queue == val else 'ghost' }}" href="{{ url_for('progress', pid=p.id, queue=val) }}">{{ label }}</a>{% endfor %}</div>
+</div>
+{% include "_player_tabs.html" %}
+{% if not n %}
+<section class="card"><p>No games yet: import your history on <a href="{{ url_for('stats', pid=p.id) }}">Stats &amp; agents</a>.</p></section>
+{% else %}
+
+{% if checks %}
+<section class="card">
+  <h2>Did the weekly focus work?</h2>
+  <p class="small muted" style="margin:-4px 0 6px">The number each focus was about, in the games since that week started, compared with before.</p>
+  {% for c in checks %}{% set k = c.check %}
+  <div class="fc">
+    <span class="muted">{{ c.week }}{% if checks|map(attribute='team')|unique|list|length > 1 %}<br>{{ c.team }}{% endif %}</span>
+    <span><b>{{ c.focus }}</b>{% if k %}<br><span class="small muted">{{ k.label }}: {{ k.before_s }} → <b style="color:var(--text)">{{ k.now_s }}</b>{% if k.goal is not none %} (goal {{ k.goal_s }}){% endif %} · {{ k.games }} games since</span>{% endif %}</span>
+    <span>{% if not k %}<span class="vd na">no number</span>{% else %}<span class="vd {{ 'ok' if k.ok else ('bad' if k.ok == false else 'na') }}">{{ k.verdict }}</span>{% endif %}</span>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<div class="mgrid" style="margin-top:14px">
+  {% for c in cards %}{% set t = c.trend %}
+  <div class="mc">
+    <div class="top"><span class="lbl">{{ c.label }}</span>
+      {% if t.delta is not none %}<span class="tr {{ 'up' if t.better else ('down' if t.better == false else 'flat') }}" title="last 2 weeks vs the 6 weeks before">{{ '▲' if t.delta > 0 else ('▼' if t.delta < 0 else '•') }} {{ c.fmt(t.before) }} → {{ c.fmt(t.now) }}</span>{% endif %}</div>
+    <div class="val">{{ c.fmt(t.now) if t.now is not none else c.bars[-1].v }}</div>
+    <div class="bars" aria-hidden="true">{% for b in c.bars %}<span class="{{ 'none' if b.h is none else ('last' if loop.last else '') }}" style="height:{{ ((b.h or 0) * 100)|round|int }}%" title="week of {{ b.label }}: {{ b.v }} ({{ b.games }} games)"></span>{% endfor %}</div>
+    <div class="wk" aria-hidden="true"><span>{{ c.bars[0].label }}</span><span>{{ c.bars[4].label }}</span><span>{{ c.bars[-1].label }}</span></div>
+    <span class="sr-only">{% for b in c.bars %}{{ b.label }}: {{ b.v }}; {% endfor %}</span>
+  </div>
+  {% endfor %}
+</div>
+<p class="small muted">Bars: one per week (red = this week), hover for the value. Lower is better for "deaths far from the team". KAST, first duels, trades, headshots and clutches need games with round data ({{ n_full }} of {{ n }}).</p>
+
+<section class="card" style="margin-top:14px">
+  <h2>Clutches, retakes, post-plants</h2>
+  {% if n_v3 %}
+  <div class="cl">{% for x, v in clutch.items() %}<div><span>1v{{ x }}</span><b>{{ v[1] }}/{{ v[0] }}</b><span>{{ (v[1] / v[0])|pct if v[0] else '–' }}</span></div>{% endfor %}</div>
+  <p class="small" style="margin:10px 0 0">Retakes (they planted while you were alive): <b>{{ retake[1] }} of {{ retake[0] }}</b> won{% if retake[0] %} ({{ (retake[1] / retake[0])|pct }}){% endif %} ·
+    Post-plants (your team planted, you alive): <b>{{ postplant[1] }} of {{ postplant[0] }}</b> won{% if postplant[0] %} ({{ (postplant[1] / postplant[0])|pct }}){% endif %}</p>
+  <p class="small muted" style="margin:6px 0 0">From {{ n_v3 }} games with round data.</p>
+  {% else %}<p class="muted">Needs games with round data: press <i>Import</i> on Stats &amp; agents (older games are re-read from the cache automatically).</p>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

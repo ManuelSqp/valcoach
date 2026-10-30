@@ -673,7 +673,7 @@ def test_premier_team_import_and_roles(app, monkeypatch):
 
     # roles: assign, see the suggestion respect it, agent to learn shows up
     page = c.get(f"/teams/{tid}/roles").data.decode()
-    assert "Suggested lineup" in page and "How well everyone fits each role" in page and "Agent to learn" in page
+    assert "Suggested lineup" in page and "How well everyone fits each role" in page and "Agents to learn" in page
     me = names["adv1ce"]["pid"]
     form = {f"roles_{me}": ["Anchor", "IGL"]}
     assert c.post(f"/teams/{tid}/roles", data=form).status_code == 302
@@ -1292,3 +1292,124 @@ def test_report_names_the_rounds_the_model_failed_on(app, monkeypatch):
 def test_no_warning_in_a_report_without_model_problems(app, monkeypatch):
     job, _ = _run_with_model(app, setup_admin(app), monkeypatch, lambda n: {"summary": "Fight at A", "importance": 1})
     assert job.status == "done" and "The model failed" not in Path(job.html_path).read_text()
+
+
+def test_premier_scouting_veto_reviews_and_brief(app, monkeypatch):
+    from datetime import datetime
+    import synth_history as sh
+    from valcoach import pipeline
+    import valcoach.discord as discord
+    history = sh.build_history(30)
+    monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrikPremier(history, full_depth=10, roster_in_match=True))
+    posted = []
+    monkeypatch.setattr(discord, "post", lambda url, content="", embeds=None, session=None: posted.append(embeds))
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    add_profile(c)
+    r = c.post("/teams", data={"premier_name": "Red Squad#RED", "premier_region": "eu"})
+    tid = int(r.headers["Location"].rsplit("/", 1)[1])
+    assert _wait_stats(app, f"premier:{tid}")["status"] == "done"
+    for m in store.team(tid).member_list:
+        _wait_stats(app, f"import:{m['pid']}")
+    page = c.get(f"/teams/{tid}/premier").data.decode()
+    assert "This week" in page and "Your Premier matches" in page and "map isn't known yet" in page
+
+    # scout the division: our own team is skipped, the rival gets a page, the empty team too
+    c.post(f"/teams/{tid}/premier/scout", data={"division": "1"})
+    st = _wait_stats(app, f"scout:{tid}")
+    assert st["status"] == "done", st
+    pj = app.extensions["valcoach"]["premier"]
+    idx = pj.scout_index(tid)
+    assert set(idx["teams"]) == {"team-2", "team-3"} and idx["division"]["division"] == 12
+    s = pj.scouted(tid, "team-2")
+    assert s["matches"] >= 5 and s["players"] and all(p["name"].startswith("blue") for p in s["players"])
+    assert s["maps"] and pj.scouted(tid, "team-3")["matches"] == 0
+    page = c.get(f"/teams/{tid}/premier/division").data.decode()
+    assert "Blue Bandits" in page and "Green Goats" in page and "(you)" in page and "Division 12" in page
+    page = c.get(f"/teams/{tid}/premier/team/team-2").data.decode()
+    assert "How to play them" in page and "Map veto" in page and "first duels" in page and "pick" in page
+    assert c.get(f"/teams/{tid}/premier/team/nope").status_code == 404
+
+    # this week's map comes from the season schedule (Bind); the brief is built for it
+    page = c.get(f"/teams/{tid}/premier").data.decode()
+    assert ">Bind<" in page and "Premier schedule" in page
+    page = c.get(f"/teams/{tid}/premier/brief").data.decode()
+    assert "Our numbers on Bind" in page and "Who you might meet" in page
+    # by hand for this week
+    c.post(f"/teams/{tid}/premier/settings", data={"week_map": "Ascent"})
+    assert ">Ascent<" in c.get(f"/teams/{tid}/premier").data.decode()
+
+    # reviews of our Premier matches (no model here: numbers only), not posted without a webhook
+    c.post(f"/teams/{tid}/premier/reviews", data={"post": "1"})
+    st = _wait_stats(app, f"review:{tid}")
+    assert st["status"] == "done", st
+    revs = pj.reviews(tid)
+    assert 1 <= len(revs) <= 3
+    rv = revs[0]
+    assert len(rv["players"]) == 5 and rv["score"] and isinstance(rv["key_rounds"], list)
+    page = c.get(f"/teams/{tid}/premier/review/{rv['match_id']}").data.decode()
+    assert "Rounds that decided it" in page and "Every player" in page
+    assert posted == []
+    # a second run finds nothing new
+    c.post(f"/teams/{tid}/premier/reviews", data={})
+    _wait_stats(app, f"review:{tid}")
+    assert len(pj.reviews(tid)) == len(revs)
+
+    # match-day brief on Discord: settings, then the scheduler posts it once inside the window
+    t = store.team(tid)
+    store.update_team(tid, discord={**t.discord_info, "prep_url": "https://discord.com/api/webhooks/1/x"})
+    c.post(f"/teams/{tid}/premier/settings", data={"on": "1", "days": ["4"], "time": "20:00", "before": "60"})
+    cfg = store.team(tid).sync_info["brief"]
+    assert cfg["on"] and cfg["days"] == [4] and cfg["time"] == "20:00"
+    tick = app.extensions["valcoach"]["ticks"][0]
+    assert tick(datetime(2026, 10, 30, 18, 30)) == []                 # Friday, too early
+    assert tick(datetime(2026, 10, 30, 19, 15)) == [tid]              # 45 min before
+    assert tick(datetime(2026, 10, 30, 19, 40)) == []                 # once a day
+    assert posted and "Match day: Ascent" in posted[-1][0]["title"]
+    sr = app.extensions["valcoach"]["stats"]
+    sr.shutdown()
+
+
+def test_scouting_veto_and_season_map():
+    from datetime import datetime, timezone
+    from valcoach.stats.scouting import how_to_play, veto
+    from valcoach.web.premier_views import season_week_map
+    v = veto({"Bind": {"games": 6, "wins": 5}, "Lotus": {"games": 4, "wins": 1}, "Ascent": {"games": 2, "wins": 1}},
+             {"Bind": {"games": 3, "wins": 1}, "Lotus": {"games": 5, "wins": 5}, "Haven": {"games": 2, "wins": 1}},
+             ["Ascent", "Bind", "Haven", "Lotus"], {"Bind": {"attack": .6, "defense": .45}}, {"Bind": {"attack": .5, "defense": .5}})
+    assert v["pick"] == "Bind" and v["bans"][0] == "Lotus" and len(v["bans"]) == 2
+    assert next(r for r in v["rows"] if r["map"] == "Bind")["side"] == "attack"
+    assert season_week_map({"x": [{"starts_at": "2026-10-26T00:00:00Z", "ends_at": "2026-11-02T00:00:00Z",
+                                    "map_selection": {"maps": [{"name": "Sunset"}]}}]},
+                           datetime(2026, 10, 30, tzinfo=timezone.utc)) == "Sunset"
+    assert season_week_map({"events": []}) is None and season_week_map(None) is None
+    assert how_to_play({"matches": 0}) == ["No Premier matches of this team found yet."]
+
+
+def test_progress_and_training_pages(app, monkeypatch):
+    import synth_history as sh
+    from valcoach import pipeline
+    history = sh.build_history(24)
+    monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrik(history, full_depth=10))
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    me = add_profile(c)
+    assert "No games yet" in c.get(f"/profiles/{me}/progress").data.decode()
+    c.post(f"/profiles/{me}/stats/import")
+    assert _wait_stats(app, f"import:{me}")["status"] == "done"
+    page = c.get(f"/profiles/{me}/progress").data.decode()
+    assert "Clutches, retakes, post-plants" in page and "KAST" in page and "1v1" in page
+    tid = store.create_team(store.user_by_name("manuel").id, "Squad")
+    store.update_team(tid, members=[{"pid": me, "kind": "starter", "roles": ["Support"]}], maps=["Ascent", "Bind"])
+    page = c.get(f"/profiles/{me}/training").data.decode()
+    assert "Aim fundamentals" in page and "Your warm-up" in page and "Fights by range" in page
+    assert "Squad: agents to learn" in page and "Premier-ready" in page
+    assert "0-day streak" in page
+    assert c.post(f"/profiles/{me}/training/done").status_code == 302
+    assert "1-day streak" in c.get(f"/profiles/{me}/training").data.decode()
+    c.post(f"/profiles/{me}/training/done")                          # undo
+    assert "0-day streak" in c.get(f"/profiles/{me}/training").data.decode()
+    # another user can't tick someone else's routine
+    c2 = make_user(app, c, "burn")
+    assert c2.post(f"/profiles/{me}/training/done").status_code == 404
+    app.extensions["valcoach"]["stats"].shutdown()

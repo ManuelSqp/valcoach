@@ -32,6 +32,7 @@
 {% endif %}
 <div class="tabs" style="display:flex;gap:4px;margin:10px 0 18px;border-bottom:1px solid var(--line)">
   <a class="ttab {{ 'on' if tab == 'comps' }}" href="{{ url_for('team', tid=t.id) }}">Comps</a>
+  <a class="ttab {{ 'on' if tab == 'premier' }}" href="{{ url_for('team_premier', tid=t.id) }}">Premier</a>
   <a class="ttab {{ 'on' if tab == 'drafts' }}" href="{{ url_for('team_drafts', tid=t.id) }}">Drafts</a>
   <a class="ttab {{ 'on' if tab == 'plans' }}" href="{{ url_for('team_plans', tid=t.id) }}">Game plans</a>
   <a class="ttab {{ 'on' if tab == 'strats' }}" href="{{ url_for('team_strats', tid=t.id) }}">Strat book</a>
@@ -43,4 +44,7 @@
 <style>
 .ttab{padding:8px 14px;text-decoration:none;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:600}
 .ttab:hover{color:var(--text)}.ttab.on{color:var(--text);border-bottom-color:var(--red)}
+@media(max-width:760px){.tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch}.tabs::-webkit-scrollbar{display:none}
+  .ttab{white-space:nowrap;padding:8px 10px;flex:none}}
 </style>
+<script>(function(){const a=document.querySelector('.tabs .ttab.on');if(a&&a.parentNode.scrollWidth>a.parentNode.clientWidth)a.parentNode.scrollLeft=a.offsetLeft-40;})();</script>
