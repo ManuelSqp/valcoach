@@ -766,3 +766,12 @@ def test_own_icon_picked_from_api_positions_not_a_yellow_portrait():
     _pick_self(per_frame, rnd, "me", lambda t: (True, 4, 5))
     xs = [k[3] for _, kept in per_frame for k in kept if k[0].kind == "self"]
     assert len(xs) == 20 and max(xs) < 2000                  # the portrait was never taken
+
+def test_playbook_with_wrong_structure_does_not_crash(tmp_path):
+    from valcoach.coach.engine import load_playbook
+    p = tmp_path / "playbook.yaml"
+    for text in ("maps:\n - Ascent\n", "maps:\n 2024: x\n"):
+        p.write_text(text)
+        assert load_playbook(p, "Ascent") == ""
+    p.write_text("maps:\n  ascent:\n    plan: default\n")
+    assert "default" in load_playbook(p, "Ascent")
