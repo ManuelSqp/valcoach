@@ -21,6 +21,7 @@ nav.top{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom
 .navlinks a.navteams:hover,.navlinks a.navteams.active{border-color:var(--red);background:rgba(255,70,85,.12)}
 .navsep{width:1px;align-self:stretch;background:var(--line);margin:2px 6px}
 .uptime{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;padding:4px 9px;border:1px solid var(--line);border-radius:99px;background:var(--panel2);white-space:nowrap;cursor:default}
+.navlinks a.uplink{padding:0;background:none;text-decoration:none}.uplink .uptime{cursor:pointer}.uplink:hover .uptime{border-color:var(--line2);color:var(--text)}
 .uptime .dot{width:7px;height:7px;border-radius:50%;background:var(--win);box-shadow:0 0 0 0 rgba(53,208,160,.6);animation:uppulse 2.4s infinite}
 @keyframes uppulse{0%{box-shadow:0 0 0 0 rgba(53,208,160,.55)}70%{box-shadow:0 0 0 6px rgba(53,208,160,0)}100%{box-shadow:0 0 0 0 rgba(53,208,160,0)}}
 @media(prefers-reduced-motion:reduce){.uptime .dot{animation:none}}
@@ -124,9 +125,9 @@ body.a-tabs main.page{animation:pagein .22s ease-out}
     <a href="{{ url_for('profile_new') }}" data-nav="new">+ Player</a>
     <span class="spacer"></span>
     <button type="button" class="kbtn" data-cmdk title="Quick search (Ctrl+K or /)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="sr-only">Search</span><kbd>Ctrl K</kbd></button>
-    <span class="uptime" id="uptime" data-start="{{ app_started }}" data-now="{{ server_now }}" {% if host_boot %}data-host="{{ host_boot|int }}"{% endif %}><span class="dot"></span><span class="t">up</span></span>
+    {% if user.can('overview') %}<a href="{{ url_for('overview') }}" class="uplink" title="Server overview">{% endif %}<span class="uptime" id="uptime" data-start="{{ app_started }}" data-now="{{ server_now }}" {% if host_boot %}data-host="{{ host_boot|int }}"{% endif %}><span class="dot"></span><span class="t">up</span></span>{% if user.can('overview') %}</a>{% endif %}
     {% if user.is_admin %}
-    <a href="{{ url_for('users') }}" class="{{ 'active' if request.endpoint in ('users', 'user_edit') }}">Users</a>
+    <a href="{{ url_for('users') }}" class="{{ 'active' if request.endpoint in ('users', 'user_edit', 'overview') }}">Users</a>
     <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint == 'settings' }}">Settings</a>
     {% endif %}
     <a href="{{ url_for('account') }}" class="{{ 'active' if request.endpoint == 'account' }}">{{ user.username }}</a>

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Users · valcoach{% endblock %}
 {% block content %}
-<h1>Users</h1>
+<div class="row between"><h1>Users</h1><a class="btn ghost sm" href="{{ url_for('overview') }}">Server overview →</a></div>
 <p class="sub">Every user has a private workspace. Admins also manage users and the server settings.
   Sign-up is <b style="color:var(--text)">{{ 'on' if signup_enabled else 'off' }}</b> (<a href="{{ url_for('settings') }}">change</a>).</p>
 

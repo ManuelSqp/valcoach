@@ -30,6 +30,11 @@
   {% if not b.map %}
   <div class="bk"><p style="margin:0">This week's map isn't known yet. Pick one above, or set it on the Premier tab.</p></div>
   {% else %}
+  {% set a = b.avail %}
+  {% if a %}<div class="bk"><h2>Who's playing <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">{{ a.label }}</span></h2>
+    <p style="margin:0" class="small"><b style="color:{{ 'var(--win)' if a.level == 'ok' else ('var(--amber)' if a.level == 'maybe' else 'var(--red)') }}">{{ a.yes|length }}/5 confirmed</b>{% if a.yes %}: {{ a.yes|map(attribute='name')|join(', ') }}{% endif %}{% if a.maybe %} · maybe {{ a.maybe|map(attribute='name')|join(', ') }}{% endif %}{% if a.unknown %} · no answer {{ a.unknown|map(attribute='name')|join(', ') }}{% endif %}</p>
+    {% for slot in a.missing %}<p class="small" style="margin:6px 0 0"><b>{{ slot.name }}</b> can't play{% if slot.agent %} ({{ slot.agent }}){% endif %}{% if slot.subs %}: <b>{{ slot.subs[0].name }}</b> {{ slot.subs[0].why }}{% else %}: nobody else is free{% endif %}</p>{% endfor %}
+    <p class="small" style="margin:6px 0 0"><a href="{{ url_for('team_availability', tid=t.id) }}">Availability →</a></p></div>{% endif %}
   <div class="bk"><h2>Comp</h2>
     {% if b.comp %}<p class="small muted" style="margin:-4px 0 8px">from the {{ b.comp.source }}</p>
     <div class="picks">{% for p in b.comp.picks %}<div class="pk">{{ ai(p.agent, 30) }}<b>{{ p.agent }}</b><span class="who">{{ p.player }}{% if p.alt %} · or {{ p.alt }}{% endif %}{% if p.note %} · {{ p.note }}{% endif %}</span></div>{% endfor %}</div>

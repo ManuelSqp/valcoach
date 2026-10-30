@@ -86,9 +86,28 @@ def from_api(seasons, conference: str | None = None, now: datetime | None = None
     return best[1] if best else None
 
 
+def covers(sched: dict | None, now: datetime | None = None) -> bool:
+    """Is today inside this schedule (from 3 days before week 1 to the end of the playoffs)?"""
+    if not sched or not sched.get("weeks"):
+        return False
+    today = (now or datetime.now(timezone.utc)).date()
+    first = datetime.fromisoformat(sched["weeks"][0]["starts"]).date()
+    last = max([w["ends"] for w in sched["weeks"]] + [((sched.get("playoffs") or {}).get("ends") or "")])
+    return (first - today).days <= 3 and today.isoformat() <= last
+
+
 def schedule(seasons=None, conference: str | None = None, now: datetime | None = None) -> dict:
-    """The API's schedule when it has one, else the built-in stage."""
-    return from_api(seasons, conference, now) or BUILTIN
+    """The API's schedule when it covers today; else the built-in stage when that covers today
+    (HenrikDev sometimes still lists an older season); else whatever is closest."""
+    api = from_api(seasons, conference, now)
+    if covers(api, now):
+        return api
+    if covers(BUILTIN, now):
+        if api:
+            return {**BUILTIN, "note": f"The Premier API only lists an older season ({api['weeks'][0]['starts']} to "
+                                       f"{api['weeks'][-1]['ends']}), so the built-in stage is used."}
+        return BUILTIN
+    return api or BUILTIN
 
 
 def current(sched: dict, now: datetime | None = None) -> dict:

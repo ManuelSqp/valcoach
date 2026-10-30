@@ -1095,13 +1095,13 @@ def test_strat_board_only_stores_typed_fields(app):
     sid = int(r.headers["Location"].rsplit("/", 1)[1])
     evil = '"><img src=x onerror=alert(1)>'
     items = [{"id": "a1", "t": "num", "x": 10, "y": 20, "n": evil, "r": evil, "ang": evil, "len": "5"},
-             {"id": "a2", "t": "arrow", "x": 1, "y": 2, "x2": 30, "y2": 40, "c": "us", "dash": 1},
+             {"id": "a2", "k": "a0", "t": "arrow", "x": 1, "y": 2, "x2": 30, "y2": 40, "c": "us", "dash": 1},
              {"id": "a3", "t": "pen", "pts": [[1, 2], ["x", 3], [4, 5]]}, "junk", {"no": "type"}]
     r = c.post(f"/api/teams/{tid}/strats/{sid}", json={"data": {"steps": [{"name": "S", "items": items}]}})
     assert r.status_code == 200
     saved = store.strat(sid)["data"]["steps"][0]["items"]
     assert saved[0] == {"id": "a1", "t": "num", "x": 10, "y": 20, "len": 5}
-    assert saved[1]["x2"] == 30 and saved[1]["dash"] is True
+    assert saved[1]["x2"] == 30 and saved[1]["dash"] is True and saved[1]["k"] == "a0"     # k: playback links steps
     assert saved[2]["pts"] == [[1, 2], [4, 5]] and len(saved) == 3
     assert "onerror" not in json.dumps(store.strat(sid)["data"])
 
@@ -1402,6 +1402,13 @@ def test_progress_and_training_pages(app, monkeypatch):
     assert _wait_stats(app, f"import:{me}")["status"] == "done"
     page = c.get(f"/profiles/{me}/progress").data.decode()
     assert "Clutches, retakes, post-plants" in page and "KAST" in page and "1v1" in page
+    # rank over time from the RR history (kept locally), with a chart
+    assert "Rank over time" in page and "<svg class=\"rkc\"" in page and " RR</div>" in page
+    entries = app.extensions["valcoach"]["stats"].rank_path(me)
+    assert entries.exists() and len(json.loads(entries.read_text())["entries"]) >= 5
+    entries.unlink()                                       # without it: the rank shown in each match
+    page = c.get(f"/profiles/{me}/progress").data.decode()
+    assert "Rank over time" in page and "Platinum 1" in page and "no RR yet" in page
     tid = store.create_team(store.user_by_name("manuel").id, "Squad")
     store.update_team(tid, members=[{"pid": me, "kind": "starter", "roles": ["Support"]}], maps=["Ascent", "Bind"])
     page = c.get(f"/profiles/{me}/training").data.decode()
@@ -1465,3 +1472,136 @@ def test_clip_info():
     assert clip_info("https://medal.tv/games/valorant/clips/xyz")["thumb"] is None
     assert clip_info("https://youtube.com/watch?v=<script>")["thumb"] is None
     assert clip_info("javascript:alert(1)") is None and clip_info("ftp://x/y") is None and clip_info("") is None
+
+
+def test_availability_and_subs(app):
+    from datetime import date, timedelta
+    from valcoach.web.availability import day_summary, match_days, summary_line
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    pids = [add_profile(c, name=f"P{i}", tag="#T") for i in range(6)]
+    tid = store.create_team(store.user_by_name("manuel").id, "Squad")
+    store.update_team(tid, members=[{"pid": p, "kind": "starter" if i < 5 else "sub"} for i, p in enumerate(pids)], maps=["Bind"])
+    # every day a match day, so the page always has today
+    info = store.team(tid).sync_info
+    info["brief"] = {"on": False, "days": list(range(7)), "time": "20:00", "before": 60}
+    store.update_team(tid, sync=info)
+    today = date.today().isoformat()
+    page = c.get(f"/teams/{tid}/premier/availability").data.decode()
+    assert "Who can play" in page and "0 ✓" in page and "P5" in page and "Nobody has answered yet" in page
+    # yes for four starters, no for P0, the sub is free
+    for p in pids[1:]:
+        r = c.post(f"/api/teams/{tid}/availability", json={"pid": p, "day": today, "state": "yes"})
+        assert r.status_code == 200, r.data
+    c.post(f"/api/teams/{tid}/availability", json={"pid": pids[0], "day": today, "state": "no", "note": "<b>away</b>"})
+    marks = store.availability(tid, [today])
+    assert marks[(pids[0], today)] == {"state": "no", "note": "<b>away</b>"}
+    page = c.get(f"/teams/{tid}/premier/availability").data.decode()
+    assert "5 ✓" in page and "5 confirmed: you can play" in page and "P0</b> can&#39;t play" in page.replace("can't", "can&#39;t") and "&lt;b&gt;away" in page
+    assert "<b>away</b>" not in page
+    # bad input: unknown player, bad day, not JSON
+    assert c.post(f"/api/teams/{tid}/availability", json={"pid": 999, "day": today, "state": "yes"}).status_code == 404
+    assert c.post(f"/api/teams/{tid}/availability", json={"pid": pids[1], "day": "soon", "state": "yes"}).status_code == 400
+    assert c.post(f"/api/teams/{tid}/availability", data={"pid": pids[1]}).status_code == 400
+    # empty state clears the mark
+    c.post(f"/api/teams/{tid}/availability", json={"pid": pids[1], "day": today, "state": ""})
+    assert (pids[1], today) not in store.availability(tid)
+    # a teammate with access can only change their own row (once linked)
+    make_user(app, c, "mate")
+    mid = store.user_by_name("mate").id
+    store.add_team_access(tid, mid)
+    m2 = login(app, "mate", "user-pass-123")
+    assert m2.post(f"/api/teams/{tid}/availability", json={"pid": pids[2], "day": today, "state": "no"}).status_code == 403
+    store.update_team(tid, members=[dict(m, user_id=mid) if m["pid"] == pids[2] else m for m in store.team(tid).member_list])
+    assert m2.post(f"/api/teams/{tid}/availability", json={"pid": pids[2], "day": today, "state": "maybe"}).status_code == 200
+    assert m2.post(f"/api/teams/{tid}/availability", json={"pid": pids[3], "day": today, "state": "no"}).status_code == 403
+    # brief shows who's playing
+    assert "Who&#39;s playing" in c.get(f"/teams/{tid}/premier/brief?map=Bind").data.decode().replace("Who's", "Who&#39;s")
+
+    # pure: the sub who plays the missing agent comes first
+    members = [{"pid": 1, "name": "A", "kind": "starter"}, {"pid": 2, "name": "B", "kind": "sub"}, {"pid": 3, "name": "C", "kind": "sub"}]
+    d = {"day": today, "label": "x", "map": "Bind"}
+    marks = {(1, today): {"state": "no"}, (2, today): {"state": "yes"}, (3, today): {"state": "maybe"}}
+    rows = {2: [{"agent": "Sage", "won": 1}] * 3, 3: [{"agent": "Sova", "won": 1}] * 4}
+    s = day_summary(d, members, marks, [{"pid": 1, "agent": "Sova"}], rows)
+    assert s["missing"][0]["subs"][0]["name"] == "C" and "plays Sova (4 games" in s["missing"][0]["subs"][0]["why"]
+    assert "A can't play (Sova) → C plays Sova" in summary_line(s)
+    days = match_days([5, 6], None, date(2026, 10, 30))
+    assert [x["label"] for x in days] == ["Sat 31.10.", "Sun 01.11.", "Sat 07.11.", "Sun 08.11."]
+
+
+def test_decision_quiz(app, monkeypatch):
+    import synth_history as sh
+    from valcoach import pipeline
+    from valcoach.coach.ollama import Ollama
+    history = sh.build_history(24)
+    monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrik(history, full_depth=10))
+    seen = {}
+
+    def chat_json(self, system, user, schema):
+        ids = schema["properties"]["questions"]["items"]["properties"]["id"]["enum"]
+        seen["user"] = user
+        qs = [{"id": i, "question": f"You are alone ({i}). What now?", "options": ["Save", "Play for time", "<script>x</script>"],
+               "best": 1, "why": "Time is on your side."} for i in ids]
+        qs.append({"id": "nope", "question": "x", "options": ["a", "b", "c"], "best": 0, "why": ""})     # unknown id: dropped
+        qs[0]["best"] = 7                                                                                 # out of range: dropped
+        return {"questions": qs}
+    monkeypatch.setattr(Ollama, "check", lambda self: None)
+    monkeypatch.setattr(Ollama, "chat_json", chat_json)
+    # the synthetic games have no 1vX / lonely deaths: one made-up moment per game (moments() itself: test_stats)
+    import valcoach.stats.quiz as qz
+    monkeypatch.setattr(qz, "moments", lambda m, pu, mi: [{"kind": "clutch", "t_ms": 60000, "happened": "You lost the 1v2.",
+        "facts": {"match_id": m.match_id, "map": m.map_name, "round": 9, "side": "defense", "agent": "Sova", "score": "4–4",
+                  "won": False, "time_s": 60, "you_vs": "1v2", "spike": "spike planted on B 10 s ago"}}])
+    c = setup_admin(app)
+    me = add_profile(c)
+    cache = Path(app.extensions["valcoach"]["store"].data_dir) / "cache" / "matches"      # the real client caches every match
+    cache.mkdir(parents=True, exist_ok=True)
+    for d in history:
+        (cache / f"{d['metadata']['match_id']}.json").write_text(json.dumps({"status": 200, "data": d}))
+    assert "Make my first quiz" in c.get(f"/profiles/{me}/quiz").data.decode()
+    c.post(f"/profiles/{me}/stats/import")
+    assert _wait_stats(app, f"import:{me}")["status"] == "done"
+    assert c.post(f"/profiles/{me}/quiz").status_code == 302
+    st = _wait_stats(app, f"quiz:{me}")
+    assert st["status"] == "done", st
+    sr = app.extensions["valcoach"]["stats"]
+    q = sr.read_quiz(me)
+    assert 2 <= len(q["questions"]) <= 5 and all(x["happened"] and x["map"] for x in q["questions"])
+    assert "time_s" in seen["user"] and "happened" not in seen["user"]          # the model never sees the outcome
+    page = c.get(f"/profiles/{me}/quiz").data.decode()
+    assert "New quiz from my latest games" in page and "quiz-data" in page and "<script>x</script>" not in page.split('id="quiz-data">')[0]
+    # score is counted on the server
+    n = len(q["questions"])
+    r = c.post(f"/api/profiles/{me}/quiz/result", json={"answers": [1] * n})
+    assert r.get_json() == {"ok": True, "score": n, "of": n}
+    assert c.post(f"/api/profiles/{me}/quiz/result", json={"answers": [1]}).status_code == 400
+    assert "Your scores" in c.get(f"/profiles/{me}/quiz").data.decode()
+    c2 = make_user(app, c, "burn")
+    assert c2.post(f"/profiles/{me}/quiz").status_code == 404
+    app.extensions["valcoach"]["stats"].shutdown()
+
+
+def test_server_overview_permission(app, monkeypatch):
+    import valcoach.web.overview as ov
+    from valcoach import henrik
+    monkeypatch.setattr(ov, "model_usage", lambda url, now=None: {"reachable": False, "loaded": [], "installed": 0, "error": "ConnectionError",
+                                                                  "requests_day": 0, "avg_s": None, "tokens_day": 0})
+    henrik.USAGE.extend([(time.time(), 200, "match"), (time.time(), 429, "premier")])
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    store.set("henrik_api_key", "HDEV-secret-key")
+    page = c.get("/admin/overview").data.decode()
+    assert "Server overview" in page and "HenrikDev API" in page and "Rate-limited" in page and "offline" in page
+    assert "HDEV-secret-key" not in page and "Match cache" not in page or "Database" in page
+    assert 'class="uplink"' in c.get("/").data.decode()                       # the uptime clock links to it
+    c2 = make_user(app, c, "darki")
+    assert c2.get("/admin/overview").status_code == 403 and 'class="uplink"' not in c2.get("/").data.decode()
+    uid = store.user_by_name("darki").id
+    # the admin gives the overview (and only that) to darki
+    r = c.post(f"/admin/users/{uid}", data={"perm_overview": "1", "vod_dir": ""})
+    assert r.status_code == 302 and store.user(uid).perms == "overview" and not store.user(uid).is_admin
+    assert c2.get("/admin/overview").status_code == 200 and 'class="uplink"' in c2.get("/").data.decode()
+    assert c2.get("/admin/users").status_code == 403 and c2.get("/settings").status_code == 403
+    c.post(f"/admin/users/{uid}", data={"vod_dir": ""})                        # and takes it away again
+    assert store.user(uid).perms == "" and c2.get("/admin/overview").status_code == 403

@@ -31,10 +31,14 @@ class StatsRunner:
         self.ex = ThreadPoolExecutor(max_workers=1, thread_name_prefix="stats")
         self._state: dict[str, dict] = {}
         self._lock = threading.Lock()
+        self.last_tick = 0.0             # when the scheduler last looked at the clock (admin overview)
 
     # ---- paths ------------------------------------------------------------
     def games(self, pid: int) -> GameStore:
         return GameStore(self.store.profile_dir(pid) / "stats" / "games.json")
+
+    def rank_path(self, pid: int) -> Path:
+        return self.store.profile_dir(pid) / "stats" / "rank.json"
 
     def tips_path(self, pid: int, map_name: str, queue: str) -> Path:
         return self.store.profile_dir(pid) / "stats" / "tips" / f"{slug(map_name)}_{queue}.json"
@@ -55,6 +59,11 @@ class StatsRunner:
     def busy(self, key: str) -> bool:
         st = self.status(key)
         return bool(st and st["status"] in ("queued", "running"))
+
+    def states(self) -> dict[str, dict]:
+        """Every background job this server ran since it started: {key: {status, t, error}}."""
+        with self._lock:
+            return {k: {"status": v["status"], "t": v.get("t", 0), "error": v.get("error", "")} for k, v in self._state.items()}
 
     def _set(self, key: str, **kw) -> None:
         with self._lock:
@@ -90,6 +99,13 @@ class StatsRunner:
                                cfg.path(cfg.paths.cache_dir), lambda m: self._log(key, m),
                                full_limit=FULL_LIMIT, stored_limit=STORED_LIMIT)
             self._log(key, f"✓ {res['total']} games ({res['full']} new with round data, {res['stored']} new from the archive)")
+            try:                                   # rank + RR per game for Progress (optional)
+                from ..henrik import mmr_history
+                from ..stats.rank import RankStore, parse_entries
+                n = RankStore(self.rank_path(pid)).merge(parse_entries(mmr_history(client, p.region, p.name, p.tag)))
+                self._log(key, f"· rank history: {n} new games")
+            except Exception as e:
+                self._log(key, f"  ! rank history: {e}")
             self._set(key, status="done")
         except Exception as e:
             self._log(key, "✗ " + str(e))
@@ -391,6 +407,81 @@ class StatsRunner:
         llm.check()
         return llm, cfg
 
+    # ---- decision quiz from your own rounds -------------------------------------------
+    def quiz_path(self, pid: int) -> Path:
+        return self.store.profile_dir(pid) / "stats" / "quiz.json"
+
+    def read_quiz(self, pid: int) -> dict:
+        try:
+            return json.loads(self.quiz_path(pid).read_text())
+        except (OSError, ValueError):
+            return {}
+
+    def save_quiz(self, pid: int, data: dict) -> None:
+        p = self.quiz_path(pid)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False))
+        tmp.replace(p)
+
+    def submit_quiz(self, pid: int) -> str:
+        key = f"quiz:{pid}"
+        if not self.busy(key):
+            with self._lock:
+                self._state[key] = {"status": "queued", "log": [], "error": "", "t": time.time()}
+            self.ex.submit(self._quiz, key, pid)
+        return key
+
+    def _quiz(self, key: str, pid: int) -> None:
+        from ..maps import MapRegistry
+        from ..parse import parse_match
+        from ..stats.quiz import moments, pick, write_quiz
+        self._set(key, status="running")
+        try:
+            p = self.store.profile(pid)
+            if p is None:
+                raise RuntimeError("Player was deleted")
+            data = self.games(pid).load()
+            rows = sorted((r for r in data["games"].values() if r.get("source") == "full"),
+                          key=lambda r: r.get("started_at", ""), reverse=True)[:20]
+            cache = self.store.data_dir / "cache"
+            reg = MapRegistry(cache)
+            found, read = [], 0
+            for r in rows:
+                f = cache / "matches" / f"{r['match_id']}.json"
+                if not f.exists():
+                    continue
+                read += 1
+                try:
+                    m = parse_match(json.loads(f.read_text()))
+                    me = m.players.get(data.get("puuid", "")) or m.find_player(p.name, p.tag)
+                    if me is None:
+                        continue
+                    try:
+                        mi = reg.get(m.map_id, m.map_name)
+                    except Exception:
+                        mi = None
+                    found += moments(m, me.puuid, mi)
+                except Exception as e:
+                    self._log(key, f"  ! skipped a match: {e}")
+            picked = pick(found)
+            self._log(key, f"· {len(found)} moments in your last {read} games with round data, {len(picked)} picked")
+            if len(picked) < 3:
+                raise RuntimeError("Not enough moments yet: play a few more games and press Import on Stats & agents.")
+            llm, cfg = self._llm(p)
+            self._log(key, f"· writing the questions with {cfg.ollama.model} ...")
+            qs = write_quiz(llm, picked, p.language)
+            if not qs:
+                raise RuntimeError("The model's answer had no usable questions; try again.")
+            old = self.read_quiz(pid)
+            self.save_quiz(pid, {"created": time.time(), "model": cfg.ollama.model, "questions": qs,
+                                 "results": (old.get("results") or [])[-30:]})
+            self._log(key, f"✓ {len(qs)} questions")
+            self._set(key, status="done")
+        except Exception as e:
+            self._log(key, "✗ " + str(e))
+            self._set(key, status="error", error=str(e) or e.__class__.__name__)
+
     # ---- game plans -----------------------------------------------------------------
     def submit_plans(self, tid: int, items: list[dict], language: str, post: dict | None = None) -> str:
         """items: [{map, facts, lineup, callouts, notes, tips}]"""
@@ -520,6 +611,7 @@ class StatsRunner:
         nightly_job(team) once a night at the team's sync hour (default 02:00)."""
         def loop():
             while not self._stop.wait(every_s):
+                self.last_tick = time.time()
                 try:
                     self.tick(weekly_job)
                 except Exception:

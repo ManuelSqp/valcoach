@@ -5,6 +5,7 @@ import json
 import re
 import threading
 import time
+from collections import deque
 
 import requests
 
@@ -14,6 +15,10 @@ THINK_CHOICES = ("", "off", "on")
 
 class OllamaError(RuntimeError):
     pass
+
+
+# model requests made by this server (for the admin overview): (time, seconds, tokens written, model)
+RECENT: "deque[tuple[float, float, int, str]]" = deque(maxlen=5000)
 
 
 class Ollama:
@@ -80,6 +85,7 @@ class Ollama:
         msg = body.get("message", {}) or {}
         thinking = msg.get("thinking") or ""
         inline = re.findall(r"<think>(.*?)</think>", msg.get("content", "") or "", re.S)
+        RECENT.append((time.time(), wall_s, body.get("eval_count") or 0, self.model))
         with self._lock:
             self._stats.append({
                 "wall_s": wall_s,

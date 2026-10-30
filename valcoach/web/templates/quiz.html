@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Quiz · {{ p.riot_id }} · valcoach{% endblock %}
+{% block head %}
+<style>
+.qz{max-width:760px}
+.qhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.qtag{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.qdots{display:flex;gap:5px}.qdots span{width:10px;height:10px;border-radius:50%;background:var(--panel3);border:1px solid var(--line2)}
+.qdots span.ok{background:var(--win);border-color:var(--win)}.qdots span.bad{background:var(--red);border-color:var(--red)}.qdots span.cur{outline:2px solid var(--text);outline-offset:1px}
+.qq{font-size:17px;line-height:1.45;margin:10px 0 14px}
+.qopts{display:grid;gap:8px}
+.qo{text-align:left;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font:inherit;font-size:14.5px;cursor:pointer;display:flex;gap:10px;align-items:flex-start}
+.qo b{color:var(--muted);min-width:18px}
+.qo:hover:not(:disabled){border-color:var(--line2);background:var(--panel3)}
+.qo:disabled{cursor:default}
+.qo.right{border-color:var(--win);background:rgba(53,208,160,.12)}.qo.wrong{border-color:var(--red);background:rgba(255,70,85,.1)}
+.qx{margin-top:14px;display:none}.qx.on{display:block}
+.qx .why{background:var(--panel2);border-left:3px solid var(--win);border-radius:0 8px 8px 0;padding:9px 12px;font-size:14px}
+.qx .hap{font-size:13.5px;margin-top:8px;color:var(--muted)}.qx .hap b{color:var(--text)}
+.qend{text-align:center;padding:10px 0}.qend .big{font-size:44px;font-weight:800}
+.hist{display:flex;gap:4px;align-items:flex-end;height:40px;margin-top:6px}
+.hist span{flex:1;max-width:22px;background:var(--line2);border-radius:3px 3px 0 0;min-height:3px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="row between" style="margin-bottom:14px">
+  <div><h1>{{ p.name }}<span class="tag">#{{ p.tag }}</span> · quiz</h1>
+    <div class="muted">decisions from your own rounds</div></div>
+  {% if can_edit %}<form method="post"><button class="btn {{ 'primary' if not q.questions else 'ghost' }}" {{ 'disabled' if status and status.status in ('queued', 'running') }}>{{ 'New quiz from my latest games' if q.questions else 'Make my first quiz' }}</button></form>{% endif %}
+</div>
+{% include "_player_tabs.html" %}
+{% if status and status.status in ('queued', 'running', 'error') %}
+<div class="card" data-key="quiz:{{ p.id }}" data-state="{{ status.status }}" style="margin-bottom:14px">
+  <span class="pill {{ 'running' if status.status != 'error' else 'error' }}">{{ 'writing the quiz' if status.status != 'error' else 'quiz failed' }}</span>
+  <pre class="log" style="margin-top:8px">{{ status.log|join('\n') }}</pre></div>
+{% endif %}
+
+{% if not q.questions %}
+<section class="card qz"><p style="margin:0">The quiz takes moments from your last games with round data: when you were left alone at the end, a first death far from your team that nobody traded, and rounds you lost with more players alive. For each one you pick the call you'd make; then you see the best call, why, and what really happened.</p>
+  <p class="small muted" style="margin:8px 0 0">Needs games with round data (Stats &amp; agents › Import) and the model (written by Ollama, takes a minute).</p></section>
+{% else %}
+<section class="card qz" id="quiz">
+  <div class="qhead"><span class="qtag" id="qtag"></span><div class="qdots" id="qdots"></div></div>
+  <div class="qq" id="qq"></div>
+  <div class="qopts" id="qopts"></div>
+  <div class="qx" id="qx"><div class="why" id="qwhy"></div><div class="hap" id="qhap"></div>
+    <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn primary" id="qnext">Next</button></div></div>
+  <div class="qend" id="qend" hidden></div>
+</section>
+<p class="small muted qz">{% if q.model %}Written by {{ q.model }} from{% else %}From{% endif %} {{ q.questions|length }} moments in your games. The best call is the model's judgement from the numbers, not a rule: talk it through with your team.</p>
+{% if results %}
+<section class="card qz" style="margin-top:14px"><h2 style="margin:0">Your scores</h2>
+  <div class="hist" aria-label="last scores">{% for r in results %}<span style="height:{{ ((r.score / r.of) * 100)|round|int if r.of else 0 }}%" title="{{ r.score }}/{{ r.of }}"></span>{% endfor %}</div>
+  <p class="small muted" style="margin:6px 0 0">Last {{ results|length }} rounds of the quiz{% if best is not none %} · best {{ (best * 100)|round|int }}%{% endif %}.</p></section>
+{% endif %}
+<script type="application/json" id="quiz-data">{{ q.questions|tojson }}</script>
+<script>
+(function () {
+  const Q = JSON.parse(document.getElementById('quiz-data').textContent);
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+  let i = 0; const answers = [];
+  function dots() { $('qdots').innerHTML = Q.map((q, n) => `<span class="${n < answers.length ? (answers[n] === Q[n].best ? 'ok' : 'bad') : ''} ${n === i ? 'cur' : ''}"></span>`).join(''); }
+  function show() {
+    const q = Q[i];
+    $('qtag').textContent = `${i + 1}/${Q.length} · ${q.kind_label} · ${q.map} round ${q.round} (${q.side})${q.agent ? ' · ' + q.agent : ''}`;
+    $('qq').textContent = q.question;
+    $('qopts').innerHTML = q.options.map((o, n) => `<button class="qo" data-n="${n}"><b>${'ABCD'[n]}</b><span>${esc(o)}</span></button>`).join('');
+    $('qx').classList.remove('on'); dots();
+  }
+  $('qopts').addEventListener('click', e => {
+    const b = e.target.closest('.qo'); if (!b || b.disabled) return;
+    const n = +b.dataset.n, q = Q[i];
+    answers[i] = n;
+    document.querySelectorAll('.qo').forEach(x => { x.disabled = true; if (+x.dataset.n === q.best) x.classList.add('right'); });
+    if (n !== q.best) b.classList.add('wrong');
+    $('qwhy').innerHTML = `<b>${n === q.best ? 'Right.' : 'Best call: ' + 'ABCD'[q.best] + '.'}</b> ${esc(q.why)}`;
+    $('qhap').innerHTML = `<b>What happened:</b> ${esc(q.happened)}`;
+    $('qnext').textContent = i === Q.length - 1 ? 'See the score' : 'Next';
+    $('qx').classList.add('on'); dots(); $('qnext').focus();
+  });
+  $('qnext').onclick = async () => {
+    if (i < Q.length - 1) { i += 1; show(); return; }
+    const score = answers.filter((a, n) => a === Q[n].best).length;
+    ['qq', 'qopts', 'qx'].forEach(id => $(id).style.display = 'none'); $('qtag').textContent = 'Done'; i = Q.length; dots();
+    $('qend').hidden = false;
+    $('qend').innerHTML = `<div class="big">${score}/${Q.length}</div><p>${score === Q.length ? 'Every call right.' : score >= Q.length / 2 ? 'Good: look at the ones you missed with your team.' : 'Worth talking through with your team.'}</p>
+      <button class="btn ghost" onclick="location.reload()">Again</button>`;
+    {% if can_edit %}try { await fetch({{ result_url|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({answers})}); } catch (e) {}{% endif %}
+  };
+  document.addEventListener('keydown', e => {
+    if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+    const n = 'abcd1234'.indexOf(e.key.toLowerCase()) % 4;
+    if (n >= 0 && 'abcd1234'.includes(e.key.toLowerCase())) { const b = document.querySelector(`.qo[data-n="${n}"]`); if (b && !b.disabled) b.click(); }
+  });
+  show();
+})();
+</script>
+{% endif %}
+<script>
+(function () {
+  document.querySelectorAll('[data-key]').forEach(el => {
+    if (!['queued', 'running'].includes(el.dataset.state)) return;
+    const log = el.querySelector('pre');
+    const tick = async () => {
+      try {
+        const s = await (await fetch('{{ url_for("stats_status") }}?key=' + encodeURIComponent(el.dataset.key))).json();
+        if (log && s.log) log.textContent = s.log.join('\n');
+        if (s.status === 'done' || s.status === 'error') { location.reload(); return; }
+      } catch (e) {}
+      setTimeout(tick, 2500);
+    };
+    setTimeout(tick, 1500);
+  });
+})();
+</script>
+{% endblock %}

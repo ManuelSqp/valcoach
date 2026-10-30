@@ -21,6 +21,14 @@
 @media(max-width:600px){.cl{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .cl div{background:var(--panel2);border-radius:8px;padding:8px 10px;text-align:center}.cl b{display:block;font-size:18px}
 .cl span{font-size:11px;color:var(--muted)}
+.rk{display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;align-items:center}
+@media(max-width:700px){.rk{grid-template-columns:1fr}}
+.rk .now{font-size:26px;font-weight:800;line-height:1.1}.rk .rr{font-size:14px;color:var(--muted);font-weight:600}
+.rk .d{font-size:13px;font-weight:700;margin-top:6px}.rk .d.up{color:var(--win)}.rk .d.down{color:var(--red)}
+.rkc{width:100%;height:auto;display:block}
+.rkc .tl{stroke:var(--line);stroke-width:1}.rkc text{fill:var(--muted);font-size:11px}
+.rkc .ln{fill:none;stroke:var(--text);stroke-width:2;stroke-linejoin:round;opacity:.85}
+.rkc circle{fill:var(--muted)}.rkc circle.up{fill:var(--win)}.rkc circle.dn{fill:var(--red)}
 </style>
 {% endblock %}
 {% block content %}
@@ -33,6 +41,26 @@
 {% if not n %}
 <section class="card"><p>No games yet: import your history on <a href="{{ url_for('stats', pid=p.id) }}">Stats &amp; agents</a>.</p></section>
 {% else %}
+
+{% if rank %}
+<section class="card" style="margin-bottom:14px">
+  <h2>Rank over time</h2>
+  <div class="rk">
+    <div><div class="now">{{ rank.name }}</div>{% if rank.rr is not none %}<div class="rr">{{ rank.rr }} RR</div>{% endif %}
+      {% if rank.delta14 is not none %}<div class="d {{ 'up' if rank.delta14 > 0 else ('down' if rank.delta14 < 0 else '') }}">{{ '+' if rank.delta14 > 0 }}{{ rank.delta14 }} {{ 'RR' if rank_src == 'rr' else 'points' }} in 14 days</div>
+      <div class="small muted">{{ rank.games14 }} ranked games in that time</div>{% endif %}
+      <div class="small muted" style="margin-top:6px">Peak: {{ rank.peak }} ({{ rank.peak_date }})</div></div>
+    {% if rank_chart %}{% set c = rank_chart %}
+    <svg class="rkc" viewBox="0 0 {{ c.w }} {{ c.h }}" role="img" aria-label="Rank over the last {{ c.dots|length }} ranked games">
+      {% for l in c.lines %}<line class="tl" x1="{{ c.x0 }}" x2="{{ c.x1 }}" y1="{{ l.y }}" y2="{{ l.y }}"></line><text x="4" y="{{ l.ly }}">{{ l.label }}</text>{% endfor %}
+      <path class="ln" d="{{ c.path }}"></path>
+      {% for d in c.dots %}<circle class="{{ 'up' if d.up else ('dn' if d.up == false else '') }}" cx="{{ d.x }}" cy="{{ d.y }}" r="3.2"><title>{{ d.title }}</title></circle>{% endfor %}
+      <text x="{{ c.x0 }}" y="{{ c.bottom }}">{{ c.first }}</text><text x="{{ c.x1 }}" y="{{ c.bottom }}" text-anchor="end">{{ c.last }}</text>
+    </svg>{% else %}<p class="muted small">The line appears after a few ranked games.</p>{% endif %}
+  </div>
+  <p class="small muted" style="margin:8px 0 0">{% if rank_src == 'rr' %}Rank and RR after each ranked game (HenrikDev's rank history, kept here so older games stay). Green = RR won, red = lost. Hover for the game.{% else %}From the rank shown in each ranked match (no RR yet: press <i>Import</i> on Stats &amp; agents to load the RR history).{% endif %}</p>
+</section>
+{% endif %}
 
 {% if checks %}
 <section class="card">

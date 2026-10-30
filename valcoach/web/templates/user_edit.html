@@ -12,6 +12,7 @@
     <input type="text" name="vod_dir" value="{{ u.vod_dir }}" placeholder="Empty = uploads only">
     <div class="hint">VODs in this folder (up to 3 levels deep) are offered on this user's coach page. Only give each user a folder with their own recordings.</div></div>
   <label class="choice"><input type="checkbox" name="is_admin" value="1" {{ 'checked' if u.is_admin }}><span><b>Admin</b><span class="muted small">Can manage users and server settings. Does not see other users' workspaces.</span></span></label>
+  <label class="choice"><input type="checkbox" name="perm_overview" value="1" {{ 'checked' if 'overview' in (u.perms or '').split(',') }}><span><b>Can see the server overview</b><span class="muted small">HenrikDev use, the model, background jobs and disk space, without being admin (admins always see it). No keys, logs or other people's games.</span></span></label>
   <label class="choice"><input type="checkbox" name="disabled" value="1" {{ 'checked' if u.disabled }}><span><b>Disabled</b><span class="muted small">Can't log in; data is kept.</span></span></label>
   <div class="field" style="margin-top:14px"><label>Set a new password (optional)</label>
     <input type="text" name="new_password" minlength="{{ min_password }}" placeholder="Leave empty to keep the current password" autocomplete="off">

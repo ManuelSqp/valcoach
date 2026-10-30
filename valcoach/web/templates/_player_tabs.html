@@ -2,6 +2,7 @@
   <a class="ttab {{ 'on' if tab == 'stats' }}" href="{{ url_for('stats', pid=p.id, queue=queue) }}">Stats &amp; agents</a>
   <a class="ttab {{ 'on' if tab == 'progress' }}" href="{{ url_for('progress', pid=p.id, queue=queue) }}">Progress</a>
   <a class="ttab {{ 'on' if tab == 'training' }}" href="{{ url_for('training', pid=p.id) }}">Training</a>
+  <a class="ttab {{ 'on' if tab == 'quiz' }}" href="{{ url_for('quiz', pid=p.id) }}">Quiz</a>
   <a class="ttab {{ 'on' if tab == 'pros' }}" href="{{ url_for('pros', pid=p.id, queue=queue) }}">Pro &amp; videos</a>
   {% if can_edit is not defined or can_edit %}<a class="ttab" href="{{ url_for('profile', pid=p.id) }}">Matches &amp; reports</a>{% endif %}
 </div>
