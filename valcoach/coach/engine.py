@@ -62,10 +62,12 @@ def load_playbook(path: Path, map_name: str) -> str:
     pb = yaml.safe_load(path.read_text()) or {}
     if not isinstance(pb, dict):
         return "\nTeam playbook (judge decisions against this):\n" + str(pb) + "\n"
-    maps = pb.get("maps", {}) or {}
+    maps = pb.get("maps")
+    if not isinstance(maps, dict):
+        maps = {}
     relevant = {k: v for k, v in pb.items() if k != "maps"}
     for name, data in maps.items():
-        if name.lower() == map_name.lower():
+        if str(name).lower() == map_name.lower():
             relevant["this_map"] = {name: data}
     if not relevant:
         return ""
