@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Drafts · {{ t.name }} · valcoach{% endblock %}
+{% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="{{ agent }}" title="{{ agent }}" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% block head %}
+<style>
+.page{max-width:1500px}
+.ai{border-radius:50%;vertical-align:middle;background:#0b0e13;object-fit:cover;flex:none}
+.maptabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px}
+.maptabs .n{font-size:10px;font-weight:700;background:rgba(255,255,255,.12);border-radius:99px;padding:0 6px;margin-left:5px}
+.dr{display:grid;grid-template-columns:250px minmax(0,1fr) 250px;gap:14px;align-items:start}
+@media(max-width:1200px){.dr{grid-template-columns:220px minmax(0,1fr)}.dr-pal{grid-column:1/-1;position:static!important;max-height:none!important}}
+@media(max-width:760px){.dr{grid-template-columns:1fr}}
+.dr-side,.dr-pal{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.dr-pal{position:sticky;top:64px;max-height:calc(100vh - 90px);overflow:auto}
+.dr-side h2,.dr-pal h2{margin:0 0 8px}
+.dlist{display:grid;gap:6px;margin-bottom:12px}
+.ditem{display:block;text-decoration:none;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 9px}
+.ditem:hover{border-color:#4a5468}.ditem.on{border-color:var(--red);background:rgba(255,70,85,.06)}
+.ditem .nm{font-weight:700;font-size:13px;display:flex;justify-content:space-between;gap:6px;align-items:center}
+.ditem .nm span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ditem .icons{display:flex;gap:3px;margin:6px 0 3px}.ditem .icons i{width:22px;height:22px;border-radius:50%;background:#0b0e13;border:1px dashed #333b4a;display:inline-block}
+.ditem .meta{font-size:11px;color:var(--muted)}
+.st{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:99px;padding:1px 7px;white-space:nowrap}
+.st.idea{background:rgba(138,147,166,.18);color:var(--muted)}.st.try{background:rgba(242,184,75,.15);color:var(--amber)}.st.main{background:rgba(53,208,160,.15);color:var(--win)}
+.sug{background:var(--panel2);border-radius:8px;padding:7px 8px;margin-bottom:6px}
+.sug .icons{display:flex;gap:3px;margin-bottom:5px}
+.sug .row{justify-content:space-between}
+.dr-main .card{margin:0 0 14px}
+.edtop{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.edtop #dr-name{flex:1;min-width:200px;font-size:16px;font-weight:700}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;padding:6px 11px;font-size:12px;font-weight:700;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on[data-st=idea]{background:rgba(138,147,166,.2);color:var(--text)}.seg button.on[data-st=try]{background:rgba(242,184,75,.18);color:var(--amber)}.seg button.on[data-st=main]{background:rgba(53,208,160,.18);color:var(--win)}
+.seg button:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
+.savest{font-size:12px;color:var(--muted);min-width:80px}.savest.unsaved,.savest.not{color:var(--amber)}.savest.saved{color:var(--win)}
+.slots{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:14px}
+@media(max-width:1000px){.slots{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){.slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.slot{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px;display:flex;flex-direction:column;gap:7px;min-width:0;transition:border-color .1s}
+.slot.sel{border-color:var(--red);box-shadow:0 0 0 1px var(--red) inset}
+.slot select,.slot input{font-size:12.5px;padding:5px 7px}
+.drop{position:relative;border:2px dashed #333b4a;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;color:var(--muted);font-size:12px;user-select:none;touch-action:none}
+.drop.main{min-height:132px;padding:8px}.drop.alt{min-height:44px;flex-direction:row;gap:7px;padding:4px 6px;justify-content:flex-start;font-size:11.5px}
+.drop.full{border-style:solid;border-color:#3a4458;background:#0e1218;color:var(--text);cursor:grab}
+.drop.hot{border-color:var(--red)!important;background:rgba(255,70,85,.08)!important}
+.drop img{pointer-events:none;border-radius:50%;background:#0b0e13;object-fit:cover}
+.pf{position:relative;width:30px;height:30px;border-radius:50%;background:#0b0e13;display:grid;place-items:center;flex:none;overflow:hidden}
+.pf b{font-size:13px;color:var(--muted)}.pf.big{width:76px;height:76px}.pf.big b{font-size:30px}
+.pf img{position:absolute;inset:0;width:100%;height:100%}
+.drop .an{font-weight:800;font-size:14px}.drop .ar{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.drop .x{all:unset;position:absolute;top:2px;right:5px;cursor:pointer;color:var(--muted);font-size:15px;line-height:1;padding:2px}
+.drop .x:hover{color:var(--red)}
+.sstat{font-size:11.5px;line-height:1.35;color:var(--muted);min-height:30px}
+.sstat b{color:var(--text);font-weight:600}.sstat .warn{color:var(--amber)}
+.qp{display:flex;gap:4px;align-items:center;flex-wrap:wrap;font-size:10.5px;color:var(--muted)}
+.qp button{all:unset;cursor:pointer;border-radius:50%;line-height:0}.qp .pf{width:26px;height:26px;border:2px solid transparent}.qp .pf b{font-size:11px}
+.qp button:hover .pf,.qp button:focus-visible .pf{border-color:var(--red)}
+.checks{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+@media(max-width:900px){.checks{grid-template-columns:1fr}}
+.mix{display:flex;gap:6px;flex-wrap:wrap}
+.mix span{font-size:12px;font-weight:700;padding:4px 9px;border-radius:99px;background:var(--panel2);border:1px solid var(--line)}
+.mix span.zero{color:var(--muted);font-weight:500}
+.warns{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:5px;font-size:13px}
+.warns li{padding:5px 9px;border-radius:6px;background:var(--panel2);border-left:3px solid var(--muted)}
+.warns li.bad{border-color:var(--red)}.warns li.warn{border-color:var(--amber)}.warns li.ok{border-color:var(--win)}
+#dr-notes{min-height:150px;font-family:inherit;font-size:13px;width:100%}
+.prole{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:10px 0 5px}
+.pgrid{display:flex;flex-wrap:wrap;gap:5px}
+.pa{position:relative;width:44px;height:44px;border-radius:50%;border:2px solid #333b4a;background:#0b0e13;padding:0;cursor:grab;touch-action:none;display:grid;place-items:center;color:#fff;font:700 14px/1 inherit;overflow:hidden}
+.pa img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
+.pa:hover,.pa:focus-visible{border-color:var(--red);outline:none}
+.pa.used{opacity:.35}.pa.used::after{content:"✓";position:absolute;right:1px;bottom:-1px;font-size:12px;color:var(--win);text-shadow:0 0 3px #000}
+.dr-ghost{position:fixed;z-index:60;pointer-events:none;width:56px;height:56px;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 8px 24px rgba(0,0,0,.55);border:2px solid var(--red);background:#0b0e13;object-fit:cover}
+.edactions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+<div class="maptabs">{% for mp in maps %}<a class="btn sm {{ 'primary' if mp == sel else 'ghost' }}" href="{{ url_for('team_drafts', tid=t.id, map=mp) }}">{{ mp }}{% if counts.get(mp) %}<span class="n">{{ counts[mp] }}</span>{% endif %}</a>{% endfor %}</div>
+
+{% if not players %}
+<section class="card"><p class="muted">No players in this team yet. {% if g.team_owner %}Add them under <a href="{{ url_for('team_settings', tid=t.id) }}">Members, maps &amp; Discord</a>.{% endif %}</p></section>
+{% else %}
+<div class="dr">
+  <aside class="dr-side">
+    <h2>{{ sel }} drafts</h2>
+    <div class="dlist">
+      {% for d in drafts %}
+      <a class="ditem {{ 'on' if cur and d.id == cur.id }}" data-did="{{ d.id }}" href="{{ url_for('team_drafts', tid=t.id, map=sel, d=d.id) }}">
+        <div class="nm"><span>{{ d.name }}</span><span class="st {{ d.data.status or 'idea' }}">{{ {'idea': 'idea', 'try': 'trying', 'main': 'our comp'}[d.data.status or 'idea'] }}</span></div>
+        <div class="icons">{% for s in d.data.slots or [] %}{% if s.agent %}{{ ai(s.agent, 22) }}{% else %}<i></i>{% endif %}{% endfor %}</div>
+        <div class="meta">{{ d.editor or 'someone' }} · {{ d.updated_at[:16]|replace('T', ' ') }}</div>
+      </a>
+      {% else %}<p class="muted small" style="margin:0">No drafts for {{ sel }} yet.</p>{% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('team_drafts', tid=t.id) }}"><input type="hidden" name="map" value="{{ sel }}">
+      <button class="btn sm primary" style="width:100%">+ New draft</button></form>
+    {% if suggestions %}
+    <div class="prole" style="margin-top:14px">Start from a suggested comp</div>
+    {% for c in suggestions %}
+    <form method="post" action="{{ url_for('team_drafts', tid=t.id) }}" class="sug"><input type="hidden" name="map" value="{{ sel }}"><input type="hidden" name="from" value="comp:{{ loop.index0 }}">
+      <div class="icons">{% for pk in c.picks %}{{ ai(pk.agent, 26) }}{% endfor %}</div>
+      <div class="row"><span class="muted small">{{ c.pattern }}</span><button class="btn sm ghost">Use</button></div>
+    </form>
+    {% endfor %}
+    {% elif players|selectattr('kind', 'equalto', 'starter')|list|length != 5 %}
+    <p class="muted small" style="margin-top:12px">Suggestions show up with exactly 5 starters.</p>
+    {% endif %}
+  </aside>
+
+  <div class="dr-main">
+    {% if cur %}
+    <section class="card">
+      <div class="edtop">
+        <input type="text" id="dr-name" maxlength="80" aria-label="Draft name">
+        <div class="seg" role="group" aria-label="Status">
+          <button type="button" data-st="idea" title="Just an idea">Idea</button><button type="button" data-st="try" title="We're trying it in games">Trying</button><button type="button" data-st="main" title="This is our comp">Our comp</button>
+        </div>
+        <span id="dr-status" class="savest saved">saved</span>
+      </div>
+      <div class="slots" id="dr-slots"></div>
+      <p class="muted small" style="margin:10px 0 0">Drag agents from the right onto a player (the small box is a backup pick). Click a slot, then click an agent to fill it.
+        Drag between slots to swap, drag out to remove. The faces under each slot are that player's best agents on {{ sel }}.</p>
+    </section>
+    <div class="checks">
+      <section class="card">
+        <h2>Check</h2>
+        <div class="mix" id="dr-mix"></div>
+        <ul class="warns" id="dr-warns"></ul>
+      </section>
+      <section class="card">
+        <h2>Notes from your discussions</h2>
+        <textarea id="dr-notes" maxlength="3000" placeholder="Why this draft, who plays what role, what to try, what didn't work…"></textarea>
+      </section>
+    </div>
+    <div class="edactions">
+      <form method="post" action="{{ url_for('team_drafts', tid=t.id) }}"><input type="hidden" name="map" value="{{ sel }}"><input type="hidden" name="from" value="copy:{{ cur.id }}"><button class="btn sm ghost" title="New draft starting as a copy of this one">Duplicate</button></form>
+      {% if discord.prep_url or discord.focus_url %}<form method="post" action="{{ url_for('draft_discord', tid=t.id, did=cur.id) }}" data-flush><button class="btn sm ghost">Post to Discord</button></form>{% endif %}
+      {% if can_delete[cur.id] %}<form method="post" action="{{ url_for('draft_delete', tid=t.id, did=cur.id) }}" onsubmit="return confirm('Delete this draft?')"><button class="btn sm ghost danger">Delete draft</button></form>{% endif %}
+    </div>
+    {% else %}
+    <section class="card"><h2>No draft open</h2>
+      <p>Make a draft for {{ sel }}: <b>+ New draft</b> starts with your starters in the slots, or start from one of the suggested comps on the left. Everyone in the team can edit drafts; they save by themselves.</p></section>
+    {% endif %}
+  </div>
+
+  {% if cur %}
+  <aside class="dr-pal" aria-label="Agents">
+    <h2>Agents</h2>
+    <div id="dr-pal"></div>
+  </aside>
+  {% endif %}
+</div>
+{% endif %}
+{% if cur %}
+<script type="application/json" id="draft-boot">{{ boot|safe }}</script>
+<script src="{{ url_for('static', filename='drafts.js') }}?v={{ app_version }}"></script>
+{% endif %}
+{% endblock %}

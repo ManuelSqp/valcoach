@@ -1189,3 +1189,51 @@ def test_abandoned_uploads_are_removed(app, monkeypatch):
     monkeypatch.setattr("valcoach.web.uploads.time.time", lambda: real() + STALE_S + 1)
     assert make_user(app, c, "bob").post("/api/uploads", json={"name": "a.mp4", "size": 10}).status_code == 200
     assert len(list(tmp.iterdir())) == 1
+
+
+def test_roster_drafts(app):
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    me = add_profile(c)
+    other = add_profile(c, name="Burn", tag="#NOW")
+    tid = store.create_team(store.user_by_name("manuel").id, "Squad")
+    store.update_team(tid, members=[{"pid": me, "kind": "starter"}, {"pid": other, "kind": "sub"}], maps=["Bind", "Haven"])
+    page = c.get(f"/teams/{tid}/drafts").data.decode()
+    assert "Drafts" in page and "No drafts for Bind yet" in page
+    # new draft: starters in the slots
+    r = c.post(f"/teams/{tid}/drafts", data={"map": "Bind"})
+    did = int(r.headers["Location"].split("d=")[1])
+    d = store.draft(did)
+    assert d["map"] == "Bind" and d["data"]["slots"][0]["pid"] == me and len(d["data"]["slots"]) == 5
+    page = c.get(r.headers["Location"]).data.decode()
+    boot = json.loads(page.split('id="draft-boot">')[1].split("</script>")[0].replace("<\\/", "</"))
+    assert boot["draft"]["id"] == did and {p["pid"] for p in boot["players"]} == {me, other}
+    assert any(a["name"] == "Omen" for a in boot["agents"])
+    # save: only known players / agents and typed fields survive (no HTML from another member)
+    bad = {"slots": [{"pid": other, "agent": "Omen", "alt": "Clove", "note": "smokes + IGL"},
+                     {"pid": 999, "agent": "<img src=x onerror=alert(1)>", "alt": 5, "note": ["x"]},
+                     {"pid": "1; drop", "agent": "Sova"}, "junk"] + [{}] * 5,
+           "status": "main", "notes": "try the A split", "evil": "<script>"}
+    assert c.post(boot["save_url"], data={"x": "1"}).status_code == 400
+    r = c.post(boot["save_url"], json={"name": "Double controller", "data": bad})
+    assert r.status_code == 200 and r.get_json()["ok"]
+    d = store.draft(did)
+    s = d["data"]["slots"]
+    assert d["name"] == "Double controller" and d["data"]["status"] == "main" and "evil" not in d["data"]
+    assert s[0] == {"pid": other, "agent": "Omen", "alt": "Clove", "note": "smokes + IGL"}
+    assert s[1] == {"pid": None, "agent": "", "alt": "", "note": "['x']"} and s[2]["pid"] is None and s[2]["agent"] == "Sova"
+    assert len(s) == 5 and "onerror" not in json.dumps(d["data"])
+    # copy, other map, list counts
+    r = c.post(f"/teams/{tid}/drafts", data={"map": "Bind", "from": f"copy:{did}"})
+    assert store.draft(int(r.headers["Location"].split("d=")[1]))["data"]["slots"][0]["agent"] == "Omen"
+    assert c.post(f"/teams/{tid}/drafts", data={"map": "Nowhere"}).status_code == 400
+    assert len(store.drafts(tid, "Bind")) == 2 and store.drafts(tid, "Haven") == []
+    # a teammate with access can edit but not delete someone else's draft
+    c2 = make_user(app, c, "burn")
+    assert c2.get(f"/teams/{tid}/drafts").status_code == 404                # not shared yet
+    store.add_team_access(tid, store.user_by_name("burn").id)
+    assert c2.get(f"/teams/{tid}/drafts?map=Bind&d={did}").status_code == 200
+    assert c2.post(f"/api/teams/{tid}/drafts/{did}", json={"name": "B stack"}).status_code == 200
+    assert c2.post(f"/teams/{tid}/drafts/{did}/delete").status_code == 403
+    # outsiders don't see it, the owner deletes
+    assert c.post(f"/teams/{tid}/drafts/{did}/delete").status_code == 302 and store.draft(did) is None

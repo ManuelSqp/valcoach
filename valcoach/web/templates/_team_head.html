@@ -32,6 +32,7 @@
 {% endif %}
 <div class="tabs" style="display:flex;gap:4px;margin:10px 0 18px;border-bottom:1px solid var(--line)">
   <a class="ttab {{ 'on' if tab == 'comps' }}" href="{{ url_for('team', tid=t.id) }}">Comps</a>
+  <a class="ttab {{ 'on' if tab == 'drafts' }}" href="{{ url_for('team_drafts', tid=t.id) }}">Drafts</a>
   <a class="ttab {{ 'on' if tab == 'plans' }}" href="{{ url_for('team_plans', tid=t.id) }}">Game plans</a>
   <a class="ttab {{ 'on' if tab == 'strats' }}" href="{{ url_for('team_strats', tid=t.id) }}">Strat book</a>
   <a class="ttab {{ 'on' if tab == 'focus' }}" href="{{ url_for('team_focus', tid=t.id) }}">Weekly focus</a>

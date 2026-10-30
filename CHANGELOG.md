@@ -10,6 +10,23 @@ every report, and with `valcoach --version`. Update: unzip over your install (ke
   be bigger than 17 MB any more, so nobody can fill the disk without logging in. Temp files stay in `data/tmp`.
   A proxy in front of valcoach must allow bodies of at least 17 MB.
 
+## 2.17.0
+- **Drafts** (new team tab): roster drafts per map, made together.
+  - Five player slots (starters or subs). Drag agents from the list onto a player, add a backup pick, drag between
+    slots to swap, drag out to remove, or click a slot and then an agent. Works with mouse, pen and touch.
+  - Start empty (your starters already in the slots) or from one of the 3 suggested comps for the map.
+  - Every slot shows that player's numbers on the agent (games and win rate on this map and overall) and their
+    best agents on the map to pick with one click.
+  - *Check*: role mix, and warnings for the same agent twice, a player in two slots, no controller / initiator /
+    sentinel, 3+ duelists, and players who haven't played their agent yet.
+  - Status *Idea / Trying / Our comp*, a role or job per player ("IGL", "lurk B"), notes from your discussions,
+    *Duplicate*, *Post to Discord* (#match-prep). Saves by itself; the list shows everyone's drafts per map.
+  - Only team members and real agents are stored (same idea as the strat board): nothing another member saves
+    can run in your browser.
+- **VOD fixes from the first real recording** (in 2.16.0 on GitHub, details in [CHANGES.md](CHANGES.md)): big
+  uploads no longer fill `/tmp`, ultrawide recordings (black bars) work, "Based on side" minimap orientation is
+  calibrated, the minimap summary no longer counts 11 allies, your own icon is followed from your API positions.
+
 ## 2.16.0
 - **Pro & videos: pick the pro.** Click any of the 3 pro cards to select it. Everything below then follows that pro:
   - the white marks on your playstyle bars,
