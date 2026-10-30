@@ -293,9 +293,10 @@ def test_youtube_search_and_cache(tmp_path):
     class Sess:
         calls = 0
 
-        def get(self, url, params, timeout):
+        def get(self, url, params, headers, timeout):
+            assert "key" not in params and headers == {"X-Goog-Api-Key": "K"}
             Sess.calls += 1
-            assert params["key"] == "K" and params["type"] == "video"
+            assert params["type"] == "video"
             return Resp(200, {"items": [{"id": {"videoId": "abc"}, "snippet": {
                 "title": "aspas Jett POV", "channelTitle": "VODs", "publishedAt": "2026-09-01T00:00:00Z",
                 "thumbnails": {"medium": {"url": "https://i.ytimg.com/vi/abc/mqdefault.jpg"}}}}]})
@@ -427,3 +428,26 @@ def test_game_plan_steps_cleaned_and_ordered():
                       ["A Main", "Mid"], [], [])
     assert [s["player"] for s in out["plans"][0]["steps"]] == ["a", "b"]
     assert out["plans"][0]["steps"][1]["what"] == "Lurk mid"
+
+
+def test_secrets_stay_out_of_network_errors(tmp_path, monkeypatch):
+    """requests puts the whole URL in its error text, and those texts are shown to teammates."""
+    import requests
+    from valcoach import discord
+    from valcoach.stats import youtube
+    monkeypatch.setattr(youtube, "API", "https://127.0.0.1:9/youtube/v3/search")   # nothing listens here
+    with pytest.raises(requests.RequestException) as e:
+        youtube.search("SECRETKEY", "q", tmp_path)
+    assert "SECRETKEY" not in str(e.value)
+
+    url = "https://discord.com/api/webhooks/1/SECRETTOKEN"
+
+    class Down:
+        def post(self, url, **kw):
+            raise requests.ConnectionError(f"Max retries exceeded with url: {url}")
+    for send in (lambda: discord.post(url, "hi", session=Down()),
+                 lambda: discord.post_file(url, "hi", "a.png", b"x", session=Down())):
+        with pytest.raises(discord.DiscordError) as e:
+            send()
+        assert "SECRETTOKEN" not in str(e.value) and "ConnectionError" in str(e.value)
+        assert e.value.__suppress_context__

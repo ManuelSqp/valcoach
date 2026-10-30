@@ -30,8 +30,8 @@ def search(api_key: str, query: str, cache_dir: Path, n: int = 3, session=None) 
     after = (datetime.now(timezone.utc) - timedelta(days=MAX_AGE_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
     r = (session or requests).get(API, params={
         "part": "snippet", "type": "video", "q": query, "maxResults": n, "order": "relevance",
-        "publishedAfter": after, "relevanceLanguage": "en", "safeSearch": "moderate", "key": api_key,
-    }, timeout=10)
+        "publishedAfter": after, "relevanceLanguage": "en", "safeSearch": "moderate",
+    }, headers={"X-Goog-Api-Key": api_key}, timeout=10)     # not in the URL: that ends up in error texts
     if r.status_code != 200:
         try:
             msg = r.json()["error"]["message"]

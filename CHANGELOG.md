@@ -9,6 +9,8 @@ every report, and with `valcoach --version`. Update: unzip over your install (ke
   byte is sent, not after the whole file has arrived, and a lost connection only repeats one piece. No request may
   be bigger than 17 MB any more, so nobody can fill the disk without logging in. Temp files stay in `data/tmp`.
   A proxy in front of valcoach must allow bodies of at least 17 MB.
+- **API keys stay out of error messages.** A network error could show the YouTube key or a Discord webhook URL on
+  pages teammates can open. The YouTube key now goes in a header, and Discord errors no longer contain the URL.
 
 ## 2.17.0
 - **Drafts** (new team tab): roster drafts per map, made together.

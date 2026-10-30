@@ -27,6 +27,14 @@ def _cut(s: str, n: int) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
 
 
+def _send(session, url: str, **kw):
+    """The webhook URL is a password, and requests puts it in its error texts, which teammates can see."""
+    try:
+        return (session or requests).post(url, **kw)
+    except requests.RequestException as e:
+        raise DiscordError(f"Could not reach Discord ({e.__class__.__name__})") from None
+
+
 def post(url: str, content: str = "", embeds: list[dict] | None = None, session=None) -> None:
     if not valid_url(url):
         raise DiscordError("That's not a Discord webhook URL")
@@ -37,7 +45,7 @@ def post(url: str, content: str = "", embeds: list[dict] | None = None, session=
         if i == 0 and content:
             body["content"] = _cut(content, 1900)
         for attempt in range(3):
-            r = (session or requests).post(url, json=body, timeout=15)
+            r = _send(session, url, json=body, timeout=15)
             if r.status_code == 429 and attempt < 2:          # rate limited: wait as told
                 try:
                     time.sleep(min(10.0, float(r.json().get("retry_after", 2))))
@@ -55,8 +63,8 @@ def post_file(url: str, content: str, filename: str, data: bytes, session=None) 
     if not valid_url(url):
         raise DiscordError("That's not a Discord webhook URL")
     payload = {"username": "valcoach", "allowed_mentions": {"parse": []}, "content": _cut(content, 1900)}
-    r = (session or requests).post(url, data={"payload_json": _json.dumps(payload)},
-                                   files={"files[0]": (filename, data, "image/png")}, timeout=30)
+    r = _send(session, url, data={"payload_json": _json.dumps(payload)},
+              files={"files[0]": (filename, data, "image/png")}, timeout=30)
     if r.status_code >= 300:
         raise DiscordError(f"Discord answered {r.status_code}: {_cut(r.text, 200)}")
 
