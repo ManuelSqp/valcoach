@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Availability · {{ t.name }} · valcoach{% endblock %}
+{% macro ai(agent, size=20) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% block head %}
+<style>
+.ai{border-radius:50%;vertical-align:middle;background:var(--ink);object-fit:cover;flex:none}
+.avwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.av{border-collapse:separate;border-spacing:4px;min-width:100%}
+.av th{font-size:12px;font-weight:700;text-align:center;padding:4px 6px;white-space:nowrap;vertical-align:bottom}
+.av th .mp{display:block;font-weight:600;color:var(--muted);font-size:11px}
+.av th.today{color:var(--red)}
+.av td.n{white-space:nowrap;font-weight:600;padding-right:10px;font-size:13.5px}
+.av td.n .k{font-size:10.5px;color:var(--muted);font-weight:500;margin-left:4px}
+.cell{width:100%;min-width:52px;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-weight:800;font-size:15px;cursor:pointer;font-family:inherit}
+.cell:disabled{cursor:default;opacity:.85}
+.cell.yes{background:rgba(53,208,160,.18);border-color:rgba(53,208,160,.6);color:var(--win)}
+.cell.maybe{background:rgba(242,184,75,.16);border-color:rgba(242,184,75,.6);color:var(--amber)}
+.cell.no{background:rgba(255,70,85,.14);border-color:rgba(255,70,85,.55);color:var(--red)}
+.cell.has-note{box-shadow:inset 0 -3px 0 var(--line2)}
+.tot{font-size:11.5px;font-weight:700;text-align:center;border-radius:6px;padding:3px 4px}
+.tot.ok{color:var(--win)}.tot.maybe{color:var(--amber)}.tot.short{color:var(--red)}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:14px}
+.dc{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;border-top:3px solid var(--line2)}
+.dc.ok{border-top-color:var(--win)}.dc.maybe{border-top-color:var(--amber)}.dc.short{border-top-color:var(--red)}
+.dc h3{margin:0 0 4px;font-size:16px}.dc .pl{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.dc .pl span{font-size:12px;padding:2px 8px 2px 3px;border-radius:99px;background:var(--panel2);display:inline-flex;gap:5px;align-items:center}
+.dc .pl span.off{opacity:.45;text-decoration:line-through}
+.sub{font-size:13px;background:var(--panel2);border-radius:8px;padding:7px 10px;margin-top:6px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_premier_nav.html" %}
+<section class="card">
+  <div class="row between"><h2 style="margin:0">Who can play</h2>
+    <span class="small muted">{% if days_set %}Match days from <a href="{{ url_for('team_premier', tid=t.id) }}">Brief before each match</a>{% else %}Sat &amp; Sun for now: set your match days under <a href="{{ url_for('team_premier', tid=t.id) }}">Brief before each match</a>{% endif %}</span></div>
+  {% if not members %}<p class="muted">Add players under Members, maps &amp; Discord first.</p>
+  {% elif not days %}<p class="muted">No match days in the next two weeks.</p>
+  {% else %}
+  <p class="small muted" style="margin:6px 0 8px">Click your own cells: ✓ yes → ? maybe → ✗ no → empty. Right-click (or long-press) to add a short note like "from 21:00".{% if not g.team_owner %} You can change your own row once you've linked yourself to your player on the team page.{% endif %}</p>
+  <div class="avwrap"><table class="av" id="av">
+    <thead><tr><th></th>{% for d in days %}<th class="{{ 'today' if d.today }}">{{ d.label }}<span class="mp">{{ d.map or ('Playoffs' if d.playoffs else '–') }}</span></th>{% endfor %}</tr></thead>
+    <tbody>{% for m in members %}<tr><td class="n">{{ m.name }}<span class="k">{{ m.kind }}</span></td>
+      {% for s in sums %}{% set st = s.state[m.pid] %}{% set nt = notes.get(m.pid ~ '|' ~ s.day, '') %}
+      <td><button type="button" class="cell {{ st or '' }} {{ 'has-note' if nt }}" data-pid="{{ m.pid }}" data-day="{{ s.day }}" data-state="{{ st or '' }}" data-note="{{ nt }}"
+        title="{{ m.name }} · {{ s.label }}{{ ': ' ~ nt if nt }}" aria-label="{{ m.name }} on {{ s.label }}: {{ st or 'no answer' }}" {{ '' if editable[m.pid] else 'disabled' }}>{{ {'yes': '✓', 'maybe': '?', 'no': '✗'}.get(st, '·') }}</button></td>{% endfor %}</tr>{% endfor %}</tbody>
+    <tfoot><tr><td class="n small muted">sure <span class="k">5 needed</span></td>{% for s in sums %}<td><div class="tot {{ s.level }}">{{ s.yes|length }} ✓{% if s.maybe %} +{{ s.maybe|length }}?{% endif %}</div></td>{% endfor %}</tr></tfoot>
+  </table></div>
+  <div class="legend"><span>✓ playing</span><span>? maybe</span><span>✗ can't</span><span>· no answer</span></div>
+  {% endif %}
+</section>
+
+{% set answered = sums|rejectattr('unknown', 'equalto', members)|list %}
+{% set silent = sums|selectattr('unknown', 'equalto', members)|list %}
+{% if answered %}
+<div class="dgrid">
+  {% for s in answered %}
+  <section class="dc {{ s.level }}">
+    <h3>{{ s.label }} {% if s.map %}· {{ s.map }}{% elif s.playoffs %}· playoffs{% endif %}</h3>
+    <div class="small muted">{% if s.level == 'ok' %}{{ s.yes|length }} confirmed: you can play{{ ' (' ~ (s.yes|length - 5) ~ ' spare)' if s.yes|length > 5 }}.{% elif s.level == 'maybe' %}Only {{ s.yes|length }} sure, {{ s.maybe|length }} maybe.{% else %}Only {{ s.yes|length }} sure: you're short.{% endif %}
+      {% if s.unknown %} No answer yet: {{ s.unknown|map(attribute='name')|join(', ') }}.{% endif %}</div>
+    {% if s.plan %}<div class="small" style="margin-top:8px"><b>Planned</b> <span class="muted">({{ s.plan_source }})</span></div>
+    <div class="pl">{% for p in s.plan %}{% set off = s.missing|selectattr('name', 'equalto', p.name)|list %}<span class="{{ 'off' if off }}">{% if p.agent %}{{ ai(p.agent) }}{% endif %}{{ p.name }}{% if p.agent %} <span class="muted">{{ p.agent }}</span>{% endif %}</span>{% endfor %}</div>{% endif %}
+    {% for slot in s.missing %}
+    <div class="sub"><b>{{ slot.name }}</b> can't play{% if slot.agent %} ({{ slot.agent }}){% endif %}.
+      {% if slot.subs %}Who could: {% for c in slot.subs %}<b>{{ c.name }}</b> <span class="muted">{{ c.why }}{{ ', maybe' if c.state == 'maybe' }}</span>{{ '; ' if not loop.last }}{% endfor %}
+      {% else %}{% set waiting = s.unknown|rejectattr('name', 'in', s.plan|map(attribute='name')|list)|list %}<span style="color:var(--red)">Nobody else said yes yet{% if waiting %}: {{ waiting|map(attribute='name')|join(', ') }} hasn't answered{% endif %}.</span>{% endif %}</div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+</div>
+{% endif %}
+{% if silent and members %}<p class="small muted" style="margin-top:10px">Nobody has answered yet for {{ silent|map(attribute='label')|join(', ') }}.</p>{% endif %}
+<script>
+(function () {
+  const t = document.getElementById('av'); if (!t) return;
+  const ORDER = ['', 'yes', 'maybe', 'no'], SIGN = {'': '·', yes: '✓', maybe: '?', no: '✗'};
+  async function send(b, state, note) {
+    const prev = [b.dataset.state, b.dataset.note];
+    paint(b, state, note);
+    try {
+      const r = await fetch({{ save_url|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({pid: +b.dataset.pid, day: b.dataset.day, state, note})});
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status);
+      window.valcoachToast && window.valcoachToast('Saved');
+      clearTimeout(window._avReload); window._avReload = setTimeout(() => location.reload(), 2500);   // refresh the day cards
+    } catch (e) { paint(b, prev[0], prev[1]); alertBox(e.message); }
+  }
+  function alertBox(m) { window.valcoachToast ? window.valcoachToast(m, 'error') : console.warn(m); }
+  function paint(b, state, note) {
+    b.dataset.state = state; b.dataset.note = note || '';
+    b.className = 'cell ' + state + (note ? ' has-note' : ''); b.textContent = SIGN[state];
+  }
+  t.addEventListener('click', e => {
+    const b = e.target.closest('.cell'); if (!b || b.disabled) return;
+    const next = ORDER[(ORDER.indexOf(b.dataset.state) + 1) % ORDER.length];
+    send(b, next, next ? b.dataset.note : '');
+  });
+  t.addEventListener('contextmenu', e => {
+    const b = e.target.closest('.cell'); if (!b || b.disabled) return;
+    e.preventDefault();
+    const n = prompt('Note for this day (e.g. "from 21:00"):', b.dataset.note || '');
+    if (n === null) return;
+    send(b, b.dataset.state || 'maybe', n.slice(0, 80));
+  });
+})();
+</script>
+{% endblock %}

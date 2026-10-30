@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections import deque
 from pathlib import Path
 
 import requests
@@ -13,6 +14,18 @@ import requests
 
 class HenrikError(RuntimeError):
     pass
+
+
+# requests made by this server (for the admin overview): (time, HTTP status, kind)
+USAGE: "deque[tuple[float, int, str]]" = deque(maxlen=20000)
+LIMITS: dict = {}            # the last rate-limit headers HenrikDev sent
+
+
+def _kind(path: str) -> str:
+    for k in ("stored-mmr-history", "stored-matches", "premier", "by-puuid/account", "matches", "match"):
+        if f"/{k}/" in path:
+            return {"by-puuid/account": "account", "stored-mmr-history": "rank history"}.get(k, k)
+    return "other"
 
 
 class HenrikClient:
@@ -43,6 +56,11 @@ class HenrikClient:
                                       f"tried {attempt + 1} times") from e
                 self._wait(5 * (attempt + 1), f"no answer from HenrikDev ({e.__class__.__name__}), retrying")
                 continue
+            USAGE.append((time.time(), r.status_code, _kind(path)))
+            lim = {k.lower(): v for k, v in (getattr(r, "headers", None) or {}).items() if k.lower().startswith("x-ratelimit")}
+            if lim:
+                LIMITS.clear()
+                LIMITS.update(lim, at=time.time())
             if r.status_code == 429 and attempt < self.max_retries:
                 wait = r.headers.get("Retry-After") or r.headers.get("X-RateLimit-Reset") or "5"
                 try:
@@ -109,6 +127,12 @@ class HenrikClient:
             params["mode"] = mode
         data = self._get(f"/valorant/v1/stored-matches/{region}/{name}/{tag}", params)
         return data.get("data", []) or [], data.get("results", {}) or {}
+
+
+def mmr_history(client: "HenrikClient", region: str, name: str, tag: str, size: int = 50) -> list[dict]:
+    """Rank and RR per competitive game (HenrikDev's stored MMR history, newest first)."""
+    data = client._get(f"/valorant/v1/stored-mmr-history/{region}/{name}/{tag}", {"page": 1, "size": size})
+    return data.get("data", []) or []
 
 
 # ------------------------------------------------------------------ Premier

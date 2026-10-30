@@ -143,6 +143,16 @@ CREATE TABLE IF NOT EXISTS drafts (
   updated_by INTEGER
 );
 CREATE INDEX IF NOT EXISTS drafts_team ON drafts(team_id, map);
+CREATE TABLE IF NOT EXISTS availability (
+  team_id    INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  pid        INTEGER NOT NULL,
+  day        TEXT NOT NULL,
+  state      TEXT NOT NULL,
+  note       TEXT NOT NULL DEFAULT '',
+  updated_by INTEGER,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (team_id, pid, day)
+);
 """
 
 DEFAULTS: dict[str, str] = {
@@ -214,6 +224,10 @@ class User:
     last_login: str
     display_name: str = ""     # in-game name, e.g. adv1ce#LFT
     prefs: str = "{}"          # JSON: look & feel (style, animation switches)
+    perms: str = ""            # extra rights an admin gave this user, comma separated (e.g. "overview")
+
+    def can(self, perm: str) -> bool:
+        return bool(self.is_admin) or perm in {x.strip() for x in (self.perms or "").split(",")}
 
     @property
     def label(self) -> str:
@@ -378,6 +392,9 @@ class Store:
             if "prefs" not in ucols:
                 # v2.20 database: look & feel per user
                 c.execute("ALTER TABLE users ADD COLUMN prefs TEXT NOT NULL DEFAULT '{}'")
+            if "perms" not in ucols:
+                # v2.21 database: rights an admin can give without making someone admin
+                c.execute("ALTER TABLE users ADD COLUMN perms TEXT NOT NULL DEFAULT ''")
             cols = [r[1] for r in c.execute("PRAGMA table_info(profiles)")]
             if "position" not in cols:
                 # v2.2 database: add the drag-and-drop order, starting alphabetical
@@ -499,7 +516,7 @@ class Store:
         return key
 
     def update_user(self, uid: int, **fields) -> None:
-        allowed = {"is_admin", "vod_dir", "disabled", "display_name", "prefs"}
+        allowed = {"is_admin", "vod_dir", "disabled", "display_name", "prefs", "perms"}
         sets = {k: v for k, v in fields.items() if k in allowed}
         if not sets:
             return
@@ -852,6 +869,27 @@ class Store:
 
     def delete_draft(self, did: int) -> None:
         self._exec("DELETE FROM drafts WHERE id = ?", (did,))
+
+    # ---- availability for match days (Premier tab) -----------------------------
+    def availability(self, tid: int, days: list[str] | None = None) -> dict[tuple[int, str], dict]:
+        """{(pid, "YYYY-MM-DD"): {"state": "yes"|"maybe"|"no", "note"}}"""
+        q, args = "SELECT * FROM availability WHERE team_id = ?", (tid,)
+        if days:
+            q += f" AND day IN ({','.join('?' * len(days))})"
+            args += tuple(days)
+        return {(r["pid"], r["day"]): {"state": r["state"], "note": r["note"]} for r in self._all(q, args)}
+
+    def set_availability(self, tid: int, pid: int, day: str, state: str, note: str, user_id: int) -> None:
+        if state not in ("yes", "maybe", "no"):
+            self._exec("DELETE FROM availability WHERE team_id = ? AND pid = ? AND day = ?", (tid, pid, day))
+            return
+        self._exec("INSERT INTO availability(team_id, pid, day, state, note, updated_by, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?) "
+                   "ON CONFLICT(team_id, pid, day) DO UPDATE SET state = excluded.state, note = excluded.note, "
+                   "updated_by = excluded.updated_by, updated_at = excluded.updated_at",
+                   (tid, pid, day, state, note[:80], user_id, now()))
+
+    def prune_availability(self, before_day: str) -> None:
+        self._exec("DELETE FROM availability WHERE day < ?", (before_day,))
 
     # ---- config for one run -------------------------------------------------
     def build_config(self, profile: Profile) -> Config:

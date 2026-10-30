@@ -31,6 +31,7 @@
     <h2>This week</h2>
     <div class="wkmap">
       {% if week_map %}<span class="big">{{ week_map }}</span><span class="muted small">{{ week_src }}</span>
+      {% elif cur and cur.next %}<span class="muted">No Premier week right now. Next: <b>{{ cur.next.map }}</b> from {{ cur.next.starts[8:10] }}.{{ cur.next.starts[5:7] }}.</span>
       {% else %}<span class="muted">This week's map isn't known yet.</span>{% endif %}
       {% if g.team_owner %}
       <form method="post" action="{{ url_for('team_premier_settings', tid=t.id) }}" class="row" style="gap:6px;margin-left:auto">
@@ -38,6 +39,9 @@
         <select id="wm" name="week_map" style="width:auto"><option value="">auto</option>{% for m in pool %}<option {{ 'selected' if m == week_map and week_src == 'set by hand' }}>{{ m }}</option>{% endfor %}</select>
         <button class="btn sm ghost">Set</button></form>{% endif %}
     </div>
+    {% set a = b.avail %}
+    {% if a %}<p class="small" style="margin:10px 0 0"><a href="{{ url_for('team_availability', tid=t.id) }}">{{ 'Today' if a.today else a.label }}</a>:
+      <b style="color:{{ 'var(--win)' if a.level == 'ok' else ('var(--amber)' if a.level == 'maybe' else 'var(--red)') }}">{{ a.yes|length }}/5 confirmed</b>{% if a.maybe %}, {{ a.maybe|length }} maybe{% endif %}{% if a.unknown %}, {{ a.unknown|length }} no answer{% endif %}{% for slot in a.missing %} · {{ slot.name }} can't{% if slot.subs %} → {{ slot.subs[0].name }}{% endif %}{% endfor %}</p>{% endif %}
     {% if b.map %}
     <div style="margin-top:12px">
       {% if b.comp %}<p style="margin:0 0 8px"><b>Comp</b> <span class="muted small">({{ b.comp.source }})</span><br>
@@ -79,7 +83,9 @@
       <input type="hidden" name="follow_pool" value="{{ '0' if pi.follow_pool is not defined or pi.follow_pool else '1' }}">
       <span class="small muted">{{ 'Team maps follow this map pool' if pi.follow_pool is not defined or pi.follow_pool else 'Team maps: your own list' }}</span>
       <button class="btn sm ghost">{{ 'Use my own list' if pi.follow_pool is not defined or pi.follow_pool else 'Follow the pool' }}</button></form>{% endif %}</div>
-  <p class="small muted" style="margin:6px 0 10px">From {{ sched.source }}. Your queue windows inside each week differ by zone (see the Premier tab in the game).</p>
+  <p class="small muted" style="margin:6px 0 10px">From {{ sched.source }}. Your queue windows inside each week differ by zone (see the Premier tab in the game).
+    {% if sched.note %}<br>{{ sched.note }}{% endif %}
+    {% if g.team_owner %}<a href="{{ url_for('team_seasons_raw', tid=t.id) }}" target="_blank" rel="noopener">Raw season data</a>{% endif %}</p>
   <div class="sched">
     {% for w in sched.weeks %}{% set res = results.get(w.week|string, []) %}
     <div class="wkc {{ 'now' if cur.week and cur.week.week == w.week else ('past' if w.ends < today else '') }}">

@@ -16,7 +16,7 @@ from .abilityshapes import color_for, shape_for
 SIDES = ("attack", "defense")
 MAX_BOARD_BYTES = 400_000          # JSON of one board (items are tiny; this is plenty)
 ITEM_NUMBERS = ("x", "y", "x2", "y2", "r", "len", "ang", "n", "size")
-ITEM_STRINGS = {"t": 20, "id": 20, "a": 40, "s": 80, "label": 40, "c": 10}
+ITEM_STRINGS = {"t": 20, "id": 20, "a": 40, "s": 80, "label": 40, "c": 10, "k": 20}   # k: same thing in the step before (playback)
 
 
 def _number(v):

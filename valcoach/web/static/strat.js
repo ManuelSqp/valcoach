@@ -469,7 +469,7 @@
   }
   $('#sb-stepadd').onclick = () => {        // a new step starts as a copy of this one: move what changes
     snapshot();
-    const copy = JSON.parse(JSON.stringify(items())).map(i => ({...i, id: uid()}));
+    const copy = JSON.parse(JSON.stringify(items())).map(i => ({...i, id: uid(), k: i.k || i.id}));   // k: playback moves it
     data.steps.splice(step + 1, 0, {name: `Step ${data.steps.length + 1}`, items: copy});
     step += 1; sel = null; changed(); draw();
     $('#sb-stepname').focus(); $('#sb-stepname').select();
@@ -481,6 +481,89 @@
   $('#sb-prev').onchange = e => { showPrev = e.target.checked; draw(); };
   $('#sb-callouts').onchange = e => { showCallouts = e.target.checked; draw(); };
   $('#sb-clear').onclick = () => { if (!items().length) return; snapshot(); data.steps[step].items = []; sel = null; changed(); draw(); };
+
+  // ------------------------------------------------------------------ playback
+  // Steps play as an animation: things that are in both steps move (agents walk, smokes slide),
+  // new things fade in, removed things fade out. Same thing = same k (set when a step is copied),
+  // else the same agent / ability / colour closest by.
+  const MOVE_MS = 1300, HOLD_MS = 1100;
+  let playing = null, speed = 1;
+  const keyOf = i => i.k || i.id;
+  function pairUp(a, b) {
+    const used = new Set(), pairs = [], born = [];
+    const byKey = new Map(a.map(i => [keyOf(i), i]));
+    for (const i of b) {
+      let m = byKey.get(i.k) || byKey.get(keyOf(i));
+      if (m && (used.has(m.id) || m.t !== i.t)) m = null;
+      if (!m && (i.t === 'agent' || i.t === 'ab')) {
+        let best = null, bd = Infinity;
+        for (const o of a) {
+          if (used.has(o.id) || o.t !== i.t || o.a !== i.a || (o.s || '') !== (i.s || '') || (o.c || 'us') !== (i.c || 'us')) continue;
+          const d = Math.hypot(o.x - i.x, o.y - i.y);
+          if (d < bd) { bd = d; best = o; }
+        }
+        m = best;
+      }
+      if (m) { used.add(m.id); pairs.push([m, i]); } else born.push(i);
+    }
+    return {pairs, born, gone: a.filter(o => !used.has(o.id))};
+  }
+  const lerp = (p, q, t) => p + (q - p) * t;
+  function tween(a, b, t) {
+    const o = {...b};
+    for (const k of ['x', 'y', 'x2', 'y2', 'r', 'len']) if (typeof a[k] === 'number' && typeof b[k] === 'number') o[k] = lerp(a[k], b[k], t);
+    if (typeof a.ang === 'number' && typeof b.ang === 'number') { let d = ((b.ang - a.ang + 540) % 360) - 180; o.ang = a.ang + d * t; }
+    if (a.pts && b.pts && a.pts.length === b.pts.length) o.pts = a.pts.map((p, n) => [lerp(p[0], b.pts[n][0], t), lerp(p[1], b.pts[n][1], t)]);
+    return o;
+  }
+  const order = i => ({smoke: 0, molly: 0, zone: 0, wall: 1, pen: 1, arrow: 2, ab: 3, agent: 4, mark: 5, num: 5, text: 6}[i.t] ?? 3);
+  function frame(list) {           // list: [[item, opacity]]
+    while (g.firstChild) g.removeChild(g.firstChild);
+    for (const [i, op] of list.sort((p, q) => order(p[0]) - order(q[0]))) {
+      const grp = token(g, i, true);
+      if (op < 1) grp.setAttribute('opacity', Math.max(0, op).toFixed(3));
+    }
+  }
+  const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  const cap = $('#sb-caption'), pbtn = $('#sb-play');
+  function caption(n) { cap.hidden = false; cap.textContent = `${n + 1}/${data.steps.length} · ${data.steps[n].name || 'Step ' + (n + 1)}`; }
+  function stopPlay(at) {
+    if (!playing) return;
+    cancelAnimationFrame(playing.raf); playing = null;
+    root.classList.remove('sb-playing'); cap.hidden = true; pbtn.textContent = '▶ Play'; pbtn.classList.remove('primary');
+    if (at !== undefined) step = at;
+    draw();
+  }
+  function startPlay() {
+    if (data.steps.length < 2) { setStatus('add a second step to play'); return; }
+    sel = null; handles(null);
+    while (gPrev.firstChild) gPrev.removeChild(gPrev.firstChild);
+    root.classList.add('sb-playing'); pbtn.textContent = '■ Stop'; pbtn.classList.add('primary');
+    const from = step >= data.steps.length - 1 ? 0 : step;
+    const seg = [];                 // [{kind: 'hold'|'move', n, ms}]
+    seg.push({kind: 'hold', n: from, ms: HOLD_MS});
+    for (let n = from; n < data.steps.length - 1; n++) { seg.push({kind: 'move', n, ms: MOVE_MS, pu: pairUp(data.steps[n].items, data.steps[n + 1].items)}); seg.push({kind: 'hold', n: n + 1, ms: HOLD_MS}); }
+    let si = 0, t0 = performance.now(), shown = -1;
+    playing = {raf: 0};
+    const tick = now => {
+      if (!playing) return;
+      let s = seg[si], el2 = (now - t0) * speed;
+      while (el2 >= s.ms) { si += 1; t0 = now; el2 = 0; if (si >= seg.length) { stopPlay(data.steps.length - 1); return; } s = seg[si]; }
+      const t = el2 / s.ms;
+      if (s.kind === 'hold') {
+        if (shown !== s.n) { frame(data.steps[s.n].items.map(i => [i, 1])); caption(s.n); shown = s.n; step = s.n; renderSteps(); }
+      } else {
+        const e = ease(t);
+        if (shown !== -2 - s.n) { caption(s.n + 1); shown = -2 - s.n; }
+        frame([...s.pu.pairs.map(([a, b]) => [tween(a, b, e), 1]), ...s.pu.born.map(i => [i, Math.min(1, t * 1.6 - .4)]),
+               ...s.pu.gone.map(i => [i, 1 - Math.min(1, t * 1.6)])]);
+      }
+      playing.raf = requestAnimationFrame(tick);
+    };
+    playing.raf = requestAnimationFrame(tick);
+  }
+  pbtn.onclick = () => playing ? stopPlay(step) : startPlay();
+  $('#sb-speed').onchange = e => { speed = Number(e.target.value) || 1; };
 
   // ------------------------------------------------------------------ name, side, notes
   $('#sb-name').addEventListener('change', e => { st.name = e.target.value.trim() || 'Untitled'; document.title = st.name + ' · valcoach'; changed(); });
@@ -498,6 +581,7 @@
   $('#sb-undo').onclick = () => restore(undo, redo); $('#sb-redo').onclick = () => restore(redo, undo);
   window.addEventListener('keydown', e => {
     const typingNow = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+    if (playing && !typingNow && (e.key === 'Escape' || e.key === ' ' || e.key.startsWith('Arrow'))) { e.preventDefault(); stopPlay(step); return; }
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); save(); return; }
     if (typingNow) return;
@@ -579,5 +663,6 @@
   // ------------------------------------------------------------------ go
   $('#sb-name').value = st.name; $('#sb-side').value = st.side;
   renderPalette(); renderShapes(); setTool('select'); draw(); setStatus('saved');
-  window.valcoachStrat = {data, save, get step() { return step; }};     // for tests / debugging
+  if (new URLSearchParams(location.search).get('play')) { step = 0; draw(); startPlay(); }
+  window.valcoachStrat = {data, save, get step() { return step; }, play: startPlay, stop: stopPlay, pairUp, get playing() { return !!playing; }};     // for tests / debugging
 })();

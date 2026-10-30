@@ -4,6 +4,35 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 2.21.0
+- **"This week" works again on the Premier tab.** HenrikDev's season data still lists an older season, and that
+  replaced the built-in stage, so no week matched today. Now the API's schedule is only used when it covers today;
+  otherwise the built-in stage (V26A6) is, with a note saying why. Between two weeks the card names the next map.
+  Team owners get a *Raw season data* link under the stage schedule to see what HenrikDev returns.
+- **Availability** (Premier › Availability): everyone marks ✓ / ? / ✗ for the match days of the next two weeks (the
+  days from *Brief before each match*), with a short note on right-click ("from 21:00"). Each day shows who's
+  confirmed, who hasn't answered, and the five planned for that day's map (your *main* draft, else the suggested
+  comp). If a planned player can't play, the free players are ranked by games on that agent, then on that role.
+  Players change their own row once linked to their player; the team owner can change all rows. The brief, the
+  Premier overview and the Discord brief show "who's playing" too.
+- **Rank over time** on Progress: your rank and RR after every ranked game as a line with tier bands, the change
+  in the last 14 days and your peak. The RR history is loaded on *Import* and kept locally (HenrikDev only keeps a
+  window of it); without it, the rank shown in each match is used.
+- **Strat playback:** *▶ Play* in the strat editor (or ▶ on a board in the list) animates the steps: agents and
+  abilities move to their next spot, new things fade in, removed ones fade out, with the step name on the map.
+  0.5×, 1× or 2×; Esc or a click on *Stop* ends it. New steps remember what they were copied from, older boards
+  are matched by agent.
+- **Quiz** (new player tab): moments from your own last games (left alone in a 1vX, a first death far from your
+  team that nobody traded, a lead of two or more that slipped) become questions with 3-4 calls. The model writes
+  them from what you could know at that moment; after you answer you see the best call, why, and what really
+  happened. Scores are kept.
+- **Server overview** (click the uptime clock, or Users › Server overview): HenrikDev requests per minute and per
+  day, rate limits hit, whether the model is online and loaded, background jobs running or failed, the scheduler,
+  and disk use per folder. Admins can give it to anyone (Users › user › *Can see the server overview*) without
+  making them admin. It shows no keys, logs or anyone's games.
+- Fixed: the progress text of running scouting, match reviews and schedule jobs on the Premier pages never
+  updated (the status check treated them as players).
+
 ## 2.20.0
 - **Nine styles**, picked per user under *Account › Look & feel*. Each one changes the whole look and layout, not
   just the colours: **Classic** (as before), **Esports broadcast** (VCT overlay: condensed type, angled red bars),

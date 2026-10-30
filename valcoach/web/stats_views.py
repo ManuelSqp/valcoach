@@ -204,7 +204,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         parts = key.split(":")
         if len(parts) < 2 or not parts[1].isdigit():
             return jsonify(error="bad key"), 400
-        if parts[0] in ("premier", "plans", "focus", "post"):
+        if parts[0] in ("premier", "plans", "focus", "post", "scout", "review", "schedule"):
             get_team(int(parts[1]))
         else:
             view_profile(int(parts[1]))
@@ -726,4 +726,5 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
     app.extensions["valcoach"]["weekly_job"] = weekly_job
 
     from .premier_views import register as register_premier
-    register_premier(app, store, sr, {"get_team": get_team, "team_data": team_data, "build": build, "known_maps": KNOWN_MAPS})
+    register_premier(app, store, sr, {"get_team": get_team, "team_data": team_data, "build": build, "known_maps": KNOWN_MAPS,
+                                      "team_context": team_context})

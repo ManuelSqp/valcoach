@@ -6,7 +6,7 @@ import re
 import time
 from datetime import datetime, timezone
 
-from flask import abort, flash, g, redirect, render_template, request, url_for
+from flask import abort, flash, g, jsonify, redirect, render_template, request, url_for
 
 from ..stats import roles
 from ..stats.scouting import general_lines, map_lines, map_record, side_rates, veto
@@ -84,6 +84,10 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
                 return r["map"], "your match this week"
         return None, ""
 
+    from .availability import register as register_availability, summary_line
+    _, next_avail = register_availability(app, store, get_team, {
+        "brief_cfg": brief_cfg, "schedule_for": pj.schedule_for, "team_context": helpers["team_context"], "build": build})
+
     def our_records(t) -> tuple[dict, list]:
         d = team_data(t)
         return map_record(d["matches"]), d["matches"]
@@ -91,6 +95,10 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
     # ------------------------------------------------------------------ brief
     def brief(t, map_name: str | None) -> dict:
         out: dict = {"map": map_name, "week": week_id()}
+        try:
+            out["avail"] = next_avail(t)
+        except Exception:
+            out["avail"] = None
         if not map_name:
             return out
         drafts = [d for d in store.drafts(t.id, map_name) if (d["data"] or {}).get("status") == "main"]
@@ -139,6 +147,9 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
 
     def brief_embed(t, b: dict) -> dict:
         lines = []
+        a = b.get("avail")
+        if a and a.get("today"):
+            lines.append("**Who's playing:** " + summary_line(a))
         if b.get("comp"):
             lines.append("**Comp** (" + b["comp"]["source"] + "): " + " · ".join(
                 f"**{p['agent']}** {p['player']}" + (f" (or {p['alt']})" if p.get("alt") else "") for p in b["comp"]["picks"]))
@@ -225,11 +236,18 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
                 if w:
                     results.setdefault(str(w["week"]), []).append(r)
         m, src = week_map(t)
-        b = brief(t, m) if m else {"map": None}
+        b = brief(t, m)
         return render_template("premier.html", **ctx(t, "overview", week_map=m, week_src=src, b=b, cfg=brief_cfg(t),
                                                       sched=sched, cur=cur, results=results, today=datetime.now().date().isoformat(),
                                                       reviews=pj.reviews(tid)[:8], pool=pool(t), days=DAYS,
                                                       rstatus=sr.status(f"review:{tid}"), discord=t.discord_info))
+
+    @app.get("/teams/<int:tid>/premier/seasons.json")
+    def team_seasons_raw(tid: int):
+        """What HenrikDev returned for the season schedule (for checking the format)."""
+        t = get_team(tid, manage=True)
+        data, fetched = pj.read_seasons(t.premier_info.get("region") or "eu")
+        return jsonify(fetched_at=fetched, data=data)
 
     @app.get("/teams/<int:tid>/premier/division")
     def team_division(tid: int):

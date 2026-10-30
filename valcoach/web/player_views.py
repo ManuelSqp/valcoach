@@ -1,12 +1,14 @@
-"""Player tabs "Progress" (week by week, did the weekly focus work, clutches and retakes) and
+"""Player tabs "Progress" (rank over time, week by week, did the weekly focus work, clutches and
+retakes), "Quiz" (decisions from your own rounds) and
 "Training" (aim fundamentals, a warm-up routine with a streak, teammates to learn from,
 agents to learn with a learning path)."""
 from __future__ import annotations
 
 import json
+import time
 from datetime import date, timedelta
 
-from flask import abort, flash, g, redirect, render_template, request, url_for
+from flask import abort, flash, g, jsonify, redirect, render_template, request, url_for
 
 from ..stats import progress as prog
 from ..stats import roles
@@ -75,9 +77,47 @@ def register(app, store, sr, helpers: dict) -> None:
                 acc[0] += v[0]
                 acc[1] += v[1]
         v3 = sum(1 for r in full if "clutch" in r)
+        # rank over time (competitive only, whatever queue tab is open)
+        from ..stats import rank as rk
+        pts, rank_src = rk.series(rk.RankStore(sr.rank_path(pid)).load(), all_rows(pid))
         return render_template("progress.html", p=p, active_pid=pid, queue=queue, queues=queues, tab="progress",
                                can_edit=can_edit, weeks=weeks, cards=cards, checks=checks, clutch=cl, retake=rt,
-                               postplant=pp, n_full=len(full), n_v3=v3, n=len(rows))
+                               postplant=pp, n_full=len(full), n_v3=v3, n=len(rows),
+                               rank=rk.summary(pts), rank_chart=rk.chart(pts), rank_src=rank_src)
+
+    # ------------------------------------------------------------------ quiz
+    @app.route("/profiles/<int:pid>/quiz", methods=["GET", "POST"])
+    def quiz(pid: int):
+        p, can_edit = view_profile(pid)
+        if request.method == "POST":
+            if not can_edit:
+                abort(403)
+            sr.submit_quiz(pid)
+            return redirect(url_for("quiz", pid=pid))
+        q = sr.read_quiz(pid)
+        res = q.get("results") or []
+        return render_template("quiz.html", p=p, active_pid=pid, tab="quiz", can_edit=can_edit, q=q,
+                               status=sr.status(f"quiz:{pid}"), results=res[-10:],
+                               best=max((r["score"] / r["of"] for r in res if r.get("of")), default=None),
+                               result_url=url_for("quiz_result", pid=pid))
+
+    @app.post("/api/profiles/<int:pid>/quiz/result")
+    def quiz_result(pid: int):
+        p, can_edit = view_profile(pid)
+        if not can_edit:
+            abort(403)
+        body = request.get_json(silent=True)
+        q = sr.read_quiz(pid)
+        if not isinstance(body, dict) or not q.get("questions"):
+            return jsonify(error="no quiz"), 400
+        answers = body.get("answers")
+        if not isinstance(answers, list) or len(answers) != len(q["questions"]):
+            return jsonify(error="answers don't match the quiz"), 400
+        score = sum(1 for a, qq in zip(answers, q["questions"]) if isinstance(a, int) and a == qq["best"])
+        q.setdefault("results", []).append({"t": time.time(), "created": q.get("created"), "score": score, "of": len(q["questions"])})
+        q["results"] = q["results"][-40:]
+        sr.save_quiz(pid, q)
+        return jsonify(ok=True, score=score, of=len(q["questions"]))
 
     # ------------------------------------------------------------------ training
     def streak_file(pid: int):

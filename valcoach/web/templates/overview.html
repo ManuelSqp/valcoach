@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Server overview · valcoach{% endblock %}
+{% macro dur(s) %}{% if s is none %}–{% elif s < 60 %}{{ s }} s{% elif s < 3600 %}{{ s // 60 }} min{% elif s < 86400 %}{{ s // 3600 }} h {{ (s % 3600) // 60 }} min{% else %}{{ s // 86400 }} d {{ (s % 86400) // 3600 }} h{% endif %}{% endmacro %}
+{% block head %}
+<style>
+.ogrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;align-items:start}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px}
+.kpi span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.kpi b{font-size:22px;font-variant-numeric:tabular-nums}
+.kpi.warn b{color:var(--amber)}.kpi.bad b{color:var(--red)}.kpi.ok b{color:var(--win)}
+.spark{display:flex;align-items:flex-end;gap:1px;height:46px;margin:8px 0 2px}
+.spark i{flex:1;background:var(--line2);border-radius:2px 2px 0 0;min-height:1px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13.5px}.kv dt{color:var(--muted)}.kv dd{margin:0;font-variant-numeric:tabular-nums}
+.bar{height:8px;background:var(--panel3);border-radius:99px;overflow:hidden;margin-top:3px}.bar i{display:block;height:100%;background:var(--line2)}
+.drow{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}.drow:last-child{border-bottom:0}
+.jrow{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:5px 0;border-bottom:1px solid var(--line)}.jrow:last-child{border-bottom:0}
+.err{color:var(--red);font-size:12px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="row between" style="margin-bottom:14px">
+  <div><h1>Server overview</h1><div class="muted">valcoach {{ version }} · up {{ dur(uptime_s) }} · Python {{ py }}</div></div>
+  <a class="btn ghost sm" href="{{ url_for('overview') }}">Refresh</a>
+</div>
+{% set h = henrik %}
+<div class="kpis">
+  <div class="kpi"><span>HenrikDev, last hour</span><b>{{ h.hour }}</b></div>
+  <div class="kpi {{ 'warn' if h.limited_hour else '' }}"><span>Rate-limited (hour)</span><b>{{ h.limited_hour }}</b></div>
+  <div class="kpi {{ 'ok' if model.reachable else 'bad' }}"><span>Model</span><b>{{ 'online' if model.reachable else 'offline' }}</b></div>
+  <div class="kpi"><span>Jobs running</span><b>{{ active|length + coach.running }}</b></div>
+  <div class="kpi {{ 'bad' if disk.free_pct is not none and disk.free_pct < 0.1 else ('warn' if disk.free_pct is not none and disk.free_pct < 0.2 else '') }}"><span>Disk free</span><b>{{ disk.free }}</b></div>
+</div>
+<div class="ogrid">
+  <section class="card">
+    <h2>HenrikDev API</h2>
+    {% if not has_key %}<p class="err" style="margin:0 0 8px">No API key set.</p>{% endif %}
+    <div class="small muted">Requests per minute, last hour (busiest minute: {{ h.busiest_minute }})</div>
+    <div class="spark" aria-label="requests per minute">{% set top = h.minutes|max or 1 %}{% for n in h.minutes %}<i style="height:{{ (n / top * 100)|round|int }}%" title="{{ 59 - loop.index0 }} min ago: {{ n }}"></i>{% endfor %}</div>
+    <div class="row between small muted"><span>1 h ago</span><span>now</span></div>
+    <dl class="kv" style="margin-top:10px">
+      <dt>Last 24 h</dt><dd>{{ h.day }} requests{% if h.errors_hour %} · {{ h.errors_hour }} errors in the last hour{% endif %}</dd>
+      <dt>What for</dt><dd>{% for k, n in h.by_kind %}{{ k }} {{ n }}{{ ' · ' if not loop.last }}{% else %}–{% endfor %}</dd>
+      {% if h.limits %}<dt>Rate limit</dt><dd>{% for k, v in h.limits|dictsort %}{{ k }} {{ v }}{{ ' · ' if not loop.last }}{% endfor %} <span class="muted">({{ dur(h.limits_age_s) }} ago)</span></dd>{% endif %}
+    </dl>
+    <p class="small muted" style="margin:10px 0 0">Counted since the server started. How many requests a minute your key allows depends on the key; imports, scouting and reviews wait by themselves when the limit is reached.</p>
+  </section>
+
+  <section class="card">
+    <h2>Model (Ollama)</h2>
+    <dl class="kv">
+      <dt>Model</dt><dd>{{ model_name }}</dd>
+      <dt>Status</dt><dd>{% if model.reachable %}<span style="color:var(--win)">reachable</span> · {{ model.installed }} models installed{% else %}<span class="err">not reachable{% if model.error %} ({{ model.error }}){% endif %}</span>{% endif %}</dd>
+      <dt>In memory</dt><dd>{% for m in model.loaded %}{{ m.name }} ({{ m.vram }} VRAM){{ ', ' if not loop.last }}{% else %}nothing loaded right now{% endfor %}</dd>
+      <dt>Last 24 h</dt><dd>{{ model.requests_day }} requests{% if model.avg_s is not none %} · {{ model.avg_s }} s on average · {{ '{:,}'.format(model.tokens_day) }} tokens written{% endif %}</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Background jobs</h2>
+    <dl class="kv" style="margin-bottom:8px">
+      <dt>Coaching runs</dt><dd>{{ coach.running }} running · {{ coach.queued }} waiting</dd>
+      <dt>Scheduler</dt><dd>{% if tick_age_s is none %}hasn't run yet (every 5 min){% else %}last look {{ dur(tick_age_s) }} ago{% endif %}</dd>
+      <dt>Done today</dt><dd>{% for k, n in done_day %}{{ k }} {{ n }}{{ ' · ' if not loop.last }}{% else %}–{% endfor %}</dd>
+    </dl>
+    {% for a in active %}<div class="jrow"><span>{{ a.kind }}</span><span class="muted">{{ a.status }} · {{ dur(a.age_s) }}</span></div>
+    {% else %}<p class="small muted" style="margin:0">Nothing running.</p>{% endfor %}
+    {% if failed %}<h3 style="font-size:13px;margin:12px 0 4px">Failed in the last 24 h</h3>
+    {% for f in failed %}<div class="jrow" style="flex-direction:column;gap:2px"><span>{{ f.kind }} <span class="muted">· {{ dur(f.age_s) }} ago</span></span><span class="err">{{ f.error }}</span></div>{% endfor %}{% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Disk</h2>
+    <p class="small" style="margin:0 0 8px">valcoach uses <b>{{ disk.total }}</b> · <b>{{ disk.free }}</b> free of {{ disk.disk }}</p>
+    {% set big = (disk.parts|map(attribute='bytes')|max) if disk.parts else 1 %}
+    {% for p in disk.parts %}<div class="drow"><span>{{ p.label }} <span class="muted small">{{ p.files }} files</span></span><b>{{ p.size }}</b>
+      <div class="bar" style="grid-column:1/-1"><i style="width:{{ ((p.bytes / (big or 1)) * 100)|round|int }}%"></i></div></div>{% endfor %}
+    <p class="small muted" style="margin:8px 0 0">Measured every 5 minutes. The match cache can be deleted when space is short: matches are loaded again when needed.</p>
+  </section>
+
+  <section class="card">
+    <h2>Workspace</h2>
+    <dl class="kv"><dt>Users</dt><dd>{{ counts.users }}</dd><dt>Players</dt><dd>{{ counts.players }}</dd><dt>Teams</dt><dd>{{ counts.teams }}</dd></dl>
+  </section>
+</div>
+{% endblock %}

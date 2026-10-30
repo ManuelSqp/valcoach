@@ -242,7 +242,7 @@ def test_lobby_backfilled_from_cache(tmp_path, cache, history):
             (cache / "matches" / f"{mid}.json").write_text(json.dumps({"status": 200, "data": copy.deepcopy(raw)}))
     gs.save(data)
     import_games(sh.FakeHenrik(history, full_depth=4), "eu", "pc", "adv1ce", "LFT", gs, cache)
-    assert all("lobby" in r and r["v"] == 3 and "iso" in r and "clutch" in r for r in gs.rows() if r["source"] == "full")
+    assert all("lobby" in r and r["v"] == 4 and "iso" in r and "clutch" in r and "tier" in r for r in gs.rows() if r["source"] == "full")
 
 
 def test_pro_list_and_matching():
@@ -468,7 +468,7 @@ def test_secrets_stay_out_of_network_errors(tmp_path, monkeypatch):
 def test_rows_v3_clutch_duels_retakes(imported):
     gs, _, _ = imported
     full = [r for r in gs.rows() if r.get("source") == "full"]
-    assert full and all(r["v"] == 3 for r in full)
+    assert full and all(r["v"] == 4 and isinstance(r["tier"], str) for r in full)
     r = full[0]
     assert len(r["shots"]) == 3 and all(isinstance(x, int) for x in r["shots"])
     assert r["duels"] and all(isinstance(d[0], int) and d[1] in (0, 1) for d in r["duels"])
@@ -551,3 +551,71 @@ def test_premier_schedule_from_api_and_builtin():
     assert schedule(None) is BUILTIN and schedule({"events": []}) is BUILTIN
     assert current(BUILTIN, datetime(2026, 11, 3, tzinfo=timezone.utc))["week"]["map"] == "Sunset"   # Tuesday before week 3
     assert current(BUILTIN, datetime(2026, 12, 6, 15, tzinfo=timezone.utc))["in_playoffs"]
+
+
+def _quiz_match():
+    """Round 1: you're left 1v2 after the plant. Round 2: you die first, 30 m from your team, untraded.
+    Round 3: your team is 5v3 and loses."""
+    from valcoach.models import Kill, Match, Player, PlayerLoc, Round, SpikeEvent
+    red = [f"r{i}" for i in range(5)]
+    blue = [f"b{i}" for i in range(5)]
+    pl = {pu: Player(pu, pu, "T", "Red" if pu in red else "Blue", "Sova" if pu == "r0" else "Jett", "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, {})
+          for pu in red + blue}
+    locs = lambda far=False: [PlayerLoc(pu, "Red", 3000 if (far and pu == "r0") else 0, 0) for pu in red] + [PlayerLoc(pu, "Blue", 500, 0) for pu in blue]
+    K = lambda t, killer, victim, x=0: Kill(1, t, t, killer, pl[killer].team, victim, pl[victim].team, [], "Vandal", "Weapon", x, 0, locs())
+    r1 = Round(0, "Blue", "Detonate", "", "Blue", SpikeEvent("plant", 40000, "B", "b0", "Blue", 0, 0), None, {},
+               [K(10000, "b0", "r1"), K(20000, "b1", "r2"), K(30000, "r0", "b2"), K(32000, "r0", "b3"), K(34000, "r0", "b4"), K(45000, "b0", "r3"), K(50000, "b1", "r4"),
+                K(60000, "b0", "r0")])
+    k_alone = Kill(2, 15000, 15000, "b3", "Blue", "r0", "Red", [], "Operator", "Weapon", 3000, 0, locs(far=True))
+    r2 = Round(1, "Blue", "Elimination", "", "Blue", None, None, {}, [k_alone, K(30000, "b3", "r1")])
+    r3 = Round(2, "Blue", "Elimination", "", "Blue", None, None, {},
+               [K(10000, "r1", "b0"), K(12000, "r2", "b1"), K(30000, "b2", "r3"), K(35000, "b2", "r4"), K(40000, "b3", "r2"),
+                K(45000, "b3", "r1"), K(50000, "b4", "r0")])
+    return Match("m1", "Bind", "bind", "2026-10-30T20:00:00Z", "Premier", 0, "eu", pl, ["Red", "Blue"],
+                 {"Red": 0, "Blue": 3}, [r1, r2, r3], [])
+
+
+def test_quiz_moments_and_pick():
+    from valcoach.stats.quiz import moments, pick
+    ms = moments(_quiz_match(), "r0", None)
+    kinds = {m["kind"]: m for m in reversed(ms)}          # the first of each kind
+    assert set(kinds) == {"clutch", "alone", "advantage"} and len(ms) == 4      # round 3 ends in a 1v3 too
+    c = kinds["clutch"]["facts"]
+    assert c["you_vs"] == "1v2" and c["time_s"] == 50 and "planted on B 10 s ago" in c["spike"] and c["round"] == 1
+    assert "You died 10 s later" in kinds["clutch"]["happened"] and "round was lost" in kinds["clutch"]["happened"]
+    a = kinds["alone"]["facts"]
+    assert a["nearest_teammate_m"] == 30 and "Operator" in a["killed_by"] and a["round"] == 2 and a["score"] == "0–1"
+    assert kinds["advantage"]["facts"]["players_alive"] == "5v3"
+    p = pick(ms * 3)
+    assert [m["id"] for m in p] == ["q1", "q2"] and len({m["kind"] for m in p}) == 2     # at most 2 from one match
+
+
+def test_rank_history():
+    from valcoach.stats import rank as rk
+    items = [{"match_id": f"m{i}", "tier": {"id": 14, "name": "GOLD 3"}, "ranking_in_tier": 10 * i, "last_mmr_change": 10,
+              "date": f"2026-10-{i + 1:02d}T20:00:00Z"} for i in range(5)]
+    items.append({"currenttierpatched": "Platinum 1", "ranking_in_tier": 5, "mmr_change_to_last_game": 20, "date_raw": 1793300000})
+    items.append({"tier": "x", "ranking_in_tier": "y"})                       # junk is skipped
+    e = rk.parse_entries(items)
+    assert len(e) == 6 and e[-1]["tier"] == 15 and e[0]["tier"] == 14
+    assert rk.tier_id("Platinum 1") == 15 and rk.tier_name(27) == "Radiant" and rk.tier_id(99) is None
+    pts, src = rk.series(e, [])
+    assert src == "rr" and pts[-1]["pts"] == 1205 and pts[0]["name"] == "Gold 3"
+    ch = rk.chart(pts)
+    assert ch["path"].startswith("M") and [l["label"] for l in ch["lines"]][:2] == ["Gold 3", "Platinum 1"]
+    # without the RR history: the rank shown in each ranked match
+    pts, src = rk.series([], [{"queue": "competitive", "tier": "Gold 2", "started_at": "1"}, {"queue": "premier", "tier": "Gold 3"}])
+    assert src == "match" and len(pts) == 1 and pts[0]["name"] == "Gold 2"
+
+
+def test_premier_schedule_skips_an_old_api_season():
+    from datetime import datetime, timezone
+    from valcoach.stats.premier_schedule import current, schedule
+    old = [{"id": "S1", "events": [{"type": "LEAGUE", "starts_at": f"2025-03-0{d}T00:00:00Z", "ends_at": f"2025-03-0{d + 1}T00:00:00Z",
+                                    "map_selection": {"maps": [{"name": "Ascent"}]}} for d in (1, 3, 5)]}]
+    now = datetime(2026, 10, 30, tzinfo=timezone.utc)
+    s = schedule(old, None, now)
+    assert s["id"] == "V26A6" and "older season" in s["note"] and current(s, now)["week"]["map"] == "Corrode"
+    new = [{"id": "S2", "events": [{"type": "LEAGUE", "starts_at": "2026-10-28T00:00:00Z", "ends_at": "2026-11-01T00:00:00Z",
+                                    "map_selection": {"maps": [{"name": "Pearl"}]}}]}]
+    assert current(schedule(new, None, now), now)["week"]["map"] == "Pearl"

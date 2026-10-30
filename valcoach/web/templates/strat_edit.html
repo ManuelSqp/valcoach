@@ -40,6 +40,8 @@
 .sb-right h2{margin:12px 0 6px}
 kbd{background:var(--ink);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px}
 #sb-notes{min-height:130px;font-family:inherit;font-size:13px}
+#sb-caption{position:absolute;left:10px;top:10px;background:rgba(11,14,19,.85);color:#fff;font-weight:800;font-size:15px;padding:6px 12px;border-radius:8px;pointer-events:none;letter-spacing:.02em}
+.sb-playing .sb-svg{pointer-events:none}.sb-playing .sb-palette,.sb-playing #sb-props{opacity:.45;pointer-events:none}
 </style>
 {% endblock %}
 {% block content %}
@@ -50,6 +52,8 @@ kbd{background:var(--ink);border:1px solid var(--line);border-radius:4px;padding
   <select id="sb-side" style="width:auto"><option value="attack">Attack</option><option value="defense">Defense</option></select>
   <span id="sb-status" class="sb-status">saved</span>
   <button class="btn sm ghost" id="sb-undo" title="Undo (Ctrl+Z)">↶</button><button class="btn sm ghost" id="sb-redo" title="Redo (Ctrl+Y)">↷</button>
+  <button class="btn sm" id="sb-play" title="Play the steps as an animation (Esc stops)">▶ Play</button>
+  <label for="sb-speed" class="sr-only">Speed</label><select id="sb-speed" style="width:auto" title="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
   <button class="btn sm" id="sb-png" title="Download this step as a picture">PNG</button>
   {% if t.discord_info.prep_url or t.discord_info.focus_url %}<button class="btn sm" id="sb-discord" title="Post this step to #match-prep">Post to Discord</button>{% endif %}
 </div>
@@ -64,6 +68,7 @@ kbd{background:var(--ink);border:1px solid var(--line);border-radius:4px;padding
   </aside>
   <div class="sb-center">
     <div id="sb-stage">
+      <div id="sb-caption" hidden></div>
       <div class="sb-zoom"><button id="sb-zin" title="Zoom in">+</button><button id="sb-zout" title="Zoom out">−</button><button id="sb-zfit" title="Whole map">⤢</button></div>
     </div>
     <p class="muted small" id="sb-nomap" hidden>The map picture couldn't be loaded (no internet on the server?). The callouts still show where things are.</p>

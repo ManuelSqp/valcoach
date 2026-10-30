@@ -12,6 +12,7 @@
 </style>
 <nav class="pnav" aria-label="Premier">
   <a class="{{ 'on' if tab2 == 'overview' }}" href="{{ url_for('team_premier', tid=t.id) }}">This week &amp; reviews</a>
+  <a class="{{ 'on' if tab2 == 'availability' }}" href="{{ url_for('team_availability', tid=t.id) }}">Availability</a>
   <a class="{{ 'on' if tab2 == 'division' }}" href="{{ url_for('team_division', tid=t.id) }}">Division &amp; scouting</a>
 </nav>
 {% if not pi.tag %}

@@ -20,7 +20,7 @@ from ..parse import parse_match
 from . import roles
 
 QUEUES = ("competitive", "premier")
-ROW_VERSION = 3            # bump when rows from full matches gain fields; old rows are rebuilt from the cache
+ROW_VERSION = 4            # bump when rows from full matches gain fields; old rows are rebuilt from the cache
 ISOLATED_UNITS = 2000      # ~20 m to the nearest living teammate
 TRADE_MS = 3000
 Log = Callable[[str], None]
@@ -75,6 +75,7 @@ def row_from_match(match: Match, puuid: str, mi: MapInfo | None) -> dict | None:
         "clutch": {},         # "X" (1vX) -> [attempts, won]
         "retake": [0, 0],     # defense rounds they planted while you were alive: [rounds, won]
         "postplant": [0, 0],  # attack rounds your team planted while you were alive: [rounds, won]
+        "tier": me.tier or "",   # v4: rank shown in the match (Progress › rank over time)
     }
     dmg = 0
     for rnd in match.rounds:
@@ -214,6 +215,13 @@ def lobby_metrics(match: Match) -> list[list[float]]:
              round(openings.get(p.puuid, 0) / n, 3)] for p in match.players.values()]
 
 
+def _tier(v) -> str:
+    from .rank import tier_id, tier_name
+    if isinstance(v, dict):
+        v = v.get("id", v.get("name"))
+    return tier_name(tier_id(v)) or (str(v) if isinstance(v, str) else "")
+
+
 def row_from_stored(item: dict) -> dict | None:
     meta, st, teams = item.get("meta", {}) or {}, item.get("stats", {}) or {}, item.get("teams", {}) or {}
     team = (st.get("team") or "").lower()
@@ -229,7 +237,7 @@ def row_from_stored(item: dict) -> dict | None:
         "kills": int(st.get("kills", 0) or 0), "deaths": int(st.get("deaths", 0) or 0),
         "assists": int(st.get("assists", 0) or 0), "acs": round(int(st.get("score", 0) or 0) / n, 1),
         "adr": round(int((st.get("damage") or {}).get("made", 0) or 0) / n, 1), "source": "stored",
-        "puuid": st.get("puuid", ""),
+        "puuid": st.get("puuid", ""), "tier": _tier(st.get("tier")),
     }
 
 

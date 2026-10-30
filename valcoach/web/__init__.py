@@ -828,7 +828,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             for e in errors:
                 flash(e, "error")
             if not errors:
-                store.update_user(uid, is_admin=int(is_admin), disabled=int(disabled), vod_dir=vod_dir)
+                perms = {x for x in (u.perms or "").split(",") if x and x != "overview"} | ({"overview"} if f.get("perm_overview") else set())
+                store.update_user(uid, is_admin=int(is_admin), disabled=int(disabled), vod_dir=vod_dir, perms=",".join(sorted(perms)))
                 if new_pw:
                     key = store.set_password(uid, new_pw)
                     if uid == g.user.id:
@@ -938,6 +939,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
 
     from .stats_views import register as register_stats
     register_stats(app, store, stats_runner, get_profile)
+    from .overview import register as register_overview
+    register_overview(app, store, started_at)
     if start_workers:
         stats_runner.start_scheduler(app.extensions["valcoach"]["weekly_job"], app.extensions["valcoach"]["nightly_job"],
                                      extra=app.extensions["valcoach"].get("ticks", []))
