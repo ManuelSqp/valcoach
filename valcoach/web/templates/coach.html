@@ -9,7 +9,7 @@
   <a class="btn" href="{{ url_for('notes', pid=p.id, match_id=match_id) }}">{{ 'Edit notes (' ~ notes_count ~ ' rounds)' if notes_count else 'Add round notes' }}</a>
 </div>
 
-<form method="post" enctype="multipart/form-data" id="coachform">
+<form method="post" id="coachform">
 <div class="grid2">
   <section class="card">
     <h2>What to coach</h2>
@@ -28,7 +28,7 @@
         <span><b>{{ v.name }}</b><span class="muted small">{{ v.mtime|epoch }} · {{ v.size|filesize }}{% if v.rel == suggested %} · <span style="color:var(--win)">saved right after this match</span>{% endif %}</span></span></label>
       {% endfor %}
       <label class="choice"><input type="radio" name="vod" value="upload" id="vod_upload"><span style="flex:1"><b>Upload a file</b>
-        <input type="file" name="vod_file" accept="video/*,.mkv" style="margin-top:6px" onchange="document.getElementById('vod_upload').checked=true"></span></label>
+        <input type="file" accept="video/*,.mkv" style="margin-top:6px" onchange="document.getElementById('vod_upload').checked=true"></span></label>
     </div>
     {% if not vod_root %}<p class="hint">{% if user.is_admin %}Set a recordings folder for your account under <a href="{{ url_for('user_edit', uid=user.id) }}">Users</a> to pick VODs from disk instead of uploading.{% else %}No recordings folder is set for your account, so upload the file. The admin can set one for you.{% endif %}</p>
     {% else %}<p class="hint">From {{ vod_root }}</p>{% endif %}
@@ -79,35 +79,57 @@
 {% endif %}
 
 <script>
-// Uploads can be several GB: send with XHR so we can show progress.
-document.getElementById('coachform').addEventListener('submit', function (e) {
+// Uploads can be several GB: sent in pieces, see valcoach/web/uploads.py. The server checks the limits
+// before the first piece, and a lost connection only repeats one piece.
+document.getElementById('coachform').addEventListener('submit', async function (e) {
   const up = document.getElementById('vod_upload');
   const file = this.querySelector('input[type=file]').files[0];
   const go = document.getElementById('go');
   go.disabled = true;
   if (!up.checked || !file) return;            // normal submit
   e.preventDefault();
-  const xhr = new XMLHttpRequest();
   const bar = document.querySelector('#prog div'), st = document.getElementById('status');
   document.getElementById('prog').style.display = 'block';
-  xhr.upload.onprogress = ev => {
-    if (!ev.lengthComputable) return;
-    const pct = ev.loaded / ev.total * 100;
-    bar.style.width = pct + '%';
-    st.textContent = `Uploading ${(ev.loaded / 1e9).toFixed(2)} / ${(ev.total / 1e9).toFixed(2)} GB`;
-  };
-  xhr.onload = () => {
-    // a server error used to reload this page with an empty form: the user then started a run without the VOD
-    if (xhr.status >= 400) {
-      // a proxy timeout (502/504) can come after the server already started the run
-      st.textContent = `No answer from the server (error ${xhr.status}). Reload the page and check "Earlier reports" before uploading again.`;
-      go.disabled = false; return;
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  async function send(id, chunk, offset) {     // -> position to go on from
+    for (let attempt = 1; ; attempt++) {
+      let r = null;
+      try {
+        r = await fetch(`{{ url_for('upload_begin') }}/${id}?offset=${offset}`, {
+          method: 'PUT', headers: {'Content-Type': 'application/octet-stream'}, body: file.slice(offset, offset + chunk)});
+      } catch (err) { /* connection lost: try again below */ }
+      if (r) {
+        const d = await r.json().catch(() => ({}));
+        if (r.ok) return d.received;
+        if (r.status === 409 && d.received != null) return d.received;
+        if (r.status < 500) throw new Error(d.error || `Error ${r.status}`);
+      }
+      if (attempt >= 6) throw new Error('No answer from the server.');
+      st.textContent = `Connection problem, trying again (${attempt}/5) ...`;
+      await wait(2000 * attempt);
     }
-    window.location = xhr.responseURL;
-  };
-  xhr.onerror = () => { st.textContent = 'Upload failed.'; go.disabled = false; };
-  xhr.open('POST', window.location.href);
-  xhr.send(new FormData(this));
+  }
+
+  try {
+    const r = await fetch("{{ url_for('upload_begin') }}", {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                                            body: JSON.stringify({name: file.name, size: file.size})});
+    const u = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(u.error || `Error ${r.status}`);
+    for (let offset = 0; offset < file.size;) {
+      offset = await send(u.id, u.chunk, offset);
+      bar.style.width = offset / file.size * 100 + '%';
+      st.textContent = `Uploading ${(offset / 1e9).toFixed(2)} / ${(file.size / 1e9).toFixed(2)} GB`;
+    }
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden'; hidden.name = 'upload_id'; hidden.value = u.id;
+    this.appendChild(hidden);
+    st.textContent = 'Starting ...';
+    this.submit();
+  } catch (err) {
+    st.textContent = `Upload failed: ${err.message}`;
+    go.disabled = false;
+  }
 });
 </script>
 {% endblock %}

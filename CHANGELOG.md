@@ -4,6 +4,12 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## Unreleased
+- **VOD uploads go up in 16 MB pieces.** Size limit, report limit and free disk are now checked before the first
+  byte is sent, not after the whole file has arrived, and a lost connection only repeats one piece. No request may
+  be bigger than 17 MB any more, so nobody can fill the disk without logging in. Temp files stay in `data/tmp`.
+  A proxy in front of valcoach must allow bodies of at least 17 MB.
+
 ## 2.17.0
 - **Drafts** (new team tab): roster drafts per map, made together.
   - Five player slots (starters or subs). Drag agents from the list onto a player, add a backup pick, drag between

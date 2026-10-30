@@ -70,6 +70,17 @@ def make_user(app, admin_client, username, password="user-pass-123", **extra):
     return login(app, username, password)
 
 
+def send_upload(client, data: bytes, name="clip.mp4"):
+    """What the coach page's script does: ask to start, then send the file in chunks."""
+    r = client.post("/api/uploads", json={"name": name, "size": len(data)})
+    assert r.status_code == 200, r.data
+    uid, chunk = r.json["id"], r.json["chunk"]
+    for offset in range(0, len(data), chunk):
+        r = client.put(f"/api/uploads/{uid}?offset={offset}", data=data[offset:offset + chunk])
+        assert r.status_code == 200 and r.json["received"] == min(offset + chunk, len(data))
+    return uid
+
+
 def wait_job(client, jid, timeout=300):
     t0 = time.time()
     while time.time() - t0 < timeout:
@@ -194,8 +205,7 @@ def test_recordings_folder_is_per_user(app):
     # upload lands in bob's own upload folder
     r = bob.post(f"/profiles/{pid}/coach/{MATCH_ID}",
                  data={"mode": "team", "vod": "upload", "no_llm": "1", "no_minimap": "1",
-                       "vod_file": (io.BytesIO(b"\x00" * 2048), "clip.mp4")},
-                 content_type="multipart/form-data")
+                       "upload_id": send_upload(bob, b"\x00" * 2048)})
     jid = r.headers["Location"].split("/")[-1]
     store = app.extensions["valcoach"]["store"]
     assert f"/uploads/{store.user_by_name('bob').id}/" in store.job(jid).vod_path
@@ -204,10 +214,10 @@ def test_recordings_folder_is_per_user(app):
 def test_upload_and_bad_inputs(app):
     c = setup_admin(app)
     pid = add_profile(c)
-    r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}",
-               data={"mode": "team", "vod": "upload", "vod_file": (io.BytesIO(b"x"), "evil.exe")},
-               content_type="multipart/form-data")
-    assert b"Unsupported video type" in c.get(r.headers["Location"]).data
+    r = c.post("/api/uploads", json={"name": "evil.exe", "size": 1})
+    assert r.status_code == 400 and "Unsupported video type" in r.json["error"]
+    r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}", data={"mode": "team", "vod": "upload"})
+    assert b"Choose a video file" in c.get(r.headers["Location"]).data
     r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}", data={"mode": "team", "vod": "../../etc/passwd"})
     assert b"not in your recordings folder" in c.get(r.headers["Location"]).data
     pid2 = add_profile(c, "someone", "ELSE")
@@ -1039,11 +1049,9 @@ def test_job_quota_upload_limit_and_running_delete(app):
     store.set("max_jobs_per_user", "3")
     # upload over the size limit is refused before it is stored
     store.set("max_upload_gb", "0.000001")          # ~1 KB
-    r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}",
-               data={"mode": "team", "vod": "upload", "vod_file": (io.BytesIO(b"x" * 5000), "big.mp4")},
-               content_type="multipart/form-data")
-    assert b"upload is too big" in c.get(r.headers["Location"]).data
-    assert not list(store.upload_dir(store.user_by_name("manuel").id).glob("*"))
+    r = c.post("/api/uploads", json={"name": "big.mp4", "size": 5000})
+    assert r.status_code == 413 and "upload is too big" in r.json["error"]
+    assert not list((store.data_dir / "tmp").iterdir())
     # a player with a running report can't be deleted
     store.update_job("held1", status="running")
     r = c.post(f"/profiles/{pid}/delete")
@@ -1104,25 +1112,83 @@ def test_uptime_clock_in_nav(app):
     assert 'id="uptime"' in page and 'data-start="' in page and 'data-now="' in page
 
 
-def test_large_upload_is_buffered_in_data_dir(app, monkeypatch):
-    """Werkzeug buffered uploads in /tmp (a small tmpfs): a real VOD filled it and the upload crashed.
-    The buffer is then linked into uploads/, not copied (a 2 GB copy ran into a proxy's 504)."""
-    import tempfile
+def test_upload_in_chunks_ends_up_as_the_job_vod(app):
+    """No request may be bigger than a chunk: waitress buffers a body before the app can refuse it."""
+    from valcoach.web.uploads import CHUNK_BYTES, MAX_REQUEST_BYTES
+    assert app.config["MAX_CONTENT_LENGTH"] == MAX_REQUEST_BYTES
     c = setup_admin(app)
     pid = add_profile(c)
     store = app.extensions["valcoach"]["store"]
-    dirs = []
-    real = tempfile.NamedTemporaryFile
-    monkeypatch.setattr(tempfile, "NamedTemporaryFile", lambda *a, **kw: dirs.append(kw.get("dir")) or real(*a, **kw))
+    data = bytes(range(256)) * ((CHUNK_BYTES + 5000) // 256)
+    uid = send_upload(c, data, "My Match.mp4")
     r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}",
-               data={"mode": "player", "vod": "upload", "no_llm": "1", "no_minimap": "1",
-                     "vod_file": (io.BytesIO(b"\x00" * 600_000), "match.mp4")},
-               content_type="multipart/form-data")
+               data={"mode": "player", "vod": "upload", "no_llm": "1", "no_minimap": "1", "upload_id": uid})
     job = store.job(r.headers["Location"].split("/")[-1])
-    assert job.vod_path and job.mode == "player"
-    assert dirs == [store.data_dir / "tmp"]
-    assert Path(job.vod_path).stat().st_size == 600_000
-    assert not list((store.data_dir / "tmp").iterdir())        # buffer removed after the request
+    assert Path(job.vod_path).read_bytes() == data and job.vod_name == "My Match.mp4"
+    assert Path(job.vod_path).name.endswith("_My_Match.mp4") and job.opts["uploaded"]
+    assert not list((store.data_dir / "tmp").iterdir())
+    # an upload is used once
+    r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}", data={"mode": "team", "vod": "upload", "upload_id": uid})
+    assert b"doesn&#39;t exist anymore" in c.get(r.headers["Location"]).data
+
+
+def test_upload_limits_come_before_the_first_byte(app, monkeypatch):
+    import shutil as sh
+    from collections import namedtuple
+    c = setup_admin(app)
+    add_profile(c)
+    store = app.extensions["valcoach"]["store"]
+    tmp = store.data_dir / "tmp"
+    assert app.test_client().post("/api/uploads", json={"name": "a.mp4", "size": 1}).status_code == 401
+    assert app.test_client().put("/api/uploads/x?offset=0", data=b"x").status_code == 401
+    usage = namedtuple("usage", "total used free")
+    monkeypatch.setattr(sh, "disk_usage", lambda p: usage(0, 0, 1024 ** 3 + 1000))
+    assert c.post("/api/uploads", json={"name": "a.mp4", "size": 5000}).status_code == 507
+    # what is still to come for another upload counts as used
+    assert c.post("/api/uploads", json={"name": "a.mp4", "size": 800}).status_code == 200
+    assert c.post("/api/uploads", json={"name": "b.mp4", "size": 800}).status_code == 507
+    monkeypatch.undo()
+    store.create_job("held", add_profile(c, "other", "ONE"), MATCH_ID, "team")
+    store.set("max_jobs_per_user", "1")
+    r = c.post("/api/uploads", json={"name": "a.mp4", "size": 10})
+    assert r.status_code == 429 and "already have 1 report" in r.json["error"]
+    assert [f.stat().st_size for f in tmp.iterdir()] == [0]       # only the empty part of the upload that passed
+
+
+def test_upload_position_owner_and_incomplete_file(app):
+    from valcoach.web.uploads import CHUNK_BYTES
+    c = setup_admin(app)
+    pid = add_profile(c)
+    bob = make_user(app, c, "bob")
+    uid = c.post("/api/uploads", json={"name": "a.mp4", "size": 10}).json["id"]
+    assert c.put(f"/api/uploads/{uid}?offset=0", data=b"12345").json["received"] == 5
+    # the answer got lost and the piece is sent again: the client is told where to go on
+    r = c.put(f"/api/uploads/{uid}?offset=0", data=b"12345")
+    assert r.status_code == 409 and r.json["received"] == 5
+    assert c.put(f"/api/uploads/{uid}?offset=5", data=b"123456").status_code == 400     # past the end
+    assert c.put(f"/api/uploads/{uid}", data=b"1").status_code == 400
+    assert c.put(f"/api/uploads/{uid}?offset=5", data=b"x" * (CHUNK_BYTES + 1)).status_code == 400
+    # someone else's upload doesn't exist for you, and it can't be turned into a job half-finished
+    assert bob.put(f"/api/uploads/{uid}?offset=5", data=b"1").status_code == 404
+    r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}", data={"mode": "team", "vod": "upload", "upload_id": uid})
+    assert b"isn&#39;t complete" in c.get(r.headers["Location"]).data
+    bob_pid = add_profile(bob)
+    r = bob.post(f"/profiles/{bob_pid}/coach/{MATCH_ID}", data={"mode": "team", "vod": "upload", "upload_id": uid})
+    assert b"exist anymore" in bob.get(r.headers["Location"]).data
+
+
+def test_abandoned_uploads_are_removed(app, monkeypatch):
+    import time as t
+    from valcoach.web.uploads import MAX_OPEN_PER_USER, STALE_S
+    c = setup_admin(app)
+    tmp = app.extensions["valcoach"]["store"].data_dir / "tmp"
+    for _ in range(MAX_OPEN_PER_USER + 2):           # page reloaded in the middle of an upload
+        assert c.post("/api/uploads", json={"name": "a.mp4", "size": 10}).status_code == 200
+    assert len(list(tmp.iterdir())) == MAX_OPEN_PER_USER
+    real = t.time
+    monkeypatch.setattr("valcoach.web.uploads.time.time", lambda: real() + STALE_S + 1)
+    assert make_user(app, c, "bob").post("/api/uploads", json={"name": "a.mp4", "size": 10}).status_code == 200
+    assert len(list(tmp.iterdir())) == 1
 
 
 def test_roster_drafts(app):
