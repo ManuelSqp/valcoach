@@ -1,0 +1,25 @@
+/* Tactical HUD: like Valorant's own interface. Thin teal lines, cut corners, a grid behind everything. */
+:root{--bg:#0e1a1f;--panel:rgba(14,26,31,.88);--panel2:rgba(122,240,220,.04);--panel3:rgba(122,240,220,.09);--line:rgba(122,240,220,.28);--line2:rgba(122,240,220,.5);
+  --text:#dff7f3;--muted:#8fb3ad;--red:#ff4655;--win:#7af0dc;--amber:#f2c14b;--blue:#7ab8f0;--ink:#0a1418;--navbg:#0b161a;--btn:rgba(122,240,220,.06);
+  --logtext:#a7d9d1;--radius:0;--radius-sm:0;--font:Rajdhani,system-ui,sans-serif;--font-head:Rajdhani,sans-serif;--font-num:"JetBrains Mono",monospace}
+body{font-size:15px;font-weight:500;background:#0e1a1f;background-image:linear-gradient(rgba(122,240,220,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(122,240,220,.045) 1px,transparent 1px);background-size:32px 32px}
+nav.top{background:var(--navbg);border-bottom:1px solid var(--line2)}
+.brand{letter-spacing:.24em}.brand b{color:var(--win)}
+.navlinks a,.linkbtn{text-transform:uppercase;letter-spacing:.06em;font-weight:700;border-radius:0;font-size:14px}
+.navlinks a:hover,.navlinks a.active{background:transparent;color:var(--win);box-shadow:inset 0 -2px 0 var(--win)}
+.navlinks a.navteams{border-color:var(--line2);background:transparent;border-radius:0;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.uptime,.kbtn{border-radius:0;font-family:var(--font-num)}
+h1{text-transform:uppercase;letter-spacing:.1em;font-weight:700;font-size:26px}
+h1::before{content:"";display:inline-block;width:4px;height:.9em;background:var(--red);margin-right:10px;vertical-align:-.05em}
+h2{color:var(--win);letter-spacing:.22em;font-weight:700}h2::before{content:"[ "}h2::after{content:" ]"}
+.card{clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border-color:var(--line)}
+.btn{text-transform:uppercase;letter-spacing:.12em;font-weight:700;border-color:var(--line2)}
+.btn.primary{background:var(--red);border-color:var(--red)}
+.ttab{text-transform:uppercase;letter-spacing:.14em}.ttab.on{border-bottom-color:var(--win)!important;color:var(--win)!important}
+th{color:var(--win);letter-spacing:.16em}
+.val,.big3 b,.nums b,.mc .val,.cl b,.sc{font-family:var(--font-num)!important}
+.procard.on,.ditem.on,.slot.sel,.wkc.now{border-color:var(--win)!important;background:rgba(122,240,220,.08)!important}
+.player,.procard,.ditem,.wkc,.lc,.mc,.slot,.pr,.path,.mapcard,.fcard{border-radius:0!important}
+pre.log{font-family:var(--font-num)}
+nav.top{gap:12px}.navlinks a,.linkbtn{font-size:13px;letter-spacing:.04em;padding:5px 7px}
+.brand{letter-spacing:.16em}

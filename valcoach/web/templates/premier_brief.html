@@ -3,7 +3,7 @@
 {% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
 {% block head %}
 <style>
-.ai{border-radius:50%;vertical-align:middle;background:#0b0e13;object-fit:cover;flex:none}
+.ai{border-radius:50%;vertical-align:middle;background:var(--ink);object-fit:cover;flex:none}
 .brief{max-width:760px;margin:0 auto;display:grid;gap:12px}
 .brief .head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .brief .head h1{margin:0;font-size:34px;letter-spacing:.02em}

@@ -1,5 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Account · valcoach{% endblock %}
+{% block head %}
+<style>
+.styles{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.stylecard{display:flex;flex-direction:column;gap:4px;padding:8px;border:2px solid var(--line);border-radius:var(--radius);cursor:pointer;background:var(--panel2);margin:0;color:var(--text)}
+.stylecard:hover{border-color:var(--line2)}.stylecard.on,.stylecard:has(input:checked){border-color:var(--red)}
+.stylecard:has(input:focus-visible){outline:2px solid var(--red);outline-offset:2px}
+.sprev{position:relative;height:74px;border-radius:6px;display:block;overflow:hidden}
+.sprev i{position:absolute;top:10px;height:24px;width:38%}.sprev i:first-child{left:8px}.sprev i:nth-child(2){left:calc(38% + 14px)}
+.sprev b{position:absolute;left:8px;bottom:10px;width:30%;height:14px}
+.sprev em{position:absolute;right:8px;bottom:6px;font-style:normal;font-size:18px;font-weight:700}
+.sname{font-weight:700;font-size:13px}.sdesc{font-size:11.5px;color:var(--muted);line-height:1.35}
+.anims{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.switch{display:flex;gap:10px;align-items:flex-start;margin:0;color:var(--text);font-size:13px;cursor:pointer;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel2)}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.switch .tr{flex:none;width:34px;height:20px;border-radius:99px;background:var(--line2);position:relative;transition:background .15s;margin-top:1px}
+.switch .tr::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s}
+.switch input:checked+.tr{background:var(--win)}.switch input:checked+.tr::after{left:17px}
+.switch input:focus-visible+.tr{outline:2px solid var(--red);outline-offset:2px}
+.switch b{display:block;font-weight:600}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?{{ styles.values()|map(attribute=2)|select|join('&') }}&display=swap">
+{% endblock %}
 {% block content %}
 <h1>{{ user.username }}</h1>
 <p class="sub">{{ 'Admin' if user.is_admin else 'User' }} · {{ usage.profiles }} player{{ '' if usage.profiles == 1 else 's' }} · {{ usage.jobs }} report{{ '' if usage.jobs == 1 else 's' }} · member since {{ user.created_at|localtime }}</p>
@@ -10,6 +32,41 @@
     <div style="flex:1;max-width:360px"><input type="text" name="display_name" value="{{ user.display_name }}" placeholder="Name#TAG" maxlength="40"></div>
     <button class="btn">Save</button></div>
   <div class="hint">Teammates see this instead of your username, e.g. when the team owner adds you to a team.</div>
+</form>
+
+{% set sw = {
+  'classic': ('#0f1218', '#171c25', '#ff4655', '#e8ebf0', 'system-ui', '10px'),
+  'broadcast': ('#0b0b0d', '#ffffff', '#ff4655', '#0b0b0d', 'Oswald, sans-serif', '0'),
+  'minimal': ('#f7f7f5', '#ffffff', '#1f2328', '#1f2328', 'Inter, sans-serif', '14px'),
+  'neon': ('#0a0816', 'rgba(255,255,255,.08)', '#ff5fa2', '#e9e6ff', '"Space Grotesk", sans-serif', '16px'),
+  'hud': ('#0e1a1f', '#13242a', '#7af0dc', '#dff7f3', 'Rajdhani, sans-serif', '0'),
+  'terminal': ('#0b0d10', '#101318', '#ffb000', '#c9d1d9', '"JetBrains Mono", monospace', '2px'),
+  'editorial': ('#f4f0e8', '#f4f0e8', '#c8102e', '#121212', '"Playfair Display", serif', '0'),
+  'playbook': ('#2b4a3a', '#fbfaf4', '#b3261e', '#1d2a44', 'Kalam, cursive', '6px'),
+  'arcade': ('#120a2a', '#120a2a', '#ff3d7f', '#ffe14d', '"Press Start 2P", monospace', '0')} %}
+<form method="post" class="card" id="look">
+  <input type="hidden" name="look" value="1">
+  <h2>Look &amp; feel</h2>
+  <p class="small muted" style="margin:-6px 0 10px">Only for you: every user picks their own. The style changes the whole look and layout, not just the colours.</p>
+  <div class="styles">
+    {% for key, (label, desc, _) in styles.items() %}{% set s = sw[key] %}
+    <label class="stylecard {{ 'on' if ui.style == key }}">
+      <input type="radio" name="style" value="{{ key }}" {{ 'checked' if ui.style == key }} class="sr-only">
+      <span class="sprev" style="background:{{ s[0] }}" aria-hidden="true">
+        <i style="background:{{ s[1] }};border-radius:{{ s[5] }}"></i><i style="background:{{ s[1] }};border-radius:{{ s[5] }}"></i>
+        <b style="background:{{ s[2] }};border-radius:{{ s[5] }}"></b>
+        <em style="color:{{ s[3] }};font-family:{{ s[4] }}">Aa 58%</em>
+      </span>
+      <span class="sname">{{ label }}</span><span class="sdesc">{{ desc }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  <h2 style="margin-top:18px">Animations</h2>
+  <div class="anims">{% for key, (label, desc) in animations.items() %}
+    <label class="switch"><input type="checkbox" name="anim_{{ key }}" value="1" {{ 'checked' if ui.anim[key] }}><span class="tr" aria-hidden="true"></span>
+      <span><b>{{ label }}</b><span class="small muted">{{ desc }}</span></span></label>{% endfor %}</div>
+  <p class="small muted" style="margin:8px 0 12px">If your computer is set to reduce motion, animations stay off anyway.</p>
+  <button class="btn primary">Save</button>
 </form>
 
 <div class="grid2">

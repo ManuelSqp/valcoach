@@ -116,6 +116,21 @@ CREATE TABLE IF NOT EXISTS strats (
   updated_by INTEGER
 );
 CREATE INDEX IF NOT EXISTS strats_team ON strats(team_id, map);
+CREATE TABLE IF NOT EXISTS lineups (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id    INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  author_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  map        TEXT NOT NULL,
+  agent      TEXT NOT NULL,
+  ability    TEXT NOT NULL DEFAULT '',
+  side       TEXT NOT NULL DEFAULT '',
+  site       TEXT NOT NULL DEFAULT '',
+  title      TEXT NOT NULL,
+  url        TEXT NOT NULL DEFAULT '',
+  notes      TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS lineups_team ON lineups(team_id, map, agent);
 CREATE TABLE IF NOT EXISTS drafts (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   team_id    INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
@@ -198,10 +213,20 @@ class User:
     created_at: str
     last_login: str
     display_name: str = ""     # in-game name, e.g. adv1ce#LFT
+    prefs: str = "{}"          # JSON: look & feel (style, animation switches)
 
     @property
     def label(self) -> str:
         return self.display_name or self.username
+
+    @property
+    def ui(self) -> dict:
+        """Look & feel with defaults filled in (see web/ui.py)."""
+        from .ui import ui_prefs
+        try:
+            return ui_prefs(json.loads(self.prefs or "{}"))
+        except ValueError:
+            return ui_prefs({})
 
 
 @dataclass
@@ -350,6 +375,9 @@ class Store:
             if "display_name" not in ucols:
                 # v2.11 database: in-game name shown to teammates
                 c.execute("ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''")
+            if "prefs" not in ucols:
+                # v2.20 database: look & feel per user
+                c.execute("ALTER TABLE users ADD COLUMN prefs TEXT NOT NULL DEFAULT '{}'")
             cols = [r[1] for r in c.execute("PRAGMA table_info(profiles)")]
             if "position" not in cols:
                 # v2.2 database: add the drag-and-drop order, starting alphabetical
@@ -471,7 +499,7 @@ class Store:
         return key
 
     def update_user(self, uid: int, **fields) -> None:
-        allowed = {"is_admin", "vod_dir", "disabled", "display_name"}
+        allowed = {"is_admin", "vod_dir", "disabled", "display_name", "prefs"}
         sets = {k: v for k, v in fields.items() if k in allowed}
         if not sets:
             return
@@ -754,6 +782,30 @@ class Store:
 
     def delete_strat(self, sid: int) -> None:
         self._exec("DELETE FROM strats WHERE id = ?", (sid,))
+
+    # ---- lineups library (strat book) ---------------------------------------
+    def lineups(self, tid: int, map_name: str | None = None) -> list[dict]:
+        q = ("SELECT l.*, COALESCE(NULLIF(u.display_name, ''), u.username) AS author FROM lineups l "
+             "LEFT JOIN users u ON u.id = l.author_id WHERE l.team_id = ?")
+        args: tuple = (tid,)
+        if map_name:
+            q += " AND l.map = ?"
+            args += (map_name,)
+        return [dict(r) for r in self._all(q + " ORDER BY l.map, l.agent, l.ability, l.title", args)]
+
+    def lineup(self, lid: int) -> dict | None:
+        rows = self._all("SELECT * FROM lineups WHERE id = ?", (lid,))
+        return dict(rows[0]) if rows else None
+
+    def add_lineup(self, tid: int, author_id: int, **f) -> int:
+        cur = self._exec("INSERT INTO lineups(team_id, author_id, map, agent, ability, side, site, title, url, notes, created_at) "
+                         "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                         (tid, author_id, f["map"], f["agent"], f.get("ability", ""), f.get("side", ""), f.get("site", ""),
+                          f["title"], f.get("url", ""), f.get("notes", ""), now()))
+        return int(cur.lastrowid)
+
+    def delete_lineup(self, lid: int) -> None:
+        self._exec("DELETE FROM lineups WHERE id = ?", (lid,))
 
     # ---- roster drafts (team tab "Drafts") -----------------------------------
     def drafts(self, tid: int, map_name: str | None = None) -> list[dict]:

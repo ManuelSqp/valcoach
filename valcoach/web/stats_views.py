@@ -442,6 +442,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     from .player_views import register as register_player
     register_player(app, store, sr, {"view_profile": view_profile, "team_context": team_context, "owner_rows": owner_rows,
                                      "queue_arg": queue_arg, "queues": QUEUE_TABS})
+    from .lineups import register as register_lineups
+    register_lineups(app, store, get_team, KNOWN_MAPS)
     from .drafts import register as register_drafts
     register_drafts(app, store, get_team, {"team_context": team_context, "owner_rows": owner_rows}, KNOWN_MAPS)
 

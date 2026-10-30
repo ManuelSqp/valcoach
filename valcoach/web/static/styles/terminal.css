@@ -1,0 +1,28 @@
+/* Data terminal: menu on the side, dense, monospace numbers, as much on one screen as possible. */
+:root{--bg:#0b0d10;--panel:#0f1216;--panel2:#13171c;--panel3:#1a1f27;--line:#1f242c;--line2:#30363d;--text:#c9d1d9;--muted:#8b949e;
+  --red:#ffb000;--win:#3fb950;--amber:#d29922;--blue:#58a6ff;--ink:#0b0d10;--navbg:#101318;--btn:#161b22;--logtext:#a5b0bc;--on-accent:#0b0d10;
+  --radius:3px;--radius-sm:2px;--font:"IBM Plex Sans",system-ui,sans-serif;--font-head:"JetBrains Mono",monospace;--font-num:"JetBrains Mono",monospace}
+body{font-size:13px}
+@media(min-width:761px){
+  nav.top{position:fixed;left:0;top:0;bottom:0;width:200px;flex-direction:column;align-items:stretch;gap:2px;padding:14px 0;border-right:1px solid var(--line);border-bottom:0;overflow:auto}
+  nav.top .brand{padding:0 14px;font-family:var(--font-head);color:var(--red)}nav.top .brand b{color:var(--red)}
+  nav.top .ver{margin:0 14px 10px;padding:0}
+  nav.top .navlinks{flex-direction:column;align-items:stretch;gap:1px}
+  nav.top .navlinks a,nav.top .linkbtn{border-radius:0;padding:5px 14px;text-align:left;border-left:2px solid transparent}
+  nav.top .navlinks a:hover,nav.top .navlinks a.active{background:var(--panel3);border-left-color:var(--red)}
+  nav.top .navlinks a.navteams{border:0;border-left:2px solid var(--red);background:var(--panel3);margin:0 0 6px}
+  nav.top .navsep{width:auto;height:1px;margin:6px 14px}
+  nav.top .spacer{flex:1}
+  nav.top .uptime,nav.top .kbtn{margin:4px 14px;align-self:flex-start;border-radius:2px}
+  main.page{margin-left:200px;max-width:none;padding:16px 20px 40px}
+}
+h1{font-family:var(--font-head);font-size:16px;font-weight:600}
+h2{font-family:var(--font-head);font-size:11px;letter-spacing:.08em}
+.card{padding:12px 14px;margin-bottom:10px}
+.grid2,.pgrid,.tgrid,.sgrid{gap:10px}
+.btn{font-size:12.5px;padding:4px 10px}.btn.primary{color:#0b0d10}
+.ttab{font-family:var(--font-head);font-size:12px;padding:6px 10px}
+td,th{padding:4px 8px}th{font-family:var(--font-head);font-size:10.5px}
+.val,.big3 b,.nums b,.mc .val,.cl b,.sc,td{font-family:var(--font-num)}
+.mc .val{font-size:20px!important}
+.procard.on,.ditem.on,.slot.sel,.wkc.now{border-color:var(--red)!important;background:var(--panel3)!important}

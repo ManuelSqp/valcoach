@@ -1,6 +1,6 @@
 # valcoach v2
 
-**Version 2.19.1** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 2.20.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -26,7 +26,7 @@ unzip valcoach-v2.zip && cd valcoach-v2
 /opt/homebrew/opt/python@3.11/bin/python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                     # 120 tests, ~3 min, builds a synthetic match + VOD
+pytest -q                     # 122 tests, ~3 min, builds a synthetic match + VOD
 ollama pull qwen3.8:27b       # default; alternatives below
 ```
 
@@ -154,6 +154,10 @@ Under *Members, maps & Discord → Teammates with access* you add them; they the
 stats (view only) and can write notes. Tabs on a team: **Comps**, **Game plans** (3 detailed plays per map with a
 step per player), **Weekly focus** (one focus per player), **Roles**, **Notes** (yours + tips from your matches
 together) and, for the owner, **Members, maps & Discord**.
+
+**Look & feel.** Every user picks a style (nine, from Classic to Retro arcade) and switches the animations on or
+off under *Account › Look & feel*. **Ctrl+K** (or `/`) opens a quick search for players, team tabs, maps, drafts
+and strat boards. The strat book has a **Lineups** library with clip links per map, agent and ability.
 
 **Progress and Training** (player tabs). *Progress* shows your numbers week by week with trends, whether each
 weekly focus moved its number, and clutches / retakes / post-plants. *Training* has your aim fundamentals (headshots,
@@ -355,6 +359,8 @@ Settings (web) or `[video]` (CLI).
 | `report.py` | single-file HTML report incl. the SVG round replay |
 | `stats/teamdata.py`, `stats/gameplans.py`, `stats/weekly.py`, `discord.py` | matches played together, teammate tips, map facts, game plans, weekly focus, Discord webhooks |
 | `web/strats.py`, `web/static/strat.js` | strat book: storage, assets (map image, ability icons), the drag-and-drop editor |
+| `web/ui.py`, `web/static/ui.js`, `web/static/styles/*.css` | styles per user, animation switches, Ctrl+K search |
+| `web/lineups.py` | lineups library in the strat book |
 | `stats/progress.py`, `stats/training.py`, `web/player_views.py` | Progress and Training tabs: weekly numbers, focus checks, aim, routine, learning paths |
 | `stats/scouting.py` | scouting summaries of other teams, how to play them, the map veto |
 | `web/premierjobs.py`, `web/premier_views.py` | Premier tab: division scouting, match reviews, this week's map, the brief |

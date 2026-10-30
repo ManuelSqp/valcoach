@@ -11,6 +11,9 @@
 {% endblock %}
 {% block content %}
 {% include "_team_head.html" %}
+<style>.snav{display:flex;gap:6px;margin:-6px 0 14px}.snav a{text-decoration:none;font-size:13px;font-weight:600;padding:5px 12px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.snav a.on,.snav a:hover{color:var(--text);border-color:var(--line2)}.snav a.on{background:var(--panel3)}</style>
+<nav class="snav" aria-label="Strat book"><a class="on" href="{{ url_for('team_strats', tid=t.id, map=sel) }}">Boards</a><a href="{{ url_for('team_lineups', tid=t.id, map=sel) }}">Lineups</a></nav>
 <section class="card">
   <h2>New strat</h2>
   <form method="post" class="row" style="align-items:flex-end;flex-wrap:wrap">

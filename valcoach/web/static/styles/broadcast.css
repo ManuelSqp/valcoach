@@ -1,0 +1,39 @@
+/* Esports broadcast: like a VCT stream overlay. Big condensed type, angled corners, red / black / white. */
+:root{--bg:#0b0b0d;--panel:#16171b;--panel2:#1d1e23;--panel3:#26272d;--line:#2a2b31;--line2:#3d3e46;--text:#ffffff;--muted:#a9abb3;
+  --red:#ff4655;--win:#3ee0a0;--amber:#ffc23d;--blue:#5aa9ff;--ink:#0b0b0d;--navbg:#ffffff;--btn:#26272d;--radius:0;--radius-sm:0;
+  --font:Barlow,system-ui,sans-serif;--font-head:Oswald,Barlow,sans-serif;--font-num:Oswald,Barlow,sans-serif}
+body{font-size:15px}
+nav.top{background:#fff;color:#0b0b0d;border-bottom:4px solid var(--red);padding:0 24px 0 0;gap:0;min-height:52px;align-items:stretch}
+nav.top .brand{background:var(--red);color:#fff;font-family:var(--font-head);font-size:22px;letter-spacing:.04em;display:flex;align-items:center;padding:0 34px 0 22px;clip-path:polygon(0 0,100% 0,86% 100%,0 100%)}
+nav.top .brand b{color:#fff}nav.top .ver{color:#55565c;margin:0 10px 0 0;align-self:center}
+nav.top .navlinks{align-items:stretch;gap:0}
+nav.top .navlinks a,nav.top .linkbtn{color:#55565c;font-family:var(--font-head);text-transform:uppercase;font-size:13px;letter-spacing:.03em;border-radius:0;display:flex;align-items:center;padding:0 9px}
+nav.top .navlinks a:hover,nav.top .navlinks a.active{background:transparent;color:#0b0b0d;box-shadow:inset 0 -4px 0 var(--red)}
+nav.top .navlinks a.navteams{background:#0b0b0d;color:#fff;border:0;border-radius:0;clip-path:polygon(8% 0,100% 0,92% 100%,0 100%);padding:0 18px;margin:8px 4px 8px 0}
+nav.top .navsep{background:#ddd}
+nav.top .uptime{background:#0b0b0d;color:#fff;border:0;border-radius:0;align-self:center;font-family:var(--font-head);letter-spacing:.06em}
+nav.top .kbtn{align-self:center;background:#eee;color:#333;border-color:#ddd;border-radius:0;margin-right:8px}
+.navtoggle{background:#0b0b0d!important;color:#fff!important;border-radius:0!important;align-self:center}
+h1{font-family:var(--font-head);font-size:38px;line-height:1;text-transform:uppercase;letter-spacing:.01em}
+h2{font-family:var(--font-head);font-size:15px;color:var(--text);letter-spacing:.08em;border-left:5px solid var(--red);padding-left:9px}
+.card{border:0;border-top:3px solid var(--red);background:var(--panel)}
+.btn{border-radius:0;font-family:var(--font-head);text-transform:uppercase;letter-spacing:.05em;font-size:14px}
+.btn.primary{clip-path:polygon(0 0,100% 0,94% 100%,0 100%);padding-right:20px}
+.btn.sm{font-size:12px}
+.ttab{font-family:var(--font-head);text-transform:uppercase;letter-spacing:.06em;font-size:15px}
+.ttab.on{background:var(--red);color:#fff!important;border-bottom-color:var(--red)!important;clip-path:polygon(0 0,100% 0,92% 100%,0 100%);padding-right:22px}
+th{font-family:var(--font-head);color:var(--text);background:var(--panel3);letter-spacing:.08em}
+tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+.pill,.st,.wl,.call,.vd{border-radius:0!important;font-family:var(--font-head);letter-spacing:.06em}
+.val,.big3 b,.nums b,.mc .val,.cl b,.wkmap .big,.procard .nm,.slot .who,.sc{font-family:var(--font-num)!important}
+.mc .val,.big3 b,.nums b{font-size:34px!important}
+.player,.procard,.ditem,.wkc,.lc,.mc,.fcard,.slot,.pr,.path,.mapcard{border-radius:0!important}
+.procard.on,.ditem.on,.wkc.now,.slot.sel{background:var(--red)!important;border-color:var(--red)!important;color:#fff}
+.procard.on .muted,.ditem.on .meta,.wkc.now .d{color:rgba(255,255,255,.85)!important}
+input[type=text],input[type=password],input[type=number],select,textarea{border-radius:0}
+.flash,.banner{border-radius:0;border-left-width:5px}
+nav.top .kbtn kbd{background:#fff;color:#333;border-color:#ccc}
+nav.top .brand{font-size:20px;padding:0 28px 0 18px}
+nav.top .navlinks a,nav.top .linkbtn{padding:0 7px;font-size:12.5px}
+nav.top .ver{margin:0 6px 0 0}
+nav.top .navlinks form{display:flex!important;align-items:stretch}

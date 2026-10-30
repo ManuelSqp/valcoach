@@ -3,7 +3,7 @@
 {% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
 {% block head %}
 <style>
-.ai{border-radius:50%;vertical-align:middle;background:#0b0e13;object-fit:cover;flex:none}
+.ai{border-radius:50%;vertical-align:middle;background:var(--ink);object-fit:cover;flex:none}
 .maptabs{display:flex;gap:4px;flex-wrap:wrap}
 .plans{display:grid;gap:14px}
 .plan{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}

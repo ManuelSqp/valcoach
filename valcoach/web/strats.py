@@ -198,6 +198,9 @@ def register(app, store, sr, get_team, known_maps: list[str]) -> None:
                 "discord_url": url_for("strat_discord", tid=tid, sid=sid)
                 if (t.discord_info.get("prep_url") or t.discord_info.get("focus_url")) else None,
                 "map_image": url_for("map_image", name=s["map"]),
+                "lineups": [{"agent": x["agent"], "ability": x["ability"], "title": x["title"], "url": x["url"], "side": x["side"]}
+                            for x in store.lineups(tid, s["map"])],
+                "lineups_url": url_for("team_lineups", tid=tid, map=s["map"]),
                 "agent_icon": url_for("agent_icon", name="__A__"), "ability_icon": url_for("ability_icon", agent="__A__", slot="__S__")}
         can_delete = g.team_owner or s["author_id"] == g.user.id
         return render_template("strat_edit.html", t=t, s=s, tab="strats", can_delete=can_delete,

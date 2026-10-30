@@ -1,0 +1,26 @@
+/* Coach's playbook: a clipboard with lined paper, sticky notes, handwritten headings. */
+:root{--bg:#2b4a3a;--panel:#fbfaf4;--panel2:#f2efe2;--panel3:#ebe6d3;--line:#d9d2bb;--line2:#9a9273;--text:#1d2a44;--muted:#5a6680;
+  --red:#b3261e;--win:#1a7f3c;--amber:#a86a00;--blue:#1d3c8f;--ink:#e6dfc8;--navbg:#22392d;--btn:#fbfaf4;--logtext:#3a3f4a;--on-accent:#fff;
+  --radius:6px;--radius-sm:6px;--shadow:0 4px 14px rgba(0,0,0,.28);--font:Inter,system-ui,sans-serif;--font-head:Kalam,cursive;--font-num:Kalam,cursive}
+nav.top{background:var(--navbg);border-bottom:0;color:#e6efe9}
+nav.top .brand,nav.top .brand b{color:#fff;font-family:var(--font-head);font-size:22px;letter-spacing:0;text-transform:none}
+nav.top .navlinks a,nav.top .linkbtn{color:#b8d0c1;font-family:var(--font-head);font-size:16px}
+nav.top .navlinks a:hover,nav.top .navlinks a.active{background:transparent;color:#fff;text-decoration:underline;text-decoration-thickness:2px}
+nav.top .navlinks a.navteams{background:transparent;border-color:#b8d0c1;color:#fff}
+nav.top .uptime,nav.top .kbtn{background:transparent;color:#b8d0c1;border-color:#4d6b5a}
+nav.top .ver{color:#b8d0c1}.navtoggle{background:transparent!important;color:#fff!important}
+main.page{background:var(--panel);background-image:linear-gradient(rgba(29,60,143,.09) 1px,transparent 1px);background-size:100% 28px;border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.35);margin:22px auto 40px;max-width:1180px}
+main.page::before{content:"";display:block;width:120px;height:18px;margin:-34px auto 16px;background:#9aa3ab;border-radius:6px 6px 2px 2px;box-shadow:inset 0 -4px 0 #7d868e}
+h1{font-family:var(--font-head);font-size:34px;color:var(--blue);font-weight:700}
+h2{font-family:var(--font-head);font-size:20px;text-transform:none;letter-spacing:0;color:var(--blue)}
+.card{background:transparent;border:2px solid var(--line);border-radius:14px 10px 16px 12px;box-shadow:none}
+.mc,.big3>div,.nums>div,.cl>div,.fcard{background:#fff7b3!important;border:0!important;box-shadow:0 3px 6px rgba(0,0,0,.18)!important;transform:rotate(-.6deg)}
+.mc:nth-child(3n+2),.big3>div:nth-child(2),.nums>div:nth-child(2),.fcard:nth-child(3n+2){background:#ffd6d6!important;transform:rotate(.7deg)}
+.mc:nth-child(3n),.big3>div:nth-child(3),.nums>div:nth-child(3),.fcard:nth-child(3n){background:#d6ecff!important;transform:rotate(-.3deg)}
+.val,.big3 b,.nums b,.mc .val,.cl b,.wkmap .big{font-family:var(--font-num)!important}
+.btn{background:transparent;border:2px solid var(--text);border-radius:14px 10px 16px 10px;font-weight:600}
+.btn.primary{background:var(--red);border-color:var(--red)}
+.ttab{font-family:var(--font-head);font-size:17px}.ttab.on{border-bottom:3px solid var(--red)!important}
+.procard.on,.ditem.on,.slot.sel,.wkc.now{border:2px solid var(--red)!important;border-radius:18px 14px 20px 12px!important}
+pre.log{background:#f6f3e6!important}
+input[type=text],input[type=password],input[type=number],select,textarea{background:#fff}
