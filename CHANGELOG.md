@@ -14,6 +14,8 @@ every report, and with `valcoach --version`. Update: unzip over your install (ke
 - **A report no longer says "done" when the model failed.** If it fails on every round, the job ends with an error
   and the reason. If it stops answering, the run stops waiting after a few rounds instead of timing out on all of
   them. If only some rounds fail, the report says which ones at the top.
+- **A playbook with the wrong structure no longer breaks a run.** `maps` must list each map by name; the profile
+  form now says so when you save it.
 
 ## 2.17.0
 - **Drafts** (new team tab): roster drafts per map, made together.
