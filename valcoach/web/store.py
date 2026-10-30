@@ -116,6 +116,18 @@ CREATE TABLE IF NOT EXISTS strats (
   updated_by INTEGER
 );
 CREATE INDEX IF NOT EXISTS strats_team ON strats(team_id, map);
+CREATE TABLE IF NOT EXISTS drafts (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id    INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  author_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  map        TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  data       TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  updated_by INTEGER
+);
+CREATE INDEX IF NOT EXISTS drafts_team ON drafts(team_id, map);
 """
 
 DEFAULTS: dict[str, str] = {
@@ -742,6 +754,52 @@ class Store:
 
     def delete_strat(self, sid: int) -> None:
         self._exec("DELETE FROM strats WHERE id = ?", (sid,))
+
+    # ---- roster drafts (team tab "Drafts") -----------------------------------
+    def drafts(self, tid: int, map_name: str | None = None) -> list[dict]:
+        q = ("SELECT d.*, COALESCE(NULLIF(u.display_name, ''), u.username) AS editor FROM drafts d "
+             "LEFT JOIN users u ON u.id = d.updated_by WHERE d.team_id = ?")
+        args: tuple = (tid,)
+        if map_name:
+            q += " AND d.map = ?"
+            args += (map_name,)
+        out = []
+        for r in self._all(q + " ORDER BY d.map, d.updated_at DESC", args):
+            d = dict(r)
+            try:
+                d["data"] = json.loads(d["data"] or "{}")
+            except ValueError:
+                d["data"] = {}
+            out.append(d)
+        return out
+
+    def draft(self, did: int) -> dict | None:
+        rows = self._all("SELECT * FROM drafts WHERE id = ?", (did,))
+        if not rows:
+            return None
+        d = dict(rows[0])
+        try:
+            d["data"] = json.loads(d["data"] or "{}")
+        except ValueError:
+            d["data"] = {}
+        return d
+
+    def create_draft(self, tid: int, author_id: int, map_name: str, name: str, data: dict | None = None) -> int:
+        cur = self._exec("INSERT INTO drafts(team_id, author_id, map, name, data, created_at, updated_at, updated_by) "
+                         "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                         (tid, author_id, map_name, name.strip()[:80], json.dumps(data or {}), now(), now(), author_id))
+        return int(cur.lastrowid)
+
+    def update_draft(self, did: int, user_id: int, **fields) -> None:
+        sets = {k: v for k, v in fields.items() if k in ("name", "data")}
+        if "data" in sets and not isinstance(sets["data"], str):
+            sets["data"] = json.dumps(sets["data"])
+        sets.update(updated_at=now(), updated_by=user_id)
+        cols = ", ".join(f"{k} = ?" for k in sets)
+        self._exec(f"UPDATE drafts SET {cols} WHERE id = ?", (*sets.values(), did))
+
+    def delete_draft(self, did: int) -> None:
+        self._exec("DELETE FROM drafts WHERE id = ?", (did,))
 
     # ---- config for one run -------------------------------------------------
     def build_config(self, profile: Profile) -> Config:

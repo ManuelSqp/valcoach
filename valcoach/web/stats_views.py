@@ -429,6 +429,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
                                           "team_data": team_data, "owner_rows": owner_rows})
     from .strats import register as register_strats
     register_strats(app, store, sr, get_team, KNOWN_MAPS)
+    from .drafts import register as register_drafts
+    register_drafts(app, store, get_team, {"team_context": team_context, "owner_rows": owner_rows}, KNOWN_MAPS)
 
     def import_members(t) -> int:
         own_ids = {p.id for p in store.profiles(t.owner_id)}
