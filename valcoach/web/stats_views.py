@@ -10,6 +10,7 @@ from ..maps import AgentRegistry
 from ..stats import roles
 from ..stats.aggregate import by_agent, by_map, by_role, filter_rows, local_meta, map_detail, summary
 from ..stats.comp import META_EXAMPLE, Pool, parse_meta, pick_helper, team_plan
+from .models import picked
 from .statsjobs import StatsRunner, slug
 
 def week_map_of(app, t) -> str | None:
@@ -176,7 +177,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             names = [m["name"] for m in c["matches"]] if request.form.get("all") else [c["chosen"]["name"]]
             jobs = [{"pro": n, "queries": c["queries"] if n == c["chosen"]["name"] else video_queries(c["rows"], c["prof"], c["matches"], pro=n)}
                     for n in names]
-            sr.submit_watch(pid, queue, c["prof"], c["matches"], jobs)
+            sr.submit_watch(pid, queue, c["prof"], c["matches"], jobs, picked(store))
         return redirect(url_for("pros", pid=pid, queue=queue, pro=c["chosen"]["name"] if c["chosen"] else None) + "#pros")
 
     @app.post("/profiles/<int:pid>/stats/import")
@@ -195,7 +196,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         queue = request.form.get("queue", "all")
         if m:
             sr.submit_tips(pid, m, queue if queue in dict(QUEUE_TABS) else "all",
-                           filter_rows(owner_rows(g.user.id), queue))
+                           filter_rows(owner_rows(g.user.id), queue), picked(store))
         return redirect(url_for("stats", pid=pid, queue=queue, map=m or None) + "#tips")
 
     @app.get("/api/stats/status")
@@ -614,7 +615,7 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
             flash("Pick 5 starters and update everyone's stats first.", "error")
             return redirect(url_for("team_plans", tid=tid))
         post = prep_post(b, [i["map"] for i in items]) if request.form.get("post") and g.team_owner else None
-        sr.submit_plans(tid, items, language(t), post)
+        sr.submit_plans(tid, items, language(t), post, picked(store))
         return redirect(url_for("team_plans", tid=tid, map=None if which == "__all" else which))
 
     @app.post("/teams/<int:tid>/discord/prep")
@@ -660,6 +661,7 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
                 ck["focus"] = pf["focus"]
                 ck["week"] = prev.get("week")
             pl["last"] = ck
+            pl["own"] = sr.read_own_focus(pl["pid"])
         mine = next((m["pid"] for m in t.member_list if m.get("user_id") == g.user.id), None)
         return render_template("team_focus.html", t=t, tab="focus", focus=f, players=players, mine=mine,
                                this_week=week_id(), status=sr.status(f"focus:{tid}"), discord=t.discord_info,
@@ -673,7 +675,7 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
         if not items:
             flash("The team has no players yet.", "error")
         else:
-            sr.submit_focus(tid, week_id(), items, language(t), post=bool(request.form.get("post")))
+            sr.submit_focus(tid, week_id(), items, language(t), post=bool(request.form.get("post")), llm_choice=picked(store))
         return redirect(url_for("team_focus", tid=tid))
 
     @app.post("/teams/<int:tid>/focus/post")
@@ -721,7 +723,7 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
         b = build(t)
         items = focus_items(t, b)
         if items:
-            sr.submit_focus(t.id, week_id(), items, language(t), post=True)
+            sr.submit_focus(t.id, week_id(), items, language(t), post=True, llm_choice=sr.AUTO)
 
     app.extensions["valcoach"]["weekly_job"] = weekly_job
 

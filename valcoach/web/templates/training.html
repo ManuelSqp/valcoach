@@ -37,8 +37,20 @@
     <div class="muted">from {{ a.games }} games with round data</div></div>
 </div>
 {% include "_player_tabs.html" %}
+{% if own %}
+<section class="card" style="margin-bottom:14px;border-left:3px solid var(--amber)">
+  <div class="row between"><div><span class="small muted">Your own focus this week ({{ 'from the quiz' if own.source == 'quiz' else ('from a report' if own.source == 'report' else 'your pick') }})</span>
+    <h2 style="margin:2px 0 0;text-transform:none;letter-spacing:0;font-size:18px">{{ own.focus }}</h2>
+    {% if own.why %}<p class="small" style="margin:4px 0 0">{{ own.why }}</p>{% endif %}</div>
+    {% if can_edit %}<button class="btn sm ghost" id="own-clear">Remove</button>{% endif %}</div>
+</section>
+<script>(function () { const b = document.getElementById('own-clear'); if (b) b.onclick = async () => { await fetch({{ focus_url|tojson }}, {method: 'DELETE'}); location.reload(); }; })();</script>
+{% endif %}
 {% if not a.games %}
 <section class="card"><p>Needs games with round data: import your history on <a href="{{ url_for('stats', pid=p.id) }}">Stats &amp; agents</a>.</p></section>
+{% if diag %}<section class="card" style="margin-top:14px"><h2>What to work on</h2>
+  {% for d in diag %}<div class="wk"><b>{{ d.title }}</b><span>{{ d.why }}.</span></div>{% endfor %}
+  {% for d in routine if d.key.startswith('q_') %}<div class="drill"><span class="n">{{ loop.index }}</span><span><b>{{ d.name }}</b><br><span class="small muted">{{ d.how }}</span></span><span class="t">{{ d.time }}</span></div>{% endfor %}</section>{% endif %}
 {% else %}
 <div class="tgrid">
   <section class="card">

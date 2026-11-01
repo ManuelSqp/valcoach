@@ -18,6 +18,11 @@
 .qx .why{background:var(--panel2);border-left:3px solid var(--win);border-radius:0 8px 8px 0;padding:9px 12px;font-size:14px}
 .qx .hap{font-size:13.5px;margin-top:8px;color:var(--muted)}.qx .hap b{color:var(--text)}
 .qend{text-align:center;padding:10px 0}.qend .big{font-size:44px;font-weight:800}
+.qact{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.qact .lbl{font-size:12px;color:var(--muted);margin-right:2px}
+.qrate.on{border-color:var(--red);color:var(--text)}
+.kacc{display:grid;grid-template-columns:minmax(0,1fr) 130px 60px;gap:8px;align-items:center;font-size:13px;padding:5px 0}
+.kacc .bar{height:8px;background:var(--panel3);border-radius:99px;overflow:hidden}.kacc .bar i{display:block;height:100%}
 .hist{display:flex;gap:4px;align-items:flex-end;height:40px;margin-top:6px}
 .hist span{flex:1;max-width:22px;background:var(--line2);border-radius:3px 3px 0 0;min-height:3px}
 </style>
@@ -26,7 +31,7 @@
 <div class="row between" style="margin-bottom:14px">
   <div><h1>{{ p.name }}<span class="tag">#{{ p.tag }}</span> · quiz</h1>
     <div class="muted">decisions from your own rounds</div></div>
-  {% if can_edit %}<form method="post"><button class="btn {{ 'primary' if not q.questions else 'ghost' }}" {{ 'disabled' if status and status.status in ('queued', 'running') }}>{{ 'New quiz from my latest games' if q.questions else 'Make my first quiz' }}</button></form>{% endif %}
+  {% if can_edit %}<form method="post" class="row" style="gap:6px">{% include "_llm_pick.html" %}<button class="btn {{ 'primary' if not q.questions else 'ghost' }}" {{ 'disabled' if status and status.status in ('queued', 'running') }}>{{ 'New quiz from my latest games' if q.questions else 'Make my first quiz' }}</button></form>{% endif %}
 </div>
 {% include "_player_tabs.html" %}
 {% if status and status.status in ('queued', 'running', 'error') %}
@@ -44,12 +49,18 @@
   <div class="qq" id="qq"></div>
   <div class="qopts" id="qopts"></div>
   <div class="qx" id="qx"><div class="why" id="qwhy"></div><div class="hap" id="qhap"></div>
-    <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn primary" id="qnext">Next</button></div></div>
+    <div class="qact">{% if can_edit %}<span class="lbl">This question was</span>
+      <button class="btn sm ghost qrate" data-r="good">good</button><button class="btn sm ghost qrate" data-r="unrealistic">unrealistic</button><button class="btn sm ghost qrate" data-r="obvious">too obvious</button>
+      <button class="btn sm ghost" id="qfocus" title="Your own focus for this week (Training tab, team focus, brief)">🎯 Make this my focus</button>{% endif %}
+      <span style="flex:1"></span><button class="btn primary" id="qnext">Next</button></div></div>
   <div class="qend" id="qend" hidden></div>
 </section>
 <p class="small muted qz">{% if q.model %}Written by {{ q.model }} from{% else %}From{% endif %} {{ q.questions|length }} moments in your games. The best call is the model's judgement from the numbers, not a rule: talk it through with your team.</p>
 {% if results %}
 <section class="card qz" style="margin-top:14px"><h2 style="margin:0">Your scores</h2>
+  {% if kinds %}<div style="margin:8px 0 10px">{% for k in kinds %}{% set r = k.right / k.total %}
+    <div class="kacc"><span>{{ k.label }}</span><span class="bar"><i style="width:{{ (r * 100)|round|int }}%;background:{{ 'var(--win)' if r >= 0.6 else 'var(--red)' }}"></i></span><span class="muted">{{ k.right }}/{{ k.total }}</span></div>{% endfor %}
+    <p class="small muted" style="margin:4px 0 0">Under 60% (with 3+ answers) shows up on Training with a decision drill.</p></div>{% endif %}
   <div class="hist" aria-label="last scores">{% for r in results %}<span style="height:{{ ((r.score / r.of) * 100)|round|int if r.of else 0 }}%" title="{{ r.score }}/{{ r.of }}"></span>{% endfor %}</div>
   <p class="small muted" style="margin:6px 0 0">Last {{ results|length }} rounds of the quiz{% if best is not none %} · best {{ (best * 100)|round|int }}%{% endif %}.</p></section>
 {% endif %}
@@ -67,6 +78,8 @@
     $('qq').textContent = q.question;
     $('qopts').innerHTML = q.options.map((o, n) => `<button class="qo" data-n="${n}"><b>${'ABCD'[n]}</b><span>${esc(o)}</span></button>`).join('');
     $('qx').classList.remove('on'); dots();
+    document.querySelectorAll('.qrate').forEach(b => b.classList.toggle('on', b.dataset.r === q.rating));
+    const fb = $('qfocus'); if (fb) { fb.disabled = false; fb.textContent = '🎯 Make this my focus'; }
   }
   $('qopts').addEventListener('click', e => {
     const b = e.target.closest('.qo'); if (!b || b.disabled) return;
@@ -79,6 +92,19 @@
     $('qnext').textContent = i === Q.length - 1 ? 'See the score' : 'Next';
     $('qx').classList.add('on'); dots(); $('qnext').focus();
   });
+  const post = (url, body) => fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  document.querySelectorAll('.qrate').forEach(b => b.onclick = async () => {
+    const q = Q[i]; q.rating = b.dataset.r;
+    document.querySelectorAll('.qrate').forEach(x => x.classList.toggle('on', x === b));
+    const r = await post({{ rate_url|tojson }}, {id: q.id, rating: q.rating});
+    if (r.ok && window.valcoachToast) window.valcoachToast('Thanks: the next quiz uses this');
+  });
+  const fbtn = $('qfocus');
+  if (fbtn) fbtn.onclick = async () => {
+    const q = Q[i];
+    const r = await post({{ focus_url|tojson }}, {focus: q.options[q.best], why: q.why, source: 'quiz', ref: q.map + ' R' + q.round});
+    if (r.ok) { fbtn.textContent = '✓ your focus this week'; fbtn.disabled = true; window.valcoachToast && window.valcoachToast('Set as your focus for this week'); }
+  };
   $('qnext').onclick = async () => {
     if (i < Q.length - 1) { i += 1; show(); return; }
     const score = answers.filter((a, n) => a === Q[n].best).length;

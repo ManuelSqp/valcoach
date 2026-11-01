@@ -28,7 +28,7 @@
 .rkc{width:100%;height:auto;display:block}
 .rkc .tl{stroke:var(--line);stroke-width:1}.rkc text{fill:var(--muted);font-size:11px}
 .rkc .ln{fill:none;stroke:var(--text);stroke-width:2;stroke-linejoin:round;opacity:.85}
-.rkc circle{fill:var(--muted)}.rkc circle.up{fill:var(--win)}.rkc circle.dn{fill:var(--red)}
+.rkc circle{fill:var(--muted)}.rkc circle.rep{stroke:var(--text);stroke-width:1.5;cursor:pointer}.rkc circle.up{fill:var(--win)}.rkc circle.dn{fill:var(--red)}
 </style>
 {% endblock %}
 {% block content %}
@@ -54,11 +54,11 @@
     <svg class="rkc" viewBox="0 0 {{ c.w }} {{ c.h }}" role="img" aria-label="Rank over the last {{ c.dots|length }} ranked games">
       {% for l in c.lines %}<line class="tl" x1="{{ c.x0 }}" x2="{{ c.x1 }}" y1="{{ l.y }}" y2="{{ l.y }}"></line><text x="4" y="{{ l.ly }}">{{ l.label }}</text>{% endfor %}
       <path class="ln" d="{{ c.path }}"></path>
-      {% for d in c.dots %}<circle class="{{ 'up' if d.up else ('dn' if d.up == false else '') }}" cx="{{ d.x }}" cy="{{ d.y }}" r="3.2"><title>{{ d.title }}</title></circle>{% endfor %}
+      {% for d in c.dots %}{% set rep = reports.get(d.match_id) %}{% if rep %}<a href="{{ url_for('job_report', jid=rep) }}" target="_blank">{% endif %}<circle class="{{ 'up' if d.up else ('dn' if d.up == false else '') }} {{ 'rep' if rep }}" cx="{{ d.x }}" cy="{{ d.y }}" r="{{ 4.6 if rep else 3.2 }}"><title>{{ d.title }}{{ ' · click for the report' if rep }}</title></circle>{% if rep %}</a>{% endif %}{% endfor %}
       <text x="{{ c.x0 }}" y="{{ c.bottom }}">{{ c.first }}</text><text x="{{ c.x1 }}" y="{{ c.bottom }}" text-anchor="end">{{ c.last }}</text>
     </svg>{% else %}<p class="muted small">The line appears after a few ranked games.</p>{% endif %}
   </div>
-  <p class="small muted" style="margin:8px 0 0">{% if rank_src == 'rr' %}Rank and RR after each ranked game (HenrikDev's rank history, kept here so older games stay). Green = RR won, red = lost. Hover for the game.{% else %}From the rank shown in each ranked match (no RR yet: press <i>Import</i> on Stats &amp; agents to load the RR history).{% endif %}</p>
+  <p class="small muted" style="margin:8px 0 0">{% if rank_src == 'rr' %}Rank and RR after each ranked game (HenrikDev's rank history, kept here so older games stay). Green = RR won, red = lost. Hover for the game; ringed dots have a coaching report (click).{% else %}From the rank shown in each ranked match (no RR yet: press <i>Import</i> on Stats &amp; agents to load the RR history).{% endif %}</p>
 </section>
 {% endif %}
 

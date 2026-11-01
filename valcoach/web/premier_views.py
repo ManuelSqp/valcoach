@@ -126,7 +126,10 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
             if m.get("kind") != "starter":
                 continue
             fp = (f.get("players") or {}).get(str(m["pid"])) or {}
-            if fp.get("focus"):
+            own = sr.read_own_focus(m["pid"])
+            if own:                                   # the player's own pick this week wins
+                out["focus"].append({"player": names.get(m["pid"], "?"), "focus": own["focus"], "first": "", "own": True})
+            elif fp.get("focus"):
                 out["focus"].append({"player": names.get(m["pid"], "?"), "focus": fp["focus"],
                                      "first": (fp.get("in_game") or [""])[0]})
         rec, matches = our_records(t)
@@ -324,7 +327,8 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
         force = request.form.get("force") or None
         if force and not re.fullmatch(r"[A-Za-z0-9-]{8,64}", force):
             abort(400)
-        pj.submit_reviews(tid, post=bool(request.form.get("post")), force=force)
+        from .models import picked
+        pj.submit_reviews(tid, post=bool(request.form.get("post")), force=force, llm_choice=picked(store))
         flash("Reviewing your Premier matches in the background.", "ok")
         return redirect(url_for("team_premier", tid=tid))
 

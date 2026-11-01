@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from flask import abort, g, jsonify, render_template, request
+from flask import abort, flash, g, jsonify, redirect, render_template, request, url_for
 
 from ..stats import roles
 from ..stats.premier_schedule import current
@@ -97,8 +97,10 @@ def day_summary(day: dict, members: list[dict], marks: dict, plan: list[dict], r
                               "subs": sub_options(p.get("agent"), cands, rows_by)[:3]})
     n_yes = len(yes)
     level = "ok" if n_yes >= 5 else ("maybe" if n_yes + len(maybe) >= 5 else "short")
+    notes = [{"name": m["name"], "note": (marks.get((m["pid"], day["day"])) or {}).get("note")} for m in members
+             if (marks.get((m["pid"], day["day"])) or {}).get("note")]
     return {**day, "yes": yes, "maybe": maybe, "unknown": unknown, "no": [m for m in members if state[m["pid"]] == "no"],
-            "level": level, "missing": out_slots, "state": state}
+            "level": level, "missing": out_slots, "state": state, "notes": notes}
 
 
 def summary_line(s: dict) -> str:
@@ -112,7 +114,29 @@ def summary_line(s: dict) -> str:
                      (f" → {sub['name']} {sub['why']}" if sub else " → nobody free"))
     if s["unknown"]:
         parts.append("no answer: " + ", ".join(m["name"] for m in s["unknown"]))
+    if s.get("notes"):
+        parts.append("notes: " + "; ".join(f"{n['name']} {n['note']}" for n in s["notes"]))
     return " · ".join(parts)
+
+
+def reminder_text(sums: list[dict], ids: dict[int, str], team: str, url: str) -> tuple[str, list[str]]:
+    """'No answer yet' message for Discord; mentions those with a Discord ID. -> (text, ids to allow)."""
+    lines, ping = [], []
+    for s in sums:
+        if not s["unknown"]:
+            continue
+        who = []
+        for m in s["unknown"]:
+            did = ids.get(m["pid"])
+            if did:
+                who.append(f"<@{did}>")
+                ping.append(did)
+            else:
+                who.append(m["name"])
+        lines.append(f"**{s['label']}**{(' · ' + s['map']) if s.get('map') else ''}: " + ", ".join(who))
+    if not lines:
+        return "", []
+    return (f"**{team}**: who can play? No answer yet:\n" + "\n".join(lines) + f"\nMark your days: {url}", sorted(set(ping)))
 
 
 def register(app, store, get_team, h: dict):
@@ -120,7 +144,8 @@ def register(app, store, get_team, h: dict):
 
     def members_of(t) -> tuple[list[dict], dict]:
         c = h["team_context"](t)
-        ms = [{"pid": m["pid"], "name": c["byid"][m["pid"]].name, "kind": m.get("kind", "sub"), "user_id": m.get("user_id")}
+        ms = [{"pid": m["pid"], "name": c["byid"][m["pid"]].name, "kind": m.get("kind", "sub"), "user_id": m.get("user_id"),
+               "discord_id": str(m.get("discord_id") or "")}
               for m in c["members"] if m.get("kind") in ("starter", "sub")]
         ms.sort(key=lambda m: (m["kind"] != "starter", m["name"].lower()))
         return ms, c["rows_by"]
@@ -193,7 +218,48 @@ def register(app, store, get_team, h: dict):
         return render_template("premier_availability.html", t=t, tab="premier", tab2="availability", premier_status=None,
                                pi=t.premier_info, days=days, sums=sums, members=members, editable=editable, notes=notes,
                                days_set=bool(cfg.get("days")), weekday=WEEKDAY,
-                               save_url=f"/api/teams/{tid}/availability")
+                               save_url=f"/api/teams/{tid}/availability", discord=t.discord_info)
+
+    @app.post("/teams/<int:tid>/premier/availability/remind")
+    def team_availability_remind(tid: int):
+        """Post 'no answer yet' to Discord (pings players whose Discord ID is set)."""
+        from ..discord import post as dpost
+        t = get_team(tid)
+        url = t.discord_info.get("prep_url") or t.discord_info.get("focus_url")
+        if not url:
+            flash("Add a Discord webhook under Members, maps & Discord first.", "error")
+            return redirect(url_for("team_availability", tid=tid))
+        days = match_days(h["brief_cfg"](t).get("days") or [], schedule(t))[:4]
+        sums, members, _ = summaries(t, days)
+        text, ping = reminder_text(sums, {m["pid"]: m["discord_id"] for m in members if m["discord_id"]}, t.name,
+                                   url_for("team_availability", tid=tid, _external=True))
+        if not text:
+            flash("Everyone has answered for the next match days.", "ok")
+            return redirect(url_for("team_availability", tid=tid))
+        try:
+            dpost(url, text, mentions=ping)
+            flash("Posted the reminder to Discord" + (f" ({len(ping)} pinged)." if ping else "."), "ok")
+        except Exception as e:
+            flash(f"Discord: {e}", "error")
+        return redirect(url_for("team_availability", tid=tid))
+
+    @app.post("/teams/<int:tid>/premier/availability/discord-ids")
+    def team_discord_ids(tid: int):
+        """Discord user IDs, so the reminder can ping people (Discord: Settings › Advanced › Developer Mode,
+        then right-click a user › Copy User ID)."""
+        t = get_team(tid, manage=True)
+        ms = []
+        for m in t.member_list:
+            v = request.form.get(f"did_{m['pid']}", "").strip()
+            m = dict(m)
+            if v.isdigit() and 15 <= len(v) <= 21:
+                m["discord_id"] = v
+            elif v == "":
+                m.pop("discord_id", None)
+            ms.append(m)
+        store.update_team(tid, members=ms)
+        flash("Discord IDs saved.", "ok")
+        return redirect(url_for("team_availability", tid=tid) + "#discord-ids")
 
     @app.post("/api/teams/<int:tid>/availability")
     def team_availability_save(tid: int):

@@ -209,15 +209,15 @@ class PremierJobs:
             self.sr._set(key, status="error", error=str(e) or e.__class__.__name__)
 
     # ---- reviews of your own new Premier matches ------------------------------------------
-    def submit_reviews(self, tid: int, post: bool = True, force: str | None = None) -> str:
+    def submit_reviews(self, tid: int, post: bool = True, force: str | None = None, llm_choice: str = "auto") -> str:
         """Review Premier matches that have no review yet (or `force` = one match id again)."""
         key = f"review:{tid}"
         if not self.sr.busy(key):
             self.sr._set(key, status="queued", log=[], error="", t=time.time())
-            self.sr.ex.submit(self._reviews, key, tid, post, force)
+            self.sr.ex.submit(self._reviews, key, tid, post, force, llm_choice)
         return key
 
-    def _reviews(self, key: str, tid: int, post: bool, force: str | None) -> None:
+    def _reviews(self, key: str, tid: int, post: bool, force: str | None, llm_choice: str = "auto") -> None:
         from ..henrik import premier_history
         self.sr._set(key, status="running")
         try:
@@ -252,8 +252,8 @@ class PremierJobs:
             prof = self.store.profile(team.member_list[0]["pid"]) if team.member_list else None
             if prof:
                 try:
-                    llm, cfg = self.sr._llm(prof)
-                    self.sr._log(key, f"· reviews written by {cfg.ollama.model}")
+                    llm, cfg = self.sr._llm(prof, llm_choice)
+                    self.sr._log(key, f"· reviews written by {llm.model}")
                 except Exception as e:
                     self.sr._log(key, f"  ! no model ({e}): numbers only")
             for h in reversed(todo):                       # oldest first, so Discord reads in order

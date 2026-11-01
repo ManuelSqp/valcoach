@@ -49,7 +49,7 @@
   <div class="maptabs">{% for mp in maps %}<a class="btn sm {{ 'primary' if mp == sel else 'ghost' }}" href="{{ url_for('team_plans', tid=t.id, map=mp) }}">{{ mp }}</a>{% endfor %}</div>
   <div class="row">
     <form method="post" action="{{ url_for('team_plans_build', tid=t.id) }}" class="row" style="gap:6px">
-      <input type="hidden" name="map" value="{{ sel }}">
+      <input type="hidden" name="map" value="{{ sel }}">{% include "_llm_pick.html" %}
       <button class="btn {{ 'primary' if not plans }}" {{ 'disabled' if status and status.status in ('queued', 'running') }}>{{ 'Write plans for ' ~ sel if not plans else 'Write ' ~ sel ~ ' again' }}</button>
     </form>
     <form method="post" action="{{ url_for('team_plans_build', tid=t.id) }}"><input type="hidden" name="map" value="__all">

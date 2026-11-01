@@ -91,6 +91,22 @@ def model_usage(url: str, now: float | None = None) -> dict:
             "tokens_day": sum(r[2] for r in day)}
 
 
+def claude_usage(store) -> dict:
+    from datetime import datetime
+    from ..coach.llm import LABELS, read_usage
+    u = read_usage()
+    month = u.get("months", {}).get(datetime.now().strftime("%Y-%m"), {})
+    today = u.get("days", {}).get(datetime.now().strftime("%Y-%m-%d"), {})
+    days = sorted(u.get("days", {}).items())[-30:]
+    budget = float(store.get("claude_budget_usd") or 0)
+    spent = sum(v.get("usd", 0) for v in month.values())
+    return {"key": bool(store.get("claude_api_key")), "month": spent, "today": sum(v.get("usd", 0) for v in today.values()),
+            "budget": budget, "left_pct": (1 - spent / budget) if budget else None,
+            "models": sorted(({"label": LABELS.get(m, m), "calls": v["calls"], "usd": v["usd"], "in": v["in"], "out": v["out"]}
+                              for m, v in month.items()), key=lambda x: -x["usd"]),
+            "days": [{"day": d, "usd": sum(x.get("usd", 0) for x in v.values())} for d, v in days]}
+
+
 def disk(data_dir: Path) -> dict:
     def measure():
         parts = []
@@ -142,6 +158,7 @@ def register(app, store, started_at: float) -> None:
         return render_template(
             "overview.html", version=__version__, uptime_s=int(now - started_at), py=platform.python_version(),
             henrik=henrik_usage(now), model=model_usage(store.get("ollama_url"), now), model_name=store.get("ollama_model"),
+            claude=claude_usage(store),
             disk=disk(store.data_dir), active=sorted(active, key=lambda a: -a["age_s"]), failed=sorted(failed, key=lambda f: f["age_s"])[:10],
             done_day=done_day.most_common(), coach=coach, counts=counts,
             tick_age_s=int(now - sr.last_tick) if sr.last_tick else None, has_key=bool(store.get("henrik_api_key")))

@@ -83,23 +83,29 @@ def register(app, store, sr, helpers: dict) -> None:
         return render_template("progress.html", p=p, active_pid=pid, queue=queue, queues=queues, tab="progress",
                                can_edit=can_edit, weeks=weeks, cards=cards, checks=checks, clutch=cl, retake=rt,
                                postplant=pp, n_full=len(full), n_v3=v3, n=len(rows),
-                               rank=rk.summary(pts), rank_chart=rk.chart(pts), rank_src=rank_src)
+                               rank=rk.summary(pts), rank_chart=rk.chart(pts), rank_src=rank_src,
+                               reports={j.match_id: j.id for j in reversed(store.jobs(pid, 500)) if j.status == "done"} if can_edit else {})
 
     # ------------------------------------------------------------------ quiz
     @app.route("/profiles/<int:pid>/quiz", methods=["GET", "POST"])
     def quiz(pid: int):
+        from ..stats.quiz import KINDS, by_kind
         p, can_edit = view_profile(pid)
         if request.method == "POST":
             if not can_edit:
                 abort(403)
-            sr.submit_quiz(pid)
+            from .models import picked
+            sr.submit_quiz(pid, picked(store))
             return redirect(url_for("quiz", pid=pid))
         q = sr.read_quiz(pid)
         res = q.get("results") or []
+        kinds = [{"kind": k, "label": KINDS.get(k, k), "right": v[0], "total": v[1]} for k, v in by_kind(res).items()]
+        kinds.sort(key=lambda x: x["right"] / max(1, x["total"]))
         return render_template("quiz.html", p=p, active_pid=pid, tab="quiz", can_edit=can_edit, q=q,
-                               status=sr.status(f"quiz:{pid}"), results=res[-10:],
+                               status=sr.status(f"quiz:{pid}"), results=res[-10:], kinds=kinds,
                                best=max((r["score"] / r["of"] for r in res if r.get("of")), default=None),
-                               result_url=url_for("quiz_result", pid=pid))
+                               result_url=url_for("quiz_result", pid=pid), rate_url=url_for("quiz_rate", pid=pid),
+                               focus_url=url_for("own_focus", pid=pid), own=sr.read_own_focus(pid))
 
     @app.post("/api/profiles/<int:pid>/quiz/result")
     def quiz_result(pid: int):
@@ -113,11 +119,52 @@ def register(app, store, sr, helpers: dict) -> None:
         answers = body.get("answers")
         if not isinstance(answers, list) or len(answers) != len(q["questions"]):
             return jsonify(error="answers don't match the quiz"), 400
-        score = sum(1 for a, qq in zip(answers, q["questions"]) if isinstance(a, int) and a == qq["best"])
-        q.setdefault("results", []).append({"t": time.time(), "created": q.get("created"), "score": score, "of": len(q["questions"])})
-        q["results"] = q["results"][-40:]
+        per = [{"kind": qq.get("kind", "?"), "ok": isinstance(a, int) and not isinstance(a, bool) and a == qq["best"]}
+               for a, qq in zip(answers, q["questions"])]
+        score = sum(x["ok"] for x in per)
+        q.setdefault("results", []).append({"t": time.time(), "created": q.get("created"), "score": score,
+                                            "of": len(q["questions"]), "answers": per})
+        q["results"] = q["results"][-60:]
         sr.save_quiz(pid, q)
         return jsonify(ok=True, score=score, of=len(q["questions"]))
+
+    @app.post("/api/profiles/<int:pid>/quiz/rate")
+    def quiz_rate(pid: int):
+        """good / unrealistic / obvious: shapes the next quiz."""
+        from ..stats.quiz import RATINGS
+        p, can_edit = view_profile(pid)
+        if not can_edit:
+            abort(403)
+        body = request.get_json(silent=True) or {}
+        q = sr.read_quiz(pid)
+        qq = next((x for x in q.get("questions") or [] if x.get("id") == body.get("id")), None)
+        if qq is None or body.get("rating") not in RATINGS:
+            return jsonify(error="unknown question or rating"), 400
+        qq["rating"] = body["rating"]
+        bank = [b for b in q.get("bank") or [] if not (b.get("created") == q.get("created") and b.get("id") == qq["id"])]
+        bank.append({"created": q.get("created"), "id": qq["id"], "kind": qq.get("kind"), "rating": body["rating"],
+                     "question": qq["question"], "best_text": qq["options"][qq["best"]]})
+        q["bank"] = bank[-40:]
+        sr.save_quiz(pid, q)
+        return jsonify(ok=True)
+
+    @app.route("/api/profiles/<int:pid>/own-focus", methods=["POST", "DELETE"])
+    def own_focus(pid: int):
+        """Your own focus for this week, picked from a quiz question or a report line."""
+        p, can_edit = view_profile(pid)
+        if not can_edit:
+            abort(403)
+        if request.method == "DELETE":
+            sr.set_own_focus(pid, None)
+            return jsonify(ok=True)
+        body = request.get_json(silent=True) or {}
+        focus = str(body.get("focus") or "").strip()[:160]
+        if not focus:
+            return jsonify(error="focus is empty"), 400
+        src = body.get("source") if body.get("source") in ("quiz", "report") else "own"
+        sr.set_own_focus(pid, {"focus": focus, "why": str(body.get("why") or "").strip()[:400], "source": src,
+                               "ref": str(body.get("ref") or "")[:80]})
+        return jsonify(ok=True)
 
     # ------------------------------------------------------------------ training
     def streak_file(pid: int):
@@ -184,9 +231,11 @@ def register(app, store, sr, helpers: dict) -> None:
         p, can_edit = view_profile(pid)
         roles.load(cache_dir)
         rows = all_rows(pid)
+        from ..stats.quiz import KINDS, by_kind
         a = tr.aim_profile(rows)
-        diag = tr.diagnose(a)
+        diag = tr.diagnose(a) + tr.quiz_diag(by_kind(sr.read_quiz(pid).get("results") or []), KINDS)
         teams = [x for x in (team_learning(t, pid, rows) for t in teams_of(pid)) if x]
         return render_template("training.html", p=p, active_pid=pid, queue="all", queues=queues, tab="training",
                                can_edit=can_edit, a=a, diag=diag, routine=tr.routine(diag), st=streak(pid), teams=teams,
-                               close_m=tr.CLOSE_M, long_m=tr.LONG_M)
+                               close_m=tr.CLOSE_M, long_m=tr.LONG_M, own=sr.read_own_focus(pid),
+                               focus_url=url_for("own_focus", pid=pid))

@@ -1,0 +1,4 @@
+{# The model for this run. Include inside a <form> that runs the model; shows nothing when there's only one model. #}
+{% if llm_choices|length > 1 %}<label class="llmpick" title="Which model writes this"><span class="sr-only">Model</span><select name="llm">
+  {% for c in llm_choices %}<option value="{{ c.value }}" {{ 'selected' if c.value == llm_last }}>{{ '☁ ' if c.kind == 'claude' }}{{ c.label }}</option>{% endfor %}
+</select></label>{% endif %}

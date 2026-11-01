@@ -40,7 +40,10 @@
 .sb-right h2{margin:12px 0 6px}
 kbd{background:var(--ink);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px}
 #sb-notes{min-height:130px;font-family:inherit;font-size:13px}
-#sb-caption{position:absolute;left:10px;top:10px;background:rgba(11,14,19,.85);color:#fff;font-weight:800;font-size:15px;padding:6px 12px;border-radius:8px;pointer-events:none;letter-spacing:.02em}
+#sb-caption{position:absolute;left:10px;top:10px;max-width:calc(100% - 70px);background:rgba(11,14,19,.88);color:#fff;font-weight:800;font-size:15px;padding:7px 12px;border-radius:8px;pointer-events:none;letter-spacing:.02em}
+#sb-caption .call{display:block;font-weight:600;font-size:17px;letter-spacing:0;margin-top:3px;color:#ffe08a}
+#sb-caption .wait{display:block;font-weight:500;font-size:12px;color:#aab3c2;margin-top:4px}
+.sb-playing.sb-waiting .sb-svg{pointer-events:auto;cursor:pointer}
 .sb-playing .sb-svg{pointer-events:none}.sb-playing .sb-palette,.sb-playing #sb-props{opacity:.45;pointer-events:none}
 </style>
 {% endblock %}
@@ -53,6 +56,7 @@ kbd{background:var(--ink);border:1px solid var(--line);border-radius:4px;padding
   <span id="sb-status" class="sb-status">saved</span>
   <button class="btn sm ghost" id="sb-undo" title="Undo (Ctrl+Z)">↶</button><button class="btn sm ghost" id="sb-redo" title="Redo (Ctrl+Y)">↷</button>
   <button class="btn sm" id="sb-play" title="Play the steps as an animation (Esc stops)">▶ Play</button>
+  <label class="sb-check small" title="Playback waits for a click (or Space / →) before each next step" style="margin:0"><input type="checkbox" id="sb-stepmode"> step by step</label>
   <label for="sb-speed" class="sr-only">Speed</label><select id="sb-speed" style="width:auto" title="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
   <button class="btn sm" id="sb-png" title="Download this step as a picture">PNG</button>
   {% if t.discord_info.prep_url or t.discord_info.focus_url %}<button class="btn sm" id="sb-discord" title="Post this step to #match-prep">Post to Discord</button>{% endif %}
@@ -80,6 +84,7 @@ kbd{background:var(--ink);border:1px solid var(--line);border-radius:4px;padding
     <div id="sb-steps"></div>
     <div class="row" style="gap:4px;flex-wrap:nowrap"><input type="text" id="sb-stepname" maxlength="40" placeholder="Step name" style="flex:1">
       <button class="btn sm ghost" id="sb-left" title="Move step earlier">◀</button><button class="btn sm ghost" id="sb-right" title="Move step later">▶</button></div>
+    <textarea id="sb-stepcall" maxlength="200" rows="2" placeholder="The call for this step, e.g. “1:20 smokes, Jett dash A Short” (shown when playing)" style="margin-top:6px;min-height:52px;font-size:13px;font-family:inherit"></textarea>
     <div class="row" style="gap:4px;margin-top:6px"><button class="btn sm" id="sb-stepadd" title="New step, starting as a copy of this one">+ Step</button>
       <button class="btn sm ghost danger" id="sb-stepdel">Delete step</button><button class="btn sm ghost" id="sb-clear" title="Remove everything in this step">Clear</button></div>
     <label class="sb-check" style="margin-top:10px"><input type="checkbox" id="sb-prev" checked> show the step before (faded)</label>

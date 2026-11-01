@@ -33,6 +33,13 @@ class OllamaCfg:
 
 
 @dataclass
+class ClaudeCfg:
+    api_key: str = ""             # Anthropic API key (empty = Claude models are not offered)
+    budget_usd: float = 0.0       # per calendar month, 0 = no limit
+    fallback: bool = True         # if the API can't be used, the local model answers instead
+
+
+@dataclass
 class CoachCfg:
     mode: str = "both"
     language: str = "English"
@@ -58,6 +65,8 @@ class Config:
     player: PlayerCfg = field(default_factory=PlayerCfg)
     henrik: HenrikCfg = field(default_factory=HenrikCfg)
     ollama: OllamaCfg = field(default_factory=OllamaCfg)
+    claude: ClaudeCfg = field(default_factory=ClaudeCfg)
+    llm: str = ""                 # the model for this run: "" = local default, "ollama:<model>", "claude:<model>"
     coach: CoachCfg = field(default_factory=CoachCfg)
     video: VideoCfg = field(default_factory=VideoCfg)
     paths: PathsCfg = field(default_factory=PathsCfg)
@@ -84,6 +93,7 @@ def load_config(path: str | Path | None = None) -> Config:
         _fill(cfg.player, raw.get("player"))
         _fill(cfg.henrik, raw.get("henrik"))
         _fill(cfg.ollama, raw.get("ollama"))
+        _fill(cfg.claude, raw.get("claude"))
         _fill(cfg.coach, raw.get("coach"))
         _fill(cfg.video, raw.get("video"))
         _fill(cfg.paths, raw.get("paths"))
@@ -93,4 +103,6 @@ def load_config(path: str | Path | None = None) -> Config:
         cfg.ollama.url = os.environ["OLLAMA_URL"]
     if os.environ.get("VALCOACH_MODEL"):
         cfg.ollama.model = os.environ["VALCOACH_MODEL"]
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        cfg.claude.api_key = os.environ["ANTHROPIC_API_KEY"]
     return cfg

@@ -105,6 +105,7 @@
   <div class="row between"><h2 style="margin:0">Your Premier matches</h2>
     {% if g.team_owner %}<form method="post" action="{{ url_for('team_reviews_run', tid=t.id) }}" class="row" style="gap:6px">
       <label class="small" style="display:flex;gap:4px;align-items:center;margin:0"><input type="checkbox" name="post" value="1" checked> post to Discord</label>
+{% include "_llm_pick.html" %}
       <button class="btn sm" {{ 'disabled' if rstatus and rstatus.status in ('queued', 'running') }}>Review new matches</button></form>{% endif %}</div>
   <p class="small muted" style="margin:6px 0 4px">New Premier matches are reviewed every night with the sync (and posted to #match-prep): MVP, the rounds that decided it, one thing per player.</p>
   {% for r in reviews %}
