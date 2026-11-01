@@ -166,6 +166,34 @@ their own games. Rules:
 Write in {language}."""
 
 
+RATINGS = ("good", "unrealistic", "obvious")
+
+
+def by_kind(results: list[dict]) -> dict[str, list[int]]:
+    """{kind: [right, answered]} over every quiz round played."""
+    out: dict[str, list[int]] = {}
+    for r in results:
+        for a in r.get("answers") or []:
+            k = out.setdefault(a.get("kind", "?"), [0, 0])
+            k[0] += int(bool(a.get("ok")))
+            k[1] += 1
+    return out
+
+
+def rated_block(bank: list[dict]) -> str:
+    """Questions the player rated: good ones as examples, the others as what to avoid."""
+    good = [b for b in bank if b.get("rating") == "good"][-3:]
+    bad = [b for b in bank if b.get("rating") in ("unrealistic", "obvious")][-4:]
+    out = ""
+    if good:
+        out += "\nQuestions this player rated as good (write like these):\n" + "\n".join(
+            f"- {b['question']} Best call: {b['best_text']}" for b in good)
+    if bad:
+        out += "\nQuestions this player did NOT like (avoid this):\n" + "\n".join(
+            f"- ({'unrealistic' if b['rating'] == 'unrealistic' else 'too obvious'}) {b['question']}" for b in bad)
+    return out + "\n" if out else ""
+
+
 def schema(ids: list[str]) -> dict:
     q = {"type": "object", "properties": {
         "id": {"type": "string", "enum": ids},
@@ -179,13 +207,13 @@ def schema(ids: list[str]) -> dict:
             "required": ["questions"]}
 
 
-def write_quiz(llm, picked: list[dict], language: str = "English") -> list[dict]:
+def write_quiz(llm, picked: list[dict], language: str = "English", bank: list[dict] | None = None) -> list[dict]:
     import yaml
     ids = [m["id"] for m in picked]
     payload = [{"id": m["id"], "type": KINDS[m["kind"]], **{k: v for k, v in m["facts"].items() if k not in ("match_id", "won") and v is not None}}
                for m in picked]
     sch = schema(ids)
-    out = llm.chat_json(SYSTEM.format(language=language) + field_guide(sch),
+    out = llm.chat_json(SYSTEM.format(language=language) + rated_block(bank or []) + field_guide(sch),
                         "Moments (YAML):\n" + yaml.safe_dump(payload, sort_keys=False, allow_unicode=True) +
                         f"\nWrite one question for each of the {len(ids)} moments.", sch)
     by = {m["id"]: m for m in picked}

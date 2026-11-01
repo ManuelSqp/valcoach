@@ -122,7 +122,7 @@ def chart(pts: list[dict], width: int = 720, height: int = 220, last: int = 80) 
     W, H = width - pad_l - pad_r, height - pad_t - pad_b
     xs = lambda i: pad_l + (W * i / (len(pts) - 1))
     ys = lambda v: pad_t + H * (1 - (v - lo) / (hi - lo))
-    dots = [{"x": round(xs(i), 1), "y": round(ys(p["pts"]), 1), "up": (p["change"] or 0) > 0 if p.get("change") is not None else None,
+    dots = [{"x": round(xs(i), 1), "y": round(ys(p["pts"]), 1), "match_id": p.get("match_id") or "", "up": (p["change"] or 0) > 0 if p.get("change") is not None else None,
              "title": f"{p['date'][:10]} · {p['name']}{(' ' + str(p['rr']) + ' RR') if p.get('rr') is not None else ''}"
                       f"{(' (' + ('+' if p['change'] > 0 else '') + str(p['change']) + ')') if p.get('change') is not None else ''}"
                       f"{(' · ' + p['map']) if p.get('map') else ''}"} for i, p in enumerate(pts)]

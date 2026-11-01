@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 import shutil
 import socket
 import sqlite3
@@ -46,6 +47,14 @@ MAX_TRACKED_LOGINS = 1000              # failed-login records kept for the locko
 
 
 from .ui import fonts_url, ui_prefs
+from ..coach.llm import month_cost as claude_month_cost
+from .models import choices as model_choices, last_choice, picked as picked_model
+
+# one-click tags on the notes page (they add the words to the note; your own sentence is still the best part)
+NOTE_TAGS = ["died alone", "not traded", "late rotate", "over-rotated", "peeked too early", "util too early",
+             "util too late", "dry peek on entry", "crosshair too low", "lost the 1v1", "good call", "bad call",
+             "should have saved", "played for time well"]
+
 
 def _host_boot() -> float | None:
     """When the machine itself booted (Linux), for the uptime tooltip."""
@@ -72,6 +81,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         SESSION_COOKIE_SAMESITE="Lax",         # blocks cross-site form posts (CSRF) in browsers
         SESSION_COOKIE_HTTPONLY=True,
     )
+    from ..coach.llm import set_usage_file
+    set_usage_file(store.data_dir / "llm_usage.json")       # what Claude calls cost (Server overview)
     stats_runner = StatsRunner(store)
     app.extensions["valcoach"] = {"store": store, "runner": runner, "stats": stats_runner, "uploads": uploads}
     history_cache: dict[tuple, tuple[float, list[dict]]] = {}
@@ -226,6 +237,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             "app_started": int(started_at),
             "server_now": int(time.time()),
             "host_boot": _host_boot(),
+            "llm_choices": model_choices(store, user) if user else [],
+            "llm_last": last_choice(user) if user else "",
             "new_version": bool(user) and store.get(f"seen_version:{user.id}") not in ("", __version__),
         }
 
@@ -356,7 +369,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             from .ui import ANIMATIONS, STYLES
             f = request.form
             prefs = {"style": f.get("style") if f.get("style") in STYLES else "classic",
-                     "anim": {k: bool(f.get(f"anim_{k}")) for k in ANIMATIONS}}
+                     "anim": {k: bool(f.get(f"anim_{k}")) for k in ANIMATIONS}, "llm": last_choice(g.user)}
             store.update_user(g.user.id, prefs=json.dumps(prefs))
             flash(f"Style: {STYLES[prefs['style']][0]}.", "ok")
             return redirect(url_for("account") + "#look")
@@ -682,6 +695,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 "anchor_time": anchor_time,
                 "anchor_round": anchor_round,
                 "anchor_kill": anchor_kill,
+                "llm": picked_model(store),
             }
             jid = uuid.uuid4().hex[:12]
             store.create_job(jid, pid, match.match_id, mode, vod_path, vod_name, opts,
@@ -726,9 +740,25 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         team = match.team_of(puuid)
         own = match.team_rounds_won.get(team, 0)
         opp = match.team_rounds_won.get(match.other_team(team), 0)
+        # the coach's line per round from the newest report of this match: shown as a hint, never as the note
+        hints: dict[int, str] = {}
+        for j in store.jobs_for_match(pid, match.match_id):
+            jp = store.resolve(j.json_path) if j.status == "done" else None
+            if jp is None:
+                continue
+            try:
+                for r in json.loads(jp.read_text()).get("rounds", []):
+                    fb = r.get("feedback") or {}
+                    line = fb.get("summary") or (fb.get("key_moment") or {}).get("what") or \
+                        next(iter((fb.get("player") or {}).get("mistakes") or []), "")
+                    if line:
+                        hints[int(r["number"])] = str(line)[:200]
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+            break
         return render_template("notes.html", p=p, match_id=match.match_id, map=match.map_name,
                                score=f"{own}-{opp}", rounds=pipeline.notes_rounds(match, puuid),
-                               existing=pipeline.read_notes(cfg, match.match_id), active_pid=pid)
+                               existing=pipeline.read_notes(cfg, match.match_id), active_pid=pid, hints=hints, tags=NOTE_TAGS)
 
     # ------------------------------------------------------------------- jobs
     @app.get("/jobs/<jid>")
@@ -751,7 +781,45 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         path = store.resolve(j.html_path) if j.status == "done" else None
         if path is None:
             abort(404)
-        return send_file(path, mimetype="text/html", max_age=0)
+        html = path.read_text(encoding="utf-8", errors="replace")
+        if "data-fb=" in html and "</body>" in html:      # 👍 / 👎 / 🎯 on the coach's lines (reports from 2.22 on)
+            votes = {f"{v['round']}|{v['text']}": v["vote"] for v in read_votes(j.profile_id) if v.get("job") == jid}
+            boot = json.dumps({"vote_url": url_for("job_vote", jid=jid), "focus_url": url_for("own_focus", pid=j.profile_id),
+                               "votes": votes, "match": j.map or "this match"}).replace("</", "<\\/")
+            tag = (f'<script>window.VALCOACH_FB = {boot};</script>'
+                   f'<script src="{url_for("static", filename="report_fb.js")}?v={__version__}"></script>')
+            i = html.rfind("</body>")
+            html = html[:i] + tag + html[i:]
+        r = app.response_class(html, mimetype="text/html")
+        r.headers["Cache-Control"] = "no-cache"
+        return r
+
+    def votes_file(pid: int) -> Path:
+        return store.profile_dir(pid) / "feedback_votes.json"
+
+    def read_votes(pid: int) -> list[dict]:
+        try:
+            return json.loads(votes_file(pid).read_text()).get("votes", [])
+        except (OSError, ValueError):
+            return []
+
+    @app.post("/api/jobs/<jid>/vote")
+    def job_vote(jid: str):
+        """👍 / 👎 on one line of a report: liked lines become examples for later runs, disliked ones what to avoid."""
+        j = get_job(jid)
+        b = request.get_json(silent=True) or {}
+        text = str(b.get("text") or "").strip()[:600]
+        if not text or b.get("vote") not in ("up", "down", "none") or b.get("who") not in ("you", "team", "key") \
+                or not isinstance(b.get("round"), int) or isinstance(b.get("round"), bool):
+            return jsonify(error="bad vote"), 400
+        votes = [v for v in read_votes(j.profile_id) if not (v.get("job") == jid and v.get("round") == b["round"] and v.get("text") == text)]
+        if b["vote"] != "none":
+            votes.append({"job": jid, "match_id": j.match_id, "round": b["round"], "who": b["who"], "text": text,
+                          "vote": b["vote"], "t": time.time()})
+        f = votes_file(j.profile_id)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps({"votes": votes[-300:]}, ensure_ascii=False))
+        return jsonify(ok=True)
 
     @app.get("/jobs/<jid>/vod")
     def job_vod(jid: str):
@@ -828,7 +896,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             for e in errors:
                 flash(e, "error")
             if not errors:
-                perms = {x for x in (u.perms or "").split(",") if x and x != "overview"} | ({"overview"} if f.get("perm_overview") else set())
+                perms = {x for x in (u.perms or "").split(",") if x and x not in ("overview", "claude")} | \
+                    ({"overview"} if f.get("perm_overview") else set()) | ({"claude"} if f.get("perm_claude") else set())
                 store.update_user(uid, is_admin=int(is_admin), disabled=int(disabled), vod_dir=vod_dir, perms=",".join(sorted(perms)))
                 if new_pw:
                     key = store.set_password(uid, new_pw)
@@ -893,6 +962,29 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 except ValueError as e:
                     errors.append(f"{key}: {e}")
             store.set("allow_signup", "1" if f.get("allow_signup") else "0")
+            # Claude (optional)
+            if f.get("claude_api_key", "").strip():
+                store.set("claude_api_key", f["claude_api_key"].strip())
+            if f.get("clear_claude_key"):
+                store.set("claude_api_key", "")
+            if "claude_models" in f:
+                names = [m.strip() for m in f.get("claude_models", "").split(",") if m.strip()]
+                if all(re.fullmatch(r"claude-[a-z0-9.-]{2,60}", m) for m in names):
+                    store.set("claude_models", ", ".join(names))
+                else:
+                    errors.append("Claude models: names like claude-sonnet-5-5, comma separated")
+            if "claude_budget_usd" in f:
+                try:
+                    b = float(f.get("claude_budget_usd") or 0)
+                    if not 0 <= b <= 100000:
+                        raise ValueError
+                    store.set("claude_budget_usd", f"{b:g}")
+                except ValueError:
+                    errors.append("Claude budget: a number of US$ (0 = no limit)")
+            if "llm_auto" in f:
+                store.set("claude_fallback", "1" if f.get("claude_fallback") else "0")
+                if f["llm_auto"] in {c["value"] for c in model_choices(store, g.user)}:
+                    store.set("llm_auto", f["llm_auto"])
             if f.get("youtube_api_key", "").strip():
                 store.set("youtube_api_key", f["youtube_api_key"].strip())
             if f.get("clear_youtube_key"):
@@ -923,7 +1015,9 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                                yt_hint=("…" + s["youtube_api_key"][-4:]) if s["youtube_api_key"] else "",
                                pros_text=s["pros_yaml"] or DEFAULT_PROS.read_text(), pros_custom=bool(s["pros_yaml"]),
                                key_hint=("…" + s["henrik_api_key"][-4:]) if s["henrik_api_key"] else "",
-                               models=models, ollama_error=ollama_error, running_workers=runner.workers)
+                               models=models, ollama_error=ollama_error, running_workers=runner.workers,
+                               claude_hint=("…" + s["claude_api_key"][-4:]) if s["claude_api_key"] else "",
+                               claude_month=claude_month_cost(), auto_choices=model_choices(store, g.user))
 
     @app.errorhandler(403)
     def forbidden(_):

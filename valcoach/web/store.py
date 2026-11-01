@@ -16,7 +16,7 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from ..config import (CoachCfg, Config, HenrikCfg, OllamaCfg, PathsCfg, PlayerCfg, VideoCfg,
+from ..config import (ClaudeCfg, CoachCfg, Config, HenrikCfg, OllamaCfg, PathsCfg, PlayerCfg, VideoCfg,
                       load_config)
 
 PROFILES_TABLE = """
@@ -166,6 +166,12 @@ DEFAULTS: dict[str, str] = {
     "ollama_num_ctx": "16384",
     "ollama_parallel": "4",
     "ollama_timeout_s": "300",
+    # Claude through Anthropic's API (optional): models offered next to the local one
+    "claude_api_key": os.environ.get("ANTHROPIC_API_KEY", ""),
+    "claude_models": "claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5",
+    "claude_budget_usd": "20",         # per month, 0 = no limit
+    "claude_fallback": "1",            # API not usable -> local model answers
+    "llm_auto": "",                    # model for jobs that run by themselves (nightly reviews, weekly focus)
     "minimap_roi": "0.012, 0.025, 0.215, 0.382",
     "killfeed_roi": "0.70, 0.08, 0.29, 0.25",
     "sample_fps": "4",
@@ -184,6 +190,13 @@ REGIONS = ["eu", "na", "ap", "kr", "latam", "br"]
 PLATFORMS = ["pc", "console"]
 MODES = ["both", "team", "player"]
 MIN_PASSWORD = 8
+
+
+def _float(v, default: float = 0.0) -> float:
+    try:
+        return max(0.0, float(v))
+    except (TypeError, ValueError):
+        return default
 
 
 def now() -> str:
@@ -903,6 +916,8 @@ class Store:
                              temperature=float(s["ollama_temperature"]), num_ctx=int(s["ollama_num_ctx"]),
                              parallel=int(s["ollama_parallel"]), timeout_s=int(s["ollama_timeout_s"]),
                              think=s["ollama_think"]),
+            claude=ClaudeCfg(api_key=s["claude_api_key"], budget_usd=_float(s["claude_budget_usd"]),
+                             fallback=s["claude_fallback"] == "1"),
             coach=CoachCfg(mode=profile.mode, language=profile.language,
                            playbook=str(pdir / "playbook.yaml"), notes_dir=str(pdir / "notes")),
             video=VideoCfg(minimap_roi=parse_roi(s["minimap_roi"]), killfeed_roi=parse_roi(s["killfeed_roi"]),

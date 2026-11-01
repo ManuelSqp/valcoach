@@ -390,11 +390,14 @@ def run(cfg: Config, req: CoachRequest, log: Log = _noop) -> CoachResult:
 
     llm = None
     if not req.no_llm:
-        llm = Ollama(cfg.ollama.url, cfg.ollama.model, cfg.ollama.temperature, cfg.ollama.num_ctx,
-                     cfg.ollama.timeout_s, cfg.ollama.think)
+        from .coach.llm import make_llm
+        llm = make_llm(cfg)
         llm.check()
-        log(f"· Coaching with {cfg.ollama.model} ({cfg.ollama.parallel} parallel, "
-            f"reasoning {cfg.ollama.think or 'model default'}) ...")
+        if llm.model.startswith("claude"):
+            log(f"· Coaching with {llm.model} (Anthropic API, {cfg.ollama.parallel} parallel) ...")
+        else:
+            log(f"· Coaching with {llm.model} ({cfg.ollama.parallel} parallel, "
+                f"reasoning {cfg.ollama.think or 'model default'}) ...")
 
     report = run_coach(
         an, llm, mode=mode, language=cfg.coach.language,
@@ -433,8 +436,10 @@ def run(cfg: Config, req: CoachRequest, log: Log = _noop) -> CoachResult:
         if st:
             report.meta["llm_stats"] = st
             log(f"· Model speed: {st['avg_s_per_request']} s per request · "
-                f"generation {st['gen_tok_per_s'] or '?'} tok/s · prompt {st['prompt_tok_per_s'] or '?'} tok/s · "
-                f"{st['avg_gen_tokens']} tokens per answer ({st['requests']} requests)")
+                f"generation {st.get('gen_tok_per_s') or '?'} tok/s · prompt {st.get('prompt_tok_per_s') or '?'} tok/s · "
+                f"{st.get('avg_gen_tokens', '?')} tokens per answer ({st.get('requests', '?')} requests)"
+                + (f" · cost US$ {st['cost_usd']:.3f}" if st.get("cost_usd") else "")
+                + (f" · Claude couldn't be used ({st['fell_back']}), the local model answered" if st.get("fell_back") else ""))
             if st["thinking"] and cfg.ollama.think != "on":
                 log("! The model produced reasoning ('thinking') although Reasoning is not 'On'. "
                     "That costs time. Set Reasoning to 'Off', or use a model whose template supports it.")

@@ -35,13 +35,15 @@ def _send(session, url: str, **kw):
         raise DiscordError(f"Could not reach Discord ({e.__class__.__name__})") from None
 
 
-def post(url: str, content: str = "", embeds: list[dict] | None = None, session=None) -> None:
+def post(url: str, content: str = "", embeds: list[dict] | None = None, session=None, mentions: list[str] | None = None) -> None:
+    """mentions: Discord user IDs that may be pinged (<@id> in content); nobody else, no @everyone."""
     if not valid_url(url):
         raise DiscordError("That's not a Discord webhook URL")
     embeds = embeds or []
     chunks = [embeds[i:i + MAX_EMBEDS] for i in range(0, len(embeds), MAX_EMBEDS)] or [[]]
     for i, chunk in enumerate(chunks):
-        body = {"username": "valcoach", "allowed_mentions": {"parse": []}, "embeds": chunk}
+        allowed = {"parse": [], "users": [m for m in (mentions or []) if str(m).isdigit()][:20]} if mentions else {"parse": []}
+        body = {"username": "valcoach", "allowed_mentions": allowed, "embeds": chunk}
         if i == 0 and content:
             body["content"] = _cut(content, 1900)
         for attempt in range(3):

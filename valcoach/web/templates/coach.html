@@ -45,7 +45,7 @@
   <details>
     <summary>Advanced options</summary>
     <div style="margin-top:12px">
-      <label class="choice"><input type="checkbox" name="no_llm" value="1"><span><b>Facts only</b><span class="muted small">Skip Ollama, only the numbers and round facts.</span></span></label>
+      <label class="choice"><input type="checkbox" name="no_llm" value="1"><span><b>Facts only</b><span class="muted small">Skip the model, only the numbers and round facts.</span></span></label>
       <label class="choice"><input type="checkbox" name="no_minimap" value="1"><span><b>No minimap tracking</b><span class="muted small">Use the VOD only for the jump buttons.</span></span></label>
       <label class="choice"><input type="checkbox" name="recalibrate" value="1"><span><b>Recalibrate minimap</b><span class="muted small">After changing HUD or recording settings.</span></span></label>
       <p class="muted small" style="margin:12px 0 6px">Manual sync, only if automatic sync fails: the VOD time of one kill.</p>
@@ -59,6 +59,7 @@
 </section>
 
 <div class="row">
+{% include "_llm_pick.html" %}
   <button class="btn primary" type="submit" id="go">Start coaching</button>
   <span class="muted small" id="status"></span>
 </div>

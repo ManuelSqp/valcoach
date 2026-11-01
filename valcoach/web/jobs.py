@@ -52,6 +52,7 @@ class JobRunner:
         try:
             cfg = st.build_config(profile)
             o = job.opts
+            cfg.llm = str(o.get("llm") or "")            # the model picked for this run
             anchor = None
             if o.get("anchor_time"):
                 anchor = pipeline.Anchor(int(o.get("anchor_round") or 1), int(o.get("anchor_kill") or 1),

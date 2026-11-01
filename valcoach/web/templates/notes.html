@@ -1,5 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Notes {{ map }} · valcoach{% endblock %}
+{% block title %}Notes {{ map }} · valcoach<script>
+document.addEventListener('click', e => {
+  const b = e.target.closest('.tg'); if (!b) return;
+  const t = document.getElementById(b.dataset.for);
+  t.value = t.value.trim() ? t.value.trim().replace(/[.,;]?$/, ', ') + b.textContent : b.textContent[0].toUpperCase() + b.textContent.slice(1);
+  t.focus(); t.setSelectionRange(t.value.length, t.value.length);
+});
+</script>
+{% endblock %}
 {% block content %}
 <div class="row between" style="margin-bottom:8px">
   <div><h1>Round notes · {{ map }} <span style="color:var(--red)">{{ score }}</span></h1>
@@ -7,7 +15,14 @@
   <a class="btn ghost" href="{{ url_for('profile', pid=p.id) }}">← {{ p.name }}</a>
 </div>
 <p class="sub">Write what actually went wrong or right, the way you'd tell a teammate. Notes for this match are given to the coach,
-and your notes from other matches show it what kind of feedback you want. Leave rounds you have nothing to say about empty.</p>
+and your notes from other matches show it what kind of feedback you want. Leave rounds you have nothing to say about empty.
+The tags add a word or two; the greyed text is what the coach said last time, so you can correct it in your own words.</p>
+<style>
+.tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.tg{font:inherit;font-size:11px;padding:1px 8px;border-radius:99px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);cursor:pointer}
+.tg:hover{color:var(--text);border-color:var(--line2)}
+.tags{max-height:22px;overflow:hidden;transition:max-height .15s}tr:hover .tags,tr:focus-within .tags{max-height:120px}
+</style>
 <form method="post">
 <section class="card">
   <div class="tablewrap"><table>
@@ -17,7 +32,8 @@ and your notes from other matches show it what kind of feedback you want. Leave 
       <td><b>{{ r.number }}</b></td>
       <td class="small"><span class="res {{ 'W' if r.won else 'L' }}">{{ 'W' if r.won else 'L' }}</span> {{ r.side }} · {{ r.score_before }}<br>
         <span class="muted">{{ r.result }}{% if r.plant %} · plant {{ r.plant }}{% endif %}</span></td>
-      <td><textarea name="round_{{ r.number }}" rows="2" style="min-height:44px" placeholder="">{{ existing.get(r.number, '') }}</textarea></td>
+      <td><textarea name="round_{{ r.number }}" id="n{{ r.number }}" rows="2" style="min-height:44px" placeholder="{{ ('Coach said: ' ~ hints[r.number]) if hints.get(r.number) else '' }}">{{ existing.get(r.number, '') }}</textarea>
+        <div class="tags">{% for tg in tags %}<button type="button" class="tg" data-for="n{{ r.number }}">{{ tg }}</button>{% endfor %}</div></td>
     </tr>
     {% endfor %}
   </table></div>
@@ -27,4 +43,12 @@ and your notes from other matches show it what kind of feedback you want. Leave 
   <button class="btn primary" type="submit" name="then" value="coach">Save and coach this match</button>
 </div>
 </form>
+<script>
+document.addEventListener('click', e => {
+  const b = e.target.closest('.tg'); if (!b) return;
+  const t = document.getElementById(b.dataset.for);
+  t.value = t.value.trim() ? t.value.trim().replace(/[.,;]?$/, ', ') + b.textContent : b.textContent[0].toUpperCase() + b.textContent.slice(1);
+  t.focus(); t.setSelectionRange(t.value.length, t.value.length);
+});
+</script>
 {% endblock %}

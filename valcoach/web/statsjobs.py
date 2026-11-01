@@ -112,15 +112,15 @@ class StatsRunner:
             self._log(key, traceback.format_exc(limit=3))
             self._set(key, status="error", error=str(e) or e.__class__.__name__)
 
-    def submit_tips(self, pid: int, map_name: str, queue: str, all_rows: list[dict]) -> str:
+    def submit_tips(self, pid: int, map_name: str, queue: str, all_rows: list[dict], llm_choice: str = "") -> str:
         key = f"tips:{pid}:{slug(map_name)}:{queue}"
         if not self.busy(key):
             with self._lock:
                 self._state[key] = {"status": "queued", "log": [], "error": "", "t": time.time()}
-            self.ex.submit(self._tips, key, pid, map_name, queue, all_rows)
+            self.ex.submit(self._tips, key, pid, map_name, queue, all_rows, llm_choice)
         return key
 
-    def _tips(self, key: str, pid: int, map_name: str, queue: str, all_rows: list[dict]) -> None:
+    def _tips(self, key: str, pid: int, map_name: str, queue: str, all_rows: list[dict], llm_choice: str = "") -> None:
         from ..coach.ollama import Ollama
         from ..stats.aggregate import filter_rows
         from ..stats.tips import write_tips
@@ -131,10 +131,8 @@ class StatsRunner:
         self._set(key, status="running")
         try:
             cfg = self.store.build_config(p)
-            llm = Ollama(cfg.ollama.url, cfg.ollama.model, cfg.ollama.temperature, cfg.ollama.num_ctx,
-                         cfg.ollama.timeout_s, cfg.ollama.think)
-            llm.check()
-            self._log(key, f"· Writing tips for {map_name} with {cfg.ollama.model} ...")
+            llm, cfg = self._llm(p, llm_choice)
+            self._log(key, f"· Writing tips for {map_name} with {llm.model} ...")
             rows = filter_rows(self.games(pid).rows(), queue)
             out = write_tips(llm, rows, map_name, p.language, all_rows)
             out["_created"] = time.time()
@@ -162,16 +160,16 @@ class StatsRunner:
             d = {"by_pro": {"": d}} if d.get("queries") else {"by_pro": {}}
         return d
 
-    def submit_watch(self, pid: int, queue: str, prof: dict, matches: list[dict], jobs: list[dict]) -> str:
+    def submit_watch(self, pid: int, queue: str, prof: dict, matches: list[dict], jobs: list[dict], llm_choice: str = "") -> str:
         """jobs: [{"pro": name, "queries": [...]}], one guide (and one model run) per pro."""
         key = f"watch:{pid}:{queue}"
         if not self.busy(key):
             with self._lock:
                 self._state[key] = {"status": "queued", "log": [], "error": "", "t": time.time()}
-            self.ex.submit(self._watch, key, pid, queue, prof, matches, jobs)
+            self.ex.submit(self._watch, key, pid, queue, prof, matches, jobs, llm_choice)
         return key
 
-    def _watch(self, key: str, pid: int, queue: str, prof: dict, matches: list[dict], jobs: list[dict]) -> None:
+    def _watch(self, key: str, pid: int, queue: str, prof: dict, matches: list[dict], jobs: list[dict], llm_choice: str = "") -> None:
         from ..coach.ollama import Ollama
         from ..stats.tips import write_watch_guide
         from ..stats.youtube import search
@@ -183,10 +181,7 @@ class StatsRunner:
         yt_key = self.store.get("youtube_api_key")
         llm, llm_error = None, None
         try:
-            cfg = self.store.build_config(p)
-            llm = Ollama(cfg.ollama.url, cfg.ollama.model, cfg.ollama.temperature, cfg.ollama.num_ctx,
-                         cfg.ollama.timeout_s, cfg.ollama.think)
-            llm.check()
+            llm, cfg = self._llm(p, llm_choice)
         except Exception as e:
             llm, llm_error = None, f"Coach: {e}"
         produced = False
@@ -203,7 +198,7 @@ class StatsRunner:
                         out["errors"].append(f"YouTube: {e}")
                         break                       # same error for every query (bad key, quota)
             if llm:
-                self._log(key, f"· {pro} ({n}/{len(jobs)}): writing what to watch for with {cfg.ollama.model} ...")
+                self._log(key, f"· {pro} ({n}/{len(jobs)}): writing what to watch for with {llm.model} ...")
                 try:
                     out["guide"] = write_watch_guide(llm, prof, matches, queries, p.language, pro=pro)
                 except Exception as e:
@@ -351,7 +346,8 @@ class StatsRunner:
             for pid, m in old.items():                     # keep manually added members
                 if pid not in pids:
                     new_members.append(m)
-            info = {"name": data.get("name", name), "tag": data.get("tag", tag), "region": region,
+            info = {**team.premier_info,                 # keeps settings like follow_pool
+                    "name": data.get("name", name), "tag": data.get("tag", tag), "region": region,
                     "id": data.get("id", ""), "placement": data.get("placement") or {}, "stats": data.get("stats") or {},
                     "synced_at": time.time()}
             self.store.update_team(tid, members=new_members, premier=info,
@@ -399,11 +395,14 @@ class StatsRunner:
         p = (f or {}).get("players", {}).get(str(mine["pid"]))
         return {"week": f["week"], **p} if p and p.get("focus") else None
 
-    def _llm(self, profile):
-        from ..coach.ollama import Ollama
+    AUTO = "auto"            # the model set for automatic jobs (Settings › Models)
+
+    def _llm(self, profile, choice: str | None = None):
+        """The model for one job: choice from the run button ("" = local default, AUTO = the automatic-jobs model)."""
+        from ..coach.llm import make_llm
         cfg = self.store.build_config(profile)
-        llm = Ollama(cfg.ollama.url, cfg.ollama.model, cfg.ollama.temperature, cfg.ollama.num_ctx,
-                     cfg.ollama.timeout_s, cfg.ollama.think)
+        cfg.llm = self.store.get("llm_auto") if choice == self.AUTO else (choice or "")
+        llm = make_llm(cfg)
         llm.check()
         return llm, cfg
 
@@ -424,15 +423,37 @@ class StatsRunner:
         tmp.write_text(json.dumps(data, ensure_ascii=False))
         tmp.replace(p)
 
-    def submit_quiz(self, pid: int) -> str:
+    # ---- your own focus pick (from a quiz question or a report line) ----------------
+    def own_focus_path(self, pid: int) -> Path:
+        return self.store.profile_dir(pid) / "stats" / "own_focus.json"
+
+    def read_own_focus(self, pid: int, week: str | None = None) -> dict | None:
+        """This week's own pick (None if not set or from another week)."""
+        from ..stats.weekly import week_id
+        try:
+            d = json.loads(self.own_focus_path(pid).read_text())
+        except (OSError, ValueError):
+            return None
+        return d if d.get("week") == (week or week_id()) and d.get("focus") else None
+
+    def set_own_focus(self, pid: int, focus: dict | None) -> None:
+        from ..stats.weekly import week_id
+        p = self.own_focus_path(pid)
+        if not focus:
+            p.unlink(missing_ok=True)
+            return
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({**focus, "week": week_id(), "set_at": time.time()}, ensure_ascii=False))
+
+    def submit_quiz(self, pid: int, llm_choice: str = "") -> str:
         key = f"quiz:{pid}"
         if not self.busy(key):
             with self._lock:
                 self._state[key] = {"status": "queued", "log": [], "error": "", "t": time.time()}
-            self.ex.submit(self._quiz, key, pid)
+            self.ex.submit(self._quiz, key, pid, llm_choice)
         return key
 
-    def _quiz(self, key: str, pid: int) -> None:
+    def _quiz(self, key: str, pid: int, llm_choice: str = "") -> None:
         from ..maps import MapRegistry
         from ..parse import parse_match
         from ..stats.quiz import moments, pick, write_quiz
@@ -468,14 +489,14 @@ class StatsRunner:
             self._log(key, f"· {len(found)} moments in your last {read} games with round data, {len(picked)} picked")
             if len(picked) < 3:
                 raise RuntimeError("Not enough moments yet: play a few more games and press Import on Stats & agents.")
-            llm, cfg = self._llm(p)
-            self._log(key, f"· writing the questions with {cfg.ollama.model} ...")
-            qs = write_quiz(llm, picked, p.language)
+            llm, cfg = self._llm(p, llm_choice)
+            self._log(key, f"· writing the questions with {llm.model} ...")
+            qs = write_quiz(llm, picked, p.language, self.read_quiz(pid).get("bank") or [])
             if not qs:
                 raise RuntimeError("The model's answer had no usable questions; try again.")
             old = self.read_quiz(pid)
-            self.save_quiz(pid, {"created": time.time(), "model": cfg.ollama.model, "questions": qs,
-                                 "results": (old.get("results") or [])[-30:]})
+            self.save_quiz(pid, {"created": time.time(), "model": llm.model, "questions": qs,
+                                 "results": (old.get("results") or [])[-60:], "bank": (old.get("bank") or [])[-40:]})
             self._log(key, f"✓ {len(qs)} questions")
             self._set(key, status="done")
         except Exception as e:
@@ -483,16 +504,16 @@ class StatsRunner:
             self._set(key, status="error", error=str(e) or e.__class__.__name__)
 
     # ---- game plans -----------------------------------------------------------------
-    def submit_plans(self, tid: int, items: list[dict], language: str, post: dict | None = None) -> str:
+    def submit_plans(self, tid: int, items: list[dict], language: str, post: dict | None = None, llm_choice: str = "") -> str:
         """items: [{map, facts, lineup, callouts, notes, tips}]"""
         key = f"plans:{tid}"
         if not self.busy(key):
             with self._lock:
                 self._state[key] = {"status": "queued", "log": [], "error": "", "t": time.time()}
-            self.ex.submit(self._plans, key, tid, items, language, post)
+            self.ex.submit(self._plans, key, tid, items, language, post, llm_choice)
         return key
 
-    def _plans(self, key, tid, items, language, post) -> None:
+    def _plans(self, key, tid, items, language, post, llm_choice: str = "") -> None:
         from ..stats.gameplans import write_plans
         self._set(key, status="running")
         try:
@@ -500,11 +521,11 @@ class StatsRunner:
             prof = self.store.profile(team.member_list[0]["pid"]) if team and team.member_list else None
             if prof is None:
                 raise RuntimeError("Team has no players")
-            llm, cfg = self._llm(prof)
+            llm, cfg = self._llm(prof, llm_choice)
             d = self.team_dir(tid) / "plans"
             d.mkdir(parents=True, exist_ok=True)
             for i, it in enumerate(items, 1):
-                self._log(key, f"· {it['map']} ({i}/{len(items)}) with {cfg.ollama.model} ...")
+                self._log(key, f"· {it['map']} ({i}/{len(items)}) with {llm.model} ...")
                 try:
                     out = write_plans(llm, it["map"], it["facts"], it["lineup"], it["callouts"], it["notes"], it["tips"], language)
                     out["_created"] = time.time()
@@ -547,16 +568,16 @@ class StatsRunner:
         return key
 
     # ---- weekly focus -----------------------------------------------------------------
-    def submit_focus(self, tid: int, week: str, items: list[dict], language: str, post: bool = False) -> str:
+    def submit_focus(self, tid: int, week: str, items: list[dict], language: str, post: bool = False, llm_choice: str = "") -> str:
         """items: [{pid, name, roles, facts}]"""
         key = f"focus:{tid}"
         if not self.busy(key):
             with self._lock:
                 self._state[key] = {"status": "queued", "log": [], "error": "", "t": time.time()}
-            self.ex.submit(self._focus, key, tid, week, items, language, post)
+            self.ex.submit(self._focus, key, tid, week, items, language, post, llm_choice)
         return key
 
-    def _focus(self, key, tid, week, items, language, post) -> None:
+    def _focus(self, key, tid, week, items, language, post, llm_choice: str = "") -> None:
         from ..stats.weekly import write_focus
         self._set(key, status="running")
         try:
@@ -564,8 +585,8 @@ class StatsRunner:
             prof = self.store.profile(items[0]["pid"]) if items else None
             if team is None or prof is None:
                 raise RuntimeError("Team has no players")
-            llm, cfg = self._llm(prof)
-            out = {"week": week, "created": time.time(), "model": cfg.ollama.model, "players": {}}
+            llm, cfg = self._llm(prof, llm_choice)
+            out = {"week": week, "created": time.time(), "model": llm.model, "players": {}}
             for i, it in enumerate(items, 1):
                 self._log(key, f"· {it['name']} ({i}/{len(items)}) ...")
                 try:

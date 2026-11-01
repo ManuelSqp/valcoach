@@ -44,6 +44,29 @@
   </div>
 </section>
 
+<section class="card" id="claude">
+  <h2>Claude (Anthropic API, optional)</h2>
+  <p class="hint" style="margin-top:-6px">With a key, the Claude models show up in the model picker next to every button that runs the model,
+    for admins and for users you give <i>Can use Claude</i> under Users. The local model stays the default.</p>
+  <div class="grid2">
+    <div class="field"><label>Anthropic API key {% if claude_hint %}<span style="color:var(--win)">✓ set ({{ claude_hint }})</span>{% endif %}</label>
+      <input type="password" name="claude_api_key" autocomplete="off" placeholder="{{ 'Leave empty to keep the current key' if claude_hint else 'sk-ant-…' }}">
+      <div class="hint">console.anthropic.com → API keys. Pay as you go: set a spending limit there as well.</div>
+      {% if claude_hint %}<label class="choice" style="margin-top:8px"><input type="checkbox" name="clear_claude_key" value="1"><span>Remove the key</span></label>{% endif %}</div>
+    <div class="field"><label>Claude models offered</label>
+      <input type="text" name="claude_models" value="{{ s.claude_models }}">
+      <div class="hint">Model names, comma separated. Haiku is cheapest, Sonnet the best value for coaching, Opus the strongest.</div></div>
+    <div class="field"><label>Monthly budget (US$)</label>
+      <input type="number" name="claude_budget_usd" value="{{ s.claude_budget_usd }}" min="0" step="1">
+      <div class="hint">Claude stops for the rest of the month once this is spent (0 = no limit). This month so far: <b>US$ {{ '%.2f'|format(claude_month) }}</b>.</div></div>
+    <div class="field"><label>If Claude can't be used</label>
+      <label class="choice"><input type="checkbox" name="claude_fallback" value="1" {{ 'checked' if s.claude_fallback == '1' }}><span><b>The local model answers instead</b><span class="muted small">No key, no credit, budget used up or the API down: the job still finishes.</span></span></label></div>
+    <div class="field"><label>Model for automatic jobs</label>
+      <select name="llm_auto">{% for c in auto_choices %}<option value="{{ c.value }}" {{ 'selected' if c.value == s.llm_auto }}>{{ c.label }}</option>{% endfor %}</select>
+      <div class="hint">Nightly Premier reviews and the weekly focus, which run without anyone pressing a button.</div></div>
+  </div>
+</section>
+
 <section class="card">
   <h2>Video analysis</h2>
   <p class="hint" style="margin-top:-6px">Each user's recordings folder is set under <a href="{{ url_for('users') }}">Users</a>.</p>

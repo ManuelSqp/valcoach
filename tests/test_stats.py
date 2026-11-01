@@ -619,3 +619,82 @@ def test_premier_schedule_skips_an_old_api_season():
     new = [{"id": "S2", "events": [{"type": "LEAGUE", "starts_at": "2026-10-28T00:00:00Z", "ends_at": "2026-11-01T00:00:00Z",
                                     "map_selection": {"maps": [{"name": "Pearl"}]}}]}]
     assert current(schedule(new, None, now), now)["week"]["map"] == "Pearl"
+
+
+class _Resp:
+    def __init__(self, status, body, headers=None):
+        self.status_code, self._b, self.headers, self.text = status, body, headers or {}, json.dumps(body)
+
+    def json(self):
+        return self._b
+
+
+class _Session:
+    def __init__(self, answers):
+        self.answers, self.sent = list(answers), []
+
+    def post(self, url, json=None, headers=None, timeout=None):
+        self.sent.append((url, json, headers))
+        return self.answers.pop(0)
+
+
+def test_claude_client_cost_budget_and_fallback(tmp_path, monkeypatch):
+    from valcoach.coach import llm as L
+    monkeypatch.setattr(L.time, "sleep", lambda s: None)
+    L.set_usage_file(tmp_path / "llm_usage.json")
+    ok = _Resp(200, {"content": [{"type": "tool_use", "name": "answer", "input": {"x": 1}}], "stop_reason": "tool_use",
+                     "usage": {"input_tokens": 100_000, "output_tokens": 20_000}})
+    s = _Session([_Resp(529, {"error": {"message": "overloaded"}}), ok])
+    c = L.ClaudeLLM("sk-test", "claude-sonnet-5-5", session=s)
+    schema = {"type": "object", "properties": {"x": {"type": "integer"}}, "required": ["x"]}
+    assert c.chat_json("sys", "user", schema) == {"x": 1}
+    url, body, headers = s.sent[-1]
+    assert url == L.API_URL and headers["x-api-key"] == "sk-test" and body["tool_choice"] == {"type": "tool", "name": "answer"}
+    assert body["tools"][0]["input_schema"] == schema and body["system"] == "sys"
+    assert abs(c.cost - 0.4) < 1e-9 and abs(L.month_cost() - 0.4) < 1e-9          # 100k in x $2 + 20k out x $10
+    assert c.summary()["cost_usd"] == 0.4 and L.price("claude-haiku-5-5", 200_000, 0) == 0.1
+    # a cut-off answer is asked again with more room
+    s2 = _Session([_Resp(200, {"content": [], "stop_reason": "max_tokens", "usage": {}}), ok])
+    assert L.ClaudeLLM("k", "claude-haiku-5-5", session=s2).chat_json("s", "u", schema) == {"x": 1}
+    assert s2.sent[1][1]["max_tokens"] == 8192
+    # key refused / budget used up: ClaudeError, and with fallback the local model answers
+    bad = L.ClaudeLLM("k", "claude-sonnet-5-5", session=_Session([_Resp(401, {"error": {"message": "invalid x-api-key"}})]))
+    with pytest.raises(L.ClaudeError):
+        bad.chat_json("s", "u", schema)
+
+    class Local:
+        model = "gemma4:26b"
+
+        def check(self):
+            pass
+
+        def chat_json(self, *a, **k):
+            return {"x": 2}
+
+        def summary(self):
+            return {"requests": 1}
+    fb = L.WithFallback(L.ClaudeLLM("k", "claude-sonnet-5-5", session=_Session([_Resp(400, {"error": {"message": "Your credit balance is too low"}})])), Local)
+    assert fb.chat_json("s", "u", schema) == {"x": 2} and fb.chat_json("s", "u", schema) == {"x": 2}
+    assert fb.model.startswith("claude-sonnet-5-5 → gemma4:26b (Anthropic API: Your credit balance") and fb.summary()["fell_back"]
+    broke = L.ClaudeLLM("k", "claude-opus-5-5", budget_usd=0.3)
+    with pytest.raises(L.ClaudeError, match="budget"):
+        broke.check()
+    with pytest.raises(L.ClaudeError, match="No Anthropic API key"):
+        L.ClaudeLLM("", "claude-opus-5-5").check()
+
+
+def test_make_llm_choices():
+    from valcoach.coach.llm import ClaudeLLM, WithFallback, make_llm
+    from valcoach.coach.ollama import Ollama
+    from valcoach.config import Config
+    cfg = Config()
+    cfg.ollama.model = "gemma4:26b"
+    assert isinstance(make_llm(cfg), Ollama) and make_llm(cfg).model == "gemma4:26b"
+    assert make_llm(cfg, "ollama:qwen3.8:27b").model == "qwen3.8:27b"
+    cfg.claude.api_key = "k"
+    m = make_llm(cfg, "claude:claude-haiku-5-5")
+    assert isinstance(m, WithFallback) and m.model == "claude-haiku-5-5"
+    cfg.claude.fallback = False
+    assert isinstance(make_llm(cfg, "claude:claude-haiku-5-5"), ClaudeLLM)
+    cfg.llm = "claude:claude-opus-5-5"
+    assert make_llm(cfg).model == "claude-opus-5-5"

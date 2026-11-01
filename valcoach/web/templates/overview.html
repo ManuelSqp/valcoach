@@ -56,6 +56,20 @@
     </dl>
   </section>
 
+  {% set cl = claude %}{% if cl.key or cl.month %}
+  <section class="card">
+    <h2>Claude (Anthropic API)</h2>
+    <dl class="kv">
+      <dt>This month</dt><dd><b>US$ {{ '%.2f'|format(cl.month) }}</b>{% if cl.budget %} of {{ '%.0f'|format(cl.budget) }} budget{% endif %}</dd>
+      <dt>Today</dt><dd>US$ {{ '%.2f'|format(cl.today) }}</dd>
+      {% for m in cl.models %}<dt>{{ m.label }}</dt><dd>{{ m.calls }} requests · US$ {{ '%.2f'|format(m.usd) }} · {{ '{:,}'.format(m.in) }} in / {{ '{:,}'.format(m.out) }} out tokens</dd>{% endfor %}
+    </dl>
+    {% if cl.budget %}<div class="bar" style="margin-top:8px"><i style="width:{{ ((1 - (cl.left_pct if cl.left_pct is not none else 1)) * 100)|round|int }}%;background:{{ 'var(--red)' if cl.left_pct is not none and cl.left_pct < 0.15 else 'var(--line2)' }}"></i></div>{% endif %}
+    {% if cl.days %}{% set top = (cl.days|map(attribute='usd')|max) or 1 %}<div class="spark" aria-label="US$ per day, last 30 days">{% for d in cl.days %}<i style="height:{{ (d.usd / top * 100)|round|int }}%" title="{{ d.day }}: US$ {{ '%.2f'|format(d.usd) }}"></i>{% endfor %}</div>
+    <div class="row between small muted"><span>{{ cl.days[0].day }}</span><span>today</span></div>{% endif %}
+    <p class="small muted" style="margin:8px 0 0">Prices from Anthropic's list (October 2026), counted from the tokens of every request; the bill on console.anthropic.com is the exact number.</p>
+  </section>{% endif %}
+
   <section class="card">
     <h2>Background jobs</h2>
     <dl class="kv" style="margin-bottom:8px">

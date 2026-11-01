@@ -82,7 +82,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{padding:5px 8px;b
 .small{font-size:12px}.duels td,.duels th{padding:4px 8px}.issue{margin-bottom:10px}.review .headline{font-size:17px;font-weight:600;margin:4px 0 6px}.review h3{margin-top:16px}.plan{width:100%}.plan td,.plan th{padding:6px 8px;vertical-align:top}.issue .ev{color:var(--muted);font-size:13px}.err{color:var(--amber)}
 </style></head><body>
 <header><h1>{{ meta.map }} <b>{{ meta.score }}</b></h1>
-<span>{{ meta.player }} · {{ meta.agent }}</span><span class="muted">{{ meta.queue }} · {{ meta.started_at }} · model {{ meta.model or 'none (facts only)' }}{% if meta.llm_stats %} · {{ meta.llm_stats.avg_s_per_request }} s/request · {{ meta.llm_stats.gen_tok_per_s }} tok/s{% endif %}{% if meta.valcoach_version %} · valcoach {{ meta.valcoach_version }}{% endif %}</span></header>
+<span>{{ meta.player }} · {{ meta.agent }}</span><span class="muted">{{ meta.queue }} · {{ meta.started_at }} · model {{ meta.model or 'none (facts only)' }}{% if meta.llm_stats %} · {{ meta.llm_stats.avg_s_per_request }} s/request · {{ meta.llm_stats.gen_tok_per_s }} tok/s{% if meta.llm_stats.cost_usd %} · US$ {{ '%.3f'|format(meta.llm_stats.cost_usd) }}{% endif %}{% endif %}{% if meta.valcoach_version %} · valcoach {{ meta.valcoach_version }}{% endif %}</span></header>
 <div class="wrap"><main>
 {% if meta.llm_failed_rounds %}<section class="card err">The model failed on {{ meta.llm_failed_rounds|length }} of {{ rounds|length }} rounds (R{{ meta.llm_failed_rounds|join(', R') }}). They show facts only. Use <i>Run again</i> on the job page to retry.</section>{% endif %}
 
@@ -214,15 +214,15 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{padding:5px 8px;b
 <div class="rbody">
 {% if r.summary_ok %}<p class="lead">{{ r.summary_ok }}</p>{% endif %}
 {% if f.error %}<p class="err">LLM failed for this round: {{ f.error }}</p>{% endif %}
-{% if f.key_moment %}<p><b>Key moment {{ f.key_moment.time }}:</b> {{ f.key_moment.what }}</p>{% endif %}
+{% if f.key_moment %}<p data-fb="{{ r.number }}" data-who="key"><b>Key moment {{ f.key_moment.time }}:</b> {{ f.key_moment.what }}</p>{% endif %}
 {% if f.check_in_vod %}<p class="muted"><b>Check in the VOD:</b> {{ f.check_in_vod }}</p>{% endif %}
 {% if r.vod %}<div>{% if r.vod.start is not none %}<button class="jump" onclick="seek({{ r.vod.start }})">▶ round start</button>{% endif %}
 {% if r.vod.first_kill is defined %}<button class="jump" onclick="seek({{ r.vod.first_kill - 3 }})">first kill</button>{% endif %}
 {% if r.vod.your_death is defined %}<button class="jump" onclick="seek({{ r.vod.your_death - 5 }})">your death</button>{% endif %}
 {% for k in r.vod.kills %}<button class="jump" onclick="seek({{ k - 3 }})">k{{ loop.index }}</button>{% endfor %}</div>{% endif %}
 <div class="{{ 'cols' if f.team and f.player else '' }}">
-{% if f.team %}<div><h3>Team</h3><ul class="good">{% for x in f.team.went_well %}<li>{{ x }}</li>{% endfor %}</ul><ul class="bad">{% for x in f.team.mistakes %}<li>{{ x }}</li>{% endfor %}</ul>{% if f.team.better_option %}<div class="better">{{ f.team.better_option }}</div>{% endif %}</div>{% endif %}
-{% if f.player %}<div><h3>You</h3><ul class="good">{% for x in f.player.went_well %}<li>{{ x }}</li>{% endfor %}</ul><ul class="bad">{% for x in f.player.mistakes %}<li>{{ x }}</li>{% endfor %}</ul>{% if f.player.better_option %}<div class="better">{{ f.player.better_option }}</div>{% endif %}</div>{% endif %}
+{% if f.team %}<div><h3>Team</h3><ul class="good">{% for x in f.team.went_well %}<li>{{ x }}</li>{% endfor %}</ul><ul class="bad">{% for x in f.team.mistakes %}<li data-fb="{{ r.number }}" data-who="team">{{ x }}</li>{% endfor %}</ul>{% if f.team.better_option %}<div class="better" data-fb="{{ r.number }}" data-who="team">{{ f.team.better_option }}</div>{% endif %}</div>{% endif %}
+{% if f.player %}<div><h3>You</h3><ul class="good">{% for x in f.player.went_well %}<li>{{ x }}</li>{% endfor %}</ul><ul class="bad">{% for x in f.player.mistakes %}<li data-fb="{{ r.number }}" data-who="you">{{ x }}</li>{% endfor %}</ul>{% if f.player.better_option %}<div class="better" data-fb="{{ r.number }}" data-who="you">{{ f.player.better_option }}</div>{% endif %}</div>{% endif %}
 </div>
 {% if r.own_note %}<p class="muted"><b>Your note:</b> {{ r.own_note }}</p>{% endif %}
 <details><summary>Facts sent to the coach</summary><pre>{{ r.llm_input }}</pre></details>

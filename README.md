@@ -1,6 +1,6 @@
 # valcoach v2
 
-**Version 2.21.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 2.23.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -26,7 +26,7 @@ unzip valcoach-v2.zip && cd valcoach-v2
 /opt/homebrew/opt/python@3.11/bin/python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                     # 129 tests, ~3 min, builds a synthetic match + VOD
+pytest -q                     # 136 tests, ~3 min, builds a synthetic match + VOD
 ollama pull qwen3.8:27b       # default; alternatives below
 ```
 
@@ -46,6 +46,16 @@ default (fast; the task is turning facts into feedback, not puzzle-solving).
 Try **On** if the feedback is shallow. Compare models by coaching the same
 match with each and use *Run again*. `-mlx` tags may be faster on Apple Silicon,
 but check that a test run works with them before switching.
+
+**Claude (optional).** With an Anthropic API key under *Settings → Claude*,
+Claude Haiku, Sonnet and Opus show up in the model picker next to every button
+that runs the model (coaching, tips, game plans, weekly focus, reviews, quiz,
+what to watch). The local model stays the default; each user's last pick is
+remembered. Admins can use Claude; other users only after *Users → Can use
+Claude*. A monthly budget stops Claude when it's spent, and with fallback on the
+local model finishes the job if the API can't be used. Nightly reviews and the
+weekly focus use *Model for automatic jobs*. Costs per day and month are on the
+server overview. The key can also come from `ANTHROPIC_API_KEY`.
 
 ## 2. Start the web app
 

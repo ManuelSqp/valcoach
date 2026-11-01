@@ -67,6 +67,10 @@ DRILLS = {
     "util_entry": ("Peek with utility", "in games", "Before a first duel, use your flash/dart/smoke or wait for a teammate's: never dry-peek a held angle twice."),
     "trade_spacing": ("Trade spacing", "in games", "Stay 1 entry behind your entry fragger: close enough to trade within 2 seconds, not in the same crosshair."),
     "dm_warm": ("Deathmatch warm-up", "1 game", "Head level, first bullet, stop before you shoot. Don't chase the score."),
+    # decision drills, from the quiz categories you keep missing
+    "q_clutch": ("Clutch checklist", "in games", "When you're the last one alive, say three things before you move: time left, spike or no spike, how many are left. Then pick: play the timer, isolate one fight, or save."),
+    "q_alone": ("First 30 seconds with the team", "in games", "Early in the round, before you take a fight, check where the nearest teammate is. If nobody can trade you within 2 seconds, wait or fall back to them."),
+    "q_advantage": ("Closing out a lead", "in games", "When you're 2 up: stop taking 1v1 peeks. Group, use the timer, make them come to you, trade every fight."),
 }
 
 
@@ -95,6 +99,24 @@ def diagnose(a: dict) -> list[dict]:
         out.append({"key": "alone", "title": "Don't fight alone",
                     "why": f"{a['alone_deaths']:.0%} of your deaths are far from your team",
                     "drills": ["trade_spacing"]})
+    return out
+
+
+QUIZ_DIAG = {
+    "clutch": ("Decisions when you're alone", "q_clutch"),
+    "alone": ("Taking fights without your team", "q_alone"),
+    "advantage": ("Closing out a lead", "q_advantage"),
+}
+
+
+def quiz_diag(by_kind: dict[str, list[int]], labels: dict[str, str]) -> list[dict]:
+    """Quiz categories with fewer than 60% right (at least 3 answers) -> things to work on."""
+    out = []
+    for k, (right, total) in sorted(by_kind.items(), key=lambda kv: kv[1][0] / max(1, kv[1][1])):
+        if k in QUIZ_DIAG and total >= 3 and right / total < 0.6:
+            title, drill = QUIZ_DIAG[k]
+            out.append({"key": f"quiz_{k}", "title": title, "drills": [drill],
+                        "why": f"in the quiz you picked the best call {right} of {total} times for “{labels.get(k, k)}”"})
     return out
 
 

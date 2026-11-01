@@ -52,7 +52,7 @@ def clean_board(data: dict) -> dict:
                 out["pts"] = [p for p in pts if None not in p]
             if "t" in out:
                 items.append(out)
-        steps.append({"name": str(st.get("name") or "")[:40], "items": items})
+        steps.append({"name": str(st.get("name") or "")[:40], "call": str(st.get("call") or "")[:200], "items": items})
     out = dict(data)
     out["steps"] = steps
     if "notes" in out:

@@ -109,7 +109,7 @@
     <h2 style="margin:0">What to watch{% if chosen %} · {{ chosen.name }}{% endif %}</h2>
     {% if can_edit %}{% set busy = status and status.status in ('queued', 'running') %}
     <form method="post" action="{{ url_for('pros_build', pid=p.id) }}" class="row" style="gap:6px"><input type="hidden" name="queue" value="{{ queue }}">
-      <input type="hidden" name="pro" value="{{ chosen.name if chosen else '' }}">
+      <input type="hidden" name="pro" value="{{ chosen.name if chosen else '' }}">{% include "_llm_pick.html" %}
       <button class="btn sm {{ 'primary' if not guide }}" {{ 'disabled' if busy }}>
         {{ (('Find videos + ' if yt else '') ~ 'Write what to watch for ' ~ (chosen.name if chosen else '')) if not guide else 'Update ' ~ chosen.name }}</button>
       {% if matches|length > 1 %}<button class="btn sm ghost" name="all" value="1" {{ 'disabled' if busy }} title="One model run per pro, so switching between them is instant">All {{ matches|length }} pros</button>{% endif %}

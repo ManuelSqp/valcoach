@@ -4,6 +4,48 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 2.23.0
+- **Claude as a model, picked per run.** Next to every button that runs the model (Start coaching, tips, what to
+  watch, game plans, weekly focus, Premier reviews, the quiz) there's now a model picker: your local default, the
+  other models installed in Ollama, and with an Anthropic API key Claude Haiku 5.5, Sonnet 5.5 and Opus 5.5 (☁).
+  - Your last pick is remembered as the default for the next run. *All maps* and *Run again* use the same model.
+  - *Settings › Claude*: API key (also `ANTHROPIC_API_KEY`), which Claude models are offered, a **monthly budget**
+    (Claude stops when it's spent), and **fallback**: if Claude can't be used (no key, no credit, budget used up,
+    API down), the local model finishes the job and the report says so.
+  - *Model for automatic jobs*: what the nightly Premier reviews and the weekly focus use.
+  - Only admins and users with **Can use Claude** (Users › user) see the Claude models; the server checks it too.
+  - What it costs: every request is priced from its tokens (Anthropic's October 2026 prices). The report header
+    shows the cost of that run; the server overview shows today, this month per model, the budget and the last
+    30 days.
+- Any other installed Ollama model can be picked per run too, to compare models on the same match.
+
+## 2.22.0
+- **Quiz → practice:**
+  - After each answer: *🎯 Make this my focus* sets the best call as your own focus for this week. It shows on
+    Training, on the team's Weekly focus page next to the coach's pick, and in the match-day brief.
+  - Every answer is saved per category (alone at the end, first death far from the team, a lead that slipped). The
+    quiz page shows how often you pick the best call in each one. A category under 60% (with 3+ answers) shows up
+    on Training under *What to work on*, with a decision drill.
+  - Rate each question as *good*, *unrealistic* or *too obvious*. The next quiz gets the good ones as examples and
+    the others as what to avoid.
+- **👍 / 👎 on reports:** every line of the coach's round feedback (key moment, mistakes, better option) can be
+  rated. Liked lines become examples for your next coaching runs, next to your own notes; disliked ones are what
+  the coach should avoid. On your own lines, *🎯* makes one your focus for the week. Works on reports made from
+  2.22 on, opened from valcoach.
+- **Faster notes:** one-click tags under every round ("died alone", "late rotate", "util too early"…), and what the
+  coach said about the round last time is shown greyed out, so you can correct it in your own words. It's never
+  filled in for you: the notes only help because they're yours.
+- **Strat playback for the IGL:** each step can have a call ("1:20 Omen smokes B Main, Jett dash in behind"), shown
+  big on the map while it plays. *Step by step* makes the playback wait for a click (or Space / →) before each
+  step, for walking the team through it in voice.
+- **Availability:**
+  - Notes like "from 21:00" show on the day cards, in the brief and in the Discord brief.
+  - *🔔 Remind* posts who hasn't answered for the next match days to Discord.
+  - With a player's Discord user ID (Availability › Discord IDs, owner only), the reminder pings them; only those
+    IDs can be pinged, never @everyone.
+- **Rank over time:** games with a coaching report are ringed and open the report on click.
+- Fixed: a Premier roster sync forgot "Use my own list" (the team maps went back to following the stage pool).
+
 ## 2.21.0
 - **"This week" works again on the Premier tab.** HenrikDev's season data still lists an older season, and that
   replaced the built-in stage, so no week matched today. Now the API's schedule is only used when it covers today;

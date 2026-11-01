@@ -93,12 +93,32 @@ def load_notes(notes_dir: Path, match_id: str) -> tuple[dict[int, str], list[str
     return this, examples[:10]
 
 
-def _examples_block(examples: list[str]) -> str:
-    if not examples:
-        return ""
-    lines = "\n".join(f"- {e}" for e in examples)
-    return ("\nExamples of round feedback the user wrote themselves. Match this level of detail, "
-            "directness and what they care about:\n" + lines + "\n")
+def load_votes(notes_dir: Path, match_id: str = "") -> tuple[list[str], list[str]]:
+    """Lines from earlier reports the user marked 👍 (liked) and 👎 (disliked), newest first.
+    The file sits next to the notes folder (profiles/<id>/feedback_votes.json)."""
+    f = Path(notes_dir).parent / "feedback_votes.json"
+    try:
+        votes = json.loads(f.read_text()).get("votes", [])
+    except (OSError, ValueError):
+        return [], []
+    votes = [v for v in votes if isinstance(v, dict) and v.get("text") and v.get("match_id") != match_id]
+    liked = [v["text"] for v in reversed(votes) if v.get("vote") == "up"]
+    disliked = [v["text"] for v in reversed(votes) if v.get("vote") == "down"]
+    return list(dict.fromkeys(liked))[:6], list(dict.fromkeys(disliked))[:5]
+
+
+def _examples_block(examples: list[str], liked: list[str] | None = None, disliked: list[str] | None = None) -> str:
+    out = ""
+    if examples:
+        out += ("\nExamples of round feedback the user wrote themselves. Match this level of detail, "
+                "directness and what they care about:\n" + "\n".join(f"- {e}" for e in examples) + "\n")
+    if liked:
+        out += ("\nFeedback from earlier reports the user marked as helpful (write like this):\n" +
+                "\n".join(f"- {e}" for e in liked) + "\n")
+    if disliked:
+        out += ("\nFeedback from earlier reports the user marked as NOT helpful (don't write like this):\n" +
+                "\n".join(f"- {e}" for e in disliked) + "\n")
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -151,12 +171,13 @@ def run_coach(an: Analysis, llm: Ollama | None, mode: str = "both", language: st
     who = prompts.who(mode, f"{me.riot_id} ({me.agent})", team_label)
     playbook = load_playbook(playbook_path, m.map_name) if playbook_path else ""
     own_notes, examples = load_notes(notes_dir, m.match_id) if notes_dir else ({}, [])
+    liked, disliked = load_votes(notes_dir, m.match_id) if notes_dir else ([], [])
 
     callouts = sorted({c.label for c in an.map_info.callouts}) if an.map_info else None
     has_vod = sync is not None
     schema = prompts.round_schema(mode, callouts, has_vod)
     round_sys = prompts.ROUND_SYSTEM.format(
-        who=who, language=language, playbook=playbook, examples=_examples_block(examples),
+        who=who, language=language, playbook=playbook, examples=_examples_block(examples, liked, disliked),
         evidence_rule=prompts.EVIDENCE_WITH_VOD if has_vod else prompts.EVIDENCE_NO_VOD,
         fields=prompts.field_guide(schema))
 

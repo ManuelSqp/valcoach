@@ -464,18 +464,20 @@
       box.appendChild(b);
     });
     $('#sb-stepname').value = data.steps[step].name || '';
+    $('#sb-stepcall').value = data.steps[step].call || '';
     $('#sb-stepdel').disabled = data.steps.length < 2;
     $('#sb-left').disabled = step === 0; $('#sb-right').disabled = step === data.steps.length - 1;
   }
   $('#sb-stepadd').onclick = () => {        // a new step starts as a copy of this one: move what changes
     snapshot();
     const copy = JSON.parse(JSON.stringify(items())).map(i => ({...i, id: uid(), k: i.k || i.id}));   // k: playback moves it
-    data.steps.splice(step + 1, 0, {name: `Step ${data.steps.length + 1}`, items: copy});
+    data.steps.splice(step + 1, 0, {name: `Step ${data.steps.length + 1}`, call: '', items: copy});
     step += 1; sel = null; changed(); draw();
     $('#sb-stepname').focus(); $('#sb-stepname').select();
   };
   $('#sb-stepdel').onclick = () => { if (data.steps.length < 2) return; snapshot(); data.steps.splice(step, 1); step = Math.max(0, step - 1); sel = null; changed(); draw(); };
   $('#sb-stepname').addEventListener('change', e => { snapshot(); data.steps[step].name = e.target.value.slice(0, 40); changed(); renderSteps(); });
+  $('#sb-stepcall').addEventListener('change', e => { snapshot(); data.steps[step].call = e.target.value.slice(0, 200); changed(); });
   $('#sb-left').onclick = () => { if (step > 0) { snapshot(); [data.steps[step - 1], data.steps[step]] = [data.steps[step], data.steps[step - 1]]; step -= 1; changed(); draw(); } };
   $('#sb-right').onclick = () => { if (step < data.steps.length - 1) { snapshot(); [data.steps[step + 1], data.steps[step]] = [data.steps[step], data.steps[step + 1]]; step += 1; changed(); draw(); } };
   $('#sb-prev').onchange = e => { showPrev = e.target.checked; draw(); };
@@ -487,7 +489,7 @@
   // new things fade in, removed things fade out. Same thing = same k (set when a step is copied),
   // else the same agent / ability / colour closest by.
   const MOVE_MS = 1300, HOLD_MS = 1100;
-  let playing = null, speed = 1;
+  let playing = null, speed = 1, stepMode = false;
   const keyOf = i => i.k || i.id;
   function pairUp(a, b) {
     const used = new Set(), pairs = [], born = [];
@@ -526,11 +528,16 @@
   }
   const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   const cap = $('#sb-caption'), pbtn = $('#sb-play');
-  function caption(n) { cap.hidden = false; cap.textContent = `${n + 1}/${data.steps.length} · ${data.steps[n].name || 'Step ' + (n + 1)}`; }
+  function caption(n, waiting) {
+    const st2 = data.steps[n];
+    cap.hidden = false;
+    cap.innerHTML = `${n + 1}/${data.steps.length} · ${esc(st2.name || 'Step ' + (n + 1))}` + (st2.call ? `<span class="call">${esc(st2.call)}</span>` : '') +
+                    (waiting ? '<span class="wait">click the map or press Space for the next step</span>' : '');
+  }
   function stopPlay(at) {
     if (!playing) return;
     cancelAnimationFrame(playing.raf); playing = null;
-    root.classList.remove('sb-playing'); cap.hidden = true; pbtn.textContent = '▶ Play'; pbtn.classList.remove('primary');
+    root.classList.remove('sb-playing', 'sb-waiting'); cap.hidden = true; pbtn.textContent = '▶ Play'; pbtn.classList.remove('primary');
     if (at !== undefined) step = at;
     draw();
   }
@@ -551,7 +558,10 @@
       while (el2 >= s.ms) { si += 1; t0 = now; el2 = 0; if (si >= seg.length) { stopPlay(data.steps.length - 1); return; } s = seg[si]; }
       const t = el2 / s.ms;
       if (s.kind === 'hold') {
-        if (shown !== s.n) { frame(data.steps[s.n].items.map(i => [i, 1])); caption(s.n); shown = s.n; step = s.n; renderSteps(); }
+        const wait = stepMode && si < seg.length - 1;
+        if (shown !== s.n) { frame(data.steps[s.n].items.map(i => [i, 1])); caption(s.n, wait); shown = s.n; step = s.n; renderSteps(); root.classList.toggle('sb-waiting', wait); }
+        if (wait && !playing.go) { t0 = now; playing.raf = requestAnimationFrame(tick); return; }
+        if (wait && playing.go) { playing.go = false; root.classList.remove('sb-waiting'); si += 1; t0 = now; playing.raf = requestAnimationFrame(tick); return; }
       } else {
         const e = ease(t);
         if (shown !== -2 - s.n) { caption(s.n + 1); shown = -2 - s.n; }
@@ -564,6 +574,12 @@
   }
   pbtn.onclick = () => playing ? stopPlay(step) : startPlay();
   $('#sb-speed').onchange = e => { speed = Number(e.target.value) || 1; };
+  $('#sb-stepmode').onchange = e => { stepMode = e.target.checked; };
+  // while waiting between steps, a click on the map goes on (caught before the editor sees it)
+  $('#sb-stage').addEventListener('pointerdown', e => {
+    if (!playing || !root.classList.contains('sb-waiting') || e.target.closest('.sb-zoom')) return;
+    e.stopPropagation(); e.preventDefault(); playing.go = true;
+  }, true);
 
   // ------------------------------------------------------------------ name, side, notes
   $('#sb-name').addEventListener('change', e => { st.name = e.target.value.trim() || 'Untitled'; document.title = st.name + ' · valcoach'; changed(); });
@@ -581,6 +597,7 @@
   $('#sb-undo').onclick = () => restore(undo, redo); $('#sb-redo').onclick = () => restore(redo, undo);
   window.addEventListener('keydown', e => {
     const typingNow = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+    if (playing && !typingNow && root.classList.contains('sb-waiting') && (e.key === ' ' || e.key === 'ArrowRight')) { e.preventDefault(); playing.go = true; return; }
     if (playing && !typingNow && (e.key === 'Escape' || e.key === ' ' || e.key.startsWith('Arrow'))) { e.preventDefault(); stopPlay(step); return; }
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); save(); return; }

@@ -21,6 +21,7 @@
   <div class="row">
     <form method="post" action="{{ url_for('team_focus_build', tid=t.id) }}" class="row" style="gap:6px">
       {% if discord.focus_url or discord.prep_url %}<label class="small" style="display:flex;gap:4px;align-items:center;margin:0"><input type="checkbox" name="post" value="1"> and post</label>{% endif %}
+{% include "_llm_pick.html" %}
       <button class="btn {{ 'primary' if not focus or focus.week != this_week }}" {{ 'disabled' if status and status.status in ('queued', 'running') }}>Write this week's focus</button></form>
     {% if focus and (discord.focus_url or discord.prep_url) %}<form method="post" action="{{ url_for('team_focus_post', tid=t.id) }}"><button class="btn ghost">Post to Discord</button></form>{% endif %}
   </div>{% endif %}
@@ -40,6 +41,7 @@
     <ul>{% for x in p.in_game %}<li>{{ x }}</li>{% endfor %}</ul>
     {% if p.number_to_watch %}<div class="watch">📈 <b>{{ p.number_to_watch.metric }}</b>: {{ p.number_to_watch.now }} → {{ p.number_to_watch.goal }}</div>{% endif %}
     {% endif %}
+    {% if p.own %}<div class="small" style="margin-top:8px;padding:6px 9px;border-radius:7px;background:var(--panel2);border-left:3px solid var(--amber)">🎯 <b>Own pick:</b> {{ p.own.focus }} <span class="muted">({{ 'quiz' if p.own.source == 'quiz' else 'report' }})</span></div>{% endif %}
     {% if p.last %}{% set k = p.last %}
     <div class="small" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
       <span class="muted">Last focus ({{ k.week }}): {{ k.focus }}</span><br>

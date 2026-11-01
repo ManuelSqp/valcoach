@@ -1605,3 +1605,195 @@ def test_server_overview_permission(app, monkeypatch):
     assert c2.get("/admin/users").status_code == 403 and c2.get("/settings").status_code == 403
     c.post(f"/admin/users/{uid}", data={"vod_dir": ""})                        # and takes it away again
     assert store.user(uid).perms == "" and c2.get("/admin/overview").status_code == 403
+
+
+def test_report_votes_focus_and_note_hints(app, monkeypatch):
+    from valcoach.coach.engine import _examples_block, load_votes
+    fb = {"summary": "Fight at A", "importance": 2, "key_moment": {"time": "1:05", "what": "You peeked A Main alone"},
+          "player": {"went_well": [], "mistakes": ["Peeked <b>alone</b> into two"], "better_option": "Wait for the flash"}}
+    c = setup_admin(app)
+    job, _ = _run_with_model(app, c, monkeypatch, lambda n: fb)
+    assert job.status == "done"
+    html = c.get(f"/jobs/{job.id}/report").data.decode()
+    assert 'data-fb="1" data-who="you"' in html and "window.VALCOACH_FB" in html and "report_fb.js" in html
+    assert "&lt;b&gt;alone" in html                                       # the model's text stays escaped
+    text = "Peeked <b>alone</b> into two"
+    r = c.post(f"/api/jobs/{job.id}/vote", json={"round": 1, "who": "you", "text": text, "vote": "up"})
+    assert r.status_code == 200
+    c.post(f"/api/jobs/{job.id}/vote", json={"round": 2, "who": "you", "text": "Play safer", "vote": "down"})
+    assert c.post(f"/api/jobs/{job.id}/vote", json={"round": "1", "who": "you", "text": "x", "vote": "up"}).status_code == 400
+    assert c.post(f"/api/jobs/{job.id}/vote", json={"round": 1, "who": "boss", "text": "x", "vote": "up"}).status_code == 400
+    html = c.get(f"/jobs/{job.id}/report").data.decode()
+    assert '"1|Peeked <b>alone<\\/b> into two": "up"' in html                # the vote shows again; no </ in the script
+    store = app.extensions["valcoach"]["store"]
+    notes_dir = store.profile_dir(job.profile_id) / "notes"
+    liked, disliked = load_votes(notes_dir)
+    assert liked == [text] and disliked == ["Play safer"]
+    assert load_votes(notes_dir, job.match_id) == ([], [])                    # never examples from the same match
+    blk = _examples_block(["my note"], liked, disliked)
+    assert "marked as helpful" in blk and "NOT helpful" in blk and "my note" in blk
+    # someone else can't vote on my report
+    c2 = make_user(app, c, "burn")
+    assert c2.post(f"/api/jobs/{job.id}/vote", json={"round": 1, "who": "you", "text": "x", "vote": "up"}).status_code == 404
+    # 🎯 a line as my focus: shows on Training
+    pid = job.profile_id
+    assert c.post(f"/api/profiles/{pid}/own-focus", json={"focus": "Wait for the flash", "why": "R1", "source": "report"}).status_code == 200
+    page = c.get(f"/profiles/{pid}/training").data.decode()
+    assert "Your own focus this week" in page and "Wait for the flash" in page and "from a report" in page
+    assert c2.post(f"/api/profiles/{pid}/own-focus", json={"focus": "x"}).status_code == 404
+    assert c.delete(f"/api/profiles/{pid}/own-focus").status_code == 200
+    assert "Your own focus this week" not in c.get(f"/profiles/{pid}/training").data.decode()
+    # notes page: tags and the coach's line as a hint (placeholder, not the note itself)
+    page = c.get(f"/profiles/{pid}/notes/{job.match_id}").data.decode()
+    assert 'class="tg"' in page and "died alone" in page and 'placeholder="Coach said: Fight at A"' in page
+    assert ">Fight at A</textarea>" not in page
+
+
+def test_quiz_categories_ratings_and_training(app, monkeypatch):
+    c = setup_admin(app)
+    me = add_profile(c)
+    sr = app.extensions["valcoach"]["stats"]
+    qs = [{"id": f"q{i}", "kind": k, "kind_label": "x", "map": "Bind", "round": i, "side": "attack", "match_id": "m",
+           "question": f"Q{i}?", "options": ["a", "b", "c"], "best": 0, "why": "because", "happened": "lost", "won": False}
+          for i, k in enumerate(["clutch", "clutch", "alone"])]
+    sr.save_quiz(me, {"created": 1, "questions": qs, "results": []})
+    for answers in ([1, 1, 0], [1, 0, 0], [2, 1, 0]):                 # clutch: 1 of 6 right, alone: 3 of 3
+        assert c.post(f"/api/profiles/{me}/quiz/result", json={"answers": answers}).status_code == 200
+    page = c.get(f"/profiles/{me}/quiz").data.decode()
+    assert "Alone at the end" in page and "1/6" in page and "3/3" in page
+    page = c.get(f"/profiles/{me}/training").data.decode()
+    assert "Decisions when you&#39;re alone" in page and "Clutch checklist" in page and "1 of 6 times" in page
+    assert "Taking fights without your team" not in page
+    # ratings go into the bank and the next prompt
+    assert c.post(f"/api/profiles/{me}/quiz/rate", json={"id": "q0", "rating": "good"}).status_code == 200
+    assert c.post(f"/api/profiles/{me}/quiz/rate", json={"id": "q1", "rating": "obvious"}).status_code == 200
+    assert c.post(f"/api/profiles/{me}/quiz/rate", json={"id": "q1", "rating": "meh"}).status_code == 400
+    assert c.post(f"/api/profiles/{me}/quiz/rate", json={"id": "nope", "rating": "good"}).status_code == 400
+    from valcoach.stats.quiz import rated_block
+    blk = rated_block(sr.read_quiz(me)["bank"])
+    assert "Q0? Best call: a" in blk and "(too obvious) Q1?" in blk
+    # quiz → own focus → team focus page and brief
+    tid = app.extensions["valcoach"]["store"].create_team(app.extensions["valcoach"]["store"].user_by_name("manuel").id, "Squad")
+    app.extensions["valcoach"]["store"].update_team(tid, members=[{"pid": me, "kind": "starter"}], maps=["Bind"])
+    c.post(f"/api/profiles/{me}/own-focus", json={"focus": "Play the timer", "source": "quiz"})
+    sr.save_quiz(me, sr.read_quiz(me))
+    page = c.get(f"/teams/{tid}/premier/brief?map=Bind").data.decode()
+    assert "🎯 Play the timer" in page
+
+
+def test_strat_step_calls_and_availability_reminder(app, monkeypatch):
+    import valcoach.discord as discord
+    from datetime import date
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    pids = [add_profile(c, name=f"P{i}", tag="#T") for i in range(5)]
+    tid = store.create_team(store.user_by_name("manuel").id, "Squad")
+    store.update_team(tid, members=[{"pid": p, "kind": "starter"} for p in pids], maps=["Testmap"],
+                      discord={"prep_url": "https://discord.com/api/webhooks/1/x"})
+    # strat: each step keeps its call
+    r = c.post(f"/teams/{tid}/strats", data={"name": "B split", "map": "Testmap", "side": "attack"})
+    sid = int(r.headers["Location"].rsplit("/", 1)[1])
+    c.post(f"/api/teams/{tid}/strats/{sid}", json={"data": {"steps": [{"name": "Setup", "call": "1:20 smokes" * 30, "items": []},
+                                                                    {"name": "Go", "call": 5, "items": []}]}})
+    steps = store.strat(sid)["data"]["steps"]
+    assert steps[0]["call"].startswith("1:20 smokes") and len(steps[0]["call"]) == 200 and steps[1]["call"] == "5"
+    page = c.get(f"/teams/{tid}/strats/{sid}").data.decode()
+    assert 'id="sb-stepcall"' in page and 'id="sb-stepmode"' in page
+    # availability: notes in the day card, reminder pings only players with an ID
+    info = store.team(tid).sync_info
+    info["brief"] = {"on": False, "days": list(range(7)), "time": "20:00", "before": 60}
+    store.update_team(tid, sync=info)
+    today = date.today().isoformat()
+    c.post(f"/api/teams/{tid}/availability", json={"pid": pids[0], "day": today, "state": "maybe", "note": "from 21:00"})
+    assert "from 21:00" in c.get(f"/teams/{tid}/premier/availability").data.decode()
+    c.post(f"/teams/{tid}/premier/availability/discord-ids", data={f"did_{pids[1]}": "284019573925183488", f"did_{pids[2]}": "not-an-id"})
+    ms = {m["pid"]: m for m in store.team(tid).member_list}
+    assert ms[pids[1]]["discord_id"] == "284019573925183488" and "discord_id" not in ms[pids[2]]
+    sent = []
+    monkeypatch.setattr(discord, "post", lambda url, content="", embeds=None, session=None, mentions=None: sent.append((content, mentions)))
+    r = c.post(f"/teams/{tid}/premier/availability/remind")
+    assert r.status_code == 302 and sent
+    content, mentions = sent[0]
+    assert "<@284019573925183488>" in content and "P2" in content and "P0" not in content.split("\n")[1] and mentions == ["284019573925183488"]
+    # a teammate can't change the IDs
+    c2 = make_user(app, c, "mate")
+    store.add_team_access(tid, store.user_by_name("mate").id)
+    assert c2.post(f"/teams/{tid}/premier/availability/discord-ids", data={}).status_code == 403
+
+
+def test_discord_mentions_are_limited():
+    from valcoach import discord
+    seen = []
+
+    class S:
+        def post(self, url, json=None, timeout=None, **k):
+            seen.append(json)
+            return type("R", (), {"status_code": 204, "text": ""})()
+    discord.post("https://discord.com/api/webhooks/1/x", "hi <@1> @everyone", session=S(), mentions=["123456789012345678", "x"])
+    discord.post("https://discord.com/api/webhooks/1/x", "hi", session=S())
+    assert seen[0]["allowed_mentions"] == {"parse": [], "users": ["123456789012345678"]}
+    assert seen[1]["allowed_mentions"] == {"parse": []}
+
+
+def test_model_picker_claude_permission_and_runs(app, monkeypatch):
+    import synth_history as sh
+    from valcoach import pipeline
+    from valcoach.coach import llm as L
+    from valcoach.coach.ollama import Ollama
+    import valcoach.web.models as wm
+    monkeypatch.setattr(wm, "local_models", lambda url: ["gemma4:26b", "qwen3.8:27b"])
+    used = []
+    monkeypatch.setattr(Ollama, "check", lambda self: None)
+    monkeypatch.setattr(L.ClaudeLLM, "chat_json", lambda self, system, user, schema, **k: used.append(self.model) or {"questions": []})
+    monkeypatch.setattr(Ollama, "chat_json", lambda self, system, user, schema, **k: used.append(self.model) or {"questions": []})
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    store.set("ollama_model", "gemma4:26b")
+    me = add_profile(c)
+    # no key: only local models
+    page = c.get(f"/profiles/{me}/quiz").data.decode()
+    assert 'name="llm"' in page and "qwen3.8:27b (local)" in page and "Claude" not in page.split('name="llm"')[1][:400]
+    # the admin adds a key and settings
+    r = c.post("/settings", data={"claude_api_key": "sk-ant-test-1234", "claude_models": "claude-haiku-5-5, claude-sonnet-5-5",
+                                  "claude_budget_usd": "15", "claude_fallback": "1", "llm_auto": "claude:claude-haiku-5-5",
+                                  "ollama_temperature": "0.3", "ollama_num_ctx": "16384", "ollama_parallel": "4", "ollama_timeout_s": "300",
+                                  "sample_fps": "2", "workers": "1", "max_upload_gb": "20", "max_jobs_per_user": "3",
+                                  "minimap_roi": store.get("minimap_roi"), "killfeed_roi": store.get("killfeed_roi")})
+    assert r.status_code == 302
+    assert store.get("claude_api_key") == "sk-ant-test-1234" and store.get("llm_auto") == "claude:claude-haiku-5-5" and store.get("claude_budget_usd") == "15"
+    settings = c.get("/settings").data.decode()
+    assert "…1234" in settings and "sk-ant-test-1234" not in settings
+    assert c.post("/settings", data={"claude_models": "gpt-4, <b>"}).status_code == 302 and store.get("claude_models") == "claude-haiku-5-5, claude-sonnet-5-5"
+    page = c.get(f"/profiles/{me}/quiz").data.decode()
+    assert "☁ Claude Sonnet 5.5" in page and "☁ Claude Haiku 5.5" in page
+    # a run with the picked model; the pick is remembered as the default
+    sr = app.extensions["valcoach"]["stats"]
+    sr.games(me).save({"version": 1, "games": {}, "puuid": ""})
+    import valcoach.stats.quiz as qz
+    monkeypatch.setattr(qz, "pick", lambda found, n=6: [{"id": f"q{i}", "kind": "clutch", "happened": "x", "facts": {"map": "Bind", "round": 1, "side": "attack", "match_id": "m", "won": False}} for i in range(3)])
+    c.post(f"/profiles/{me}/quiz", data={"llm": "claude:claude-sonnet-5-5"})
+    _wait_stats(app, f"quiz:{me}")
+    assert used[-1] == "claude-sonnet-5-5"
+    assert 'value="claude:claude-sonnet-5-5" selected' in c.get(f"/profiles/{me}/quiz").data.decode()
+    # automatic jobs use the "automatic" model
+    llm, _ = sr._llm(store.profile(me), sr.AUTO)
+    assert llm.model == "claude-haiku-5-5"
+    # a user without "Can use Claude" can't pick it, even by sending the value
+    c2 = make_user(app, c, "burn")
+    p2 = add_profile(c2, name="Burn", tag="#NOW")
+    assert "Claude" not in c2.get(f"/profiles/{p2}/quiz").data.decode().split('name="llm"')[1][:400]
+    c2.post(f"/profiles/{p2}/quiz", data={"llm": "claude:claude-sonnet-5-5"})
+    _wait_stats(app, f"quiz:{p2}")
+    assert used[-1] == "gemma4:26b"
+    uid = store.user_by_name("burn").id
+    c.post(f"/admin/users/{uid}", data={"perm_claude": "1", "vod_dir": ""})
+    assert store.user(uid).can("claude") and not store.user(uid).can("overview")
+    assert "☁ Claude Sonnet 5.5" in c2.get(f"/profiles/{p2}/quiz").data.decode()
+    # coaching runs keep the pick in the job
+    assert 'name="llm"' in c.get(f"/profiles/{me}/coach/{MATCH_ID}").data.decode()
+    # the overview shows the spend
+    L.set_usage_file(store.data_dir / "llm_usage.json")
+    L._add_usage("claude-sonnet-5-5", 100_000, 20_000, 0.4)
+    page = c.get("/admin/overview").data.decode()
+    assert "Claude (Anthropic API)" in page and "US$ 0.40" in page and "of 15 budget" in page
+    app.extensions["valcoach"]["stats"].shutdown()
