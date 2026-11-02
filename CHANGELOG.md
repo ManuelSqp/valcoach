@@ -4,6 +4,12 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 3.0.1
+- **Fix:** the team and player pickers at the top of the menu were see-through in the *Neon glass* and *Tactical
+  HUD* styles, so the open list overlapped the menu behind it. Lists, the search box, messages and the phone menu
+  now always have a solid background.
+- The pickers close when you click anywhere else or press Escape.
+
 ## 3.0.0
 **New design.** Every page was rebuilt on one design system; all features, data and links stay the same.
 - **One menu for everything**, on the left (a ☰ button on phones). At the top you pick the *team* and the *player*
