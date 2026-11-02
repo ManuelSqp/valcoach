@@ -11,7 +11,7 @@ import secrets
 import sqlite3
 import threading
 from dataclasses import dataclass, fields
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -238,6 +238,7 @@ class User:
     display_name: str = ""     # in-game name, e.g. adv1ce#LFT
     prefs: str = "{}"          # JSON: look & feel (style, animation switches)
     perms: str = ""            # extra rights an admin gave this user, comma separated (e.g. "overview")
+    last_seen: str = ""        # last page or API call while logged in (updated at most once a minute)
 
     def can(self, perm: str) -> bool:
         return bool(self.is_admin) or perm in {x.strip() for x in (self.perms or "").split(",")}
@@ -405,6 +406,9 @@ class Store:
             if "prefs" not in ucols:
                 # v2.20 database: look & feel per user
                 c.execute("ALTER TABLE users ADD COLUMN prefs TEXT NOT NULL DEFAULT '{}'")
+            if "last_seen" not in ucols:
+                # v2.23.1 database: when someone was last on the site
+                c.execute("ALTER TABLE users ADD COLUMN last_seen TEXT NOT NULL DEFAULT ''")
             if "perms" not in ucols:
                 # v2.21 database: rights an admin can give without making someone admin
                 c.execute("ALTER TABLE users ADD COLUMN perms TEXT NOT NULL DEFAULT ''")
@@ -527,6 +531,13 @@ class Store:
         self._exec("UPDATE users SET password_hash = ?, session_key = ? WHERE id = ?",
                    (generate_password_hash(password), key, uid))
         return key
+
+    def touch_user(self, uid: int) -> None:
+        self._exec("UPDATE users SET last_seen = ? WHERE id = ?", (now(), uid))
+
+    def online_count(self, minutes: int = 5) -> int:
+        cut = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat(timespec="seconds")
+        return int(self._all("SELECT COUNT(*) AS n FROM users WHERE last_seen >= ? AND disabled = 0", (cut,))[0]["n"])
 
     def update_user(self, uid: int, **fields) -> None:
         allowed = {"is_admin", "vod_dir", "disabled", "display_name", "prefs", "perms"}

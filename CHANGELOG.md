@@ -4,6 +4,11 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 2.23.1
+- **Last active** on Users: when each user was last on the site (any page, updated at most once a minute), with
+  "● online now" for the last 5 minutes. *Last login* only changes when someone types their password, and logins
+  last a long time, so it said little. Also on each user's page, and the server overview counts who's online.
+
 ## 2.23.0
 - **Claude as a model, picked per run.** Next to every button that runs the model (Start coaching, tips, what to
   watch, game plans, weekly focus, Premier reviews, the quiz) there's now a model picker: your local default, the
