@@ -4,6 +4,11 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 3.0.2
+- **Fix:** on the match-day brief the comp's agent pictures overlapped the player names. The comp now shows as five
+  tiles (agent picture, agent, player, backup pick) like on *This week*; long names are shortened with "…" and shown
+  in full on hover.
+
 ## 3.0.1
 - **Fix:** the team and player pickers at the top of the menu were see-through in the *Neon glass* and *Tactical
   HUD* styles, so the open list overlapped the menu behind it. Lists, the search box, messages and the phone menu
