@@ -1,5 +1,87 @@
 {% extends "base.html" %}
+{% block head %}
+<style>
+.today{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;margin-bottom:22px}
+@media(max-width:900px){.today{grid-template-columns:1fr}}
+.tcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.tcard h2{margin:0 0 10px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.tcard h2 a{font-size:12px;text-transform:none;letter-spacing:0;font-weight:600}
+.tline{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.tline:last-child{border-bottom:0}.tline .ic{font-size:15px;text-align:center}
+.tline .act{white-space:nowrap}.tline b.ok{color:var(--win)}.tline b.warn{color:var(--amber)}.tline b.bad{color:var(--red)}
+.big2{font-size:22px;font-weight:800;letter-spacing:.02em}
+.avq{display:inline-flex;gap:4px}.avq button{font:inherit;font-size:13px;font-weight:800;width:34px;height:28px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);cursor:pointer}
+.avq button.yes{color:var(--win);border-color:rgba(53,208,160,.6)}.avq button.maybe{color:var(--amber);border-color:rgba(242,184,75,.6)}.avq button.no{color:var(--red);border-color:rgba(255,70,85,.55)}
+.avq button.on{background:var(--panel3)}
+.news a{display:block;text-decoration:none;color:inherit;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}.news a:last-child{border-bottom:0}
+.news a:hover{color:var(--text)}.news .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-right:6px}
+</style>
+{% endblock %}
 {% block content %}
+{% set first = td.teams[0] if td.teams else None %}
+<h1 style="margin:0 0 12px">Today</h1>
+<div class="today">
+  <div>
+  {% for x in td.teams %}{% set a = x.avail %}
+  <section class="tcard" style="margin-bottom:14px">
+    <h2>{{ x.t.name }} <a href="{{ url_for('team_premier', tid=x.t.id) }}">Premier →</a></h2>
+    {% if x.map %}<div class="tline"><span class="ic">🗺</span><span>This week: <span class="big2">{{ x.map }}</span></span>
+      <span class="act"><a class="btn sm primary" href="{{ url_for('team_brief', tid=x.t.id) }}">Match-day brief</a></span></div>{% endif %}
+    {% if a %}<div class="tline"><span class="ic">👥</span>
+      <span>{{ 'Today' if a.today else a.label }}{% if a.map %} · {{ a.map }}{% endif %}:
+        <b class="{{ 'ok' if a.level == 'ok' else ('warn' if a.level == 'maybe' else 'bad') }}">{{ a.yes|length }} confirmed</b>{% if a.maybe %}, {{ a.maybe|length }} maybe{% endif %}{% if a.unknown %}, {{ a.unknown|length }} no answer{% endif %}
+        {% for slot in a.missing %}<br><span class="small">{{ slot.name }} can't{% if slot.subs %} → {{ slot.subs[0].name }} {{ slot.subs[0].why }}{% endif %}</span>{% endfor %}</span>
+      <span class="act">{% if x.mine %}<span class="avq" data-url="/api/teams/{{ x.t.id }}/availability" data-pid="{{ x.mine.pid }}" data-day="{{ a.day }}" title="Your answer for {{ a.label }}">
+        {% for st, sign in (('yes', '✓'), ('maybe', '?'), ('no', '✗')) %}<button type="button" class="{{ st }} {{ 'on' if x.my_answer == st }}" data-st="{{ st }}" aria-label="{{ st }}">{{ sign }}</button>{% endfor %}</span>
+        {% else %}<a class="small" href="{{ url_for('team_availability', tid=x.t.id) }}">Availability →</a>{% endif %}</span></div>
+      {% if x.mine and not x.my_answer %}<div class="small" style="color:var(--amber);margin:-2px 0 4px 30px">You haven't said whether you can play {{ 'today' if a.today else a.label }}.</div>{% endif %}{% endif %}
+    {% set f = x.own or x.focus %}{% if f %}<div class="tline"><span class="ic">🎯</span><span>Your focus: <b>{{ f.focus }}</b>{% if x.own %} <span class="muted small">(your pick)</span>{% endif %}</span>
+      <span class="act"><a class="small" href="{{ url_for('team_focus', tid=x.t.id) }}">Weekly focus →</a></span></div>{% endif %}
+    {% if not x.map and not a and not f %}<p class="muted small" style="margin:0">Nothing planned yet: set match days under Premier › <i>Brief before each match</i>{% if x.t.premier_info.tag %}{% else %}, or link the team to Premier{% endif %}.</p>{% endif %}
+  </section>
+  {% else %}
+  <section class="tcard"><h2>Get started</h2>
+    <div class="tline"><span class="ic">1</span><span>Add your player (Riot name and tag) and import your history.</span><span class="act"><a class="btn sm" href="{{ url_for('profile_new') }}">Add player</a></span></div>
+    <div class="tline"><span class="ic">2</span><span>Create your team, from Premier or by hand, and add your teammates.</span><span class="act"><a class="btn sm" href="{{ url_for('teams') }}">Create team</a></span></div>
+    <div class="tline"><span class="ic">3</span><span>Set your in-game name under Account, so valcoach knows which player is you.</span><span class="act"><a class="btn sm ghost" href="{{ url_for('account') }}">Account</a></span></div>
+  </section>
+  {% endfor %}
+  </div>
+  <div>
+  {% set me = td.me %}{% if me %}
+  <section class="tcard" style="margin-bottom:14px">
+    <h2>{{ me.p.name }} <a href="{{ url_for('stats', pid=me.p.id) }}">Stats →</a></h2>
+    {% if not me.games %}<div class="tline"><span class="ic">⬇</span><span>No games yet: import your history first.</span>
+      <span class="act"><form method="post" action="{{ url_for('stats_import', pid=me.p.id) }}"><button class="btn sm primary">Import</button></form></span></div>{% endif %}
+    <div class="tline"><span class="ic">🔥</span><span>Warm-up {% if me.warmup_done %}<b class="ok">done today</b>{% else %}not done yet{% endif %} · {{ me.streak }}-day streak</span>
+      <span class="act"><a class="small" href="{{ url_for('training', pid=me.p.id) }}#routine">Training →</a></span></div>
+    {% if me.rank %}<div class="tline"><span class="ic">📈</span><span>{{ me.rank.name }}{% if me.rank.rr is not none %} · {{ me.rank.rr }} RR{% endif %}{% if me.rank.delta14 is not none %} · <b class="{{ 'ok' if me.rank.delta14 > 0 else ('bad' if me.rank.delta14 < 0 else '') }}">{{ '+' if me.rank.delta14 > 0 }}{{ me.rank.delta14 }}</b> in 14 days{% endif %}</span>
+      <span class="act"><a class="small" href="{{ url_for('progress', pid=me.p.id) }}">Progress →</a></span></div>{% endif %}
+    <div class="tline"><span class="ic">❓</span><span>{% if me.quiz %}A quiz with {{ me.quiz }} questions is waiting{% elif me.has_quiz %}Quiz done: make a new one after a few games{% else %}No quiz yet: questions from your own rounds{% endif %}</span>
+      <span class="act"><a class="btn sm {{ 'primary' if me.quiz else 'ghost' }}" href="{{ url_for('quiz', pid=me.p.id) }}">{{ 'Play' if me.quiz else 'Quiz' }}</a></span></div>
+    {% if me.report %}<div class="tline"><span class="ic">📝</span><span>Last report: {{ me.report.map }} {{ me.report.score }}</span>
+      <span class="act"><a class="small" href="{{ url_for('job_report', jid=me.report.id) }}" target="_blank">Open →</a></span></div>{% endif %}
+  </section>
+  {% endif %}
+  {% if td.jobs %}<section class="tcard" style="margin-bottom:14px"><h2>Running &amp; failed</h2>
+    {% for j in td.jobs %}<div class="tline"><span class="ic">{{ '⏳' if j.status in ('queued', 'running') else '⚠' }}</span>
+      <span>{{ j.what }}{% if j.who %} · {{ j.who }}{% endif %}{% if j.error %}<br><span class="small" style="color:var(--red)">{{ j.error }}</span>{% endif %}</span>
+      <span class="act small muted">{{ j.status }}{% if j.jid %} · <a href="{{ url_for('job', jid=j.jid) }}">view</a>{% endif %}</span></div>{% endfor %}</section>{% endif %}
+  {% if td.new %}<section class="tcard news"><h2>New since your last visit</h2>
+    {% for n in td.new %}<a href="{{ url_for(n.url[0], **n.url[1]) }}"><span class="k">{{ n.kind }}</span>{{ n.text }}<span class="muted small"> · {{ n.team }}</span></a>{% endfor %}</section>{% endif %}
+  </div>
+</div>
+<script>
+document.querySelectorAll('.avq').forEach(box => box.addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const st = b.classList.contains('on') ? '' : b.dataset.st;
+  const r = await fetch(box.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({pid: +box.dataset.pid, day: box.dataset.day, state: st})});
+  if (r.ok) { box.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.st === st)); window.valcoachToast && window.valcoachToast('Saved'); setTimeout(() => location.reload(), 900); }
+  else { const j = await r.json().catch(() => ({})); window.valcoachToast && window.valcoachToast(j.error || 'Not saved', 'error'); }
+}));
+</script>
+
 <div class="row between" style="margin-bottom:10px"><h1 style="margin:0">Your teams</h1>
   <a class="btn sm" href="{{ url_for('teams') }}">{{ 'Manage teams' if teams else '+ New team' }}</a></div>
 <div class="grid" style="margin-bottom:28px">
@@ -77,8 +159,8 @@
     const nav = document.querySelector('.navlinks');
     const anchor = nav && nav.querySelector('a[data-nav="new"]');
     if (anchor) order().forEach(id => {
-      const link = nav.querySelector(`a[data-pid="${id}"]`);
-      if (link) nav.insertBefore(link, anchor);
+      const link = anchor.parentNode.querySelector(`a[data-pid="${id}"]`);
+      if (link) anchor.parentNode.insertBefore(link, anchor);
     });
   }
 

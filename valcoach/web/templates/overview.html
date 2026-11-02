@@ -94,6 +94,7 @@
 
   <section class="card">
     <h2>Workspace</h2>
+    <dl class="kv" style="margin-bottom:8px"><dt>Last backup</dt><dd>{% if backup.at %}{{ backup.at|epoch }} {% if backup.ok %}<span style="color:var(--win)">✓ {{ '%.1f'|format(backup.size / 1048576) }} MB</span>{% else %}<span style="color:var(--red)">✗ {{ backup.error }}</span>{% endif %}{% else %}<span style="color:var(--amber)">none yet</span>{% endif %}</dd></dl>
     <dl class="kv"><dt>Users</dt><dd>{{ counts.users }} · {{ counts.online }} online now</dd><dt>Players</dt><dd>{{ counts.players }}</dd><dt>Teams</dt><dd>{{ counts.teams }}</dd></dl>
   </section>
 </div>

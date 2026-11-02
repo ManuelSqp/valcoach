@@ -54,7 +54,7 @@
 </div>
 <p class="small muted" style="margin-top:10px">Written by {{ focus.model }} {% if focus.created %}on {{ focus.created|epoch }}{% endif %}. Roles from the Roles tab; notes about a player are taken into account.</p>
 {% elif not (status and status.status in ('queued', 'running')) %}
-<section class="card"><p class="muted">{% if g.team_owner %}Press <b>Write this week's focus</b>, or turn on the weekly Discord post under Members, maps &amp; Discord and it's written automatically.{% else %}The team owner hasn't written this week's focus yet.{% endif %}</p></section>
+<section class="card"><p class="muted">{% if g.team_owner %}Press <b>Write this week's focus</b>, or turn on the weekly Discord post under the team's ⚙ Settings and it's written automatically.{% else %}The team owner hasn't written this week's focus yet.{% endif %}</p></section>
 {% endif %}
 <script>
 (function () {

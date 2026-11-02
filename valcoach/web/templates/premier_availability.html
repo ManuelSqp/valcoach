@@ -34,7 +34,7 @@ table.av{border-collapse:separate;border-spacing:4px;min-width:100%}
 <section class="card">
   <div class="row between"><h2 style="margin:0">Who can play</h2>
     <span class="small muted">{% if days_set %}Match days from <a href="{{ url_for('team_premier', tid=t.id) }}">Brief before each match</a>{% else %}Sat &amp; Sun for now: set your match days under <a href="{{ url_for('team_premier', tid=t.id) }}">Brief before each match</a>{% endif %}</span></div>
-  {% if not members %}<p class="muted">Add players under Members, maps &amp; Discord first.</p>
+  {% if not members %}<p class="muted">Add players under the team's ⚙ Settings first.</p>
   {% elif not days %}<p class="muted">No match days in the next two weeks.</p>
   {% else %}
   <p class="small muted" style="margin:6px 0 8px">Click your own cells: ✓ yes → ? maybe → ✗ no → empty. Right-click (or long-press) to add a short note like "from 21:00".{% if not g.team_owner %} You can change your own row once you've linked yourself to your player on the team page.{% endif %}</p>

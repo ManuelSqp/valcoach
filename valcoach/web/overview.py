@@ -159,6 +159,7 @@ def register(app, store, started_at: float) -> None:
             "overview.html", version=__version__, uptime_s=int(now - started_at), py=platform.python_version(),
             henrik=henrik_usage(now), model=model_usage(store.get("ollama_url"), now), model_name=store.get("ollama_model"),
             claude=claude_usage(store),
+            backup=__import__("valcoach.web.backup", fromlist=["last"]).last(store),
             disk=disk(store.data_dir), active=sorted(active, key=lambda a: -a["age_s"]), failed=sorted(failed, key=lambda f: f["age_s"])[:10],
             done_day=done_day.most_common(), coach=coach, counts=counts,
             tick_age_s=int(now - sr.last_tick) if sr.last_tick else None, has_key=bool(store.get("henrik_api_key")))

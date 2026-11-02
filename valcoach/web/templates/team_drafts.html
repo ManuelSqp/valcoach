@@ -80,7 +80,7 @@
 <div class="maptabs">{% for mp in maps %}<a class="btn sm {{ 'primary' if mp == sel else 'ghost' }}" href="{{ url_for('team_drafts', tid=t.id, map=mp) }}">{{ mp }}{% if counts.get(mp) %}<span class="n">{{ counts[mp] }}</span>{% endif %}</a>{% endfor %}</div>
 
 {% if not players %}
-<section class="card"><p class="muted">No players in this team yet. {% if g.team_owner %}Add them under <a href="{{ url_for('team_settings', tid=t.id) }}">Members, maps &amp; Discord</a>.{% endif %}</p></section>
+<section class="card"><p class="muted">No players in this team yet. {% if g.team_owner %}Add them under <a href="{{ url_for('team_settings', tid=t.id) }}">the team's ⚙ Settings</a>.{% endif %}</p></section>
 {% else %}
 <div class="dr">
   <aside class="dr-side">

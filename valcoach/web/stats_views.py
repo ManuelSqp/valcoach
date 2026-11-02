@@ -566,8 +566,23 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
         ps = store.profiles(t.owner_id)
         return ps[0].language if ps else "English"
 
+    build_cache: dict = {}
+
     def build(t) -> dict:
-        """Everything the team pages / jobs need: comps per map, roles, data, tips."""
+        """Everything the team pages / jobs need: comps per map, roles, data, tips. Cached until the team or
+        anyone's games change (a team page used to recompute all of it on every visit)."""
+        sig = (t.id, t.members, t.maps, t.meta, t.queue,
+               tuple(sorted((p.id, sr.games(p.id).signature()) for p in store.profiles(t.owner_id))))
+        hit = build_cache.get(t.id)
+        if hit and hit[0] == sig:
+            return hit[1]
+        out = _build(t)
+        if len(build_cache) > 50:
+            build_cache.clear()
+        build_cache[t.id] = (sig, out)
+        return out
+
+    def _build(t) -> dict:
         roles.load(cache_dir)
         d = team_data(t)
         members, byid, rows_by = d["members"], d["byid"], d["rows_by"]
@@ -658,7 +673,7 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
         b = build(t)
         maps = [m for m in request.form.getlist("maps") if m in b["maps"]] or b["maps"]
         if not (t.discord_info.get("prep_url") or t.discord_info.get("focus_url")):
-            flash("Add a Discord webhook under Members, maps & Discord first.", "error")
+            flash("Add a Discord webhook under the team's ⚙ Settings first.", "error")
         else:
             sr.submit_post_prep(tid, prep_post(b, maps))
             flash(f"Posting comps{' and game plans' if any(sr.read_plans(tid, m) for m in maps) else ''} for {', '.join(maps)} to Discord.", "ok")
@@ -728,7 +743,7 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
         t = get_team(tid, manage=True)
         f = request.form
         info = dict(t.discord_info)
-        for k in ("prep_url", "focus_url"):
+        for k in ("prep_url", "focus_url", "review_url", "clips_url"):
             v = f.get(k, "").strip()
             if v and not valid_url(v):
                 flash(f"That doesn't look like a Discord webhook URL: {v[:60]}…", "error")

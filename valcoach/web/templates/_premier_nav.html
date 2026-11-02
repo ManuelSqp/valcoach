@@ -16,5 +16,5 @@
   <a class="{{ 'on' if tab2 == 'division' }}" href="{{ url_for('team_division', tid=t.id) }}">Division &amp; scouting</a>
 </nav>
 {% if not pi.tag %}
-<section class="card"><p>This team isn't linked to a Premier team yet. {% if g.team_owner %}Create the team from Premier (Teams › <i>From Premier</i>) or set the Premier name and tag under <a href="{{ url_for('team_settings', tid=t.id) }}">Members, maps &amp; Discord</a>, then <b>Sync Premier roster</b>.{% endif %}</p></section>
+<section class="card"><p>This team isn't linked to a Premier team yet. {% if g.team_owner %}Create the team from Premier (Teams › <i>From Premier</i>) or set the Premier name and tag under <a href="{{ url_for('team_settings', tid=t.id) }}">the team's ⚙ Settings</a>, then <b>Sync Premier roster</b>.{% endif %}</p></section>
 {% endif %}

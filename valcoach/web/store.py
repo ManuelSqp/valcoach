@@ -181,6 +181,10 @@ DEFAULTS: dict[str, str] = {
     "claude_budget_usd": "20",         # per month, 0 = no limit
     "claude_fallback": "1",            # API not usable -> local model answers
     "llm_auto": "",                    # model for jobs that run by themselves (nightly reviews, weekly focus)
+    "backup_on": "1",                  # nightly backup of the data folder (Settings › Backups)
+    "backup_dir": "",                  # empty = data/backups; better a NAS folder
+    "backup_keep": "14",
+    "backup_last": "",
     "minimap_roi": "0.012, 0.025, 0.215, 0.382",
     "killfeed_roi": "0.70, 0.08, 0.29, 0.25",
     "sample_fps": "4",

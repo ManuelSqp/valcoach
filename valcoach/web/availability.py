@@ -227,7 +227,7 @@ def register(app, store, get_team, h: dict):
         t = get_team(tid)
         url = t.discord_info.get("prep_url") or t.discord_info.get("focus_url")
         if not url:
-            flash("Add a Discord webhook under Members, maps & Discord first.", "error")
+            flash("Add a Discord webhook under the team's ⚙ Settings first.", "error")
             return redirect(url_for("team_availability", tid=tid))
         days = match_days(h["brief_cfg"](t).get("days") or [], schedule(t))[:4]
         sums, members, _ = summaries(t, days)

@@ -201,7 +201,7 @@ def register(app, store, get_team, helpers: dict, known_maps: list[str]) -> None
         t, d = get_draft(tid, did)
         url = t.discord_info.get("prep_url") or t.discord_info.get("focus_url")
         if not url:
-            flash("Add a Discord webhook under Members, maps & Discord first.", "error")
+            flash("Add a Discord webhook under the team's ⚙ Settings first.", "error")
             return redirect(url_for("team_drafts", tid=tid, map=d["map"], d=did))
         players = {p["pid"]: p["name"] for p in roster(t)[0]}
         lines = []

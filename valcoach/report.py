@@ -20,6 +20,8 @@ header h1{margin:0;font-size:22px;letter-spacing:.04em;text-transform:uppercase}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px 18px;margin-bottom:16px}
 h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 12px}
 h3{font-size:15px;margin:14px 0 6px}ul{margin:4px 0;padding-left:18px}li{margin:3px 0}
+.rfilter{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.rfilter button{font:inherit;font-size:12.5px;padding:4px 11px;border-radius:99px;border:1px solid rgba(255,255,255,.15);background:transparent;color:inherit;cursor:pointer;opacity:.75}
+.rfilter button.on{opacity:1;border-color:#ff4655;background:rgba(255,70,85,.12)}
 .timeline{display:flex;gap:3px;flex-wrap:wrap;margin:4px 0 14px}.tl{width:30px;height:30px;border-radius:4px;display:grid;place-items:center;font-size:12px;font-weight:600;cursor:pointer;border:2px solid transparent;color:#0f1218}
 .tl.w{background:var(--win)}.tl.l{background:var(--loss)}.tl.i3{border-color:var(--amber)}.tl.half{margin-left:10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.stat{background:#11151c;border:1px solid var(--line);border-radius:6px;padding:8px 10px}.stat b{display:block;font-size:18px}
@@ -88,7 +90,17 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{padding:5px 8px;b
 
 <section class="card"><h2>Rounds</h2><div class="timeline">
 {% for r in rounds %}<div class="tl {{ 'w' if r.team_facts.won else 'l' }} {{ 'i3' if r.feedback.importance == 3 }} {{ 'half' if r.number in halves }}" title="R{{ r.number }} {{ r.team_facts.side }} {{ r.feedback.summary|default('') }}" onclick="openRound({{ r.number }})">{{ r.number }}</div>{% endfor %}
-</div><span class="muted">Amber border = round with a big lesson. Click a round to open it{% if vod %} and jump the VOD{% endif %}.</span></section>
+</div><span class="muted">Amber border = round with a big lesson. Click a round to open it{% if vod %} and jump the VOD{% endif %}.</span>
+{% set lessons = rounds|selectattr('feedback.importance', 'equalto', 3)|list %}
+{% set thrown = rounds|selectattr('team_facts.threw_advantage')|list %}
+{% set died = rounds|rejectattr('player_facts', 'none')|selectattr('player_facts.survived', 'sameas', false)|list %}
+<div class="rfilter" role="group" aria-label="Show rounds">
+  <button class="on" data-f="all">All {{ rounds|length }}</button>
+  {% if lessons %}<button data-f="{{ lessons|map(attribute='number')|join(',') }}">★ Lessons {{ lessons|length }}</button>{% endif %}
+  {% if thrown %}<button data-f="{{ thrown|map(attribute='number')|join(',') }}">Leads thrown {{ thrown|length }}</button>{% endif %}
+  {% if died %}<button data-f="{{ died|map(attribute='number')|join(',') }}">Your deaths {{ died|length }}</button>{% endif %}
+  <button data-f="{{ rounds|rejectattr('team_facts.won')|map(attribute='number')|join(',') }}">Lost {{ rounds|rejectattr('team_facts.won')|list|length }}</button>
+</div></section>
 
 {% if review %}<section class="card review"><h2>Match review</h2>
 {% if review.error %}<p class="err">Match review failed: {{ review.error }}</p>{% endif %}
@@ -265,6 +277,13 @@ function showReplay(n) {
   if (!R || !R.events || !R.events.length) { box.innerHTML = '<p class="muted">No replay data for this round.</p>'; return; }
   valcoachBuild(box);
 }
+document.querySelectorAll('.rfilter button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.rfilter button').forEach(x => x.classList.toggle('on', x === b));
+  const keep = b.dataset.f === 'all' ? null : new Set(b.dataset.f.split(',').filter(Boolean).map(Number));
+  document.querySelectorAll('.round[id^="r"]').forEach(el => { el.style.display = !keep || keep.has(+el.id.slice(1)) ? '' : 'none'; });
+  document.querySelectorAll('.timeline .tl').forEach(el => { el.style.opacity = !keep || keep.has(+el.textContent) ? '' : '.3'; });
+  if (keep && keep.size) openRound(Math.min(...keep));
+}));
 function selectRound(n, toggleBody) {
   const el = document.getElementById('r' + n);
   if (!el) return;
