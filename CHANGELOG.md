@@ -4,6 +4,13 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 3.1.0
+- **Menu at the top or on the left** (Account › Look & feel › Menu). *At the top* puts the same menu in a bar across
+  the page: the team and player pickers, then *Home* and the five groups as dropdowns (they close when you click
+  elsewhere or press Escape), and What's new, Server, Users, Settings, your account, light/dark and log out as
+  icons on the right. The group you're in is underlined. On narrower screens the bar drops the icons and labels it
+  can do without; on a phone the menu is always behind ☰. Works with every style.
+
 ## 3.0.2
 - **Fix:** on the match-day brief the comp's agent pictures overlapped the player names. The comp now shows as five
   tiles (agent picture, agent, player, backup pick) like on *This week*; long names are shortened with "…" and shown

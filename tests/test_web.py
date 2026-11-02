@@ -1,5 +1,6 @@
 import io
 import json
+import re
 import shutil
 import sqlite3
 import sys
@@ -1442,6 +1443,15 @@ def test_look_and_feel_search_and_lineups(app):
     c.post("/account", data={"look": "1", "style": "<script>"})            # unknown style -> classic
     assert "skin-classic" in c.get("/").data.decode()
     assert "Look &amp; feel" in c.get("/account").data.decode()
+    # menu at the top or on the left; a form without the field keeps the choice
+    assert " nav-top" not in c.get("/").data.decode()
+    c.post("/account", data={"look": "1", "style": "neon", "nav": "top"})
+    page = c.get("/").data.decode()
+    assert 'class="skin-neon nav-top' in page and not re.search(r'class="ngroup" data-g="\w+" open', page)   # dropdowns start closed
+    c.post("/account", data={"look": "1", "style": "classic"})
+    assert 'class="skin-classic nav-top' in c.get("/").data.decode()
+    c.post("/account", data={"look": "1", "style": "classic", "nav": "side"})
+    assert " nav-top" not in c.get("/").data.decode()
     # Ctrl+K index: players, team tabs, maps, drafts, strats
     tid = store.create_team(store.user_by_name("manuel").id, "Squad")
     store.update_team(tid, members=[{"pid": me, "kind": "starter"}], maps=["Bind"])

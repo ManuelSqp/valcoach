@@ -4,7 +4,7 @@ from __future__ import annotations
 # name -> (label, one line, Google Fonts css2 query or "")
 STYLES = {
     "classic": ("valcoach", "The standard look: calm navy, amber for things you can do. Light or dark with the moon button.", ""),
-    "original": ("Original red", "The colours from before 2.26: Valorant red on deep navy.", ""),
+    "original": ("Original red", "The colours from before 3.0: Valorant red on deep navy.", ""),
     "broadcast": ("Esports broadcast", "Like a VCT stream overlay: big condensed type, angled corners, red, black and white.",
                   "family=Oswald:wght@500;600;700&family=Barlow:wght@400;500;600;700"),
     "minimal": ("Clean minimal", "Light and calm, soft cards, lots of space. Easiest to read on a phone.",
@@ -20,6 +20,9 @@ STYLES = {
                  "family=Kalam:wght@400;700&family=Inter:wght@400;500;600"),
     "arcade": ("Retro arcade", "Pixel font, CRT scanlines, bright neon colours.", "family=Press+Start+2P&family=VT323"),
 }
+# where the menu sits (phones always get the ☰ drawer)
+NAVS = {"side": ("On the left", "A column with every group open or closed, like a file browser."),
+        "top": ("At the top", "A bar across the page; each group opens as a dropdown. More room for wide pages.")}
 # switch -> (label, what it does)
 ANIMATIONS = {
     "count": ("Numbers count up", "Stats roll up from 0 when a page opens."),
@@ -34,7 +37,8 @@ def ui_prefs(raw: dict | None) -> dict:
     raw = raw if isinstance(raw, dict) else {}
     style = raw.get("style") if raw.get("style") in STYLES else "classic"
     anim = raw.get("anim") if isinstance(raw.get("anim"), dict) else {}
-    return {"style": style, "anim": {k: bool(anim.get(k, True)) for k in ANIMATIONS}}
+    nav = raw.get("nav") if raw.get("nav") in NAVS else "side"
+    return {"style": style, "nav": nav, "anim": {k: bool(anim.get(k, True)) for k in ANIMATIONS}}
 
 
 def fonts_url(style: str) -> str:

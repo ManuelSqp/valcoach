@@ -22,3 +22,4 @@ td,th{padding:5px 8px;font-size:13px}td{font-family:var(--font-num);font-size:12
 .wk-grid{opacity:.15}
 .btn{font-size:13px;padding:6px 12px}.btn.sm{padding:3px 9px;font-size:12px}
 .grid{gap:10px}.cols{gap:12px}
+@media(min-width:901px){body.nav-top{grid-template-columns:none}.nav-top .page{padding-top:16px}}

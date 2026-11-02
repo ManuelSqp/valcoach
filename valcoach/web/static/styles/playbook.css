@@ -32,3 +32,5 @@ h1{font-size:40px;font-weight:700;color:var(--blue)}h2,.sec h2{color:var(--blue)
 .ctxs{background:rgba(255,255,255,.05);border-color:#3d5b4b}.ctxpick>summary:hover,.ctxpick[open]>summary{background:rgba(255,255,255,.08)}
 .ctx-t b{color:#fff;font-family:var(--font-head)}.ctx-t small{color:#7fa08d}
 .vc-side .sg-head{color:#e6efe9}
+@media(min-width:901px){.nav-top .ngroup>.sg-head,.nav-top .ngroup[data-here]>.sg-head{color:#fff}.nav-top .sg-items{border-color:#3d5b4b}
+  .nav-top .vc-side{border-bottom-color:#3d5b4b}.nav-top main.page{margin-top:22px}}
