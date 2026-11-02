@@ -13,7 +13,7 @@
 </head>
 {% set ep = request.endpoint or '' %}
 {% set cur_tid = t.id if (t is defined and t and t.id is defined) else None %}
-<body class="skin-{{ ui.style if ui else 'classic' }}{% if ui %}{% for k, v in ui.anim.items() if v %} a-{{ k }}{% endfor %}{% endif %}{{ ' no-side' if not user }}" {% if user %}data-search="{{ url_for('search_index') }}"{% endif %}>
+<body class="skin-{{ ui.style if ui else 'classic' }}{{ ' nav-top' if user and ui and ui.nav == 'top' }}{% if ui %}{% for k, v in ui.anim.items() if v %} a-{{ k }}{% endfor %}{% endif %}{{ ' no-side' if not user }}" {% if user %}data-search="{{ url_for('search_index') }}"{% endif %}>
 {% if user %}
 <aside class="vc-side" id="side" aria-label="Main">
   <div class="side-top">
@@ -64,11 +64,11 @@
       ('team_settings', 'Team settings', ('team_settings',), 'o', '')]),
   ] %}
   <nav class="side-nav">
-    <a class="si {{ 'on' if ep == 'index' }}" href="{{ url_for('index') }}">{{ nav_ico('home') }}Home</a>
+    <a class="si home {{ 'on' if ep == 'index' }}" href="{{ url_for('index') }}">{{ nav_ico('home') }}Home</a>
     {% for gid, glabel, gico, items in nav_groups %}
     {% set usable = [] %}{% for e, lbl, eps, need, badge in items %}{% if (need == 't' and navT) or (need == 'o' and navT and navT.owner_id == user.id) or (need == 'p' and navP) %}{% set _ = usable.append((e, lbl, eps, need, badge)) %}{% endif %}{% endfor %}
     {% set has_on = [] %}{% for x in usable if ep in x[2] %}{% set _ = has_on.append(1) %}{% endfor %}
-    <details class="ngroup" data-g="{{ gid }}" {{ 'open' if has_on or gid in ('match', 'perf') }} {{ 'data-here' if has_on }}>
+    <details class="ngroup" data-g="{{ gid }}" {{ 'open' if (has_on or gid in ('match', 'perf')) and ui.nav != 'top' }} {{ 'data-here' if has_on }}>
       <summary class="si sg-head">{{ nav_ico(gico) }}<span class="sg-name">{{ glabel }}</span></summary>
       <div class="sg-items">
         {% for e, lbl, eps, need, badge in usable %}{% set on = ep in eps %}
@@ -80,11 +80,11 @@
     {% endfor %}
   </nav>
   <div class="side-bottom">
-    <a class="si {{ 'on' if ep == 'changelog' }}" href="{{ url_for('changelog') }}">{{ nav_ico('spark') }}What's new{% if new_version %}<span class="badge hot">new</span>{% endif %}</a>
+    <a class="si {{ 'on' if ep == 'changelog' }}" href="{{ url_for('changelog') }}" title="What's new">{{ nav_ico('spark') }}What's new{% if new_version %}<span class="badge hot">new</span>{% endif %}</a>
     {% if user.is_admin or user.can('overview') %}<div class="admin">
-      {% if user.can('overview') %}<a class="si {{ 'on' if ep == 'overview' }}" href="{{ url_for('overview') }}">{{ nav_ico('server') }}Server</a>{% endif %}
-      {% if user.is_admin %}<a class="si {{ 'on' if ep in ('users', 'user_edit') }}" href="{{ url_for('users') }}">{{ nav_ico('user') }}Users</a>
-      <a class="si {{ 'on' if ep == 'settings' }}" href="{{ url_for('settings') }}">{{ nav_ico('gear') }}Settings</a>{% endif %}
+      {% if user.can('overview') %}<a class="si {{ 'on' if ep == 'overview' }}" href="{{ url_for('overview') }}" title="Server">{{ nav_ico('server') }}Server</a>{% endif %}
+      {% if user.is_admin %}<a class="si {{ 'on' if ep in ('users', 'user_edit') }}" href="{{ url_for('users') }}" title="Users">{{ nav_ico('user') }}Users</a>
+      <a class="si {{ 'on' if ep == 'settings' }}" href="{{ url_for('settings') }}" title="Settings">{{ nav_ico('gear') }}Settings</a>{% endif %}
     </div>{% endif %}
     <div class="me">
       <a class="me-link {{ 'on' if ep == 'account' }}" href="{{ url_for('account') }}" title="Account and look"><span class="avatar" aria-hidden="true">{{ (user.display_name or user.username)[:1]|upper }}</span><span class="me-text"><b>{{ user.username }}</b>
@@ -101,10 +101,10 @@
 {% endif %}
 <main class="page">
   {% if user and not has_api_key and ep != 'settings' %}
-  <div class="banner">No HenrikDev API key yet. {% if user.is_admin %}<a href="{{ url_for('settings') }}">Add it in Settings</a> so matches can be loaded.{% else %}Ask the admin to add one so matches can be loaded.{% endif %}</div>
+  <div class="banner">No HenrikDev API key yet. {% if user.is_admin %}<a href="{{ url_for('settings') }}" title="Settings">Add it in Settings</a> so matches can be loaded.{% else %}Ask the admin to add one so matches can be loaded.{% endif %}</div>
   {% endif %}
   {% if new_version and ep != 'changelog' %}
-  <div class="flash ok">valcoach was updated to <b>{{ app_version }}</b>. <a href="{{ url_for('changelog') }}">See what's new</a></div>
+  <div class="flash ok">valcoach was updated to <b>{{ app_version }}</b>. <a href="{{ url_for('changelog') }}" title="What's new">See what's new</a></div>
   {% endif %}
   {% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}{% endwith %}
   {% block content %}{% endblock %}
@@ -127,7 +127,14 @@
   const setOpen = o => { if (!side) return; side.classList.toggle('open', o); scrim.hidden = !o; btn && btn.setAttribute('aria-expanded', o); };
   btn && btn.addEventListener('click', () => setOpen(!side.classList.contains('open')));
   scrim && scrim.addEventListener('click', () => setOpen(false));
+  const topNav = () => document.body.classList.contains('nav-top') && matchMedia('(min-width: 901px)').matches;
+  if (topNav()) document.querySelectorAll('details.ngroup').forEach(d => { d.open = false; });
+  document.querySelectorAll('details.ngroup').forEach(d => d.addEventListener('toggle', () => {
+    if (topNav() && d.open) document.querySelectorAll('details.ngroup[open], details.ctxpick[open]').forEach(o => { if (o !== d) o.open = false; }); }));
+  document.addEventListener('click', e => { if (topNav() && !e.target.closest('details.ngroup')) document.querySelectorAll('details.ngroup[open]').forEach(d => { d.open = false; }); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && topNav()) document.querySelectorAll('details.ngroup[open]').forEach(d => { d.open = false; }); });
   document.querySelectorAll('details.ngroup').forEach(d => {
+    if (topNav()) return;                    // the top bar doesn't remember open dropdowns
     const k = 'vc-nav-' + d.dataset.g;
     try { const v = localStorage.getItem(k); if (v !== null && !d.hasAttribute('data-here')) d.open = v === '1'; } catch (e) {}
     d.addEventListener('toggle', () => { try { localStorage.setItem(k, d.open ? '1' : '0'); } catch (e) {} });

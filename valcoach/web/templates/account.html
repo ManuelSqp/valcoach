@@ -8,6 +8,17 @@
 .stylecard:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .sprev{display:block;width:100%;height:auto;aspect-ratio:8/5;border-radius:6px;background:var(--panel3);object-fit:cover}
 .sname{font-weight:700;font-size:13px}.sdesc{font-size:11.5px;color:var(--muted);line-height:1.35}
+.navopts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.navopt{display:flex;gap:12px;align-items:center;margin:0;padding:10px 12px;border:2px solid var(--line);border-radius:var(--radius);background:var(--panel2);color:var(--text);font-size:13px;font-weight:400;cursor:pointer}
+.navopt:hover{border-color:var(--line2)}.navopt:has(input:checked){border-color:var(--accent)}.navopt:has(input:focus-visible){box-shadow:var(--focus)}
+.navopt b{display:block;font-weight:700;font-size:14px}
+.navpic{flex:none;position:relative;width:72px;height:48px;border-radius:6px;background:var(--bg);border:1px solid var(--line2);overflow:hidden}
+.navpic i{position:absolute;background:var(--panel3)}.navpic.side i{left:0;top:0;bottom:0;width:18px}.navpic.top i{left:0;right:0;top:0;height:10px}
+.navpic b{position:absolute;height:5px;border-radius:2px;background:var(--line2)}
+.navpic.side b{left:24px;right:8px}.navpic.top b{left:8px;right:8px}
+.navpic b:nth-of-type(1){top:9px;background:var(--accent);right:30px}.navpic.top b:nth-of-type(1){top:17px}
+.navpic b:nth-of-type(2){top:20px}.navpic.top b:nth-of-type(2){top:28px}
+.navpic b:nth-of-type(3){top:31px}.navpic.top b:nth-of-type(3){top:39px}
 .anims{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
 .switch{display:flex;gap:10px;align-items:flex-start;margin:0;color:var(--text);font-size:13px;cursor:pointer;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel2)}
 .switch input{position:absolute;opacity:0;width:1px;height:1px}
@@ -44,6 +55,12 @@
     </label>
     {% endfor %}
   </div>
+  <h2 style="margin-top:18px">Menu</h2>
+  <div class="navopts">{% for key, (label, desc) in navs.items() %}
+    <label class="navopt"><input type="radio" name="nav" value="{{ key }}" {{ 'checked' if ui.nav == key }} class="sr-only">
+      <span class="navpic {{ key }}" aria-hidden="true"><i></i><b></b><b></b><b></b></span>
+      <span><b>{{ label }}</b><span class="small muted">{{ desc }}</span></span></label>{% endfor %}</div>
+  <p class="small muted" style="margin:6px 0 0">On a phone the menu is always behind the ☰ button.</p>
   <h2 style="margin-top:18px">Animations</h2>
   <div class="anims">{% for key, (label, desc) in animations.items() %}
     <label class="switch"><input type="checkbox" name="anim_{{ key }}" value="1" {{ 'checked' if ui.anim[key] }}><span class="tr" aria-hidden="true"></span>

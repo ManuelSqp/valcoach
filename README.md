@@ -1,6 +1,6 @@
 # valcoach v2
 
-**Version 3.0.2** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 3.1.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -94,7 +94,7 @@ or player page picks it for you. Below: *Match day* (This week, Availability, Ma
 *Strategy* (Comps, Drafts, Game plans, Strat book, Lineups), *Performance* (Matches & reports, Stats & agents,
 Rank & progress), *Practice* (Training, Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes,
 Player & playbook, Team settings). Ctrl+K searches everything. *Home* shows what's up today. The look (10 styles,
-light or dark) is under Account.
+light or dark, menu on the left or at the top) is under Account.
 
 ### What's in a report
 

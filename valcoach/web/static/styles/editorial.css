@@ -27,3 +27,4 @@ th{text-transform:uppercase;letter-spacing:.1em;font-size:11px;color:var(--text)
 .badge.hot{background:var(--accent);color:#fff}
 .ctxs{background:transparent;border-color:var(--text);border-radius:0}.ctx-t b{font-family:var(--font-head);font-weight:800}
 .ngroup>.sg-head{font-family:var(--font-head);font-weight:800}
+@media(min-width:901px){.nav-top .vc-side{border-bottom:3px double var(--text)}.nav-top .logo{font-size:24px}}

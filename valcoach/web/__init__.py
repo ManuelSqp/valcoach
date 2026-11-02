@@ -453,6 +453,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             for k in ("home_seen", "home_prev"):
                 if old_prefs.get(k):
                     prefs[k] = old_prefs[k]
+            from .ui import NAVS
+            prefs["nav"] = f.get("nav") if f.get("nav") in NAVS else (old_prefs.get("nav") if old_prefs.get("nav") in NAVS else "side")
             store.update_user(g.user.id, prefs=json.dumps(prefs))
             flash(f"Style: {STYLES[prefs['style']][0]}.", "ok")
             return redirect(url_for("account") + "#look")
@@ -473,8 +475,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                     flash("Password changed. Other devices were logged out.", "ok")
             return redirect(url_for("account"))
         usage = store.usage_by_user().get(g.user.id, {"profiles": 0, "jobs": 0})
-        from .ui import ANIMATIONS, STYLES
-        return render_template("account.html", usage=usage, vod_root=vod_root(g.user), styles=STYLES, animations=ANIMATIONS)
+        from .ui import ANIMATIONS, NAVS, STYLES
+        return render_template("account.html", navs=NAVS, usage=usage, vod_root=vod_root(g.user), styles=STYLES, animations=ANIMATIONS)
 
     # -------------------------------------------------------------- quick search (Ctrl+K)
     @app.get("/api/search-index")
