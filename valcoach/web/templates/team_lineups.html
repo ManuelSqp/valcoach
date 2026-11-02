@@ -4,11 +4,7 @@
 {% block head %}
 <style>
 .ai{border-radius:50%;vertical-align:middle;background:var(--ink);object-fit:cover;flex:none}
-.snav{display:flex;gap:6px;margin:-6px 0 14px}
-.snav a{text-decoration:none;font-size:13px;font-weight:600;padding:5px 12px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
-.snav a.on,.snav a:hover{color:var(--text);border-color:var(--line2)}.snav a.on{background:var(--panel3)}
-.maptabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
-.maptabs .n{font-size:10px;font-weight:700;background:rgba(255,255,255,.12);border-radius:99px;padding:0 6px;margin-left:5px}
+.maptabs .n{font-size:11px;font-weight:650;background:var(--line);color:var(--muted);border-radius:99px;padding:0 6px;margin-left:6px}
 .lgrid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
 @media(max-width:900px){.lgrid{grid-template-columns:1fr}}
 .filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
@@ -26,8 +22,7 @@
 {% endblock %}
 {% block content %}
 {% include "_team_head.html" %}
-<nav class="snav" aria-label="Strat book"><a href="{{ url_for('team_strats', tid=t.id, map=sel) }}">Boards</a><a class="on" href="{{ url_for('team_lineups', tid=t.id, map=sel) }}">Lineups</a></nav>
-<div class="maptabs">{% for mp in maps %}<a class="btn sm {{ 'primary' if mp == sel else 'ghost' }}" href="{{ url_for('team_lineups', tid=t.id, map=mp) }}">{{ mp }}{% if counts.get(mp) %}<span class="n">{{ counts[mp] }}</span>{% endif %}</a>{% endfor %}</div>
+<div class="subtabs maptabs" role="navigation" aria-label="Map">{% for mp in maps %}<a class="{{ 'on' if mp == sel }}" href="{{ url_for('team_lineups', tid=t.id, map=mp) }}">{{ mp }}{% if counts.get(mp) %}<span class="n">{{ counts[mp] }}</span>{% endif %}</a>{% endfor %}</div>
 <div class="lgrid">
   <section class="card">
     <div class="row between"><h2 style="margin:0">{{ sel }} lineups</h2>

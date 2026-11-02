@@ -7,13 +7,13 @@
   const css = document.createElement('style');
   css.textContent = `
 .vask{margin-top:12px;border-top:1px dashed rgba(255,255,255,.12);padding-top:10px}
-.vask h4{margin:0 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.7}
+.vask h4{margin:0 0 6px;font-size:13px;font-weight:650;opacity:.75}
 .vask .qa{margin:6px 0 8px;font-size:13.5px}.vask .qa .q{font-weight:700}.vask .qa .a{margin-top:3px;line-height:1.45}
 .vask .qa .m{font-size:11px;opacity:.55}
 .vask form{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .vask input[type=text]{flex:1;min-width:200px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.25);color:inherit;font:inherit;font-size:13.5px}
 .vask select,.vask button,.vclip button,.vclip a{font:inherit;font-size:12.5px;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:inherit;cursor:pointer;text-decoration:none}
-.vask button[type=submit]{background:#ff4655;border-color:#ff4655;color:#fff;font-weight:700}
+.vask button[type=submit]{background:var(--accent,#f4b740);border-color:var(--accent,#f4b740);color:#1b1305;font-weight:700}
 .vask .wait{font-size:12.5px;opacity:.75}.vask .err{font-size:12.5px;color:#ff6b77}
 .vclip{display:inline-flex;gap:3px;margin:0 8px 0 2px;vertical-align:middle}
 .vclip button,.vclip a{padding:3px 7px;font-size:11.5px}`;
@@ -21,7 +21,7 @@
   const post = (url, body) => fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   function toast(m) {
     const d = document.createElement('div');
-    d.textContent = m; d.style.cssText = 'position:fixed;right:16px;bottom:16px;background:#222a36;color:#fff;padding:9px 14px;border-radius:9px;font:13px system-ui;z-index:99;box-shadow:0 6px 24px rgba(0,0,0,.4)';
+    d.textContent = m; d.style.cssText = 'position:fixed;right:16px;bottom:16px;background:#212b3a;color:#fff;padding:9px 14px;border-radius:9px;font:13px Archivo,system-ui;z-index:99;box-shadow:0 6px 24px rgba(0,0,0,.4)';
     document.body.appendChild(d); setTimeout(() => d.remove(), 2600);
   }
 

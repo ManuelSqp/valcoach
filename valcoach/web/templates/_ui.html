@@ -1,0 +1,9 @@
+{# Shared page pieces. Import with: {% import "_ui.html" as vc %} #}
+{% macro pagehead(title, crumbs=(), ctx='') -%}
+<div class="pagehead">
+  <div>{% if crumbs %}<div class="crumbs">{% for lbl, url in crumbs %}{% if url %}<a href="{{ url }}">{{ lbl }}</a>{% else %}{{ lbl }}{% endif %}{{ " / " if not loop.last }}{% endfor %}</div>{% endif %}
+    <h1>{{ title }}</h1>{% if ctx %}<div class="ctx">{{ ctx }}</div>{% endif %}</div>
+  {% if caller is defined %}<div class="acts">{{ caller() }}</div>{% endif %}
+</div>
+{%- endmacro %}
+{% macro player_crumbs(p) -%}{{ [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))] }}{%- endmacro %}

@@ -32,11 +32,10 @@
 </style>
 {% endblock %}
 {% block content %}
-<div class="row between" style="margin-bottom:14px">
-  <div><h1>{{ p.name }}<span class="tag">#{{ p.tag }}</span> · training</h1>
-    <div class="muted">from {{ a.games }} games with round data</div></div>
-</div>
-{% include "_player_tabs.html" %}
+{% import "_ui.html" as vc %}
+{% call vc.pagehead('Training', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))], 'From ' ~ a.games ~ ' games with round data') %}
+
+{% endcall %}
 {% if own %}
 <section class="card" style="margin-bottom:14px;border-left:3px solid var(--amber)">
   <div class="row between"><div><span class="small muted">Your own focus this week ({{ 'from the quiz' if own.source == 'quiz' else ('from a report' if own.source == 'report' else 'your pick') }})</span>

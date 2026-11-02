@@ -4,7 +4,7 @@
 <style>
 .qz{max-width:760px}
 .qhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
-.qtag{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.qtag{font-size:11px;font-weight:800;color:var(--muted)}
 .qdots{display:flex;gap:5px}.qdots span{width:10px;height:10px;border-radius:50%;background:var(--panel3);border:1px solid var(--line2)}
 .qdots span.ok{background:var(--win);border-color:var(--win)}.qdots span.bad{background:var(--red);border-color:var(--red)}.qdots span.cur{outline:2px solid var(--text);outline-offset:1px}
 .qq{font-size:17px;line-height:1.45;margin:10px 0 14px}
@@ -13,14 +13,14 @@
 .qo b{color:var(--muted);min-width:18px}
 .qo:hover:not(:disabled){border-color:var(--line2);background:var(--panel3)}
 .qo:disabled{cursor:default}
-.qo.right{border-color:var(--win);background:rgba(53,208,160,.12)}.qo.wrong{border-color:var(--red);background:rgba(255,70,85,.1)}
+.qo.right{border-color:var(--win);background:var(--win-soft)}.qo.wrong{border-color:var(--red);background:var(--red-soft)}
 .qx{margin-top:14px;display:none}.qx.on{display:block}
 .qx .why{background:var(--panel2);border-left:3px solid var(--win);border-radius:0 8px 8px 0;padding:9px 12px;font-size:14px}
 .qx .hap{font-size:13.5px;margin-top:8px;color:var(--muted)}.qx .hap b{color:var(--text)}
 .qend{text-align:center;padding:10px 0}.qend .big{font-size:44px;font-weight:800}
 .qact{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}
 .qact .lbl{font-size:12px;color:var(--muted);margin-right:2px}
-.qrate.on{border-color:var(--red);color:var(--text)}
+.qrate.on{border-color:var(--accent);color:var(--text)}
 .kacc{display:grid;grid-template-columns:minmax(0,1fr) 130px 60px;gap:8px;align-items:center;font-size:13px;padding:5px 0}
 .kacc .bar{height:8px;background:var(--panel3);border-radius:99px;overflow:hidden}.kacc .bar i{display:block;height:100%}
 .hist{display:flex;gap:4px;align-items:flex-end;height:40px;margin-top:6px}
@@ -28,12 +28,10 @@
 </style>
 {% endblock %}
 {% block content %}
-<div class="row between" style="margin-bottom:14px">
-  <div><h1>{{ p.name }}<span class="tag">#{{ p.tag }}</span> · quiz</h1>
-    <div class="muted">decisions from your own rounds</div></div>
-  {% if can_edit %}<form method="post" class="row" style="gap:6px">{% include "_llm_pick.html" %}<button class="btn {{ 'primary' if not q.questions else 'ghost' }}" {{ 'disabled' if status and status.status in ('queued', 'running') }}>{{ 'New quiz from my latest games' if q.questions else 'Make my first quiz' }}</button></form>{% endif %}
-</div>
-{% include "_player_tabs.html" %}
+{% import "_ui.html" as vc %}
+{% call vc.pagehead('Quiz', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))], 'Decisions from your own rounds') %}
+{% if can_edit %}<form method="post" class="row" style="gap:6px">{% include "_llm_pick.html" %}<button class="btn sm {{ 'primary' if not q.questions else 'ghost' }}" {{ 'disabled' if status and status.status in ('queued', 'running') }}>{{ 'New quiz from my latest games' if q.questions else 'Make my first quiz' }}</button></form>{% endif %}
+{% endcall %}
 {% if status and status.status in ('queued', 'running', 'error') %}
 <div class="card" data-key="quiz:{{ p.id }}" data-state="{{ status.status }}" style="margin-bottom:14px">
   <span class="pill {{ 'running' if status.status != 'error' else 'error' }}">{{ 'writing the quiz' if status.status != 'error' else 'quiz failed' }}</span>

@@ -4,6 +4,30 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 3.0.0
+**New design.** Every page was rebuilt on one design system; all features, data and links stay the same.
+- **One menu for everything**, on the left (a ☰ button on phones). At the top you pick the *team* and the *player*
+  it works on (opening a team or player page picks it for you). Below, five groups that open and close:
+  *Match day* (This week, Availability, Match-day brief, Opponents), *Strategy* (Comps, Drafts, Game plans,
+  Strat book, Lineups), *Performance* (Matches & reports, Stats & agents, Rank & progress), *Practice* (Training,
+  Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes, Player & playbook, Team settings).
+  The menu remembers which groups you opened; *This week* shows the week's map, *Quiz* how many questions wait.
+- **Every page starts the same way:** where you are, a title that matches the menu, one line of context, and the
+  page's buttons on the right. Map and queue switches are one kind of tab everywhere.
+- **Home:** the week's map large at the top (with the minimap behind it), who can play on the next match day as
+  one chip per player and your Yes / Maybe / No right there.
+- **This week (Premier):** the comp as five agent tiles, the season as week tiles with the current week marked,
+  match days as toggle buttons, results as *Won* / *Lost*.
+- **Reports** use the same colours and type, with the score green or red.
+- **Light and dark** with the moon button at the bottom of the menu (standard style).
+- **Styles rebuilt** for the new layout: Esports broadcast, Clean minimal, Neon glass, Tactical HUD, Data
+  terminal, Editorial magazine, Coach's playbook, Retro arcade, and new *Original red* (the colours before 3.0).
+  Account › Look & feel shows a real preview of each.
+- **Fonts ship with valcoach** (Archivo and the styles' fonts, all OFL licensed, in `static/fonts`): nothing is
+  loaded from Google any more.
+- Colours mean one thing each: amber = something you can do, teal = good or won, coral = bad or lost.
+  Labels are no longer in capitals.
+
 ## 2.25.0
 - **Home page "Today":** everything for today in one place, instead of clicking through five pages.
   - Per team: this week's map with the match-day brief, the next match day with who's playing (and who could sub),

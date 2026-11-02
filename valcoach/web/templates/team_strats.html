@@ -4,18 +4,15 @@
 <style>
 .sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
 .scard{display:block;text-decoration:none;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
-.scard:hover{border-color:var(--red)}
+.scard:hover{border-color:var(--accent)}
 .scard-w{position:relative}.splay{position:absolute;right:10px;top:10px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--panel3);border:1px solid var(--line);text-decoration:none;color:var(--text);font-size:12px}
-.splay:hover{border-color:var(--red);color:var(--red)}.scard b{font-size:15px}
-.side{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}.side.attack{color:var(--red)}.side.defense{color:var(--blue)}
+.splay:hover{border-color:var(--accent);color:var(--accent)}.scard b{font-size:15px}
+.side{font-size:10.5px;font-weight:800;}.side.attack{color:var(--red)}.side.defense{color:var(--blue)}
 .mapblock{margin-bottom:18px}.mapblock h3{margin:0 0 8px}
 </style>
 {% endblock %}
 {% block content %}
 {% include "_team_head.html" %}
-<style>.snav{display:flex;gap:6px;margin:-6px 0 14px}.snav a{text-decoration:none;font-size:13px;font-weight:600;padding:5px 12px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
-.snav a.on,.snav a:hover{color:var(--text);border-color:var(--line2)}.snav a.on{background:var(--panel3)}</style>
-<nav class="snav" aria-label="Strat book"><a class="on" href="{{ url_for('team_strats', tid=t.id, map=sel) }}">Boards</a><a href="{{ url_for('team_lineups', tid=t.id, map=sel) }}">Lineups</a></nav>
 <section class="card">
   <h2>New strat</h2>
   <form method="post" class="row" style="align-items:flex-end;flex-wrap:wrap">
@@ -31,7 +28,7 @@
   <h3>{{ m }} <span class="muted small">{{ ss|length }}</span></h3>
   <div class="sgrid">{% for s in ss %}
     <div class="scard-w"><a class="scard" href="{{ url_for('strat_edit', tid=t.id, sid=s.id) }}">
-      <div class="side {{ s.side }}">{{ s.side }}</div><b>{{ s.name }}</b>
+      <div class="side {{ s.side }}">{{ s.side|capitalize }}</div><b>{{ s.name }}</b>
       <div class="muted small">changed {{ s.updated_at|localtime }}{% if s.author %} by {{ s.author }}{% endif %}</div></a>
       <a class="splay" href="{{ url_for('strat_edit', tid=t.id, sid=s.id, play=1) }}" title="Play the steps" aria-label="Play {{ s.name }}">▶</a></div>
   {% endfor %}</div>

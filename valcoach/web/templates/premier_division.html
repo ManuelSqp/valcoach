@@ -26,7 +26,7 @@
   <div class="tablewrap"><table>
     <tr><th>#</th><th>Team</th><th>W–L</th><th>Points</th><th>Maps (their wins–games)</th><th></th></tr>
     {% for r in rows %}
-    <tr {% if r.ours %}style="background:rgba(255,70,85,.06)"{% endif %}>
+    <tr {% if r.ours %}style="background:var(--red-soft)"{% endif %}>
       <td>{{ r.place or loop.index }}</td>
       <td>{% if r.scouted_at %}<a href="{{ url_for('team_scouted', tid=t.id, team_id=r.id) }}"><b>{{ r.name }}</b></a>{% else %}<b>{{ r.name }}</b>{% endif %} <span class="muted small">#{{ r.tag }}</span>{% if r.ours %} <span class="muted small">(you)</span>{% endif %}</td>
       <td>{% if r.wins is not none %}{{ r.wins }}–{{ r.losses }}{% endif %}</td>

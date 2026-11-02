@@ -1,13 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Coach {{ s.map }} · valcoach{% endblock %}
 {% block content %}
-<div class="row between" style="margin-bottom:18px">
-  <div>
-    <h1>{{ s.map }} <span style="color:var(--red)">{{ s.score }}</span></h1>
-    <div class="muted">{{ p.riot_id }} · {{ s.agent }} · {{ s.kda }} · {{ s.queue }} · {{ s.started_at|localtime }} · {{ s.rounds }} rounds</div>
-  </div>
-  <a class="btn" href="{{ url_for('notes', pid=p.id, match_id=match_id) }}">{{ 'Edit notes (' ~ notes_count ~ ' rounds)' if notes_count else 'Add round notes' }}</a>
-</div>
+{% import "_ui.html" as vc %}
+{% call vc.pagehead('Coach ' ~ s.map ~ ' ' ~ s.score, [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+    s.agent ~ ', ' ~ s.kda ~ ', ' ~ s.queue ~ ', ' ~ (s.started_at|localtime) ~ ', ' ~ s.rounds ~ ' rounds') %}
+  <a class="btn sm" href="{{ url_for('notes', pid=p.id, match_id=match_id) }}">{{ 'Edit round notes (' ~ notes_count ~ ')' if notes_count else 'Add round notes' }}</a>
+{% endcall %}
 
 <form method="post" id="coachform">
 <div class="grid2">

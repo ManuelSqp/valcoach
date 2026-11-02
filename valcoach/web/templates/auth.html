@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ {'login': 'Log in', 'signup': 'Create account', 'setup': 'Set up'}[mode] }} · valcoach{% endblock %}
 {% block content %}
-<form method="post" class="card" style="max-width:400px;margin:48px auto" autocomplete="on">
+<div class="authlogo"><span class="logo"><span class="logo-mark" aria-hidden="true"></span>valcoach</span></div>
+<form method="post" class="card authcard" autocomplete="on">
   {% if mode == 'setup' %}
     <h1>Create the admin account</h1>
     <p class="muted" style="margin:6px 0 18px">The admin manages user accounts and the server settings (API key, Ollama).
