@@ -12,10 +12,10 @@
 .vrow:last-child{border-bottom:0}
 .bar{position:relative;height:8px;background:var(--panel2);border-radius:99px}
 .bar i{position:absolute;top:0;bottom:0;border-radius:99px}
-.call{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:5px}
-.call.pick{background:rgba(53,208,160,.15);color:var(--win)}.call.ban{background:rgba(255,70,85,.15);color:var(--red)}
+.call{font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:5px}
+.call.pick{background:var(--win-soft);color:var(--win)}.call.ban{background:var(--red-soft);color:var(--red)}
 .pl{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(0,1fr));gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
-.pl:last-child{border-bottom:0}.pl.h{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.pl:last-child{border-bottom:0}.pl.h{color:var(--muted);font-size:11px;}
 @media(max-width:600px){.pl{grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr))}.pl .x{display:none}}
 .mapcard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
 .mapcard.wk{border-color:var(--amber)}
@@ -43,7 +43,7 @@
     <h2>Map veto <span class="muted" style="text-transform:none;letter-spacing:0">(playoffs)</span></h2>
     <p class="small muted" style="margin:-4px 0 8px">Your win rate on each map against theirs (small samples pulled toward 50%). Ban from the bottom, pick from the top.
       {% if v.pick %}Suggestion: <b>ban {{ v.bans|join(', then ') }}</b>, <b>pick {{ v.pick }}</b>.{% endif %}</p>
-    <div class="vrow" style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em"><span>Map</span><span>Edge (you vs them)</span><span>You</span><span>Them</span><span class="sd">Start on</span></div>
+    <div class="vrow" style="font-size:12.5px;color:var(--muted)"><span>Map</span><span>Edge (you vs them)</span><span>You</span><span>Them</span><span class="sd">Start on</span></div>
     {% for r in v.rows %}
     <div class="vrow">
       <span><b>{{ r.map }}</b> {% if r.call %}<span class="call {{ r.call }}">{{ r.call }}</span>{% endif %}</span>

@@ -9,11 +9,10 @@ document.addEventListener('click', e => {
 </script>
 {% endblock %}
 {% block content %}
-<div class="row between" style="margin-bottom:8px">
-  <div><h1>Round notes · {{ map }} <span style="color:var(--red)">{{ score }}</span></h1>
-    <div class="muted">{{ p.riot_id }}</div></div>
-  <a class="btn ghost" href="{{ url_for('profile', pid=p.id) }}">← {{ p.name }}</a>
-</div>
+{% import "_ui.html" as vc %}
+{% call vc.pagehead('Round notes: ' ~ map ~ ' ' ~ score, [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))]) %}
+  <a class="btn sm ghost" href="{{ url_for('coach', pid=p.id, match_id=match_id) }}">Back to coaching</a>
+{% endcall %}
 <p class="sub">Write what actually went wrong or right, the way you'd tell a teammate. Notes for this match are given to the coach,
 and your notes from other matches show it what kind of feedback you want. Leave rounds you have nothing to say about empty.
 The tags add a word or two; the greyed text is what the coach said last time, so you can correct it in your own words.</p>

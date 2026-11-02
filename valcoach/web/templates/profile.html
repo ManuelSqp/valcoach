@@ -1,12 +1,11 @@
 {% extends "base.html" %}
 {% block title %}{{ p.riot_id }} · valcoach{% endblock %}
 {% block content %}
-<div class="row between" style="margin-bottom:18px">
-  <div><h1>{{ p.name }}<span class="tag">#{{ p.tag }}</span></h1>
-    <div class="muted">{{ p.region|upper }} · default coaching: {{ p.mode|mode_label }} · {{ p.language }}{% if p.playbook.strip() %} · playbook set{% else %} · no playbook yet{% endif %}</div></div>
-  <div class="row"><a class="btn primary" href="{{ url_for('stats', pid=p.id) }}">Stats &amp; agents</a>
-  <a class="btn" href="{{ url_for('profile_edit', pid=p.id) }}">Edit player / playbook</a></div>
-</div>
+{% import "_ui.html" as vc %}
+{% call vc.pagehead('Matches & reports', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, none)],
+    p.region|upper ~ ', coaching: ' ~ (p.mode|mode_label) ~ ', ' ~ p.language ~ (', playbook set' if p.playbook.strip() else ', no playbook yet')) %}
+  <a class="btn sm ghost" href="{{ url_for('profile_edit', pid=p.id) }}">Player &amp; playbook</a>
+{% endcall %}
 
 <section class="card">
   <div class="row between" style="margin-bottom:12px">
@@ -42,7 +41,7 @@
         {% if r.match_id in latest_done %}
         <a class="btn sm" href="{{ url_for('job_report', jid=latest_done[r.match_id].id) }}" target="_blank">Report</a>
         {% endif %}
-        <a class="btn sm primary" href="{{ url_for('coach', pid=p.id, match_id=r.match_id) }}">Coach</a>
+        <a class="btn sm" href="{{ url_for('coach', pid=p.id, match_id=r.match_id) }}">Coach</a>
         {% else %}
         <span class="muted small" title="Deathmatch, Team Deathmatch and similar modes have no rounds to coach">not coachable</span>
         {% endif %}

@@ -1,14 +1,16 @@
-<div class="row between" style="margin-bottom:6px">
-  <div><div class="muted small"><a href="{{ url_for('teams') }}">Teams</a> ›</div>
-    <h1>{{ t.name }}</h1></div>
-  <div class="row">
-    {% if g.team_owner %}{% if t.premier_info.tag %}<form method="post" action="{{ url_for('team_premier_sync', tid=t.id) }}"><button class="btn ghost" title="Reload the roster from Premier">Sync Premier roster</button></form>{% endif %}
-    <form method="post" action="{{ url_for('team_import', tid=t.id) }}"><button class="btn">Update everyone's stats</button></form>
+{% set tab_names = {'premier': 'This week', 'comps': 'Comps', 'drafts': 'Drafts', 'plans': 'Game plans', 'strats': 'Strat book', 'focus': 'Weekly focus', 'roles': 'Roles', 'notes': 'Notes', 'settings': 'Team settings'} %}
+{% set ep_names = {'team_availability': 'Availability', 'team_brief': 'Match-day brief', 'team_division': 'Opponents', 'team_scouted': 'Scouting', 'team_review_page': 'Match review', 'team_lineups': 'Lineups', 'team': 'Comps'} %}
+<div class="pagehead">
+  <div><div class="crumbs"><a href="{{ url_for('teams') }}">Teams</a> / <a href="{{ url_for('team_premier', tid=t.id) if t.premier_info.tag else url_for('team', tid=t.id) }}">{{ t.name }}</a></div>
+    <h1>{{ page_title if page_title is defined else ep_names.get(request.endpoint, tab_names.get(tab, t.name)) }}</h1>
+    {% if t.premier_info.tag %}<div class="ctx">Premier team {{ t.premier_info.name }}#{{ t.premier_info.tag }}{% if t.premier_info.placement and t.premier_info.placement.division is defined %}, division {{ t.premier_info.placement.division }} with {{ t.premier_info.placement.points }} points{% endif %}{% if t.premier_info.stats and t.premier_info.stats.matches %}, {{ t.premier_info.stats.wins }}–{{ t.premier_info.stats.losses }}{% endif %}</div>{% else %}<div class="ctx">{{ t.name }}</div>{% endif %}</div>
+  {% if request.endpoint in ('team_premier', 'team', 'team_settings') %}<div class="acts">
+    {% if g.team_owner %}{% if t.premier_info.tag %}<form method="post" action="{{ url_for('team_premier_sync', tid=t.id) }}"><button class="btn ghost sm" title="Reload the roster from Premier">Sync roster</button></form>{% endif %}
+    <form method="post" action="{{ url_for('team_import', tid=t.id) }}"><button class="btn sm">Update everyone's stats</button></form>
     {% else %}<span class="muted small">shared with you by the team owner</span>{% endif %}
-    {% set sy = t.sync_info %}{% if sy.nightly %}<span class="muted small" title="{% if sy.last_at %}last automatic sync {{ sy.last_at|epoch }}{% else %}hasn't run yet{% endif %}">⟳ syncs nightly {{ '%02d' % sy.hour|int }}:00</span>{% endif %}
-  </div>
+    {% set sy = t.sync_info %}{% if sy.nightly %}<span class="muted small" title="{% if sy.last_at %}last automatic sync {{ sy.last_at|epoch }}{% else %}hasn't run yet{% endif %}">Syncs every night at {{ '%02d' % sy.hour|int }}:00</span>{% endif %}
+  </div>{% endif %}
 </div>
-{% if t.premier_info.tag %}<div class="muted small" style="margin-top:-2px">Premier {{ t.premier_info.name }}#{{ t.premier_info.tag }} · {{ t.premier_info.region|upper }}{% if t.premier_info.placement and t.premier_info.placement.division is defined %} · division {{ t.premier_info.placement.division }}, {{ t.premier_info.placement.points }} points{% endif %}{% if t.premier_info.stats and t.premier_info.stats.matches %} · {{ t.premier_info.stats.wins }}–{{ t.premier_info.stats.losses }}{% endif %}</div>{% endif %}
 {% if premier_status and premier_status.status in ('queued', 'running', 'error') %}
 <div class="card" style="margin-top:12px" data-key="premier:{{ t.id }}" data-state="{{ premier_status.status }}">
   <span class="pill {{ 'running' if premier_status.status != 'error' else 'error' }}">{{ 'loading Premier team' if premier_status.status != 'error' else 'Premier lookup failed' }}</span>
@@ -30,28 +32,4 @@
 })();
 </script>
 {% endif %}
-<nav class="tabs ttabs" aria-label="Team">
-  <span class="tgrp">Match prep</span>
-  <a class="ttab {{ 'on' if tab == 'premier' }}" href="{{ url_for('team_premier', tid=t.id) }}">Premier</a>
-  <a class="ttab {{ 'on' if tab == 'comps' }}" href="{{ url_for('team', tid=t.id) }}">Comps</a>
-  <a class="ttab {{ 'on' if tab == 'drafts' }}" href="{{ url_for('team_drafts', tid=t.id) }}">Drafts</a>
-  <a class="ttab {{ 'on' if tab == 'plans' }}" href="{{ url_for('team_plans', tid=t.id) }}">Game plans</a>
-  <a class="ttab {{ 'on' if tab == 'strats' }}" href="{{ url_for('team_strats', tid=t.id) }}">Strat book</a>
-  <span class="tsep" aria-hidden="true"></span><span class="tgrp">Players</span>
-  <a class="ttab {{ 'on' if tab == 'focus' }}" href="{{ url_for('team_focus', tid=t.id) }}">Weekly focus</a>
-  <a class="ttab {{ 'on' if tab == 'roles' }}" href="{{ url_for('team_roles_page', tid=t.id) }}">Roles</a>
-  <a class="ttab {{ 'on' if tab == 'notes' }}" href="{{ url_for('team_notes', tid=t.id) }}">Notes</a>
-  {% if g.team_owner %}<span class="tsep" aria-hidden="true"></span>
-  <a class="ttab {{ 'on' if tab == 'settings' }}" href="{{ url_for('team_settings', tid=t.id) }}" title="Members, maps &amp; Discord">⚙ Settings</a>{% endif %}
-</nav>
-<style>
-.ttabs{display:flex;gap:2px;align-items:flex-end;margin:10px 0 18px;border-bottom:1px solid var(--line)}
-.ttab{padding:8px 12px;text-decoration:none;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:600;white-space:nowrap}
-.ttab:hover{color:var(--text)}.ttab.on{color:var(--text);border-bottom-color:var(--red)}
-.tgrp{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);opacity:.7;padding:0 4px 11px 2px;white-space:nowrap}
-.tsep{width:1px;height:22px;background:var(--line);margin:0 8px 8px}
-@media(max-width:1000px){.tgrp{display:none}}
-@media(max-width:760px){.ttabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch}.ttabs::-webkit-scrollbar{display:none}
-  .ttab{padding:8px 10px;flex:none}.tsep{flex:none}}
-</style>
-<script>(function(){const a=document.querySelector('.ttabs .ttab.on');if(a&&a.parentNode.scrollWidth>a.parentNode.clientWidth)a.parentNode.scrollLeft=a.offsetLeft-40;})();</script>
+

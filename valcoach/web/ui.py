@@ -3,7 +3,8 @@ from __future__ import annotations
 
 # name -> (label, one line, Google Fonts css2 query or "")
 STYLES = {
-    "classic": ("Classic", "The original dark look.", ""),
+    "classic": ("valcoach", "The standard look: calm navy, amber for things you can do. Light or dark with the moon button.", ""),
+    "original": ("Original red", "The colours from before 2.26: Valorant red on deep navy.", ""),
     "broadcast": ("Esports broadcast", "Like a VCT stream overlay: big condensed type, angled corners, red, black and white.",
                   "family=Oswald:wght@500;600;700&family=Barlow:wght@400;500;600;700"),
     "minimal": ("Clean minimal", "Light and calm, soft cards, lots of space. Easiest to read on a phone.",
@@ -11,7 +12,7 @@ STYLES = {
     "neon": ("Neon glass", "Dark purple and teal glow, frosted panels.", "family=Space+Grotesk:wght@400;500;600;700"),
     "hud": ("Tactical HUD", "Like Valorant's own interface: thin teal lines, cut corners, a grid behind everything.",
             "family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;600"),
-    "terminal": ("Data terminal", "Menu on the side, dense, monospace numbers: the most on one screen.",
+    "terminal": ("Data terminal", "Dense, monospace numbers, a narrow menu: the most on one screen.",
                  "family=JetBrains+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600"),
     "editorial": ("Editorial magazine", "“The Valcoach”: big serif headlines on paper.",
                   "family=Playfair+Display:wght@700;900&family=Source+Sans+3:wght@400;600;700"),
@@ -37,5 +38,5 @@ def ui_prefs(raw: dict | None) -> dict:
 
 
 def fonts_url(style: str) -> str:
-    q = STYLES.get(style, STYLES["classic"])[2]
-    return f"https://fonts.googleapis.com/css2?{q}&display=swap" if q else ""
+    """Fonts ship with valcoach now (static/fonts, loaded by each style's CSS): nothing comes from Google."""
+    return ""

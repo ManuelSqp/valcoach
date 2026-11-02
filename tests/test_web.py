@@ -669,7 +669,7 @@ def test_premier_team_import_and_roles(app, monkeypatch):
     for m in t.member_list:                                      # imports were queued for everyone
         assert _wait_stats(app, f"import:{m['pid']}")["status"] == "done"
     page = c.get(f"/teams/{tid}").data.decode()
-    assert "Premier Red Squad#RED" in page and "division 12" in page and "Comps at a glance" in page
+    assert "Red Squad#RED" in page and "division 12" in page and "Comps at a glance" in page
 
     # roles: assign, see the suggestion respect it, agent to learn shows up
     page = c.get(f"/teams/{tid}/roles").data.decode()
@@ -747,7 +747,7 @@ def test_changelog_page_and_update_note(app):
     c = setup_admin(app)
     store = app.extensions["valcoach"]["store"]
     page = c.get("/").data.decode()
-    assert f"v{__version__}" in page and "was updated to" not in page        # fresh install: no note
+    assert f">{__version__}" in page and "was updated to" not in page        # fresh install: no note
     uid = store.user_by_name("manuel").id
     store.set(f"seen_version:{uid}", "2.0.0")                                   # pretend an update happened
     page = c.get("/").data.decode()
@@ -1001,7 +1001,7 @@ def test_nightly_sync_and_sortable_roles(app):
     assert r.status_code == 302 and store.team(tid).sync_info == {**store.team(tid).sync_info, "nightly": False, "hour": 1}
     assert sr.tick_nightly(job, now=datetime(2026, 11, 4, 1, 10)) == []
     c.post(f"/teams/{tid}/sync-settings", data={"hour": "1", "nightly": "1"})
-    assert "syncs nightly 01:00" in c.get(f"/teams/{tid}").data.decode()
+    assert "Syncs every night at 01:00" in c.get(f"/teams/{tid}").data.decode()
     assert "Automatic sync" in c.get(f"/teams/{tid}/settings").data.decode()
     # the role table has sortable headers
     page = c.get(f"/teams/{tid}/roles").data.decode()
@@ -1312,7 +1312,7 @@ def test_premier_scouting_veto_reviews_and_brief(app, monkeypatch):
     for m in store.team(tid).member_list:
         _wait_stats(app, f"import:{m['pid']}")
     page = c.get(f"/teams/{tid}/premier").data.decode()
-    assert "This week" in page and "Your Premier matches" in page and "Stage schedule" in page
+    assert "This week" in page and "Premier matches" in page and "Season schedule" in page
     assert ">Corrode<" in page or "built-in schedule" in page or "known yet" in page     # before the API schedule is read
     _wait_stats(app, f"schedule:{tid}")
 
@@ -1334,7 +1334,7 @@ def test_premier_scouting_veto_reviews_and_brief(app, monkeypatch):
 
     # this week's map comes from the season schedule (Bind); the brief is built for it
     page = c.get(f"/teams/{tid}/premier").data.decode()
-    assert ">Bind<" in page and "Premier week 2" in page and "Stage schedule" in page
+    assert ">Bind<" in page and "Premier week 2" in page and "Season schedule" in page
     assert store.team(tid).map_list == ["Ascent", "Bind"]                    # follows the stage map pool
     page = c.get(f"/teams/{tid}/premier/brief").data.decode()
     assert "Our numbers on Bind" in page and "Who you might meet" in page
@@ -1436,7 +1436,8 @@ def test_look_and_feel_search_and_lineups(app):
     assert r.status_code == 302
     page = c.get("/").data.decode()
     assert 'class="skin-hud a-count a-tabs a-loaders"' in page and "styles/hud.css" in page
-    assert "fonts.googleapis.com/css2?family=Rajdhani" in page
+    assert "fonts.googleapis.com" not in page                                  # fonts ship with valcoach
+    assert c.get("/static/fonts/rajdhani-600.woff2").status_code == 200
     assert c.get("/static/styles/hud.css").status_code == 200
     c.post("/account", data={"look": "1", "style": "<script>"})            # unknown style -> classic
     assert "skin-classic" in c.get("/").data.decode()
@@ -1594,14 +1595,14 @@ def test_server_overview_permission(app, monkeypatch):
     page = c.get("/admin/overview").data.decode()
     assert "Server overview" in page and "HenrikDev API" in page and "Rate-limited" in page and "offline" in page
     assert "HDEV-secret-key" not in page and "Match cache" not in page or "Database" in page
-    assert 'class="uplink"' in c.get("/").data.decode()                       # the uptime clock links to it
+    assert 'id="uptime"' in c.get("/").data.decode()                          # the uptime clock in the menu
     c2 = make_user(app, c, "darki")
-    assert c2.get("/admin/overview").status_code == 403 and 'class="uplink"' not in c2.get("/").data.decode()
+    assert c2.get("/admin/overview").status_code == 403 and 'id="uptime"' not in c2.get("/").data.decode()
     uid = store.user_by_name("darki").id
     # the admin gives the overview (and only that) to darki
     r = c.post(f"/admin/users/{uid}", data={"perm_overview": "1", "vod_dir": ""})
     assert r.status_code == 302 and store.user(uid).perms == "overview" and not store.user(uid).is_admin
-    assert c2.get("/admin/overview").status_code == 200 and 'class="uplink"' in c2.get("/").data.decode()
+    assert c2.get("/admin/overview").status_code == 200 and 'id="uptime"' in c2.get("/").data.decode()
     assert c2.get("/admin/users").status_code == 403 and c2.get("/settings").status_code == 403
     c.post(f"/admin/users/{uid}", data={"vod_dir": ""})                        # and takes it away again
     assert store.user(uid).perms == "" and c2.get("/admin/overview").status_code == 403
@@ -1940,7 +1941,7 @@ def test_home_today_nav_and_tabs(app):
     c = setup_admin(app)
     store = app.extensions["valcoach"]["store"]
     page = c.get("/").data.decode()
-    assert "Today" in page and "Get started" in page
+    assert "Get started" in page
     pids = [add_profile(c, name=f"P{i}", tag="#T") for i in range(3)]
     uid = store.user_by_name("manuel").id
     store.update_user(uid, display_name="P1#T")
@@ -1950,14 +1951,14 @@ def test_home_today_nav_and_tabs(app):
     info["brief"] = {"on": False, "days": list(range(7)), "time": "20:00", "before": 60}
     store.update_team(tid, sync=info)
     page = c.get("/").data.decode()
-    assert "Squad" in page and "haven&#39;t said whether you can play" in page.replace("haven't", "haven&#39;t")
+    assert "Squad" in page and "Can you play?" in page
     assert f'data-pid="{pids[1]}"' in page and "Warm-up" in page and "No quiz yet" in page
-    # nav: your own player first, everyone under Players
-    assert 'class="navdd"' in page and page.index(f'href="/profiles/{pids[1]}/stats"') < page.index("Players <span")
+    # menu: your own player is picked, everyone in the player picker
+    assert 'class="ctxpick"' in page and "Player · you" in page and all(f'data-pid="{p}"' in page for p in pids)
     # answer from the home page
     c.post(f"/api/teams/{tid}/availability", json={"pid": pids[1], "day": date.today().isoformat(), "state": "yes"})
     today_part = c.get("/").data.decode().split("Your teams")[0]
-    assert "whether you can play" not in today_part and 'class="yes on"' in today_part
+    assert "Can you play?" not in today_part and 'class="yes on"' in today_part
     # what's new by others since the last visit
     mate = make_user(app, c, "mate")
     store.add_team_access(tid, store.user_by_name("mate").id)
@@ -1974,9 +1975,13 @@ def test_home_today_nav_and_tabs(app):
     store.update_user(uid, prefs=_j.dumps(prefs))
     store._exec("UPDATE team_notes SET created_at = '2020-01-01T00:00:00+00:00'")   # the note came before that visit
     assert "New since your last visit" not in c.get("/").data.decode()
-    # grouped team tabs
+    # one menu in groups; the team and player it works on are the last ones opened
     page = c.get(f"/teams/{tid}").data.decode()
-    assert "Match prep" in page and "⚙ Settings" in page and page.index(">Premier<") < page.index(">Comps<")
+    assert "Match day" in page and "Roster &amp; setup" in page and page.index(">This week<") < page.index(">Comps<")
+    assert f'href="/teams/{tid}/strats"' in page and f'href="/profiles/{pids[1]}/stats"' in page
+    c.get(f"/profiles/{pids[2]}/stats")
+    page = c.get("/").data.decode()
+    assert f'href="/profiles/{pids[2]}/training"' in page and "<b>P2</b>" in page
 
 
 def test_backups_and_discord_channels(app, tmp_path):

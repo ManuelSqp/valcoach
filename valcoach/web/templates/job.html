@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Report {{ j.map }} · valcoach{% endblock %}
 {% block content %}
-<div class="row between" style="margin-bottom:18px">
-  <div>
-    <h1>{{ j.map or 'Match' }} {% if j.score %}<span style="color:var(--red)">{{ j.score }}</span>{% endif %}</h1>
-    <div class="muted">{{ p.riot_id if p else '' }} · {{ j.mode|mode_label }} · {{ j.vod_name or 'no VOD' }}{% if j.opts.no_llm %} · facts only{% endif %} · <span class="small">{{ j.match_id }}</span></div>
+{% import "_ui.html" as vc %}
+<div class="pagehead">
+  <div>{% if p %}<div class="crumbs"><a href="{{ url_for('index') }}#players">Players</a> / <a href="{{ url_for('profile', pid=p.id) }}">{{ p.name }}#{{ p.tag }}</a></div>{% endif %}
+    <h1>Report: {{ j.map or 'match' }}{% if j.score %} {{ j.score }}{% endif %}</h1>
+    <div class="ctx">{{ j.mode|mode_label }}, {{ j.vod_name or 'no VOD' }}{% if j.opts.no_llm %}, facts only{% endif %}, <span class="small">{{ j.match_id }}</span></div>
   </div>
-  <div class="row">
-    {% if p %}<a class="btn ghost" href="{{ url_for('profile', pid=p.id) }}">← {{ p.name }}</a>{% endif %}
-    <form method="post" action="{{ url_for('job_retry', jid=j.id) }}" id="retry" style="display:{{ 'inline' if j.status in ('error','done') else 'none' }}"><button class="btn">Run again</button></form>
-    <form method="post" action="{{ url_for('job_delete', jid=j.id) }}" onsubmit="return confirm('Delete this report?')"><button class="btn danger ghost">Delete</button></form>
+  <div class="acts">
+    <form method="post" action="{{ url_for('job_retry', jid=j.id) }}" id="retry" style="display:{{ 'inline' if j.status in ('error','done') else 'none' }}"><button class="btn sm">Run again</button></form>
+    <form method="post" action="{{ url_for('job_delete', jid=j.id) }}" onsubmit="return confirm('Delete this report?')"><button class="btn sm danger ghost">Delete</button></form>
   </div>
 </div>
 

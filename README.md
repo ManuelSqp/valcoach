@@ -1,6 +1,6 @@
 # valcoach v2
 
-**Version 2.25.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 3.0.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -86,6 +86,15 @@ Then in the browser:
 6. **Notes** next to each match: write what went wrong/right per round. This is the
    biggest quality lever: notes for the match go to the coach, and your notes from
    other matches teach it the kind of feedback you want.
+
+### Finding your way
+
+One menu on the left (☰ on a phone). At the top you pick the **team** and the **player** it works on; opening a team
+or player page picks it for you. Below: *Match day* (This week, Availability, Match-day brief, Opponents),
+*Strategy* (Comps, Drafts, Game plans, Strat book, Lineups), *Performance* (Matches & reports, Stats & agents,
+Rank & progress), *Practice* (Training, Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes,
+Player & playbook, Team settings). Ctrl+K searches everything. *Home* shows what's up today. The look (10 styles,
+light or dark) is under Account.
 
 ### What's in a report
 
@@ -174,9 +183,9 @@ weekly focus moved its number, and clutches / retakes / post-plants. *Training* 
 fights by range), what to work on, a 20-minute warm-up with a streak, teammates to learn from, and up to five agents
 to learn with a learning path that ticks itself from your games.
 
-**Premier.** On a team linked to Premier, the *Premier* tab has this week's map, the match-day brief (also posted
+**Premier.** On a team linked to Premier, *Match day › This week* has this week's map, *Match-day brief* (also posted
 to Discord before your matches: set days, time and minutes before), reviews of your Premier matches (every night,
-posted to #match-prep), and *Division & scouting*: every team in your division scouted in advance from its recent
+posted to #match-prep), and *Opponents*: every team in your division scouted in advance from its recent
 Premier matches, with a page per team (how to play them, players, comps per map) and a map veto for playoffs.
 The first division scout takes a few minutes (HenrikDev rate limit); after that it's quick and runs nightly.
 
@@ -217,9 +226,9 @@ it to #match-prep. Shortcuts: `V` select, `A` arrow, `P` path, `W` wall, `T` tex
   console → enable *YouTube Data API v3* → Credentials → API key). The page then shows the videos themselves
   (recent uploads, cached for a day; the free quota is about 100 searches a day). Without a key it shows search links.
 
-**Teams** (first link in the top bar, also on the dashboard) is for Premier: add your teammates as players,
+**Teams** (*All teams* in the team picker at the top of the menu) is for Premier: add your teammates as players,
 make a team, and under **Members & maps** choose 5 starters, any substitutes and the map pool. Then press
-*Update everyone's stats*. The **Comps** tab shows all maps at a glance (one row per player, one column per
+*Update everyone's stats*. **Strategy › Comps** shows all maps at a glance (one row per player, one column per
 map); click a map for the details:
 
 - a comp: one agent per starter, from their win rate and ACS with that agent on that map (pulled towards
@@ -250,7 +259,7 @@ so coaching them can fail.
   analysis). There must always be at least one active admin.
 - Each user's **recordings folder** is set by an admin, because it's a path on
   the server. Users without one upload their VODs.
-- Drag the **⋮⋮** handle on a player card to set the order of your players (dashboard and top bar).
+- Drag the **⋮⋮** handle on a player card to set the order of your players (Home and the player picker in the menu).
   It's saved per account. On a phone drag the handle; with the keyboard, focus it and use the arrow keys.
 - All coaching jobs share **one queue** (*Settings → Coaching jobs at the same
   time*, 1 is right for one Mac). Each user can have at most 3 reports queued or

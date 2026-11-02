@@ -1,9 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Settings · valcoach{% endblock %}
 {% block content %}
-<h1>Settings</h1>
-<p class="muted small" style="margin:0 0 4px">valcoach {{ app_version }}</p>
-<p class="sub">Server-wide settings, shared by all users. Only admins see this page.</p>
+<div class="pagehead"><div><div class="crumbs">Admin</div><h1>Settings</h1><div class="ctx">Server-wide settings, shared by all users. Only admins see this page. valcoach {{ app_version }}</div></div></div>
 <nav class="setnav" aria-label="Settings sections">
   <a href="#henrik">Match data</a><a href="#ollama">Local model</a><a href="#claude">Claude</a><a href="#video">Video</a><a href="#pros">Pros &amp; videos</a><a href="#server">Server</a><a href="#backup">Backups</a>
 </nav>

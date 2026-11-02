@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Edit ' ~ profile.riot_id if profile else 'Add player' }} · valcoach{% endblock %}
 {% block content %}
-<h1>{{ 'Edit ' ~ profile.riot_id if profile else 'Add player' }}</h1>
-<p class="sub">The Riot ID is used to load this player's matches from the HenrikDev API.</p>
+{% import "_ui.html" as vc %}
+{% if profile %}{% set p = profile %}{{ vc.pagehead('Player & playbook', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))], "Riot ID, coaching defaults and this player's playbook") }}
+{% else %}{{ vc.pagehead('Add a player', [('Players', url_for('index') ~ '#players')], "The Riot ID is used to load this player's matches from HenrikDev.") }}{% endif %}
 <form method="post" class="card">
   <div class="grid2">
     <div class="field"><label>Riot name</label><input type="text" name="name" value="{{ v.name }}" placeholder="adv1ce" required autofocus></div>

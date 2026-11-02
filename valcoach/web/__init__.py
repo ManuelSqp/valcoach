@@ -254,14 +254,47 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             n /= 1024
         return f"{n:.1f} TB"
 
+    def _nav_week(teams) -> dict:
+        """Sidebar hint: this week's Premier map per team (cheap: the schedule is cached)."""
+        fn = app.extensions["valcoach"].get("week_map")
+        out = {}
+        for t in teams:
+            if not fn or not t.premier_info.get("tag"):
+                continue
+            try:
+                out[t.id] = fn(t) or ""
+            except Exception:
+                out[t.id] = ""
+        return out
+
+    def _nav_quiz(p) -> int:
+        """Sidebar hint: questions waiting in your quiz."""
+        if p is None:
+            return 0
+        try:
+            q = app.extensions["valcoach"]["stats"].read_quiz(p.id)
+        except Exception:
+            return 0
+        played = {r.get("created") for r in q.get("results") or []}
+        return len(q.get("questions") or []) if q.get("questions") and q.get("created") not in played else 0
+
     @app.context_processor
     def inject():
         user = getattr(g, "user", None)
         nav_ps = store.profiles(user.id) if user else []
+        nav_ts = store.teams_for_user(user.id) if user else []
+        nav_me = next((p for p in nav_ps if p.riot_id.lower() == (user.display_name or "").lower()), nav_ps[0] if nav_ps else None) if user else None
+        nav_team = next((t for t in nav_ts if t.id == session.get("nav_tid")), nav_ts[0] if nav_ts else None)
+        nav_player = next((p for p in nav_ps if p.id == session.get("nav_pid")), nav_me)
         return {
+            "nav_team": nav_team,
+            "nav_player": nav_player,
+            "nav_week": _nav_week(nav_ts),
+            "nav_quiz": _nav_quiz(nav_me),
             "user": user,
             "nav_profiles": nav_ps,
-            "nav_me": next((p for p in nav_ps if p.riot_id.lower() == (user.display_name or "").lower()), nav_ps[0] if nav_ps else None) if user else None,
+            "nav_teams": nav_ts,
+            "nav_me": nav_me,
             "has_api_key": bool(store.get("henrik_api_key")),
             "signup_enabled": signup_enabled(),
             "min_password": MIN_PASSWORD,
@@ -312,6 +345,12 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         if g.user is not None and not store.get(f"seen_version:{g.user.id}"):
             # first visit of this account since the changelog exists: nothing to announce yet
             store.set(f"seen_version:{g.user.id}", __version__)
+        if g.user is not None and request.method == "GET" and request.view_args:
+            # the sidebar works on "your current team" and "your current player": the last ones you opened
+            for arg, key in (("tid", "nav_tid"), ("pid", "nav_pid")):
+                v = request.view_args.get(arg)
+                if isinstance(v, int) and session.get(key) != v:
+                    session[key] = v
         if g.user is None and request.endpoint not in PUBLIC_ENDPOINTS:
             if request.path.startswith("/api/"):
                 return jsonify(error="login required"), 401
