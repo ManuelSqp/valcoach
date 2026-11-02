@@ -93,6 +93,39 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         return send_file(f, mimetype="image/png", max_age=86400)
 
     # ------------------------------------------------------------------ stats
+    def heat_map(rows: list[dict], map_name: str) -> dict | None:
+        """Deaths and kills per callout, placed on the minimap (attack / defense)."""
+        from collections import Counter
+        from ..maps import MapRegistry
+        full = [r for r in rows if r.get("map") == map_name and r.get("source") == "full"]
+        if not full:
+            return None
+        try:
+            mi = MapRegistry(cache_dir).get(name=map_name)
+        except Exception:
+            mi = None
+        if mi is None:
+            return None
+        cnt = {k: Counter() for k in ("d_attack", "d_defense", "k_attack", "k_defense")}
+        for r in full:
+            for x in r.get("deaths_at") or []:
+                cnt[f"d_{x[0]}"][x[1]] += 1
+            for x in r.get("kills_at") or []:
+                cnt[f"k_{x[0]}"][x[1]] += 1
+        pts, seen = [], set()
+        for c in mi.callouts:
+            if c.label in seen:
+                continue
+            seen.add(c.label)
+            vals = {k: v.get(c.label, 0) for k, v in cnt.items()}
+            if any(vals.values()):
+                u, v = mi.to_uv(c.x, c.y)
+                pts.append({"label": c.label, "x": round(u * 1000), "y": round(v * 1000), **vals})
+        if not pts:
+            return None
+        top = max(max(p[k] for k in cnt) for p in pts) or 1
+        return {"img": url_for("map_image", name=map_name), "points": pts, "top": top, "games": len(full)}
+
     @app.get("/profiles/<int:pid>/stats")
     def stats(pid: int):
         p, can_edit = view_profile(pid)
@@ -115,6 +148,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             "stats.html", p=p, active_pid=pid, queue=queue, queues=QUEUE_TABS, rows=rows, data=data,
             total=summary(rows), maps=maps, agents=by_agent(rows), roles_t=by_role(rows), sel=sel,
             detail=map_detail(rows, sel) if sel else None, meta=meta_all.get(sel) if sel else None,
+            heat=heat_map(rows, sel) if sel else None,
             tips=sr.read_tips(pid, sel, queue) if sel else None,
             import_status=sr.status(f"import:{pid}"),
             tips_status=sr.status(f"tips:{pid}:{slug(sel)}:{queue}") if sel else None,

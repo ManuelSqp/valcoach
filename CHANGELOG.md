@@ -4,6 +4,25 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 2.24.0
+- **Ask the coach about a round:** under every round of a report opened in valcoach, ask a question ("Should I
+  have saved?", "What if I'd waited for the flash?"). The model gets that round's facts and its own feedback,
+  answers in a few sentences, and the questions and answers stay with the report. Pick the model next to *Ask*.
+  Works on older reports too.
+- **Clips:** next to the VOD jump buttons in a report (round start, first kill, your death…), *⬇ clip* cuts 15
+  seconds from there as an MP4 (720p, with sound) and *→ Discord* posts it to your team's channel. Clips are
+  kept, so the second time is instant. Needs ffmpeg on the server: `sudo apt install ffmpeg`.
+- **On the map** (Stats & agents › a map): where you die (red) and get kills (green), drawn on the minimap at the
+  callout, for attack and defense; bigger = more often.
+- **AFK in reports:** rounds where a teammate was AFK or never left spawn (Riot's own flags) get a chip.
+- **Strat history:** *History* in the strat editor lists earlier versions of the board (one per 10 minutes of
+  editing, and one whenever someone else edits) with who saved it; *Restore* brings one back, and the board as it
+  was stays in the history.
+- **Test buttons** in Settings for the HenrikDev key, the Anthropic key (also says if an offered model isn't
+  available to the key) and the Ollama model.
+- **Tests on GitHub:** every pull request and every push to main runs the test suite (GitHub Actions). The PR
+  shows a green check or a red cross before you merge.
+
 ## 2.23.1
 - **Last active** on Users: when each user was last on the site (any page, updated at most once a minute), with
   "● online now" for the last 5 minutes. *Last login* only changes when someone types their password, and logins

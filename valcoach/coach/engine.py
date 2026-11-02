@@ -265,6 +265,9 @@ def run_coach(an: Analysis, llm: Ollama | None, mode: str = "both", language: st
             "player_facts": asdict(an.player_facts[i]),
             "minimap": an.minimap.get(r.index),
             "own_note": own_notes.get(r.number),
+            # teammates who were AFK or never left spawn this round (Riot's own flags)
+            "afk": [{"name": m.players[st.puuid].name if st.puuid in m.players else "?", "spawn": not st.was_afk}
+                    for st in r.stats.values() if st.team == an.team and (st.was_afk or st.stayed_in_spawn)],
             "llm_input": inputs[i],
             "feedback": feedback[i],
             "vod": vod,

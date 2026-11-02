@@ -1,0 +1,88 @@
+// valcoach report, opened from the web app: "Ask the coach" under every round, and clips from the VOD
+// next to the jump buttons (download, or post to the team's Discord).
+(function () {
+  'use strict';
+  const C = window.VALCOACH_FB; if (!C || !C.ask_url) return;
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+  const css = document.createElement('style');
+  css.textContent = `
+.vask{margin-top:12px;border-top:1px dashed rgba(255,255,255,.12);padding-top:10px}
+.vask h4{margin:0 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.7}
+.vask .qa{margin:6px 0 8px;font-size:13.5px}.vask .qa .q{font-weight:700}.vask .qa .a{margin-top:3px;line-height:1.45}
+.vask .qa .m{font-size:11px;opacity:.55}
+.vask form{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.vask input[type=text]{flex:1;min-width:200px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.25);color:inherit;font:inherit;font-size:13.5px}
+.vask select,.vask button,.vclip button,.vclip a{font:inherit;font-size:12.5px;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:inherit;cursor:pointer;text-decoration:none}
+.vask button[type=submit]{background:#ff4655;border-color:#ff4655;color:#fff;font-weight:700}
+.vask .wait{font-size:12.5px;opacity:.75}.vask .err{font-size:12.5px;color:#ff6b77}
+.vclip{display:inline-flex;gap:3px;margin:0 8px 0 2px;vertical-align:middle}
+.vclip button,.vclip a{padding:3px 7px;font-size:11.5px}`;
+  document.head.appendChild(css);
+  const post = (url, body) => fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  function toast(m) {
+    const d = document.createElement('div');
+    d.textContent = m; d.style.cssText = 'position:fixed;right:16px;bottom:16px;background:#222a36;color:#fff;padding:9px 14px;border-radius:9px;font:13px system-ui;z-index:99;box-shadow:0 6px 24px rgba(0,0,0,.4)';
+    document.body.appendChild(d); setTimeout(() => d.remove(), 2600);
+  }
+
+  // ------------------------------------------------------------- ask the coach
+  const qaHtml = x => `<div class="qa"><div class="q">${esc(x.q)}</div><div class="a">${esc(x.a)}</div>${x.model ? `<div class="m">${esc(x.model)}</div>` : ''}</div>`;
+  const pick = () => C.llm && C.llm.length > 1 ? `<select name="llm" title="Which model answers">${C.llm.map(c => `<option value="${esc(c.value)}" ${c.value === C.llm_last ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select>` : '';
+  fetch(C.ask_url).then(r => r.json()).then(all => {
+    document.querySelectorAll('.round[id^="r"]').forEach(el => {
+      const n = +el.id.slice(1), body = el.querySelector('.rbody'); if (!n || !body) return;
+      const box = document.createElement('div'); box.className = 'vask';
+      box.innerHTML = `<h4>Ask the coach about round ${n}</h4><div class="list">${((all.items || {})[n] || []).map(qaHtml).join('')}</div>
+        <form><input type="text" maxlength="400" placeholder="e.g. Should I have saved here? What if I'd waited for the flash?" aria-label="Your question">${pick()}<button type="submit">Ask</button></form>
+        <div class="state"></div>`;
+      body.appendChild(box);
+      const form = box.querySelector('form'), state = box.querySelector('.state'), list = box.querySelector('.list');
+      form.addEventListener('click', e => e.stopPropagation());
+      form.addEventListener('submit', async e => {
+        e.preventDefault(); e.stopPropagation();
+        const q = form.querySelector('input').value.trim(); if (!q) return;
+        const sel = form.querySelector('select');
+        const btn = form.querySelector('button'); btn.disabled = true;
+        state.innerHTML = '<span class="wait">The coach is thinking… (a local model can take a minute)</span>';
+        const r = await post(C.ask_url, {round: n, question: q, llm: sel ? sel.value : undefined});
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) { state.innerHTML = `<span class="err">${esc(j.error || 'Not sent')}</span>`; btn.disabled = false; return; }
+        if (sel) C.llm_last = sel.value;
+        const seen = list.children.length;
+        const poll = async () => {
+          const s = await (await fetch(C.ask_url + '?round=' + n)).json().catch(() => null);
+          if (s && s.error) { state.innerHTML = `<span class="err">${esc(s.error)}</span>`; btn.disabled = false; return; }
+          if (s && !s.pending && s.items.length > seen) {
+            list.innerHTML = s.items.map(qaHtml).join(''); state.innerHTML = ''; form.querySelector('input').value = ''; btn.disabled = false; return;
+          }
+          setTimeout(poll, 2000);
+        };
+        setTimeout(poll, 1500);
+      });
+    });
+  }).catch(() => {});
+
+  // ------------------------------------------------------------- clips
+  if (!C.clip_url) return;
+  document.querySelectorAll('button.jump').forEach(b => {
+    const m = /seek\(([-\d.]+)\)/.exec(b.getAttribute('onclick') || ''); if (!m) return;
+    const start = Math.max(0, +m[1] - 2), label = b.textContent.trim();
+    const g = document.createElement('span'); g.className = 'vclip';
+    const a = document.createElement('a'); a.textContent = '⬇ clip'; a.title = `15 s clip from here (${label})`;
+    a.href = `${C.clip_url}?t=${start.toFixed(1)}&len=15&dl=1`;
+    a.addEventListener('click', () => toast('Cutting the clip… the download starts when it’s ready'));
+    g.appendChild(a);
+    if (C.discord_url) {
+      const d = document.createElement('button'); d.type = 'button'; d.textContent = '→ Discord'; d.title = 'Post this clip to the team’s Discord';
+      d.onclick = async e => {
+        e.stopPropagation(); d.disabled = true; toast('Cutting the clip and posting it…');
+        const round = (b.closest('.round') || {}).id || '';
+        const r = await fetch(`${C.discord_url}?t=${start.toFixed(1)}&len=15&label=${encodeURIComponent((round ? 'R' + round.slice(1) + ' · ' : '') + label)}`, {method: 'POST'});
+        const j = await r.json().catch(() => ({}));
+        toast(r.ok ? 'Posted to Discord' : (j.error || 'Not posted')); d.disabled = false;
+      };
+      g.appendChild(d);
+    }
+    b.after(g);
+  });
+})();

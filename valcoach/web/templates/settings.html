@@ -13,6 +13,7 @@
     <input type="password" name="henrik_api_key" placeholder="{{ 'Leave empty to keep the current key' if key_set else 'HDEV-…' }}">
     <div class="hint">Get one instantly in the HenrikDev Discord: verify, go to <b>#get-a-key</b>, choose <b>VALORANT (Basic Key)</b>.</div>
     {% if key_set %}<label class="choice" style="margin-top:8px"><input type="checkbox" name="clear_api_key" value="1"><span>Remove the key</span></label>{% endif %}
+    <div class="row" style="gap:8px;margin-top:8px"><button type="button" class="btn sm ghost tbtn" data-test="henrik">Test</button><span class="tres small" data-for="henrik"></span></div>
   </div>
   <details><summary>Advanced</summary>
     <div class="field" style="margin-top:10px"><label>API base URL</label><input type="text" name="henrik_base_url" value="{{ s.henrik_base_url }}"></div>
@@ -23,6 +24,7 @@
   <h2>Ollama</h2>
   {% if ollama_error %}<div class="flash error">Ollama is not reachable at {{ s.ollama_url }}: {{ ollama_error }}</div>
   {% else %}<div class="flash ok">Ollama is reachable · {{ models|length }} model{{ '' if models|length == 1 else 's' }} installed</div>{% endif %}
+  <div class="row" style="gap:8px;margin-bottom:10px"><button type="button" class="btn sm ghost tbtn" data-test="ollama">Test</button><span class="tres small" data-for="ollama"></span><span class="small muted">checks that the model below is installed</span></div>
   <div class="grid2">
     <div class="field"><label>Ollama URL</label><input type="text" name="ollama_url" value="{{ s.ollama_url }}"></div>
     <div class="field"><label>Model</label>
@@ -52,7 +54,8 @@
     <div class="field"><label>Anthropic API key {% if claude_hint %}<span style="color:var(--win)">✓ set ({{ claude_hint }})</span>{% endif %}</label>
       <input type="password" name="claude_api_key" autocomplete="off" placeholder="{{ 'Leave empty to keep the current key' if claude_hint else 'sk-ant-…' }}">
       <div class="hint">console.anthropic.com → API keys. Pay as you go: set a spending limit there as well.</div>
-      {% if claude_hint %}<label class="choice" style="margin-top:8px"><input type="checkbox" name="clear_claude_key" value="1"><span>Remove the key</span></label>{% endif %}</div>
+      {% if claude_hint %}<label class="choice" style="margin-top:8px"><input type="checkbox" name="clear_claude_key" value="1"><span>Remove the key</span></label>{% endif %}
+      <div class="row" style="gap:8px;margin-top:8px"><button type="button" class="btn sm ghost tbtn" data-test="claude">Test</button><span class="tres small" data-for="claude"></span></div></div>
     <div class="field"><label>Claude models offered</label>
       <input type="text" name="claude_models" value="{{ s.claude_models }}">
       <div class="hint">Model names, comma separated. Haiku is cheapest, Sonnet the best value for coaching, Opus the strongest.</div></div>
@@ -111,4 +114,16 @@
 
 <button class="btn primary" type="submit">Save settings</button>
 </form>
+<script>
+document.querySelectorAll('.tbtn').forEach(b => b.onclick = async () => {
+  const out = document.querySelector(`.tres[data-for="${b.dataset.test}"]`);
+  b.disabled = true; out.textContent = 'testing…'; out.style.color = '';
+  try {
+    const r = await fetch(`{{ url_for('settings') }}/test/${b.dataset.test}`, {method: 'POST'});
+    const j = await r.json();
+    out.textContent = (j.ok ? '✓ ' : '✗ ') + j.msg; out.style.color = j.ok ? 'var(--win)' : 'var(--red)';
+  } catch (e) { out.textContent = '✗ ' + e.message; out.style.color = 'var(--red)'; }
+  b.disabled = false;
+});
+</script>
 {% endblock %}

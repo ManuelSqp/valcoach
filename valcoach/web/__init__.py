@@ -815,17 +815,38 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         if path is None:
             abort(404)
         html = path.read_text(encoding="utf-8", errors="replace")
-        if "data-fb=" in html and "</body>" in html:      # 👍 / 👎 / 🎯 on the coach's lines (reports from 2.22 on)
+        if "</body>" in html:
+            # 👍 / 👎 / 🎯 on the coach's lines (reports from 2.22 on), ask the coach, clips
             votes = {f"{v['round']}|{v['text']}": v["vote"] for v in read_votes(j.profile_id) if v.get("job") == jid}
             boot = json.dumps({"vote_url": url_for("job_vote", jid=jid), "focus_url": url_for("own_focus", pid=j.profile_id),
-                               "votes": votes, "match": j.map or "this match"}).replace("</", "<\\/")
+                               "votes": votes, "match": j.map or "this match", **report_boot(j)}).replace("</", "<\\/")
             tag = (f'<script>window.VALCOACH_FB = {boot};</script>'
-                   f'<script src="{url_for("static", filename="report_fb.js")}?v={__version__}"></script>')
+                   f'<script src="{url_for("static", filename="report_fb.js")}?v={__version__}"></script>'
+                   f'<script src="{url_for("static", filename="report_tools.js")}?v={__version__}"></script>')
             i = html.rfind("</body>")
             html = html[:i] + tag + html[i:]
         r = app.response_class(html, mimetype="text/html")
         r.headers["Cache-Control"] = "no-cache"
         return r
+
+    def report_llm(profile, choice: str):
+        from ..coach.llm import make_llm
+        cfg = store.build_config(profile)
+        cfg.llm = choice or ""
+        llm = make_llm(cfg)
+        llm.check()
+        return llm
+
+    def report_discord(j) -> str:
+        for t in store.teams_for_user(g.user.id):
+            if any(m["pid"] == j.profile_id for m in t.member_list):
+                d = t.discord_info
+                if d.get("prep_url") or d.get("focus_url"):
+                    return d.get("prep_url") or d.get("focus_url")
+        return ""
+
+    from .report_tools import register as register_report_tools
+    report_boot = register_report_tools(app, store, get_job, report_llm, report_discord)
 
     def votes_file(pid: int) -> Path:
         return store.profile_dir(pid) / "feedback_votes.json"
@@ -1051,6 +1072,51 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                                models=models, ollama_error=ollama_error, running_workers=runner.workers,
                                claude_hint=("…" + s["claude_api_key"][-4:]) if s["claude_api_key"] else "",
                                claude_month=claude_month_cost(), auto_choices=model_choices(store, g.user))
+
+    @app.post("/settings/test/<what>")
+    @admin_required
+    def settings_test(what: str):
+        """'Test' buttons: does the saved key / model work? (Never echoes the key.)"""
+        try:
+            if what == "henrik":
+                from ..henrik import HenrikClient, HenrikError
+                key = store.get("henrik_api_key")
+                if not key:
+                    return jsonify(ok=False, msg="No key saved yet.")
+                cl = HenrikClient(key, store.data_dir / "cache", store.get("henrik_base_url"), max_retries=0)
+                ps = store.profiles(g.user.id)
+                try:
+                    if ps:
+                        cl._get(f"/valorant/v1/account/{ps[0].name}/{ps[0].tag}")
+                        return jsonify(ok=True, msg=f"Works: found {ps[0].riot_id}.")
+                    cl._get("/valorant/v1/status/eu")
+                    return jsonify(ok=True, msg="Works: HenrikDev answered.")
+                except HenrikError as e:
+                    m = str(e)
+                    hint = " The key was refused." if " 401 " in m or " 403 " in m else ""
+                    return jsonify(ok=False, msg=m[:200] + hint)
+            if what == "claude":
+                key = store.get("claude_api_key")
+                if not key:
+                    return jsonify(ok=False, msg="No key saved yet.")
+                r = requests.get("https://api.anthropic.com/v1/models", timeout=15,
+                                 headers={"x-api-key": key, "anthropic-version": "2023-06-01"})
+                if r.status_code == 200:
+                    have = {m.get("id") for m in r.json().get("data", [])}
+                    offered = [m.strip() for m in store.get("claude_models").split(",") if m.strip()]
+                    missing = [m for m in offered if have and m not in have]
+                    return jsonify(ok=not missing, msg="Works: the key was accepted." +
+                                   (f" Not available to this key: {', '.join(missing)}." if missing else ""))
+                return jsonify(ok=False, msg="The key was refused." if r.status_code in (401, 403) else f"Anthropic answered HTTP {r.status_code}.")
+            if what == "ollama":
+                from ..coach.ollama import Ollama
+                Ollama(store.get("ollama_url"), store.get("ollama_model")).check()
+                return jsonify(ok=True, msg=f"Works: {store.get('ollama_model')} is installed.")
+        except requests.RequestException as e:
+            return jsonify(ok=False, msg=f"Not reachable ({e.__class__.__name__}).")
+        except Exception as e:
+            return jsonify(ok=False, msg=str(e)[:200])
+        abort(404)
 
     @app.errorhandler(403)
     def forbidden(_):

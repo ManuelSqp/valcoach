@@ -1818,3 +1818,118 @@ def test_last_active_on_users_page(app):
     assert store.user(uid).last_seen == first
     assert "last active" in c.get(f"/admin/users/{uid}").data.decode()
     assert "online now" in c.get("/admin/overview").data.decode()
+
+
+def test_ask_the_coach_and_clips(app, monkeypatch, synthetic):
+    import valcoach.web.report_tools as rt
+    from valcoach.coach.ollama import Ollama
+    fb = {"summary": "Fight at A", "importance": 2, "player": {"went_well": [], "mistakes": ["Peeked alone"], "better_option": "Wait"}}
+    c = setup_admin(app)
+    job, _ = _run_with_model(app, c, monkeypatch, lambda n: fb)
+    seen = {}
+
+    def chat_json(self, system, user, schema, **k):
+        seen["user"] = user
+        return {"answer": "You were 1v2 with 30 s on the spike: <play> the timer."}
+    monkeypatch.setattr(Ollama, "chat_json", chat_json)
+    html = c.get(f"/jobs/{job.id}/report").data.decode()
+    assert "report_tools.js" in html and '"ask_url": "/api/jobs/' in html
+    assert c.post(f"/api/jobs/{job.id}/ask", json={"round": 99, "question": "x"}).status_code == 400
+    assert c.post(f"/api/jobs/{job.id}/ask", json={"round": 2, "question": ""}).status_code == 400
+    r = c.post(f"/api/jobs/{job.id}/ask", json={"round": 2, "question": "Should I have saved?"})
+    assert r.status_code == 200 and r.get_json()["pending"]
+    for _ in range(100):
+        s = c.get(f"/api/jobs/{job.id}/ask?round=2").get_json()
+        if not s["pending"]:
+            break
+        time.sleep(0.1)
+    assert s["items"][0]["q"] == "Should I have saved?" and "<play>" in s["items"][0]["a"] and not s["error"]
+    assert "round_facts" in seen["user"] and "Question: Should I have saved?" in seen["user"]
+    assert c.get(f"/api/jobs/{job.id}/ask").get_json()["items"]["2"][0]["a"]          # all rounds at once
+    c2 = make_user(app, c, "burn")
+    assert c2.post(f"/api/jobs/{job.id}/ask", json={"round": 2, "question": "x"}).status_code == 404
+    # a failing model: the error comes back once
+    monkeypatch.setattr(Ollama, "chat_json", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("model down")))
+    c.post(f"/api/jobs/{job.id}/ask", json={"round": 3, "question": "Why?"})
+    for _ in range(100):
+        s = c.get(f"/api/jobs/{job.id}/ask?round=3").get_json()
+        if s["error"]:
+            break
+        time.sleep(0.1)
+    assert "model down" in s["error"]
+    # clips from the VOD (ffmpeg); no VOD -> 404
+    assert c.get(f"/jobs/{job.id}/clip?t=1").status_code == 404
+    store = app.extensions["valcoach"]["store"]
+    store.update_job(job.id, vod_path=str(synthetic["vod"]))
+    if rt.ffmpeg():
+        r = c.get(f"/jobs/{job.id}/clip?t=0.5&len=3&dl=1")
+        assert r.status_code == 200 and r.mimetype == "video/mp4" and "attachment" in r.headers["Content-Disposition"]
+        assert len(r.data) > 1000
+        assert '"clip_url": "/jobs/' in c.get(f"/jobs/{job.id}/report").data.decode()
+    assert c.get(f"/jobs/{job.id}/clip?t=-1").status_code == 400 and c.get(f"/jobs/{job.id}/clip?t=1&len=99").status_code == 400
+    assert c.post(f"/jobs/{job.id}/clip/discord?t=1").get_json()["error"].startswith("none of your teams")
+
+
+def test_settings_test_buttons(app, monkeypatch):
+    import requests as rq
+    from valcoach import henrik
+    c = setup_admin(app)
+    assert c.post("/settings/test/claude").get_json() == {"ok": False, "msg": "No key saved yet."}
+    store = app.extensions["valcoach"]["store"]
+    store.set("claude_api_key", "sk-ant-secret")
+    import valcoach.web.models as wm
+    monkeypatch.setattr(wm, "local_models", lambda url: [])
+    monkeypatch.setattr(rq, "get", lambda url, **k: type("R", (), {"status_code": 401, "json": lambda self: {}})())
+    j = c.post("/settings/test/claude").get_json()
+    assert j["ok"] is False and "refused" in j["msg"] and "sk-ant" not in j["msg"]
+    monkeypatch.setattr(henrik.HenrikClient, "_get", lambda self, path, params=None: {"data": {}})
+    add_profile(c)
+    j = c.post("/settings/test/henrik").get_json()
+    assert j["ok"] and "adv1ce#LFT" in j["msg"]
+    assert c.post("/settings/test/nope").status_code == 404
+    assert make_user(app, c, "burn").post("/settings/test/henrik").status_code == 403
+    assert 'data-test="henrik"' in c.get("/settings").data.decode()
+
+
+def test_heat_map_on_stats(app, monkeypatch):
+    import synth_history as sh
+    from valcoach import pipeline
+    history = sh.build_history(20)
+    monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrik(history, full_depth=10))
+    from valcoach.maps import MapRegistry
+    orig = MapRegistry.get
+    monkeypatch.setattr(MapRegistry, "get", lambda self, map_id="", name="": orig(self, "00000000-test-map0-0000-000000000001"))
+    c = setup_admin(app)
+    me = add_profile(c)
+    c.post(f"/profiles/{me}/stats/import")
+    assert _wait_stats(app, f"import:{me}")["status"] == "done"
+    rows = app.extensions["valcoach"]["stats"].games(me).rows()
+    m = next(r["map"] for r in rows if r.get("source") == "full" and r.get("deaths_at"))
+    page = c.get(f"/profiles/{me}/stats?map={m}").data.decode()
+    assert "heatsvg" in page and "deaths," in page and 'data-hs="defense"' in page
+    app.extensions["valcoach"]["stats"].shutdown()
+
+
+def test_strat_history_and_restore(app, monkeypatch):
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    tid = store.create_team(store.user_by_name("manuel").id, "Squad")
+    store.update_team(tid, maps=["Testmap"])
+    r = c.post(f"/teams/{tid}/strats", data={"name": "B split", "map": "Testmap", "side": "attack"})
+    sid = int(r.headers["Location"].rsplit("/", 1)[1])
+    board = lambda n: {"data": {"steps": [{"name": "S", "items": [{"id": f"a{i}", "t": "mark", "x": i, "y": i} for i in range(n)]}]}}
+    c.post(f"/api/teams/{tid}/strats/{sid}", json=board(1))
+    c.post(f"/api/teams/{tid}/strats/{sid}", json=board(2))           # same person within 10 min: no new version
+    assert len(store.strat_versions(sid)) == 1
+    mate = make_user(app, c, "mate")
+    store.add_team_access(tid, store.user_by_name("mate").id)
+    mate.post(f"/api/teams/{tid}/strats/{sid}", json=board(3))         # someone else edits: the board before is kept
+    vs = c.get(f"/api/teams/{tid}/strats/{sid}/versions").get_json()["versions"]
+    assert len(vs) == 2 and vs[0]["items"] == 2 and vs[0]["by"] == "manuel"
+    r = c.post(f"/api/teams/{tid}/strats/{sid}/versions/{vs[0]['id']}/restore")
+    assert r.status_code == 200
+    assert len(store.strat(sid)["data"]["steps"][0]["items"]) == 2
+    assert store.strat_versions(sid)[0]["items"] == 3                  # what was there before the restore
+    assert c.post(f"/api/teams/{tid}/strats/{sid}/versions/99999/restore").status_code == 404
+    assert make_user(app, c, "outsider").get(f"/api/teams/{tid}/strats/{sid}/versions").status_code == 404
+    assert 'id="sb-hist"' in c.get(f"/teams/{tid}/strats/{sid}").data.decode()
