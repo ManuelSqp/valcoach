@@ -153,7 +153,7 @@ def register(app, store, started_at: float) -> None:
         done_day = Counter(JOB_NAMES.get(k.split(":")[0], k.split(":")[0]) for k, v in states.items()
                            if v["status"] == "done" and now - v["t"] < 86400)
         coach = {s: len(store.jobs_with_status(s)) for s in ("queued", "running")}
-        counts = {"users": store.user_count(), "teams": len(store.all_teams()),
+        counts = {"users": store.user_count(), "online": store.online_count(), "teams": len(store.all_teams()),
                   "players": int(store._all("SELECT COUNT(*) AS n FROM profiles")[0]["n"])}
         return render_template(
             "overview.html", version=__version__, uptime_s=int(now - started_at), py=platform.python_version(),

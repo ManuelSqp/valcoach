@@ -56,6 +56,14 @@ NOTE_TAGS = ["died alone", "not traded", "late rotate", "over-rotated", "peeked 
              "should have saved", "played for time well"]
 
 
+def _stale(iso: str, seconds: float) -> bool:
+    """True if the timestamp is empty, unreadable or older than `seconds`."""
+    try:
+        return (datetime.now().astimezone() - datetime.fromisoformat(iso.replace("Z", "+00:00"))).total_seconds() > seconds
+    except (ValueError, TypeError, AttributeError):
+        return True
+
+
 def _host_boot() -> float | None:
     """When the machine itself booted (Linux), for the uptime tooltip."""
     try:
@@ -206,6 +214,29 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         except ValueError:
             return iso
 
+    @app.template_filter("ago")
+    def ago(iso: str) -> str:
+        """'online now' / '12 min ago' / '3 h ago' / 'yesterday 21:14' / '28.10.2026'."""
+        if not iso:
+            return ""
+        try:
+            t = datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone()
+        except ValueError:
+            return iso
+        now_ = datetime.now().astimezone()
+        mins = (now_ - t).total_seconds() / 60
+        if mins < 5:
+            return "online now"
+        if mins < 60:
+            return f"{int(mins)} min ago"
+        if t.date() == now_.date():
+            return f"{int(mins // 60)} h ago"
+        if (now_.date() - t.date()).days == 1:
+            return t.strftime("yesterday %H:%M")
+        if (now_.date() - t.date()).days < 7:
+            return t.strftime("%a %H:%M")
+        return t.strftime("%d.%m.%Y")
+
     @app.template_filter("epoch")
     def epoch(ts: float) -> str:
         return datetime.fromtimestamp(ts).strftime("%d.%m.%Y %H:%M")
@@ -270,6 +301,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             u = store.user(uid)
             if u and not u.disabled and session.get("sk") == u.session_key:
                 g.user = u
+                if request.endpoint != "static" and _stale(u.last_seen, 60):
+                    store.touch_user(u.id)             # "last active" on the Users page
             else:
                 session.clear()
         if g.user is not None and not store.get(f"seen_version:{g.user.id}"):

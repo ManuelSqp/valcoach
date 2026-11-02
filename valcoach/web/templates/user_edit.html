@@ -3,7 +3,7 @@
 {% block content %}
 <div class="row between" style="margin-bottom:18px">
   <div><h1>{{ u.username }}</h1>
-    <div class="muted">{{ usage.get('profiles', 0) }} players · {{ usage.get('jobs', 0) }} reports · created {{ u.created_at|localtime }} · last login {{ u.last_login|localtime or 'never' }}</div></div>
+    <div class="muted">{{ usage.get('profiles', 0) }} players · {{ usage.get('jobs', 0) }} reports · created {{ u.created_at|localtime }} · last login {{ u.last_login|localtime or 'never' }} · last active <span title="{{ u.last_seen|localtime }}">{{ u.last_seen|ago or 'never' }}</span></div></div>
   <a class="btn ghost" href="{{ url_for('users') }}">← Users</a>
 </div>
 

@@ -1797,3 +1797,24 @@ def test_model_picker_claude_permission_and_runs(app, monkeypatch):
     page = c.get("/admin/overview").data.decode()
     assert "Claude (Anthropic API)" in page and "US$ 0.40" in page and "of 15 budget" in page
     app.extensions["valcoach"]["stats"].shutdown()
+
+
+def test_last_active_on_users_page(app):
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    c2 = make_user(app, c, "burn")
+    uid = store.user_by_name("burn").id
+    c2.get("/")
+    assert store.user(uid).last_seen
+    page = c.get("/admin/users").data.decode()
+    assert "Last active" in page and "● online now" in page
+    store._exec("UPDATE users SET last_seen = ? WHERE id = ?", ("2026-01-05T10:00:00+00:00", uid))
+    assert "05.01.2026" in c.get("/admin/users").data.decode()
+    seen = store.user(uid).last_seen
+    c2.get("/")                                      # stale: updated again
+    assert store.user(uid).last_seen != seen
+    first = store.user(uid).last_seen
+    c2.get("/")                                      # within a minute: not written again
+    assert store.user(uid).last_seen == first
+    assert "last active" in c.get(f"/admin/users/{uid}").data.decode()
+    assert "online now" in c.get("/admin/overview").data.decode()
