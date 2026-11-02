@@ -134,6 +134,10 @@
   });
   document.querySelectorAll('details.ctxpick').forEach(d => d.addEventListener('toggle', () => {
     if (d.open) document.querySelectorAll('details.ctxpick').forEach(o => { if (o !== d) o.open = false; }); }));
+  // the team / player picker closes on a click elsewhere or Escape
+  const closePicks = () => document.querySelectorAll('details.ctxpick[open]').forEach(d => { d.open = false; });
+  document.addEventListener('click', e => { if (!e.target.closest('details.ctxpick')) closePicks(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePicks(); });
   const tb = document.getElementById('themebtn');
   tb && tb.addEventListener('click', () => { const r = document.documentElement, n = r.dataset.theme === 'light' ? 'dark' : 'light';
     r.dataset.theme = n; try { localStorage.setItem('vc-theme', n); } catch (e) {} });

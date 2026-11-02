@@ -275,3 +275,8 @@ body.no-side{background:radial-gradient(1200px 500px at 50% -10%,var(--panel3),t
 /* long error texts and URLs wrap instead of widening the page */
 main.page{overflow-wrap:break-word}
 .flash,.banner,.card p,.card .err,.hint,pre.log{overflow-wrap:anywhere}
+/* things that float over the page get a solid background, also in styles with see-through panels (Neon, HUD) */
+.ctx-menu,.cmdk-box{background:linear-gradient(var(--panel),var(--panel)),var(--bg)}
+.vtoast{background:linear-gradient(var(--panel3),var(--panel3)),var(--bg)}
+.ctx-menu{box-shadow:0 18px 44px rgba(0,0,0,.5)}
+@media(max-width:900px){.vc-side,.mobilebar{background:linear-gradient(var(--side),var(--side)),var(--bg)}}
