@@ -20,6 +20,11 @@ nav.top{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom
 .navlinks a.navteams{display:inline-flex;align-items:center;gap:6px;color:var(--text);font-weight:600;border:1px solid var(--line2);background:var(--panel3)}
 .navlinks a.navteams:hover,.navlinks a.navteams.active{border-color:var(--red);background:rgba(255,70,85,.12)}
 .navsep{width:1px;align-self:stretch;background:var(--line);margin:2px 6px}
+.navdd{position:relative}.navdd summary{list-style:none;cursor:pointer;color:var(--muted);padding:5px 9px;border-radius:6px;white-space:nowrap;user-select:none}
+.navdd summary::-webkit-details-marker{display:none}.navdd summary:hover,.navdd summary.active,.navdd[open] summary{color:var(--text);background:var(--panel3)}
+.navdd .ddbox{position:absolute;left:0;top:calc(100% + 6px);z-index:50;min-width:200px;max-height:70vh;overflow:auto;display:flex;flex-direction:column;gap:1px;padding:6px;
+  background:var(--panel);border:1px solid var(--line2);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.35)}
+.navdd .ddbox a{display:flex;justify-content:space-between;gap:10px}.navdd .ddbox a .muted{font-size:11px}
 .uptime{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;padding:4px 9px;border:1px solid var(--line);border-radius:99px;background:var(--panel2);white-space:nowrap;cursor:default}
 .navlinks a.uplink{padding:0;background:none;text-decoration:none}.uplink .uptime{cursor:pointer}.uplink:hover .uptime{border-color:var(--line2);color:var(--text)}
 .uptime .dot{width:7px;height:7px;border-radius:50%;background:var(--win);box-shadow:0 0 0 0 rgba(53,208,160,.6);animation:uppulse 2.4s infinite}
@@ -35,6 +40,7 @@ nav.top{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom
   .navlinks a{padding:9px 10px}.navlinks .spacer,.navsep{display:none}
   .navlinks .uptime{align-self:flex-start;margin:4px 0}
   .navlinks form{padding:4px 10px}
+  .navdd .ddbox{position:static;box-shadow:none;border:0;padding:0 0 0 12px;background:none}.navdd summary{padding:9px 10px}
 }
 .page{max-width:1180px;margin:0 auto;padding:24px 16px 60px}
 h1{font-size:22px;margin:0 0 4px;letter-spacing:.02em;font-family:var(--font-head)}h1 .tag{color:var(--muted);font-weight:500}
@@ -120,10 +126,15 @@ body.a-tabs main.page{animation:pagein .22s ease-out}
   {% if user %}
   <button type="button" class="navtoggle" aria-expanded="false" aria-controls="navlinks" onclick="const n=this.closest('nav');n.classList.toggle('open');this.setAttribute('aria-expanded',n.classList.contains('open'))"><span class="sr-only">Menu</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <div class="navlinks" id="navlinks">
-    <a href="{{ url_for('teams') }}" class="navteams {{ 'active' if request.endpoint in ('teams', 'team', 'team_settings') }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2c3 .2 5.5 2.6 5.5 5.8"/></svg>Teams</a>
+    <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' }}">Home</a>
+    <a href="{{ url_for('teams') }}" class="navteams {{ 'active' if request.endpoint and (request.endpoint.startswith('team') or request.endpoint in ('strat_edit',)) }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2c3 .2 5.5 2.6 5.5 5.8"/></svg>Teams</a>
     <span class="navsep"></span>
-    {% for np in nav_profiles %}<a href="{{ url_for('profile', pid=np.id) }}" data-pid="{{ np.id }}" class="{{ 'active' if active_pid == np.id }}">{{ np.name }}</a>{% endfor %}
-    <a href="{{ url_for('profile_new') }}" data-nav="new">+ Player</a>
+    {% if nav_me %}<a href="{{ url_for('stats', pid=nav_me.id) }}" data-pid="{{ nav_me.id }}" class="{{ 'active' if active_pid == nav_me.id }}" title="{{ nav_me.riot_id }}: stats, progress, training, quiz, reports">{{ nav_me.name }}</a>{% endif %}
+    {% if nav_profiles|length > 1 %}
+    <details class="navdd"><summary class="{{ 'active' if active_pid and (not nav_me or active_pid != nav_me.id) }}">Players <span aria-hidden="true">▾</span></summary>
+      <div class="ddbox">{% for np in nav_profiles %}<a href="{{ url_for('stats', pid=np.id) }}" data-pid="{{ np.id }}" class="{{ 'active' if active_pid == np.id }}">{{ np.name }}<span class="muted">#{{ np.tag }}</span></a>{% endfor %}
+        <a href="{{ url_for('profile_new') }}" data-nav="new">+ Add player</a></div></details>
+    {% else %}<a href="{{ url_for('profile_new') }}" data-nav="new">+ Player</a>{% endif %}
     <span class="spacer"></span>
     <button type="button" class="kbtn" data-cmdk title="Quick search (Ctrl+K or /)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="sr-only">Search</span><kbd>Ctrl K</kbd></button>
     {% if user.can('overview') %}<a href="{{ url_for('overview') }}" class="uplink" title="Server overview">{% endif %}<span class="uptime" id="uptime" data-start="{{ app_started }}" data-now="{{ server_now }}" {% if host_boot %}data-host="{{ host_boot|int }}"{% endif %}><span class="dot"></span><span class="t">up</span></span>{% if user.can('overview') %}</a>{% endif %}
@@ -166,5 +177,6 @@ body.a-tabs main.page{animation:pagein .22s ease-out}
 </script>
 <div id="toasts" aria-live="polite"></div>
 <script src="{{ url_for('static', filename='ui.js') }}?v={{ app_version }}" defer></script>
+<script>document.addEventListener('click', e => { document.querySelectorAll('details.navdd[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; }); });</script>
 </body>
 </html>

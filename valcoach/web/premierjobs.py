@@ -268,7 +268,8 @@ class PremierJobs:
                 _write(self.sr.team_dir(tid) / "reviews" / f"{slug(r['match_id'])}.json", r)
                 self.sr._log(key, f"  ✓ {r['map']} {r['score']} vs {r['opponent']}")
                 if post:
-                    url = team.discord_info.get("prep_url") or team.discord_info.get("focus_url")
+                    from ..discord import channel
+                    url = channel(team.discord_info, "review")
                     if url:
                         from ..discord import post as dpost
                         try:

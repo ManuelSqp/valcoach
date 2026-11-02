@@ -4,9 +4,18 @@
 <h1>Settings</h1>
 <p class="muted small" style="margin:0 0 4px">valcoach {{ app_version }}</p>
 <p class="sub">Server-wide settings, shared by all users. Only admins see this page.</p>
+<nav class="setnav" aria-label="Settings sections">
+  <a href="#henrik">Match data</a><a href="#ollama">Local model</a><a href="#claude">Claude</a><a href="#video">Video</a><a href="#pros">Pros &amp; videos</a><a href="#server">Server</a><a href="#backup">Backups</a>
+</nav>
+<style>
+.setnav{position:sticky;top:0;z-index:5;display:flex;gap:4px;flex-wrap:wrap;padding:8px 0 10px;margin-bottom:6px;background:var(--bg)}
+.setnav a{text-decoration:none;font-size:13px;font-weight:600;padding:5px 12px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.setnav a:hover{color:var(--text);border-color:var(--line2)}
+section.card[id]{scroll-margin-top:60px}
+</style>
 <form method="post" autocomplete="off">
 
-<section class="card">
+<section class="card" id="henrik">
   <h2>HenrikDev API</h2>
   <div class="field">
     <label>API key {% if key_set %}<span style="color:var(--win)">✓ set ({{ key_hint }})</span>{% endif %}</label>
@@ -20,7 +29,7 @@
   </details>
 </section>
 
-<section class="card">
+<section class="card" id="ollama">
   <h2>Ollama</h2>
   {% if ollama_error %}<div class="flash error">Ollama is not reachable at {{ s.ollama_url }}: {{ ollama_error }}</div>
   {% else %}<div class="flash ok">Ollama is reachable · {{ models|length }} model{{ '' if models|length == 1 else 's' }} installed</div>{% endif %}
@@ -70,7 +79,7 @@
   </div>
 </section>
 
-<section class="card">
+<section class="card" id="video">
   <h2>Video analysis</h2>
   <p class="hint" style="margin-top:-6px">Each user's recordings folder is set under <a href="{{ url_for('users') }}">Users</a>.</p>
   <div class="grid2">
@@ -98,7 +107,7 @@
   </div>
 </section>
 
-<section class="card">
+<section class="card" id="server">
   <h2>Server</h2>
   <div class="grid2">
     <div class="field"><label>Coaching jobs at the same time</label><input type="number" name="workers" value="{{ s.workers }}" min="1" max="8">
@@ -112,8 +121,26 @@
     <span><b>Allow sign-up</b><span class="muted small">Anyone who can reach this page can create an account (as a normal user). Off: only admins create accounts under Users.</span></span></label>
 </section>
 
+<section class="card" id="backup">
+  <h2>Backups</h2>
+  <p class="hint" style="margin-top:-6px">Every night from 04:00: the database, players, teams, notes, strats and reports in one .tar.gz.
+    Left out: the match cache, VODs and clips (they can be loaded or cut again). Restore: stop valcoach, unpack the archive into the data folder, start it again.</p>
+  <label class="choice"><input type="checkbox" name="backup_on" value="1" {{ 'checked' if s.backup_on == '1' }}><span><b>Back up every night</b></span></label>
+  <div class="grid2">
+    <div class="field"><label>Folder</label><input type="text" name="backup_dir" value="{{ s.backup_dir }}" placeholder="{{ backup_folder }}">
+      <div class="hint">Full path on this server. Empty = inside the data folder, which doesn't help if the disk dies: use your NAS (e.g. /mnt/nas/valcoach-backups).</div></div>
+    <div class="field"><label>Backups to keep</label><input type="number" name="backup_keep" value="{{ s.backup_keep }}" min="1" max="365">
+      <div class="hint">The newest ones stay, older ones are deleted.</div></div>
+  </div>
+  <p class="small" style="margin:6px 0 0">{% if backup_last.at %}Last backup: {{ backup_last.at|epoch }} ·
+    {% if backup_last.ok %}<span style="color:var(--win)">✓ {{ backup_last.file }} ({{ '%.1f'|format(backup_last.size / 1048576) }} MB, {{ backup_last.secs }} s)</span>
+    {% else %}<span style="color:var(--red)">✗ {{ backup_last.error }}</span>{% endif %}{% else %}No backup yet.{% endif %}
+    {% if backups %}<br><span class="muted">In {{ backup_folder }}: {% for b in backups %}{{ b.name }}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}</p>
+</section>
+
 <button class="btn primary" type="submit">Save settings</button>
 </form>
+<form method="post" action="{{ url_for('backup_now') }}" style="margin-top:10px"><button class="btn ghost">Back up now</button></form>
 <script>
 document.querySelectorAll('.tbtn').forEach(b => b.onclick = async () => {
   const out = document.querySelector(`.tres[data-for="${b.dataset.test}"]`);

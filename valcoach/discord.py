@@ -35,6 +35,16 @@ def _send(session, url: str, **kw):
         raise DiscordError(f"Could not reach Discord ({e.__class__.__name__})") from None
 
 
+# where each kind of post goes: its own channel if set, else #match-prep, else #weekly-focus
+CHANNELS = {"prep": ("prep_url", "focus_url"), "focus": ("focus_url", "prep_url"),
+            "review": ("review_url", "prep_url", "focus_url"), "clip": ("clips_url", "prep_url", "focus_url")}
+
+
+def channel(info: dict | None, kind: str = "prep") -> str:
+    info = info or {}
+    return next((info[k] for k in CHANNELS.get(kind, CHANNELS["prep"]) if info.get(k)), "")
+
+
 def post(url: str, content: str = "", embeds: list[dict] | None = None, session=None, mentions: list[str] | None = None) -> None:
     """mentions: Discord user IDs that may be pinged (<@id> in content); nobody else, no @everyone."""
     if not valid_url(url):

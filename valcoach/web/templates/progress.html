@@ -39,7 +39,8 @@
 </div>
 {% include "_player_tabs.html" %}
 {% if not n %}
-<section class="card"><p>No games yet: import your history on <a href="{{ url_for('stats', pid=p.id) }}">Stats &amp; agents</a>.</p></section>
+<section class="card"><p style="margin:0 0 10px">No games yet. Import this player's match history from HenrikDev (takes a minute or two).</p>
+  {% if can_edit %}<form method="post" action="{{ url_for('stats_import', pid=p.id) }}"><button class="btn primary">Import history</button></form>{% endif %}</section>
 {% else %}
 
 {% if rank %}

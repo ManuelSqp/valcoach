@@ -48,6 +48,7 @@ MAX_TRACKED_LOGINS = 1000              # failed-login records kept for the locko
 
 from .ui import fonts_url, ui_prefs
 from ..coach.llm import month_cost as claude_month_cost
+from . import backup as _backups
 from .models import choices as model_choices, last_choice, picked as picked_model
 
 # one-click tags on the notes page (they add the words to the note; your own sentence is still the best part)
@@ -256,9 +257,11 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
     @app.context_processor
     def inject():
         user = getattr(g, "user", None)
+        nav_ps = store.profiles(user.id) if user else []
         return {
             "user": user,
-            "nav_profiles": store.profiles(user.id) if user else [],
+            "nav_profiles": nav_ps,
+            "nav_me": next((p for p in nav_ps if p.riot_id.lower() == (user.display_name or "").lower()), nav_ps[0] if nav_ps else None) if user else None,
             "has_api_key": bool(store.get("henrik_api_key")),
             "signup_enabled": signup_enabled(),
             "min_password": MIN_PASSWORD,
@@ -267,6 +270,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             "ui_fonts": fonts_url(user.ui["style"]) if user else "",
             "app_started": int(started_at),
             "server_now": int(time.time()),
+            "server_tz": time.strftime("%Z") or "UTC",
             "host_boot": _host_boot(),
             "llm_choices": model_choices(store, user) if user else [],
             "llm_last": last_choice(user) if user else "",
@@ -403,6 +407,13 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             f = request.form
             prefs = {"style": f.get("style") if f.get("style") in STYLES else "classic",
                      "anim": {k: bool(f.get(f"anim_{k}")) for k in ANIMATIONS}, "llm": last_choice(g.user)}
+            try:
+                old_prefs = json.loads(g.user.prefs or "{}")
+            except ValueError:
+                old_prefs = {}
+            for k in ("home_seen", "home_prev"):
+                if old_prefs.get(k):
+                    prefs[k] = old_prefs[k]
             store.update_user(g.user.id, prefs=json.dumps(prefs))
             flash(f"Style: {STYLES[prefs['style']][0]}.", "ok")
             return redirect(url_for("account") + "#look")
@@ -482,8 +493,23 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                           "subs": [tnames[m["pid"]] for m in ms if m["kind"] == "sub"],
                           "shared": t.owner_id != g.user.id,
                           "focus": app.extensions["valcoach"]["stats"].my_focus(t, g.user.id)})
+        # "what's new" is measured from your previous visit to this page
+        from .home import today
+        try:
+            prefs = json.loads(g.user.prefs or "{}")
+        except ValueError:
+            prefs = {}
+        # a "visit" lasts 30 minutes: coming back to Home within it still shows what was new when it started
+        now_ = time.time()
+        last_seen = float(prefs.get("home_seen") or 0)
+        if now_ - last_seen > 1800:
+            prefs["home_prev"] = last_seen or (now_ - 3 * 86400)
+        prefs["home_seen"] = now_
+        since = float(prefs.get("home_prev") or (now_ - 3 * 86400))
+        td = today(app, store, app.extensions["valcoach"]["stats"], g.user, since)
+        store.update_user(g.user.id, prefs=json.dumps(prefs))
         return render_template("index.html", profiles=profiles, jobs=store.jobs_for_owner(g.user.id, 20),
-                               names=names, counts=counts, teams=teams)
+                               names=names, counts=counts, teams=teams, td=td, weekday=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
 
     # --------------------------------------------------------------- profiles
     def _profile_form_values() -> dict:
@@ -841,8 +867,9 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         for t in store.teams_for_user(g.user.id):
             if any(m["pid"] == j.profile_id for m in t.member_list):
                 d = t.discord_info
-                if d.get("prep_url") or d.get("focus_url"):
-                    return d.get("prep_url") or d.get("focus_url")
+                from ..discord import channel
+                if channel(d, "clip"):
+                    return channel(d, "clip")
         return ""
 
     from .report_tools import register as register_report_tools
@@ -1016,6 +1043,19 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 except ValueError as e:
                     errors.append(f"{key}: {e}")
             store.set("allow_signup", "1" if f.get("allow_signup") else "0")
+            if "backup_keep" in f:                      # Backups
+                store.set("backup_on", "1" if f.get("backup_on") else "0")
+                bd = f.get("backup_dir", "").strip()
+                if bd and not Path(bd).expanduser().is_absolute():
+                    errors.append("Backup folder: give the full path, e.g. /mnt/nas/valcoach-backups")
+                elif bd and not Path(bd).expanduser().is_dir():
+                    errors.append(f"Backup folder not found on this server: {bd}")
+                else:
+                    store.set("backup_dir", bd)
+                try:
+                    store.set("backup_keep", str(max(1, min(365, int(f.get("backup_keep") or 14)))))
+                except ValueError:
+                    errors.append("Backups to keep: a number")
             # Claude (optional)
             if f.get("claude_api_key", "").strip():
                 store.set("claude_api_key", f["claude_api_key"].strip())
@@ -1071,7 +1111,17 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                                key_hint=("…" + s["henrik_api_key"][-4:]) if s["henrik_api_key"] else "",
                                models=models, ollama_error=ollama_error, running_workers=runner.workers,
                                claude_hint=("…" + s["claude_api_key"][-4:]) if s["claude_api_key"] else "",
-                               claude_month=claude_month_cost(), auto_choices=model_choices(store, g.user))
+                               claude_month=claude_month_cost(), auto_choices=model_choices(store, g.user),
+                               backups=_backups.list_backups(store)[:5], backup_last=_backups.last(store),
+                               backup_folder=str(_backups.backup_dir(store)))
+
+    @app.post("/settings/backup-now")
+    @admin_required
+    def backup_now():
+        res = _backups.run(store)
+        flash(f"Backup saved: {res['file']} ({res['size'] / 1048576:.1f} MB)." if res["ok"] else f"Backup failed: {res['error']}",
+              "ok" if res["ok"] else "error")
+        return redirect(url_for("settings") + "#backup")
 
     @app.post("/settings/test/<what>")
     @admin_required
@@ -1135,6 +1185,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
     from .overview import register as register_overview
     register_overview(app, store, started_at)
     if start_workers:
+        from . import backup as _backup
+        app.extensions["valcoach"].setdefault("ticks", []).append(lambda: _backup.tick(store))
         stats_runner.start_scheduler(app.extensions["valcoach"]["weekly_job"], app.extensions["valcoach"]["nightly_job"],
                                      extra=app.extensions["valcoach"].get("ticks", []))
     return app

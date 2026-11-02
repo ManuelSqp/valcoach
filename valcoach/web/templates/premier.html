@@ -62,7 +62,7 @@
     {% if g.team_owner %}
     <form method="post" action="{{ url_for('team_premier_settings', tid=t.id) }}">
       <label class="choice"><input type="checkbox" name="on" value="1" {{ 'checked' if cfg.on }}>
-        <span><b>Post the brief to Discord before our matches</b><span class="muted small">Comp, game plans, everyone's focus and who's strong on the map. Server time.</span></span></label>
+        <span><b>Post the brief to Discord before our matches</b><span class="muted small">Comp, game plans, everyone's focus and who's strong on the map. Server time ({{ server_tz }}).</span></span></label>
       <div class="field"><label>Match days</label>
         <div class="days">{% for d in days %}<label><input type="checkbox" name="days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in cfg.days }}>{{ d }}</label>{% endfor %}</div></div>
       <div class="row">
@@ -70,7 +70,7 @@
         <div class="field" style="margin:0"><label for="bb">Post it … minutes before</label><input id="bb" type="number" name="before" min="10" max="240" value="{{ cfg.before }}" style="width:90px"></div>
       </div>
       <button class="btn sm" style="margin-top:10px">Save</button>
-      {% if not (discord.prep_url or discord.focus_url) %}<p class="small warnc">Add a Discord webhook under Members, maps &amp; Discord first.</p>{% endif %}
+      {% if not (discord.prep_url or discord.focus_url) %}<p class="small warnc">Add a Discord webhook under the team's ⚙ Settings first.</p>{% endif %}
     </form>
     {% else %}<p class="muted small">{% if cfg.on %}Posted to Discord {{ cfg.before }} min before {{ cfg.time }} on {% for d in cfg.days %}{{ days[d] }}{{ ', ' if not loop.last }}{% endfor %}.{% else %}Not set up by the team owner.{% endif %}</p>{% endif %}
   </section>

@@ -244,17 +244,42 @@ def row_from_stored(item: dict) -> dict | None:
 # ---------------------------------------------------------------------------
 # storage
 # ---------------------------------------------------------------------------
+_CACHE: dict = {}                  # path -> ((mtime_ns, size), parsed file)
+_CACHE_LOCK = __import__("threading").Lock()
+
+
 class GameStore:
     def __init__(self, path: Path):
         self.path = Path(path)
 
     def load(self) -> dict:
-        if self.path.exists():
+        """The file, parsed once per change (pages read every player's games on every visit).
+        Returns a fresh top-level dict and games dict, so callers can add or replace games freely."""
+        try:
+            st = self.path.stat()
+        except OSError:
+            return {"version": 1, "games": {}, "updated": "", "puuid": ""}
+        sig = (st.st_mtime_ns, st.st_size)
+        hit = _CACHE.get(self.path)
+        if hit is None or hit[0] != sig:
             try:
-                return json.loads(self.path.read_text())
+                data = json.loads(self.path.read_text())
             except ValueError:
-                pass
-        return {"version": 1, "games": {}, "updated": "", "puuid": ""}
+                return {"version": 1, "games": {}, "updated": "", "puuid": ""}
+            with _CACHE_LOCK:
+                if len(_CACHE) > 200:
+                    _CACHE.clear()
+                _CACHE[self.path] = (sig, data)
+            hit = (sig, data)
+        data = hit[1]
+        return {**data, "games": dict(data.get("games") or {})}
+
+    def signature(self) -> tuple:
+        try:
+            st = self.path.stat()
+            return (st.st_mtime_ns, st.st_size)
+        except OSError:
+            return (0, 0)
 
     def save(self, data: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

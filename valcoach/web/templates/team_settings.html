@@ -52,7 +52,7 @@
   <h2>Automatic sync</h2>
   <label class="choice"><input type="checkbox" name="nightly" value="1" {{ 'checked' if sy.nightly }}>
     <span><b>Sync every night</b><span class="muted small">Does what the two buttons at the top do:
-      {% if t.premier_info.tag %}reloads the Premier roster, then everyone's stats{% else %}updates everyone's stats{% endif %}. Server time. The buttons still work any time.</span></span></label>
+      {% if t.premier_info.tag %}reloads the Premier roster, then everyone's stats{% else %}updates everyone's stats{% endif %}. Server time ({{ server_tz }}). The buttons still work any time.</span></span></label>
   <div class="row" style="margin-top:8px">
     <span class="small">at</span>
     <select name="hour" style="width:auto">{% for h in range(24) %}<option value="{{ h }}" {{ 'selected' if sy.hour|int == h }}>{{ '%02d' % h }}:00</option>{% endfor %}</select>
@@ -71,9 +71,17 @@
     <div class="field"><label>#weekly-focus webhook {% if discord.focus_url %}<span style="color:var(--win)">✓ set</span>{% endif %}</label>
       <input type="password" name="focus_url" placeholder="{{ 'Leave empty to keep it' if discord.focus_url else 'https://discord.com/api/webhooks/…' }}" autocomplete="off">
       {% if discord.focus_url %}<label class="small" style="display:flex;gap:6px;margin-top:6px"><input type="checkbox" name="clear_focus_url" value="1">remove</label>{% endif %}</div>
+    <div class="field"><label>#reviews webhook (optional) {% if discord.review_url %}<span style="color:var(--win)">✓ set</span>{% endif %}</label>
+      <input type="password" name="review_url" placeholder="{{ 'Leave empty to keep it' if discord.review_url else 'https://discord.com/api/webhooks/…' }}" autocomplete="off">
+      <div class="hint">Premier match reviews. Empty = #match-prep.</div>
+      {% if discord.review_url %}<label class="small" style="display:flex;gap:6px;margin-top:6px"><input type="checkbox" name="clear_review_url" value="1">remove</label>{% endif %}</div>
+    <div class="field"><label>#clips webhook (optional) {% if discord.clips_url %}<span style="color:var(--win)">✓ set</span>{% endif %}</label>
+      <input type="password" name="clips_url" placeholder="{{ 'Leave empty to keep it' if discord.clips_url else 'https://discord.com/api/webhooks/…' }}" autocomplete="off">
+      <div class="hint">Clips from reports. Empty = #match-prep.</div>
+      {% if discord.clips_url %}<label class="small" style="display:flex;gap:6px;margin-top:6px"><input type="checkbox" name="clear_clips_url" value="1">remove</label>{% endif %}</div>
   </div>
   <label class="choice"><input type="checkbox" name="weekly" value="1" {{ 'checked' if discord.weekly }}>
-    <span><b>Post the weekly focus automatically</b><span class="muted small">Writes everyone's focus and posts it once a week (server time).</span></span></label>
+    <span><b>Post the weekly focus automatically</b><span class="muted small">Writes everyone's focus and posts it once a week (server time, {{ server_tz }}).</span></span></label>
   <div class="row" style="margin:8px 0 12px">
     <select name="weekly_day" style="width:auto">{% for d in ('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday') %}<option value="{{ loop.index0 }}" {{ 'selected' if (discord.weekly_day|default(0))|int == loop.index0 }}>{{ d }}</option>{% endfor %}</select>
     <span class="small">from</span>

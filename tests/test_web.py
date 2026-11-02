@@ -1933,3 +1933,89 @@ def test_strat_history_and_restore(app, monkeypatch):
     assert c.post(f"/api/teams/{tid}/strats/{sid}/versions/99999/restore").status_code == 404
     assert make_user(app, c, "outsider").get(f"/api/teams/{tid}/strats/{sid}/versions").status_code == 404
     assert 'id="sb-hist"' in c.get(f"/teams/{tid}/strats/{sid}").data.decode()
+
+
+def test_home_today_nav_and_tabs(app):
+    from datetime import date
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    page = c.get("/").data.decode()
+    assert "Today" in page and "Get started" in page
+    pids = [add_profile(c, name=f"P{i}", tag="#T") for i in range(3)]
+    uid = store.user_by_name("manuel").id
+    store.update_user(uid, display_name="P1#T")
+    tid = store.create_team(uid, "Squad")
+    store.update_team(tid, members=[{"pid": p, "kind": "starter", **({"user_id": uid} if i == 1 else {})} for i, p in enumerate(pids)], maps=["Bind"])
+    info = store.team(tid).sync_info
+    info["brief"] = {"on": False, "days": list(range(7)), "time": "20:00", "before": 60}
+    store.update_team(tid, sync=info)
+    page = c.get("/").data.decode()
+    assert "Squad" in page and "haven&#39;t said whether you can play" in page.replace("haven't", "haven&#39;t")
+    assert f'data-pid="{pids[1]}"' in page and "Warm-up" in page and "No quiz yet" in page
+    # nav: your own player first, everyone under Players
+    assert 'class="navdd"' in page and page.index(f'href="/profiles/{pids[1]}/stats"') < page.index("Players <span")
+    # answer from the home page
+    c.post(f"/api/teams/{tid}/availability", json={"pid": pids[1], "day": date.today().isoformat(), "state": "yes"})
+    today_part = c.get("/").data.decode().split("Your teams")[0]
+    assert "whether you can play" not in today_part and 'class="yes on"' in today_part
+    # what's new by others since the last visit
+    mate = make_user(app, c, "mate")
+    store.add_team_access(tid, store.user_by_name("mate").id)
+    import json as _j
+    prefs = _j.loads(store.user(uid).prefs or "{}")
+    prefs["home_seen"] = 1.0
+    store.update_user(uid, prefs=_j.dumps(prefs))
+    mate.post(f"/teams/{tid}/notes", data={"text": "Rotate earlier on B", "about": "", "map": "Bind"})
+    page = c.get("/").data.decode()
+    assert "New since your last visit" in page and "Rotate earlier on B" in page
+    assert "Rotate earlier on B" in c.get("/").data.decode()                       # same visit: still there
+    prefs = _j.loads(store.user(uid).prefs)
+    prefs["home_seen"] -= 3600                                                   # next visit, an hour later
+    store.update_user(uid, prefs=_j.dumps(prefs))
+    store._exec("UPDATE team_notes SET created_at = '2020-01-01T00:00:00+00:00'")   # the note came before that visit
+    assert "New since your last visit" not in c.get("/").data.decode()
+    # grouped team tabs
+    page = c.get(f"/teams/{tid}").data.decode()
+    assert "Match prep" in page and "⚙ Settings" in page and page.index(">Premier<") < page.index(">Comps<")
+
+
+def test_backups_and_discord_channels(app, tmp_path):
+    import tarfile
+    from valcoach.discord import channel
+    from valcoach.web import backup
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    pid = add_profile(c)
+    (store.profile_dir(pid) / "notes").mkdir(parents=True, exist_ok=True)
+    (store.profile_dir(pid) / "notes" / "m.yaml").write_text("rounds: {1: hi}")
+    (store.data_dir / "cache" / "big.json").write_text("x" * 1000)
+    dest = tmp_path / "nas"
+    dest.mkdir()
+    r = c.post("/settings", data={"backup_on": "1", "backup_dir": str(dest), "backup_keep": "2",
+                                  "ollama_temperature": "0.3", "ollama_num_ctx": "16384", "ollama_parallel": "4", "ollama_timeout_s": "300",
+                                  "sample_fps": "2", "workers": "1", "max_upload_gb": "20", "max_jobs_per_user": "3",
+                                  "minimap_roi": store.get("minimap_roi"), "killfeed_roi": store.get("killfeed_roi")})
+    assert r.status_code == 302 and store.get("backup_dir") == str(dest) and store.get("backup_keep") == "2"
+    c.post("/settings/backup-now")
+    files = list(dest.glob("valcoach-backup-*.tar.gz"))
+    assert len(files) == 1
+    with tarfile.open(files[0]) as tar:
+        names = tar.getnames()
+    assert "valcoach.db" in names and any(n.endswith("notes/m.yaml") for n in names) and not any(n.startswith("cache") for n in names)
+    assert backup.last(store)["ok"] and "Last backup" in c.get("/admin/overview").data.decode()
+    # keep 2: older ones go
+    for i in range(3):
+        (dest / f"valcoach-backup-2020-01-0{i + 1}_0400.tar.gz").write_text("old")
+    backup.run(store)
+    assert len(list(dest.glob("valcoach-backup-*.tar.gz"))) == 2
+    # nightly: runs once after 04:00
+    from datetime import datetime
+    store.set("backup_last", "")
+    assert backup.tick(store, datetime(2026, 11, 2, 5, 0)) and not backup.tick(store, datetime(2026, 11, 2, 6, 0))
+    assert not backup.tick(store, datetime(2026, 11, 3, 3, 0))
+    # bad folder
+    c.post("/settings", data={"backup_keep": "14", "backup_dir": "relative/path", "minimap_roi": store.get("minimap_roi"), "killfeed_roi": store.get("killfeed_roi")})
+    assert store.get("backup_dir") == str(dest)
+    # Discord: each kind of post finds its channel
+    info = {"prep_url": "P", "focus_url": "F", "review_url": "R"}
+    assert channel(info, "review") == "R" and channel(info, "clip") == "P" and channel(info, "focus") == "F" and channel({}, "prep") == ""

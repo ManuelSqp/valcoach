@@ -4,6 +4,29 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 2.25.0
+- **Home page "Today":** everything for today in one place, instead of clicking through five pages.
+  - Per team: this week's map with the match-day brief, the next match day with who's playing (and who could sub),
+    your own ✓ / ? / ✗ for it right there, and your focus.
+  - For you: warm-up done or not and your streak, your rank and the change in 14 days, a quiz waiting, your last
+    report.
+  - Jobs running or failed in the last day, and what teammates changed since your last visit (strats, drafts,
+    notes, Premier reviews). New accounts get three first steps instead.
+- **Simpler navigation:** *Home*, *Teams*, your own player (the one named like your in-game name under Account) and
+  everyone else under *Players ▾*, instead of every player in the top bar. Player links open Stats & agents.
+- **Team tabs grouped:** *Match prep* (Premier first, then Comps, Drafts, Game plans, Strat book), *Players* (Weekly
+  focus, Roles, Notes) and *⚙ Settings* (members, maps & Discord).
+- **Faster pages:** players' game files are read once per change instead of on every page, and a team's comps,
+  roles and tips are kept until the team or someone's games change.
+- **Backups** (Settings › Backups, on by default): every night from 04:00 the database, players, teams, notes,
+  strats and reports go into one .tar.gz, the newest 14 are kept. Set the folder to your NAS. *Back up now*, and
+  the last backup shows in Settings and on the server overview.
+- **Reports:** filter the rounds: ★ lessons, leads thrown, your deaths, lost rounds.
+- **Discord:** optional channels for Premier reviews and for clips (empty = #match-prep as before).
+- **Settings:** a section menu at the top (match data, local model, Claude, video, pros, server, backups).
+- Smaller: the empty Progress and Training pages have an *Import history* button; schedule times say which time
+  zone the server uses.
+
 ## 2.24.0
 - **Ask the coach about a round:** under every round of a report opened in valcoach, ask a question ("Should I
   have saved?", "What if I'd waited for the flash?"). The model gets that round's facts and its own feedback,

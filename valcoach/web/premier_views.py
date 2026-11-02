@@ -177,7 +177,7 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
         from ..discord import post as dpost
         url = t.discord_info.get("prep_url") or t.discord_info.get("focus_url")
         if not url:
-            raise RuntimeError("Add a Discord webhook under Members, maps & Discord first.")
+            raise RuntimeError("Add a Discord webhook under the team's ⚙ Settings first.")
         m, _ = week_map(t)
         if not m:
             raise RuntimeError("This week's map isn't known yet: set it on the Premier tab.")
@@ -215,6 +215,7 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
     app.extensions["valcoach"].setdefault("ticks", []).append(tick_brief)
     app.extensions["valcoach"]["premier"] = pj
     app.extensions["valcoach"]["week_map"] = lambda t: week_map(t)[0]
+    app.extensions["valcoach"]["next_avail"] = next_avail
 
     # ------------------------------------------------------------------ pages
     def ctx(t, tab2: str, **kw) -> dict:
@@ -363,7 +364,7 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
             store.update_team(tid, premier=pi)
             if pi["follow_pool"]:
                 pj.apply_pool(get_team(tid))
-            flash("Map pool: " + ("follows the Premier stage." if pi["follow_pool"] else "your own list (Members, maps & Discord)."), "ok")
+            flash("Map pool: " + ("follows the Premier stage." if pi["follow_pool"] else "your own list (the team's ⚙ Settings)."), "ok")
             return redirect(url_for("team_premier", tid=tid) + "#schedule")
         if "week_map" in f:                                   # the week's map, by hand (only for this week)
             m = f.get("week_map", "")
