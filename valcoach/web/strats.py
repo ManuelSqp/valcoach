@@ -228,8 +228,25 @@ def register(app, store, sr, get_team, known_maps: list[str]) -> None:
             if len(raw) > MAX_BOARD_BYTES:
                 return jsonify(error="board too big"), 413
             fields["data"] = raw
+        if "data" in fields:
+            store.keep_strat_version(sid, g.user.id)        # the board before this save, for History
         store.update_strat(sid, g.user.id, **fields)
         return jsonify(ok=True, saved_at=time.strftime("%H:%M:%S"))
+
+    @app.get("/api/teams/<int:tid>/strats/<int:sid>/versions")
+    def strat_versions(tid: int, sid: int):
+        get_strat(tid, sid)
+        return jsonify(versions=store.strat_versions(sid))
+
+    @app.post("/api/teams/<int:tid>/strats/<int:sid>/versions/<int:vid>/restore")
+    def strat_restore(tid: int, sid: int, vid: int):
+        get_strat(tid, sid)
+        v = store.strat_version(vid)
+        if v is None or v["strat_id"] != sid:
+            abort(404)
+        store.keep_strat_version(sid, g.user.id, force=True)     # what's there now stays in History
+        store.update_strat(sid, g.user.id, data=v["data"])
+        return jsonify(ok=True)
 
     @app.post("/teams/<int:tid>/strats/<int:sid>/delete")
     def strat_delete(tid: int, sid: int):

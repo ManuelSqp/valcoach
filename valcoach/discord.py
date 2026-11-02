@@ -59,14 +59,14 @@ def post(url: str, content: str = "", embeds: list[dict] | None = None, session=
             break
 
 
-def post_file(url: str, content: str, filename: str, data: bytes, session=None) -> None:
-    """One message with an attached file (e.g. a strat board as PNG)."""
+def post_file(url: str, content: str, filename: str, data: bytes, session=None, content_type: str = "image/png") -> None:
+    """One message with an attached file (e.g. a strat board as PNG, a clip as MP4)."""
     import json as _json
     if not valid_url(url):
         raise DiscordError("That's not a Discord webhook URL")
     payload = {"username": "valcoach", "allowed_mentions": {"parse": []}, "content": _cut(content, 1900)}
     r = _send(session, url, data={"payload_json": _json.dumps(payload)},
-              files={"files[0]": (filename, data, "image/png")}, timeout=30)
+              files={"files[0]": (filename, data, content_type)}, timeout=60)
     if r.status_code >= 300:
         raise DiscordError(f"Discord answered {r.status_code}: {_cut(r.text, 200)}")
 

@@ -143,6 +143,15 @@ CREATE TABLE IF NOT EXISTS drafts (
   updated_by INTEGER
 );
 CREATE INDEX IF NOT EXISTS drafts_team ON drafts(team_id, map);
+CREATE TABLE IF NOT EXISTS strat_versions (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  strat_id   INTEGER NOT NULL REFERENCES strats(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL DEFAULT '',
+  data       TEXT NOT NULL,
+  saved_at   TEXT NOT NULL,
+  saved_by   INTEGER
+);
+CREATE INDEX IF NOT EXISTS strat_versions_strat ON strat_versions(strat_id, id);
 CREATE TABLE IF NOT EXISTS availability (
   team_id    INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   pid        INTEGER NOT NULL,
@@ -812,6 +821,49 @@ class Store:
                          "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
                          (tid, author_id, map_name, side, name.strip()[:80], json.dumps(data or {}), now(), now(), author_id))
         return int(cur.lastrowid)
+
+    VERSION_EVERY_S = 600         # a board saves every few seconds: keep one version per 10 minutes (or per editor)
+    VERSIONS_KEPT = 40
+
+    def strat_versions(self, sid: int) -> list[dict]:
+        rows = self._all("SELECT v.id, v.name, v.saved_at, LENGTH(v.data) AS size, v.data, "
+                         "COALESCE(NULLIF(u.display_name, ''), u.username) AS by FROM strat_versions v "
+                         "LEFT JOIN users u ON u.id = v.saved_by WHERE v.strat_id = ? ORDER BY v.id DESC", (sid,))
+        out = []
+        for r in rows:
+            d = dict(r)
+            try:
+                steps = json.loads(d.pop("data") or "{}").get("steps", [])
+            except ValueError:
+                steps = []
+            d["steps"], d["items"] = len(steps), sum(len(x.get("items", [])) for x in steps)
+            out.append(d)
+        return out
+
+    def strat_version(self, vid: int) -> dict | None:
+        rows = self._all("SELECT * FROM strat_versions WHERE id = ?", (vid,))
+        return dict(rows[0]) if rows else None
+
+    def keep_strat_version(self, sid: int, user_id: int, force: bool = False) -> None:
+        """Save the board as it is now as a version, unless the last version is recent and by the same person."""
+        cur = self._all("SELECT name, data, updated_at, updated_by FROM strats WHERE id = ?", (sid,))
+        if not cur:
+            return
+        cur = cur[0]
+        last = self._all("SELECT data, saved_at, saved_by FROM strat_versions WHERE strat_id = ? ORDER BY id DESC LIMIT 1", (sid,))
+        if last and last[0]["data"] == cur["data"]:
+            return
+        if not force and last and cur["updated_by"] == user_id:
+            try:
+                age = (datetime.now(timezone.utc) - datetime.fromisoformat(last[0]["saved_at"])).total_seconds()
+            except ValueError:
+                age = self.VERSION_EVERY_S
+            if age < self.VERSION_EVERY_S:
+                return
+        self._exec("INSERT INTO strat_versions(strat_id, name, data, saved_at, saved_by) VALUES(?, ?, ?, ?, ?)",
+                   (sid, cur["name"], cur["data"], cur["updated_at"] or now(), cur["updated_by"]))
+        self._exec("DELETE FROM strat_versions WHERE strat_id = ? AND id NOT IN "
+                   "(SELECT id FROM strat_versions WHERE strat_id = ? ORDER BY id DESC LIMIT ?)", (sid, sid, self.VERSIONS_KEPT))
 
     def update_strat(self, sid: int, user_id: int, **fields) -> None:
         sets = {k: v for k, v in fields.items() if k in ("name", "side", "data")}

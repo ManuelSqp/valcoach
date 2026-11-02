@@ -207,6 +207,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{padding:5px 8px;b
 {% if t.threw_advantage %}<span class="chip r">lead thrown</span>{% endif %}
 {% if t.won_from_disadvantage %}<span class="chip g">comeback</span>{% endif %}
 {% if f.importance == 3 %}<span class="chip a">★ lesson</span>{% endif %}
+{% for x in r.afk or [] %}<span class="chip r" title="{{ 'never left spawn' if x.spawn else 'AFK' }} (Riot's flag)">{{ x.name }} {{ 'in spawn' if x.spawn else 'AFK' }}</span>{% endfor %}
 </span>
 <span class="caret">▾</span>
 </button>

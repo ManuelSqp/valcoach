@@ -4,6 +4,7 @@
 {% macro wr(v, n=None) %}<span class="wr {{ 'hi' if v is not none and v >= 0.55 else ('lo' if v is not none and v < 0.45 else '') }}">{{ v|pct }}</span>{% endmacro %}
 {% block head %}
 <style>
+.heatsvg{width:100%;max-width:560px;display:block;margin:10px auto 0;aspect-ratio:1/1;background:var(--panel2);border-radius:12px;border:1px solid var(--line)}
 .tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px}
 .tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
@@ -138,6 +139,27 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--panel3)}tr.sel td{bac
     {% endfor %}
   </div>
 
+  {% if heat %}
+  <div class="heat" style="margin-top:18px">
+    <div class="row between"><h3 style="margin:0">On the map <span class="muted small" style="font-weight:400">· {{ heat.games }} games with round data</span></h3>
+      <div class="row" style="gap:4px" role="group" aria-label="Side">
+        <button type="button" class="btn sm primary" data-hs="attack">Attack</button><button type="button" class="btn sm ghost" data-hs="defense">Defense</button></div></div>
+    <svg class="heatsvg" viewBox="0 0 1000 1000" role="img" aria-label="Where you die and get kills on {{ detail.map }}">
+      <image href="{{ heat.img }}" x="0" y="0" width="1000" height="1000" opacity=".55" preserveAspectRatio="none"></image>
+      {% for sd in ('attack', 'defense') %}<g class="hs-{{ sd }}" {{ 'style=display:none' if sd == 'defense' }}>
+        {% for p in heat.points %}{% set d = p['d_' ~ sd] %}{% set k = p['k_' ~ sd] %}{% if d or k %}
+        <g><title>{{ p.label }}: {{ d }} deaths, {{ k }} kills ({{ sd }})</title>
+          {% if k %}<circle cx="{{ p.x + 9 }}" cy="{{ p.y }}" r="{{ (8 + 34 * (k / heat.top) ** 0.5)|round(1) }}" fill="#35d0a0" fill-opacity=".45" stroke="#35d0a0" stroke-width="2"></circle>{% endif %}
+          {% if d %}<circle cx="{{ p.x - 9 }}" cy="{{ p.y }}" r="{{ (8 + 34 * (d / heat.top) ** 0.5)|round(1) }}" fill="#ff4655" fill-opacity=".5" stroke="#ff4655" stroke-width="2"></circle>{% endif %}
+          <text x="{{ p.x }}" y="{{ p.y + 4 }}" text-anchor="middle" font-size="15" font-weight="700" fill="#fff" stroke="#0b0e13" stroke-width="4" paint-order="stroke">{{ p.label }}</text></g>
+        {% endif %}{% endfor %}</g>{% endfor %}
+    </svg>
+    <p class="small muted" style="margin:6px 0 0"><span style="color:var(--red)">●</span> where you died · <span style="color:var(--win)">●</span> where you got kills. Bigger = more often; hover for the numbers. Placed at the callout where it happened.</p>
+  </div>
+  <script>(function () { document.querySelectorAll('[data-hs]').forEach(b => b.onclick = () => {
+    document.querySelectorAll('[data-hs]').forEach(x => { x.classList.toggle('primary', x === b); x.classList.toggle('ghost', x !== b); });
+    document.querySelectorAll('.heatsvg > g').forEach(g => g.style.display = g.classList.contains('hs-' + b.dataset.hs) ? '' : 'none'); }); })();</script>
+  {% endif %}
   <div id="tips" style="margin-top:18px">
     <div class="row between"><h2 style="margin:0">Coach tips for {{ detail.map }}</h2>
       {% if can_edit %}<form method="post" action="{{ url_for('stats_tips', pid=p.id) }}"><input type="hidden" name="map" value="{{ detail.map }}"><input type="hidden" name="queue" value="{{ queue }}">
