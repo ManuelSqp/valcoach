@@ -12,7 +12,8 @@
   -webkit-mask-image:linear-gradient(100deg,transparent 35%,#000);mask-image:linear-gradient(100deg,transparent 35%,#000)}
 .wk-in{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,340px);gap:22px 34px;padding:22px 26px 24px}
 .wk-team{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted);font-weight:600}
-.wk-team a{color:var(--text);text-decoration:none}.wk-team a:hover{text-decoration:underline}
+.wk-team a{color:var(--text);text-decoration:none}
+.livedot{width:8px;height:8px;border-radius:50%;background:var(--red);animation:lpulse 1.6s infinite}@keyframes lpulse{50%{opacity:.3}}.wk-team a:hover{text-decoration:underline}
 .wk-name{font-size:clamp(64px,9vw,118px);line-height:.86;font-weight:850;font-stretch:62%;letter-spacing:-.01em;margin:14px 0 14px;color:var(--text)}
 .wk-name.none{font-size:40px;font-stretch:72%;color:var(--muted);line-height:1.1}
 .wk-meta{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:14px;color:var(--muted)}
@@ -68,7 +69,7 @@ a.li:hover .li-t{text-decoration:underline;text-decoration-color:var(--accent)}
   {% if x.map %}<div class="wk-map"><img src="{{ url_for('map_image', name=x.map) }}" alt="" onerror="this.parentNode.remove()"></div>{% endif %}
   <div class="wk-in">
     <div>
-      <div class="wk-team"><span class="avatar sm">{{ x.t.name[:1]|upper }}</span><a href="{{ url_for('team_premier', tid=x.t.id) }}">{{ x.t.name }}</a><span>· Premier this week</span></div>
+      <div class="wk-team"><span class="avatar sm">{{ x.t.name[:1]|upper }}</span><a href="{{ url_for('team_premier', tid=x.t.id) }}">{{ x.t.name }}</a><span>· {{ 'Match time' if x.live else 'Premier this week' }}</span>{% if x.live %}<span class="livedot" aria-hidden="true"></span>{% endif %}</div>
       {% if x.map %}<div class="wk-name">{{ x.map }}</div>{% else %}<div class="wk-name none">No map set for this week</div>{% endif %}
       <div class="wk-meta">
         {% if a %}<span>Next match <b>{{ 'today' if a.today else a.label }}</b></span>{% endif %}
@@ -76,7 +77,9 @@ a.li:hover .li-t{text-decoration:underline;text-decoration-color:var(--accent)}
         {% if not x.map and not a %}<span>Set match days under Premier to see who can play.</span>{% endif %}
       </div>
       <div class="wk-acts">
-        {% if x.map %}<a class="btn primary" href="{{ url_for('team_brief', tid=x.t.id) }}">Open match-day brief</a>{% endif %}
+        {% if x.live %}<a class="btn primary" href="{{ url_for('team_match', tid=x.t.id) }}">Open match screen</a>{% endif %}
+        {% if x.map %}<a class="btn {{ '' if x.live else 'primary' }}" href="{{ url_for('team_brief', tid=x.t.id) }}">Open match-day brief</a>{% endif %}
+        {% if not x.live %}<a class="btn" href="{{ url_for('team_match', tid=x.t.id) }}">Match screen</a>{% endif %}
         <a class="btn" href="{{ url_for('team', tid=x.t.id) }}">Team comps</a>
         <a class="btn ghost" href="{{ url_for('team_strats', tid=x.t.id) }}">Strat book</a>
       </div>

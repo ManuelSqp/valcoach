@@ -73,6 +73,13 @@ CREATE TABLE IF NOT EXISTS jobs (
   started_at  TEXT NOT NULL DEFAULT '',
   finished_at TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS push_subs (
+  endpoint   TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  keys       TEXT NOT NULL DEFAULT '{}',
+  agent      TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS jobs_profile ON jobs(profile_id, created_at);
 CREATE TABLE IF NOT EXISTS teams (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -309,6 +316,7 @@ class Job:
     created_at: str
     started_at: str
     finished_at: str
+    share_token: str = ""           # read-only link /share/<token> (empty = not shared)
 
     @property
     def opts(self) -> dict:
@@ -425,6 +433,10 @@ class Store:
             if "perms" not in ucols:
                 # v2.21 database: rights an admin can give without making someone admin
                 c.execute("ALTER TABLE users ADD COLUMN perms TEXT NOT NULL DEFAULT ''")
+            jcols = [r[1] for r in c.execute("PRAGMA table_info(jobs)")]
+            if "share_token" not in jcols:
+                # v3.4 database: read-only links to a report
+                c.execute("ALTER TABLE jobs ADD COLUMN share_token TEXT NOT NULL DEFAULT ''")
             cols = [r[1] for r in c.execute("PRAGMA table_info(profiles)")]
             if "position" not in cols:
                 # v2.2 database: add the drag-and-drop order, starting alphabetical
@@ -673,6 +685,28 @@ class Store:
     def job(self, job_id: str) -> Job | None:
         rows = self._all("SELECT * FROM jobs WHERE id = ?", (job_id,))
         return _load(Job, rows[0]) if rows else None
+
+    def job_by_share(self, token: str) -> Job | None:
+        if not token or len(token) < 20:
+            return None
+        rows = self._all("SELECT * FROM jobs WHERE share_token = ?", (token,))
+        return _load(Job, rows[0]) if rows else None
+
+    # ---- push notifications (installed app / browser) -------------------------
+    def push_subs(self, user_id: int | None = None) -> list[dict]:
+        if user_id is None:
+            return [dict(r) for r in self._all("SELECT * FROM push_subs")]
+        return [dict(r) for r in self._all("SELECT * FROM push_subs WHERE user_id = ?", (user_id,))]
+
+    def add_push_sub(self, user_id: int, endpoint: str, keys: dict, agent: str = "") -> None:
+        self._exec("INSERT OR REPLACE INTO push_subs(endpoint, user_id, keys, agent, created_at) VALUES(?, ?, ?, ?, ?)",
+                   (endpoint[:1000], user_id, json.dumps(keys)[:1000], agent[:200], now()))
+
+    def remove_push_sub(self, endpoint: str, user_id: int | None = None) -> None:
+        if user_id is None:
+            self._exec("DELETE FROM push_subs WHERE endpoint = ?", (endpoint,))
+        else:
+            self._exec("DELETE FROM push_subs WHERE endpoint = ? AND user_id = ?", (endpoint, user_id))
 
     def job_owner(self, job_id: str) -> int | None:
         rows = self._all("SELECT p.owner_id FROM jobs j JOIN profiles p ON p.id = j.profile_id WHERE j.id = ?",

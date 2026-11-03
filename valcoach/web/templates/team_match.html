@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Match screen · {{ sel or '' }} · {{ t.name }}{% endblock %}
+{% macro ai(agent, size=26) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% block head %}
+<style>
+main.page{max-width:1760px}
+.ms-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px 24px;flex-wrap:wrap;margin-bottom:18px}
+.ms-map{font-size:clamp(56px,7vw,96px);line-height:.85;font-weight:850;font-stretch:62%;font-family:var(--font-head)}
+.ms-crumbs{font-size:13px;color:var(--muted);margin-bottom:6px}.ms-crumbs a{color:var(--muted)}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--red);margin-left:10px;vertical-align:middle}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--red);animation:pulse 1.6s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.ms-ctl{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.ms-ctl select{width:auto}
+.sideswitch{display:inline-flex;padding:4px;border-radius:12px;background:var(--panel2);border:1px solid var(--line)}
+.sideswitch button{font:inherit;font-size:16px;font-weight:700;padding:9px 22px;border:0;border-radius:9px;background:transparent;color:var(--muted);cursor:pointer}
+.sideswitch button.on[data-side=attack]{background:var(--red);color:#fff}.sideswitch button.on[data-side=defense]{background:var(--blue);color:#06121f}
+.ms-grid{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(0,1.6fr) minmax(280px,1fr);gap:16px;align-items:start}
+@media(max-width:1200px){.ms-grid{grid-template-columns:1fr 1fr}.ms-grid>.col3{grid-column:1/-1}}
+@media(max-width:760px){.ms-grid{grid-template-columns:1fr}}
+.ms-grid .card{margin:0 0 16px}
+.ms-grid h2{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.ms-grid h2 a,.ms-grid h2 span{font-size:12.5px;font-weight:500;color:var(--muted)}
+.cp{display:grid;grid-template-columns:40px minmax(0,1fr);gap:4px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.cp:first-of-type{border-top:0}
+.cp img{width:40px;height:40px;border-radius:10px;grid-row:span 2}
+.cp .who{font-weight:700;font-size:16px}.cp .who small{font-weight:500;color:var(--muted);font-size:13px;margin-left:6px}
+.cp .fo{font-size:13px;color:var(--muted);line-height:1.35}
+.cp.me{background:var(--accent-soft);margin:0 -10px;padding:10px;border-radius:10px;border-top-color:transparent}
+.cp.me .who::after{content:"you";font-size:11px;font-weight:700;color:var(--accent-ink);background:var(--accent);border-radius:5px;padding:0 5px;margin-left:8px;vertical-align:2px}
+.pl{border-top:1px solid var(--line);padding:14px 0 6px}.pl:first-of-type{border-top:0;padding-top:4px}
+.pl h3{font-size:19px;margin:0 0 4px}.pl .idea{margin:0 0 8px;color:var(--muted)}
+.pl .timing{display:inline-block;font-size:13px;font-weight:650;padding:2px 9px;border-radius:6px;background:var(--panel3);margin-bottom:8px}
+.st{display:grid;grid-template-columns:120px minmax(0,1fr);gap:10px;padding:6px 0;font-size:14.5px;border-top:1px dashed var(--line)}
+.st b{font-weight:650}.st.me{background:var(--accent-soft);border-radius:8px;padding:6px 8px;border-top-color:transparent;font-size:15.5px}
+.ift{margin:8px 0 0;padding-left:18px;font-size:13.5px;color:var(--muted)}.ift li{margin:2px 0}
+.sr{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--line)}.sr:first-of-type{border-top:0}
+.sr b{font-weight:650}.sr .small{color:var(--muted)}
+.lu{padding:9px 0;border-top:1px solid var(--line);font-size:14px}.lu:first-of-type{border-top:0}
+.lu .h{display:flex;align-items:center;gap:8px;font-weight:650}.lu .h img{width:22px;height:22px}
+.lu .tags{display:flex;gap:4px;flex-wrap:wrap;margin:4px 0 0 30px}.lu .tags span{font-size:11.5px;padding:0 7px;border-radius:99px;background:var(--panel3);color:var(--muted)}
+.lu .note{margin:3px 0 0 30px;color:var(--muted);font-size:13px}
+.lu.mine{background:var(--accent-soft);border-radius:8px;padding:9px 8px;border-top-color:transparent}
+.opp .ln{margin:0;padding-left:18px;font-size:14px}.opp .ln li{margin:3px 0}
+.opp .oc{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0 10px}
+[data-side-only]{display:none}
+body[data-side=attack] [data-side-only=attack],body[data-side=defense] [data-side-only=defense]{display:block}
+.empty-s{color:var(--muted);font-size:14px;margin:4px 0 8px}
+/* a strat, played right here */
+.stratbox{position:fixed;inset:3vh 3vw;z-index:80;background:var(--bg);border:1px solid var(--line2);border-radius:var(--radius);box-shadow:0 30px 80px rgba(0,0,0,.6);display:flex;flex-direction:column}
+.stratbox[hidden]{display:none}.stratbox .bar{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}
+.stratbox iframe{flex:1;border:0;width:100%;border-radius:0 0 var(--radius) var(--radius)}
+.keys{font-size:12.5px;color:var(--faint);margin-top:14px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="ms-head">
+  <div>
+    <div class="ms-crumbs"><a href="{{ url_for('teams') }}">Teams</a> / <a href="{{ url_for('team_premier', tid=t.id) }}">{{ t.name }}</a> / Match screen{% if live %}<span class="live"><i></i>Match time</span>{% endif %}</div>
+    <div class="ms-map">{{ sel or 'Pick a map' }}</div>
+  </div>
+  <form class="ms-ctl" method="get" id="msform">
+    <input type="hidden" name="side" value="{{ side }}" id="sidefield">
+    <label class="sr-only" for="msmap">Map</label>
+    <select id="msmap" name="map" onchange="this.form.submit()">{% for mp in maps %}<option {{ 'selected' if mp == sel }}>{{ mp }}</option>{% endfor %}</select>
+    <label class="sr-only" for="msopp">Opponent</label>
+    <select id="msopp" name="opp" onchange="this.form.submit()"><option value="">Opponent: not known yet</option>{% for oid, oname in opponents %}<option value="{{ oid }}" {{ 'selected' if opp and opp.id == oid }}>{{ oname }}</option>{% endfor %}</select>
+    <div class="sideswitch" role="group" aria-label="Side">
+      <button type="button" data-side="attack" class="{{ 'on' if side == 'attack' }}">Attack</button>
+      <button type="button" data-side="defense" class="{{ 'on' if side == 'defense' }}">Defense</button>
+    </div>
+    <button type="button" class="btn ghost" id="fsbtn" title="Full screen (F)">Full screen</button>
+  </form>
+</div>
+
+{% if sel %}
+<div class="ms-grid">
+  <div>
+    <section class="card">
+      <h2>Comp{% if b.comp %}<span>{{ b.comp.source }}</span>{% endif %}</h2>
+      {% set fo = {} %}{% for f in b.focus or [] %}{% set _ = fo.update({f.player: f.focus}) %}{% endfor %}
+      {% for pk in (b.comp.picks if b.comp else []) %}
+      <div class="cp {{ 'me' if pk.player == me_name }}">{{ ai(pk.agent, 40) }}
+        <div class="who">{{ pk.player }}<small>{{ pk.agent }}{% if pk.alt %} or {{ pk.alt }}{% endif %}</small></div>
+        <div class="fo">{% if fo.get(pk.player) %}Focus: {{ fo[pk.player] }}{% elif pk.note %}{{ pk.note }}{% else %}&nbsp;{% endif %}</div></div>
+      {% else %}<p class="empty-s">No comp yet: mark a draft as <i>Our comp</i> under <a href="{{ url_for('team_drafts', tid=t.id, map=sel) }}">Drafts</a>.</p>{% endfor %}
+    </section>
+    {% set a = b.avail %}{% if a %}
+    <section class="card"><h2>Who's playing<a href="{{ url_for('team_availability', tid=t.id) }}">{{ 'Today' if a.today else a.label }}</a></h2>
+      <div class="roster">{% for m in a.yes + a.maybe + a.unknown + a.no %}{% set st = a.state[m.pid] or 'unknown' %}<span class="rc {{ st }}"><i>{{ {'yes': '✓', 'maybe': '?', 'no': '✕', 'unknown': '·'}[st] }}</i>{{ m.name }}</span>{% endfor %}</div>
+      {% for slot in a.missing %}<div class="small muted">{{ slot.name }} can't play{% if slot.subs %}: {{ slot.subs[0].name }} {{ slot.subs[0].why }}{% endif %}</div>{% endfor %}
+    </section>{% endif %}
+  </div>
+
+  <div>
+    <section class="card">
+      <h2>Game plans<a href="{{ url_for('team_plans', tid=t.id, map=sel) }}">All plans for {{ sel }}</a></h2>
+      {% for sd in ('attack', 'defense') %}<div data-side-only="{{ sd }}">
+        {% for p in plans if p.side == sd %}
+        <div class="pl"><h3>{{ p.title }}</h3><p class="idea">{{ p.idea }}</p>
+          {% if p.timing %}<span class="timing">{{ p.timing }}</span>{% endif %}
+          {% for s in p.steps or [] %}<div class="st {{ 'me' if s.player == me_name }}"><b>{{ s.player }}</b><span>{{ s.what }}</span></div>{% endfor %}
+          {% if p.if_then %}<ul class="ift">{% for x in p.if_then %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        {% else %}<p class="empty-s">No {{ sd }} plan for {{ sel }} yet: <a href="{{ url_for('team_plans', tid=t.id, map=sel) }}">write plans</a>.</p>{% endfor %}
+      </div>{% endfor %}
+    </section>
+  </div>
+
+  <div class="col3">
+    {% if opp %}
+    <section class="card opp"><h2>{{ opp.name }}<a href="{{ url_for('team_scouted', tid=t.id, team_id=opp.id) }}">{{ opp.record }}, full scouting</a></h2>
+      {% if opp.map.games %}<div class="small muted">On {{ sel }}: {{ opp.map.wins }}–{{ opp.map.games - opp.map.wins }}</div>{% endif %}
+      {% for c in opp.comps %}<div class="oc">{% for ag in c.agents %}{{ ai(ag, 26) }}{% endfor %}<span class="small muted" style="align-self:center">{{ c.games }}×</span></div>{% endfor %}
+      <ul class="ln">{% for l in (opp.lines or opp.general) %}<li>{{ l }}</li>{% endfor %}</ul>
+    </section>{% endif %}
+    <section class="card">
+      <h2>Strats<a href="{{ url_for('team_strats', tid=t.id) }}#map-{{ sel }}">Strat book</a></h2>
+      {% for sd in ('attack', 'defense') %}<div data-side-only="{{ sd }}">
+        {% for x in strats if x.side == sd %}<div class="sr"><span><b>{{ x.name }}</b><br><span class="small">changed {{ x.updated_at|localtime }}</span></span>
+          <button type="button" class="btn sm" data-strat="{{ url_for('strat_edit', tid=t.id, sid=x.id, play=1, embed=1) }}" data-name="{{ x.name }}">Play</button></div>
+        {% else %}<p class="empty-s">No {{ sd }} strats on {{ sel }}.</p>{% endfor %}
+      </div>{% endfor %}
+    </section>
+    <section class="card">
+      <h2>Lineups<a href="{{ url_for('team_lineups', tid=t.id, map=sel) }}">All lineups</a></h2>
+      {% for sd in ('attack', 'defense') %}<div data-side-only="{{ sd }}">
+        {% for r in lineups if not r.side or r.side == sd %}{% set mine = (b.comp and (b.comp.picks|selectattr('player', 'equalto', me_name)|map(attribute='agent')|first) == r.agent) %}
+        <div class="lu {{ 'mine' if mine }}"><div class="h">{{ ai(r.agent, 22) }}{{ r.title }}{% if r.clip %} <a class="small" href="{{ r.clip.url }}" target="_blank" rel="noopener">▶ watch</a>{% endif %}</div>
+          <div class="tags">{% if r.ability %}<span>{{ r.ability }}</span>{% endif %}{% if r.site %}<span>{{ r.site }}</span>{% endif %}{% if r.agent not in comp_agents %}<span>not in the comp</span>{% endif %}</div>
+          {% if r.notes %}<div class="note">{{ r.notes }}</div>{% endif %}</div>
+        {% else %}<p class="empty-s">No {{ sd }} lineups on {{ sel }}.</p>{% endfor %}
+      </div>{% endfor %}
+    </section>
+  </div>
+</div>
+<p class="keys">Keys: <kbd>A</kbd> attack · <kbd>D</kbd> defense · <kbd>F</kbd> full screen · <kbd>Esc</kbd> closes a strat. Your own lines are highlighted.</p>
+{% else %}
+<section class="card"><p class="muted">No maps for this team yet: set the map pool under <a href="{{ url_for('team_settings', tid=t.id) }}">Team settings</a>.</p></section>
+{% endif %}
+
+<div class="stratbox" id="stratbox" hidden role="dialog" aria-modal="true" aria-label="Strat">
+  <div class="bar"><b id="stratname"></b><button type="button" class="btn sm" id="stratclose">Close</button></div>
+  <iframe id="stratframe" title="Strat" src="about:blank"></iframe>
+</div>
+<script>
+(function () {
+  const body = document.body, field = document.getElementById('sidefield');
+  const setSide = s => {
+    body.dataset.side = s; field.value = s;
+    document.querySelectorAll('.sideswitch button').forEach(b => b.classList.toggle('on', b.dataset.side === s));
+    const u = new URL(location.href); u.searchParams.set('side', s); history.replaceState(null, '', u);
+  };
+  setSide('{{ side }}');
+  document.querySelectorAll('.sideswitch button').forEach(b => b.addEventListener('click', () => setSide(b.dataset.side)));
+  const box = document.getElementById('stratbox'), frame = document.getElementById('stratframe');
+  const close = () => { box.hidden = true; frame.src = 'about:blank'; };
+  document.querySelectorAll('[data-strat]').forEach(b => b.addEventListener('click', () => {
+    document.getElementById('stratname').textContent = b.dataset.name; frame.src = b.dataset.strat; box.hidden = false; }));
+  document.getElementById('stratclose').addEventListener('click', close);
+  const fs = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+  document.getElementById('fsbtn').addEventListener('click', fs);
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input, select, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k === 'escape' && !box.hidden) close();
+    else if (k === 'a') setSide('attack');
+    else if (k === 'd') setSide('defense');
+    else if (k === 'f') fs();
+  });
+})();
+</script>
+{% endblock %}

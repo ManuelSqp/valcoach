@@ -26,6 +26,7 @@
   src:url(fonts/archivo-latin-ext.woff2) format("woff2-variations"),url(fonts/archivo-latin-ext.woff2) format("woff2");
   unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:linear-gradient(90deg,var(--side) 255px,var(--line) 255px 256px,var(--bg) 256px);color:var(--text);font:15px/1.55 var(--font);font-variant-numeric:tabular-nums;display:grid;grid-template-columns:256px minmax(0,1fr);min-height:100vh}
 body.no-side{display:block;background:var(--bg)}
@@ -326,3 +327,6 @@ main.page{overflow-wrap:break-word}
   .nav-top .side-nav>.si,.nav-top .ngroup>.sg-head{padding:7px 6px;font-size:13.5px}
   .nav-top .vc-side{padding:8px 10px;gap:4px}
 }
+/* a page shown inside another (the match screen opens strats this way) */
+body.embed{background:var(--bg)}body.embed .page{max-width:none;padding:12px 14px}
+.sn .badge.live{background:var(--red);color:#fff}

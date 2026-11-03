@@ -10,6 +10,7 @@ from __future__ import annotations
 import functools
 import json
 import re
+import secrets
 import shutil
 import socket
 import sqlite3
@@ -39,7 +40,7 @@ HISTORY_TTL_S = 120
 HISTORY_PAGE = 10     # full matches per page (each uncached match costs one API request)
 STORED_PAGE = 20      # stored-archive rows per page (one API request per page)
 PLAYBOOK_EXAMPLE = (Path(__file__).parent / "playbook_example.yaml").read_text()
-PUBLIC_ENDPOINTS = {"login", "signup", "setup", "static"}
+PUBLIC_ENDPOINTS = {"login", "signup", "setup", "static", "shared_report", "shared_vod", "manifest", "service_worker", "offline"}
 MAX_LOGIN_FAILS = 5
 LOCKOUT_S = 600
 MAX_CACHE_ENTRIES = 200                # match-list cache (one entry per player / queue / page)
@@ -267,6 +268,17 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 out[t.id] = ""
         return out
 
+    def _nav_live(teams) -> dict:
+        """Sidebar hint: teams whose match is about now (match day, from 90 min before the match time)."""
+        fn = app.extensions["valcoach"].get("match_window")
+        out = {}
+        for t in teams:
+            try:
+                out[t.id] = bool(fn and fn(t))
+            except Exception:
+                out[t.id] = False
+        return out
+
     def _nav_quiz(p) -> int:
         """Sidebar hint: questions waiting in your quiz."""
         if p is None:
@@ -290,6 +302,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             "nav_team": nav_team,
             "nav_player": nav_player,
             "nav_week": _nav_week(nav_ts),
+            "nav_live": _nav_live(nav_ts),
             "nav_quiz": _nav_quiz(nav_me),
             "user": user,
             "nav_profiles": nav_ps,
@@ -450,7 +463,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 old_prefs = json.loads(g.user.prefs or "{}")
             except ValueError:
                 old_prefs = {}
-            for k in ("home_seen", "home_prev"):
+            for k in ("home_seen", "home_prev", "notify"):
                 if old_prefs.get(k):
                     prefs[k] = old_prefs[k]
             from .ui import NAVS
@@ -458,6 +471,16 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             store.update_user(g.user.id, prefs=json.dumps(prefs))
             flash(f"Style: {STYLES[prefs['style']][0]}.", "ok")
             return redirect(url_for("account") + "#look")
+        if request.method == "POST" and request.form.get("notify"):
+            from .push import KINDS
+            try:
+                prefs = json.loads(g.user.prefs or "{}")
+            except ValueError:
+                prefs = {}
+            prefs["notify"] = {k: bool(request.form.get(f"n_{k}")) for k in KINDS}
+            store.update_user(g.user.id, prefs=json.dumps(prefs))
+            flash("Notification settings saved.", "ok")
+            return redirect(url_for("account") + "#app")
         if request.method == "POST" and "display_name" in request.form:
             store.update_user(g.user.id, display_name=request.form["display_name"].strip()[:40])
             flash("Saved.", "ok")
@@ -476,7 +499,9 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             return redirect(url_for("account"))
         usage = store.usage_by_user().get(g.user.id, {"profiles": 0, "jobs": 0})
         from .ui import ANIMATIONS, NAVS, STYLES
-        return render_template("account.html", navs=NAVS, usage=usage, vod_root=vod_root(g.user), styles=STYLES, animations=ANIMATIONS)
+        from .push import KINDS, available as push_ok, wants
+        return render_template("account.html", navs=NAVS, push_kinds=KINDS, push_ok=push_ok(),
+                               push_on={k: wants(g.user, k) for k in KINDS}, push_devices=len(store.push_subs(g.user.id)), usage=usage, vod_root=vod_root(g.user), styles=STYLES, animations=ANIMATIONS)
 
     # -------------------------------------------------------------- quick search (Ctrl+K)
     @app.get("/api/search-index")
@@ -953,6 +978,115 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             abort(404)
         return send_file(path, conditional=True)   # supports Range requests (seeking)
 
+    # ------------------------------------------------------- the installable app (PWA) and push
+    from . import push as _push
+
+    def _report_done(job_id: str, status: str) -> None:
+        j, owner = store.job(job_id), store.job_owner(job_id)
+        if j is None or owner is None:
+            return
+        what = f"{j.map} {j.score}".strip() or "your match"
+        if status == "done":
+            _push.send(store, owner, f"Report ready: {what}", "Tap to open the coaching report.",
+                       url=f"/jobs/{job_id}/report", tag=f"job-{job_id}", kind="report")
+        else:
+            _push.send(store, owner, "Report failed", (j.error or "")[:120] or "Open the job to see why.",
+                       url=f"/jobs/{job_id}", tag=f"job-{job_id}", kind="report")
+    runner.on_finish = _report_done
+
+    @app.get("/manifest.webmanifest")
+    def manifest():
+        icon = lambda n, purpose="any": {"src": url_for("static", filename=f"icons/{n}"), "sizes": n.split("-")[-1].split(".")[0] + "x" + n.split("-")[-1].split(".")[0],  # noqa: E731
+                                          "type": "image/png", "purpose": purpose}
+        data = {"name": "valcoach", "short_name": "valcoach", "description": "Your Valorant coach: reports, stats, team prep.",
+                "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "any",
+                "background_color": "#121822", "theme_color": "#0e131b",
+                "icons": [icon("icon-192.png"), icon("icon-512.png"), icon("maskable-512.png", "maskable")],
+                "shortcuts": [{"name": "Home", "url": "/"}]}
+        r = app.response_class(json.dumps(data), mimetype="application/manifest+json")
+        r.headers["Cache-Control"] = "no-cache"
+        return r
+
+    @app.get("/sw.js")
+    def service_worker():
+        r = app.response_class(render_template("sw.js", version=__version__), mimetype="text/javascript")
+        r.headers["Cache-Control"] = "no-cache"
+        r.headers["Service-Worker-Allowed"] = "/"
+        return r
+
+    @app.get("/offline")
+    def offline():
+        return render_template("offline.html")
+
+    @app.get("/api/push/key")
+    def push_key():
+        if not _push.available():
+            return jsonify(error="Push isn't installed on the server (pip install -e . adds it)."), 503
+        return jsonify(key=_push.keys(store)[0])
+
+    @app.post("/api/push/subscribe")
+    def push_subscribe():
+        b = request.get_json(silent=True) or {}
+        ep, keys = str(b.get("endpoint") or ""), b.get("keys") or {}
+        if not ep.startswith("https://") or not isinstance(keys, dict) or not keys.get("p256dh") or not keys.get("auth"):
+            return jsonify(error="bad subscription"), 400
+        store.add_push_sub(g.user.id, ep, {"p256dh": str(keys["p256dh"])[:200], "auth": str(keys["auth"])[:100]},
+                           request.headers.get("User-Agent", ""))
+        if not store.get("push_claim"):
+            store.set("push_claim", request.host_url.rstrip("/"))       # push services want a contact URL
+        return jsonify(ok=True, devices=len(store.push_subs(g.user.id)))
+
+    @app.post("/api/push/unsubscribe")
+    def push_unsubscribe():
+        b = request.get_json(silent=True) or {}
+        store.remove_push_sub(str(b.get("endpoint") or ""), g.user.id)
+        return jsonify(ok=True, devices=len(store.push_subs(g.user.id)))
+
+    @app.post("/api/push/test")
+    def push_test():
+        n = _push.send(store, g.user.id, "valcoach", "Notifications work on this device.", url="/account#app", tag="test", wait=True)
+        return jsonify(ok=bool(n), devices=n) if n else (jsonify(error="No device has notifications on."), 400)
+
+    # ------------------------------------------------------- share a report (read-only link)
+    @app.post("/jobs/<jid>/share")
+    def job_share(jid: str):
+        j = get_job(jid)
+        if j.status != "done":
+            flash("Only finished reports can be shared.", "error")
+        elif request.form.get("off"):
+            store.update_job(jid, share_token="")
+            flash("The share link is off: whoever had it can't open the report any more.", "ok")
+        elif not j.share_token:
+            store.update_job(jid, share_token=secrets.token_urlsafe(24))
+            flash("Share link made: anyone with the link can read this report (no account needed).", "ok")
+        return redirect(url_for("job", jid=jid) + "#share")
+
+    @app.get("/share/<token>")
+    def shared_report(token: str):
+        j = store.job_by_share(token)
+        path = store.resolve(j.html_path) if j and j.status == "done" else None
+        if path is None:
+            abort(404)
+        html = path.read_text(encoding="utf-8", errors="replace")
+        html = html.replace(f"/jobs/{j.id}/vod", url_for("shared_vod", token=token))
+        note = ('<div style="position:sticky;top:0;z-index:50;background:#212b3a;color:#e7ecf3;font:13px/1.4 system-ui,sans-serif;'
+                'padding:7px 14px;text-align:center">Shared from valcoach: read only.</div>')
+        i = html.find("<body>")
+        html = html[:i + 6] + note + html[i + 6:] if i >= 0 else note + html
+        r = app.response_class(html, mimetype="text/html")
+        r.headers["Cache-Control"] = "no-store"
+        r.headers["X-Robots-Tag"] = "noindex, nofollow"
+        r.headers["Referrer-Policy"] = "no-referrer"
+        return r
+
+    @app.get("/share/<token>/vod")
+    def shared_vod(token: str):
+        j = store.job_by_share(token)
+        path = store.resolve(j.vod_path) if j and j.vod_path else None
+        if path is None:
+            abort(404)
+        return send_file(path, conditional=True)
+
     @app.post("/jobs/<jid>/delete")
     def job_delete(jid: str):
         j = get_job(jid)
@@ -1230,6 +1364,9 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
     if start_workers:
         from . import backup as _backup
         app.extensions["valcoach"].setdefault("ticks", []).append(lambda: _backup.tick(store))
+        if "match_window" in app.extensions["valcoach"]:
+            from . import push as _push2
+            app.extensions["valcoach"]["ticks"].append(lambda: _push2.match_day_tick(store, app.extensions["valcoach"]["match_window"]))
         stats_runner.start_scheduler(app.extensions["valcoach"]["weekly_job"], app.extensions["valcoach"]["nightly_job"],
                                      extra=app.extensions["valcoach"].get("ticks", []))
     return app

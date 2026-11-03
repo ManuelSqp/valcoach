@@ -43,7 +43,11 @@ def today(app, store, sr, user, since: float) -> dict:
         if mine is None and t.owner_id == user.id and user.display_name:
             p = next((p for p in my_profiles if p.riot_id.lower() == user.display_name.lower()), None)
             mine = next((m for m in t.member_list if p and m["pid"] == p.id), None)
-        x = {"t": t, "mine": mine, "map": None, "avail": None, "my_answer": None, "focus": None, "own": None}
+        x = {"t": t, "mine": mine, "map": None, "avail": None, "my_answer": None, "focus": None, "own": None, "live": False}
+        try:
+            x["live"] = bool(ext["match_window"](t)) if "match_window" in ext else False
+        except Exception:
+            pass
         try:
             x["map"] = ext["week_map"](t) if "week_map" in ext else None
         except Exception:
