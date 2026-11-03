@@ -56,8 +56,16 @@ def test_import_is_incremental(imported, cache):
     before = dict(client.calls)
     res = import_games(client, "eu", "pc", "adv1ce", "LFT", gs, cache)
     assert res["full"] == 0 and res["stored"] == 0
-    assert client.calls["history"] - before["history"] <= 2        # one page per queue, nothing new: stop
-    assert client.calls["stored"] - before["stored"] <= 4
+    assert client.calls["history"] - before["history"] <= 3        # one page per queue, nothing new: stop
+    assert client.calls["stored"] - before["stored"] <= 6
+
+
+def test_queue_filters():
+    rows = [{"queue": q} for q in ("competitive", "premier", "unrated", "swiftplay", "deathmatch")]
+    assert [r["queue"] for r in filter_rows(rows, "all")] == ["competitive", "premier"]
+    assert [r["queue"] for r in filter_rows(rows, "unrated")] == ["unrated"]
+    assert [r["queue"] for r in filter_rows(rows, "everything")] == ["competitive", "premier", "unrated"]
+    assert filter_rows(rows, "nonsense") == filter_rows(rows, "all")
 
 
 def test_aggregates(imported):

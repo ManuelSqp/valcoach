@@ -22,7 +22,7 @@ def week_map_of(app, t) -> str | None:
         return None
 
 
-QUEUE_TABS = [("all", "All ranked"), ("competitive", "Competitive"), ("premier", "Premier")]
+QUEUE_TABS = [("all", "All ranked"), ("competitive", "Competitive"), ("premier", "Premier"), ("unrated", "Unrated"), ("everything", "Everything")]
 # fallback when nobody has games yet; maps with games are added automatically
 KNOWN_MAPS = ["Abyss", "Ascent", "Bind", "Breeze", "Corrode", "Fracture", "Haven", "Icebox", "Lotus",
               "Pearl", "Split", "Summit", "Sunset"]

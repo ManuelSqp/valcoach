@@ -19,7 +19,7 @@ from ..models import Match
 from ..parse import parse_match
 from . import roles
 
-QUEUES = ("competitive", "premier")
+QUEUES = ("competitive", "premier", "unrated")
 ROW_VERSION = 4            # bump when rows from full matches gain fields; old rows are rebuilt from the cache
 ISOLATED_UNITS = 2000      # ~20 m to the nearest living teammate
 TRADE_MS = 3000

@@ -34,7 +34,7 @@
       {% else %}<p class="muted">Add your teammates as players first.</p>{% endif %}
       <div class="field" style="margin-top:12px"><label>Use games from</label>
         <select name="queue">{% for val, label in queues %}<option value="{{ val }}" {{ 'selected' if t.queue == val }}>{{ label }}</option>{% endfor %}</select>
-        <div class="hint">"All ranked" uses Competitive + Premier: more data per agent. "Premier" only counts your Premier games.</div></div>
+        <div class="hint">"All ranked" uses Competitive + Premier: more data per agent. "Premier" only counts your Premier games. "Everything" adds Unrated (more games, but people play it less seriously).</div></div>
     </section>
     <section class="card">
       <h2>Map pool</h2>

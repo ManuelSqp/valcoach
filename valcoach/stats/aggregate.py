@@ -14,10 +14,17 @@ def smooth(wins: float, n: int, prior: float = 0.5, k: float = PRIOR_GAMES) -> f
     return (wins + prior * k) / (n + k)
 
 
+RANKED = ("competitive", "premier")
+EVERY = ("competitive", "premier", "unrated")
+
+
 def filter_rows(rows: list[dict], queue: str = "all") -> list[dict]:
-    if queue in ("competitive", "premier"):
+    """all = ranked (Competitive + Premier); everything = ranked + Unrated; or one queue."""
+    if queue in EVERY:
         return [r for r in rows if r.get("queue") == queue]
-    return [r for r in rows if r.get("queue") in ("competitive", "premier")]
+    if queue == "everything":
+        return [r for r in rows if r.get("queue") in EVERY]
+    return [r for r in rows if r.get("queue") in RANKED]
 
 
 def summary(rows: list[dict]) -> dict:

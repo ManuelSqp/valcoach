@@ -1,6 +1,6 @@
 # valcoach v2
 
-**Version 3.2.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 3.3.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -26,7 +26,7 @@ unzip valcoach-v2.zip && cd valcoach-v2
 /opt/homebrew/opt/python@3.11/bin/python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                     # 145 tests, ~3 min, builds a synthetic match + VOD
+pytest -q                     # 146 tests, ~3 min, builds a synthetic match + VOD
 ollama pull qwen3.8:27b       # default; alternatives below
 ```
 
@@ -134,11 +134,12 @@ light or dark, menu on the left or at the top) is under Account.
 
 ### Stats, agents and team comps
 
-**Performance › Stats & maps.** *Import match history* loads your Competitive and Premier games from HenrikDev
+**Performance › Stats & maps.** *Import match history* loads your Competitive, Premier and Unrated games from HenrikDev
 in the background: the last ~60 per queue with full round data (10 per request) and up to 300 older ones per
 queue from the stored archive (summaries only, 20 per request). *Update* later only fetches what's new.
 
-- **Maps and agents**: games, win rate, ACS, K/D per map and per agent, filterable by queue.
+- **Maps and agents**: games, win rate, ACS, K/D per map and per agent, filterable by queue (All ranked,
+  Competitive, Premier, Unrated, or Everything).
 - **Agents & roles** (its own page): every agent you played with all numbers (sortable, per map on click), the
   agent class you pick most, the team role your habits fit (0–100 per role, from first fights, trades, fights far
   from the team, holding a site, assists, Operator), whether the two match, and three agents to try.
