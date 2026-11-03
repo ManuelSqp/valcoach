@@ -1,0 +1,2 @@
+{% if old_rows %}<div class="flash" style="margin-bottom:16px">{{ old_rows }} of these games were loaded before valcoach 3.6 and don't have utility, buys or teammates yet.
+  {% if can_edit %}Press <i>Load new games</i> on <a href="{{ url_for('stats', pid=p.id) }}">Stats &amp; maps</a> once: they're rebuilt from the stored matches, nothing is downloaded again.{% else %}They're updated with the owner's next import.{% endif %}</div>{% endif %}

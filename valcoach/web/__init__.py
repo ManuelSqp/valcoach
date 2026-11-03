@@ -512,7 +512,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         for p in store.profiles(g.user.id):
             seen.add(p.id)
             add("player", p.riot_id, url_for("stats", pid=p.id), "stats & maps")
-            for ep, lbl in (("agents_roles", "agents & roles"), ("habits", "habits"), ("progress", "rank & progress"), ("training", "training"),
+            for ep, lbl in (("agents_roles", "agents & roles"), ("rounds_page", "rounds & economy"), ("teammates_page", "teammates"), ("habits", "habits"), ("progress", "rank & progress"), ("training", "training"),
                             ("quiz", "quiz"), ("pros", "pros & videos"), ("profile", "matches & reports")):
                 add("player", f"{p.name} · {lbl}", url_for(ep, pid=p.id))
         for t in store.teams_for_user(g.user.id):

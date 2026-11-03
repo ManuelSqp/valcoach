@@ -38,6 +38,20 @@
 .agtable tr.det[hidden]{display:none}
 .mchips{display:flex;flex-wrap:wrap;gap:6px}.mchips span{font-size:12.5px;padding:3px 10px;border-radius:99px;background:var(--panel3)}
 .mchips span b{font-weight:650}
+.dgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}@media(max-width:1000px){.dgrid{grid-template-columns:1fr}}
+.dgrid h3{font-size:14px;color:var(--muted);font-weight:650;margin:0 0 8px}
+.prog{width:100%;height:120px;display:block;background:var(--panel2);border-radius:8px}
+.prog .pl{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke}
+.prog circle{stroke:none}.prog circle.w{fill:var(--win)}.prog circle.l{fill:var(--red)}.prog circle.d{fill:var(--muted)}
+.fl{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.fl div{background:var(--panel2);border-radius:8px;padding:10px 12px}
+.fl span{display:block;font-size:12.5px;color:var(--muted)}.fl b{font-size:22px;font-weight:800;font-stretch:72%}
+.cmp{font-size:14px}.cmp td,.cmp th{padding:6px 8px}.cmp .n{text-align:right}.cmp td:last-child{white-space:nowrap}
+.pbar{display:inline-block;width:90px;height:7px;border-radius:99px;background:var(--panel3);overflow:hidden;vertical-align:middle}
+.pbar i{display:block;height:100%;background:var(--line2)}.pbar i.g{background:var(--win)}.pbar i.b{background:var(--red)}
+.agrid td,.agrid th{padding:6px 8px}.agrid th.n,.agrid td.n{text-align:center}
+.gc{display:inline-flex;flex-direction:column;align-items:center;min-width:52px;padding:3px 6px;border-radius:7px;background:var(--panel2);font-weight:650;font-size:13.5px;line-height:1.2}
+.gc small{font-size:11px;color:var(--muted);font-weight:500}.gc.g{background:var(--win-soft);color:var(--win)}.gc.b{background:var(--red-soft);color:var(--red)}
+a.more{text-decoration:none}
 .np{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}@media(max-width:900px){.np{grid-template-columns:1fr 1fr}}
 .np h3{font-size:13.5px;color:var(--muted);font-weight:650;margin:0 0 6px}
 .np .chips{display:flex;flex-wrap:wrap;gap:6px}.np .chips span{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:3px 10px 3px 3px;border-radius:99px;background:var(--panel2);border:1px solid var(--line)}
@@ -98,6 +112,51 @@
   </section>
 </div>
 
+{% include "_oldrows.html" %}
+{% if detail %}{% set D = detail %}
+<section class="card" id="detail">
+  <div class="sec"><div><h2 style="display:flex;align-items:center;gap:10px">{{ ai(D.agent, 34) }}{{ D.agent }} in detail</h2>
+    <p>{{ D.role }}, {{ D.games }} games{% if D.others %}, compared with {{ D.others }} other {{ D.agent }} players in your matches{% endif %}</p></div>
+    <a class="btn sm ghost" href="{{ url_for('agents_roles', pid=p.id, queue=queue) }}">Close</a></div>
+  <div class="dgrid">
+    <div>
+      <h3>Progress</h3>
+      {% if D.trend|length >= 3 %}{% set W, H = 520, 120 %}{% set vals = D.trend|map(attribute='acs')|list %}
+      {% set lo = [vals|min - 20, 0]|max %}{% set hi = vals|max + 20 %}{% set n = vals|length %}
+      <svg class="prog" viewBox="0 0 {{ W }} {{ H }}" preserveAspectRatio="none" aria-label="ACS over your games on {{ D.agent }}">
+        {% set pts = [] %}{% for t in D.trend %}{% set x = (loop.index0 * W / ([n - 1, 1]|max))|round(1) %}{% set y = (H - 10 - (t.acs - lo) / ([hi - lo, 1]|max) * (H - 20))|round(1) %}{% set _ = pts.append(x ~ ',' ~ y) %}{% endfor %}
+        <polyline points="{{ pts|join(' ') }}" class="pl"/>
+        {% for t in D.trend %}{% set x = (loop.index0 * W / ([n - 1, 1]|max))|round(1) %}<circle cx="{{ x }}" cy="{{ H - 3 }}" r="3" class="{{ 'w' if t.won >= 1 else ('l' if t.won <= 0 else 'd') }}"><title>{{ t.date }} {{ t.map }}: {{ 'won' if t.won >= 1 else 'lost' }}, ACS (5-game average) {{ t.acs }}</title></circle>{% endfor %}
+      </svg>
+      <div class="small muted">Combat score, 5-game average, oldest left. Dots: won (green) or lost (red).</div>
+      {% else %}<p class="small muted">Needs 3 games on {{ D.agent }}.</p>{% endif %}
+      {% if D.first %}<div class="fl">
+        <div><span>First {{ D.k }} games</span><b>ACS {{ D.first.acs|round|int }}</b><span>{{ (D.first.wr * 100)|round|int }}% won, K/D {{ '%.2f'|format(D.first.kd) }}</span></div>
+        <div><span>Latest {{ D.k }} games</span><b class="{{ 'up' if D.last.acs > D.first.acs + 8 else ('down' if D.last.acs < D.first.acs - 8 else '') }}">ACS {{ D.last.acs|round|int }}</b><span>{{ (D.last.wr * 100)|round|int }}% won, K/D {{ '%.2f'|format(D.last.kd) }}</span></div>
+      </div>{% endif %}
+    </div>
+    <div>
+      <h3>You against everyone else on {{ D.agent }}</h3>
+      {% if D.compare %}<table class="cmp"><tr><th></th><th class="n">You</th><th class="n">Others</th><th>Where you stand</th></tr>
+        {% for c in D.compare %}<tr><td>{{ c.label }}</td>
+          <td class="n"><b>{% if c.fmt == 'pct' %}{{ (c.me * 100)|round|int }}%{% elif c.fmt == 'num2' %}{{ '%.2f'|format(c.me) }}{% else %}{{ c.me|round|int }}{% endif %}</b></td>
+          <td class="n">{% if c.them is none %}–{% elif c.fmt == 'pct' %}{{ (c.them * 100)|round|int }}%{% elif c.fmt == 'num2' %}{{ '%.2f'|format(c.them) }}{% else %}{{ c.them|round|int }}{% endif %}</td>
+          <td>{% if c.pct is defined %}<span class="pbar"><i style="width:{{ (c.pct * 100)|round|int }}%" class="{{ 'g' if c.pct >= 0.6 else ('b' if c.pct < 0.4 else '') }}"></i></span> <span class="small">better than {{ (c.pct * 100)|round|int }}%</span>{% elif c.higher_better is none %}<span class="small muted">style, not good or bad</span>{% else %}<span class="small muted">too few others yet</span>{% endif %}</td></tr>{% endfor %}
+      </table>{% endif %}
+      <h3 style="margin-top:16px">Utility per round</h3>
+      {% if D.utility %}<table class="cmp"><tr><th>Ability</th><th class="n">You</th><th class="n">Others</th><th class="n"></th></tr>
+        {% for u in D.utility %}<tr><td><kbd>{{ u.key }}</kbd> {{ u.name if u.name != u.key else '' }}</td><td class="n"><b>{{ '%.2f'|format(u.me) }}</b></td>
+          <td class="n">{{ '%.2f'|format(u.them) if u.them is not none else '–' }}</td>
+          <td class="n">{% if u.diff is not none %}<span class="{{ 'up' if u.diff > 0.15 else ('down' if u.diff < -0.15 else 'muted') }}">{{ '+' if u.diff > 0 }}{{ (u.diff * 100)|round|int }}%</span>{% endif %}</td></tr>{% endfor %}
+      </table>
+      {% if D.utility_note %}<p class="small" style="color:var(--amber);margin:8px 0 0">{{ D.utility_note }}</p>{% endif %}
+      <p class="small muted" style="margin:6px 0 0">From {{ D.utility_games }} games with ability data (Riot sometimes leaves it out).</p>
+      {% else %}<p class="small muted">No ability data for your games on {{ D.agent }} yet.</p>{% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
 <section class="card">
   <div class="sec" style="margin-bottom:8px"><div><h2>All your agents</h2><p>Click a column to sort, <i>Maps</i> for the numbers per map. Faded: fewer than 3 games, too few to judge.</p></div></div>
   <div class="tablewrap"><table class="agtable" id="agtable">
@@ -114,13 +173,25 @@
         <td class="n hide-sm">{{ a.adr|num }}</td><td class="n hide-sm">{{ a.kast|pct if a.kast is defined else '–' }}</td>
         <td class="n hide-sm">{{ a.opening_rate|pct if a.opening_rate is defined else '–' }}</td><td class="n hide-sm">{{ a.opening_wr|pct if a.opening_wr is defined and a.opening_wr is not none else '–' }}</td>
         <td class="hide-sm">{% if a.best_map %}{{ a.best_map }} <span class="muted small">{{ a.best_map_wr|pct }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
-        <td style="text-align:right"><button type="button" class="more" aria-expanded="false">Maps</button></td></tr>
+        <td style="text-align:right;white-space:nowrap"><button type="button" class="more" aria-expanded="false">Maps</button>
+          <a class="more" href="{{ url_for('agents_roles', pid=p.id, queue=queue, agent=a.agent) }}#detail">Details</a></td></tr>
       <tr class="det" hidden><td colspan="11"><div class="mchips">{% for m in a.maps %}<span><b>{{ m.map }}</b> {{ m.games }} {{ 'game' if m.games == 1 else 'games' }}, {{ m.wr|pct }} won, ACS {{ m.acs|num }}</span>{% endfor %}</div>
         {% if a.worst_map %}<p class="small muted" style="margin:8px 0 0">Weakest: {{ a.worst_map }} ({{ a.worst_map_wr|pct }} won).</p>{% endif %}</td></tr>
     </tbody>
     {% endfor %}
   </table></div>
 </section>
+
+{% if grid.agents|length > 1 and grid.maps|length > 1 %}
+<section class="card">
+  <div class="sec" style="margin-bottom:8px"><div><h2>Agent × map</h2><p>Win rate (and games) for every agent on every map. Empty: not played there.</p></div></div>
+  <div class="tablewrap"><table class="agrid">
+    <tr><th></th>{% for m in grid.maps %}<th class="n">{{ m }}</th>{% endfor %}</tr>
+    {% for a in grid.agents %}<tr><td><span class="agcell">{{ ai(a, 20) }}{{ a }}</span></td>
+      {% for m in grid.maps %}{% set c = grid.cells.get(a ~ '|' ~ m) %}<td class="n">{% if c %}<span class="gc {{ 'g' if c.games >= 3 and c.wr >= 0.55 else ('b' if c.games >= 3 and c.wr < 0.45 else '') }}" title="{{ a }} on {{ m }}: {{ c.games }} games, {{ (c.wr * 100)|round|int }}% won">{{ (c.wr * 100)|round|int }}%<small>{{ c.games }}</small></span>{% endif %}</td>{% endfor %}</tr>{% endfor %}
+  </table></div>
+</section>
+{% endif %}
 
 {% if o.not_played %}
 <section class="card">
