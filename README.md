@@ -1,4 +1,4 @@
-# valcoach v2
+# valcoach
 
 **Version 3.8.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
