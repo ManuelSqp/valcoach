@@ -1,6 +1,6 @@
 # valcoach
 
-**Version 4.0.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.1.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -26,7 +26,7 @@ unzip valcoach-v2.zip && cd valcoach-v2
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                     # 162 tests, ~3 min, builds a synthetic match + VOD
+pytest -q                     # 164 tests, ~3 min, builds a synthetic match + VOD
 ollama pull qwen3.8:27b       # default; alternatives below
 ```
 
@@ -111,6 +111,10 @@ week of practice from those habits, the week's map, its strats and lineups, with
 own screen and marks his own rounds (my fault, good, talk about it); the summary goes into the practice plan.
 *Practice › Aim* keeps aim routines (Aimlabs share links, KovaaK's codes, steps for the Range), picks the ones that fit
 your matches and sets your warm-up, which shows on the match screen, in the practice plan and as a push before the match.
+For KovaaK's the coach writes the playlists itself: download one, save it in `FPSAimTrainer/Saved/SaveGames/Playlists`
+and it shows up under *Local Playlists*. Import your KovaaK's scores (the `.csv` files in `FPSAimTrainer/stats`, or the
+folder as a zip) and it moves you to harder scenarios once you're steady at your best. More scenarios: import any
+playlist file, add one by hand, or let them come in with your scores.
 
 ### What's in a report
 

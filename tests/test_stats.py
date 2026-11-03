@@ -790,3 +790,53 @@ def test_aim_routines_pick_and_effect():
     e = aim.effect(rows, log)
     assert e["ready"] and round(e["with"]["hs"], 2) == 0.3 and round(e["without"]["hs"], 2) == 0.1 and e["diff"] > 0
     assert not aim.effect(rows, [])["ready"]
+
+
+def _kcsv(scenario="1wall 6targets small", score=812.5, shots=100, hits=80):
+    return (f"Kill #,Timestamp,Bot,Weapon,TTK,Shots,Hits\n1,18:00:01.000,Target,pistol,0.5s,1,1\n\n"
+            f"Weapon,Shots,Hits,Damage Done,Damage Possible\npistol,{shots},{hits},1000,1200\n\n"
+            f"Kills:,{hits}\nDeaths:,0\nScore:,{score}\nScenario:,{scenario}\nGame Version:,3.6\n")
+
+
+def test_kovaaks_files_scores_and_playlists():
+    import io as _io
+    import zipfile as _zip
+    from valcoach.stats import kovaaks as kv
+    # playlists in both spellings KovaaK's has used
+    old = kv.read_playlist(json.dumps({"playlistName": "A", "shareCode": "KovaaKsTest", "scenarioList": [
+        {"scenario_Name": " Wide Wall 10 Extra Small Moving ", "play_Count": 2}, {"scenario_Name": "bad/name"}]}))
+    assert old["scenarios"] == [(" Wide Wall 10 Extra Small Moving ", 2)] and old["code"] == "KovaaKsTest"
+    assert kv.read_playlist(json.dumps({"scenarioList": [{"scenario_name": "Tile Frenzy", "play_Count": 99}]}))["scenarios"] == [("Tile Frenzy", 20)]
+    assert kv.read_playlist("not json") is None and kv.read_playlist("{}") is None
+    # stats files: one CSV, a zip, unreadable ones counted
+    name = "1wall 6targets small - Challenge - 2026.10.10-18.03.00 Stats.csv"
+    r = kv.read_stats(name, _kcsv())
+    assert r == {"s": "1wall 6targets small", "t": "2026-10-10T18:03:00", "d": "2026-10-10", "score": 812.5, "kills": 80, "acc": 0.8}
+    assert kv.read_stats("random.csv", _kcsv()) is None and kv.read_stats(name, "nothing here") is None
+    buf = _io.BytesIO()
+    with _zip.ZipFile(buf, "w") as z:
+        for i in range(8):
+            z.writestr(f"stats/1wall 6targets small - Challenge - 2026.10.1{i}-18.00.00 Stats.csv", _kcsv(score=900 + i))
+        z.writestr("stats/broken - Challenge - 2026.10.10-18.00.00 Stats.csv", "x")
+        z.writestr("readme.txt", "not a csv")
+    runs, bad = kv.read_upload("stats.zip", buf.getvalue())
+    assert len(runs) == 8 and bad == 1
+    allr, new = kv.merge_runs([r], runs + runs)
+    assert new == 8 and len(allr) == 9
+    s = kv.summary(allr)[0]
+    assert s["runs"] == 9 and s["best"] == 907 and s["mastered"]
+    # the coach's playlists: only known names, about the right length, harder once you're steady at your best
+    cat = kv.builtin() + [{"name": "My scenario", "focus": ["micro"], "level": 2}]
+    need = [{"focus": ["crosshair", "micro"], "weight": 3, "why": "hs"}, {"focus": ["peeking", "flicks", "reaction"], "weight": 1, "why": "duels"}]
+    w = kv.build("warmup", need, cat, [], week="2026-W45")
+    names = {c["name"] for c in cat}
+    assert all(x["name"] in names for x in w["items"]) and 7 <= sum(x["runs"] for x in w["items"]) <= 9
+    assert w["items"][0]["focus"] == "warmup" and kv.build("warmup", need, cat, [], week="2026-W45") == w
+    t = kv.build("training", need, cat, [], week="2026-W45")
+    assert sum(x["runs"] for x in t["items"]) == round(25 * 60 / kv.SECONDS_PER_RUN)
+    flicks_mastered = kv.build("training", [{"focus": ["flicks"], "weight": 3, "why": ""}], cat, allr, week="2026-W45")
+    assert any(x["level"] == 3 for x in flicks_mastered["items"] if x["focus"] == "flicks")
+    f = kv.playlist_file(w, "Player")
+    assert f["scenarioList"][0] == {"scenario_name": w["items"][0]["name"], "play_Count": 1} and f["version"] == 31
+    assert kv.guess("VoxTargetSwitch xsmall 200%") == (["switching", "micro"], 3)
+    assert kv.guess("Smooth Strafe Track Easy")[0][0] == "tracking"

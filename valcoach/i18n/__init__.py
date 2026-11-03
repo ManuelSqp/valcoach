@@ -112,13 +112,21 @@ class Catalog:
             out = re.sub(MARK, lambda _m: next(it), out)
         return out
 
+    def _sentences(self, s: str) -> str | None:
+        """Several sentences in one piece of text (messages): translated one by one, only if all are known."""
+        parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", s)
+        if len(parts) < 2:
+            return None
+        out = [self.lookup(p) for p in parts]
+        return " ".join(out) if all(x is not None for x in out) else None
+
     def text(self, s: str) -> str:
         """One piece of text, keeping its leading and trailing white space."""
         core = s.strip()
         if not core or not LETTER_RE.search(core):
             return s
         norm = WS_RE.sub(" ", core)
-        t = self.lookup(norm)
+        t = self.lookup(norm) or self._sentences(norm)
         if t is None:
             return s
         i = s.find(core[0])

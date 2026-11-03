@@ -2308,3 +2308,55 @@ def test_german_interface_and_language_switch(app):
     store.update_team(tid, discord=info)
     content, embeds = discord._translate(discord._lang(info["prep_url"]), "Posted to Discord", [{"title": "Rounds that decided it"}])
     assert content == "Auf Discord gepostet" and embeds[0]["title"] == "Entscheidende Runden"
+
+
+def test_kovaaks_playlists_scores_and_scenarios(app):
+    import io as _io
+    import zipfile as _zip
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    pid = add_profile(c)
+    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    assert "KovaaK's playlists from the coach" in page and "Download for KovaaK's" in page
+    r = c.get(f"/profiles/{pid}/aim/kovaaks/warmup.json")
+    assert r.status_code == 200 and "valcoach_warmup.json" in r.headers["Content-Disposition"]
+    data = r.get_json()
+    assert data["scenarioList"] and all(set(x) == {"scenario_name", "play_Count"} for x in data["scenarioList"])
+    assert c.get(f"/profiles/{pid}/aim/kovaaks/other.json").status_code == 404
+    # import a playlist: its unknown scenario joins your list, the playlist becomes a routine with its share code
+    pl = json.dumps({"playlistName": "Friend's list", "shareCode": "KovaaKsFriendList", "scenarioList": [
+        {"scenario_name": "Tile Frenzy", "play_Count": 1}, {"scenario_name": "Totally New Scenario", "play_Count": 2}]})
+    c.post(f"/profiles/{pid}/aim", data={"action": "k_import_playlist", "as_routine": "1", "scope": "me",
+                                         "files": (_io.BytesIO(pl.encode()), "friend.json")}, content_type="multipart/form-data")
+    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    assert "Totally New Scenario" in page and "KovaaKsFriendList" in page
+    # add one by hand, then remove it
+    c.post(f"/profiles/{pid}/aim", data={"action": "k_add_scenario", "name": "Hand Added", "level": "3", "scope": "me"})
+    assert "Hand Added" in c.get(f"/profiles/{pid}/aim").data.decode()
+    c.post(f"/profiles/{pid}/aim", data={"action": "k_remove_scenario", "name": "Hand Added", "scope": "me"})
+    c.get(f"/profiles/{pid}/aim")                                  # the "Removed" message
+    assert "Hand Added" not in c.get(f"/profiles/{pid}/aim").data.decode()
+    # scores from a zipped stats folder (twice: nothing is counted double)
+    buf = _io.BytesIO()
+    with _zip.ZipFile(buf, "w") as z:
+        for i in range(6):
+            z.writestr(f"Found In Stats - Challenge - 2026.10.1{i}-18.00.00 Stats.csv",
+                       f"Weapon,Shots,Hits\npistol,100,70\n\nKills:,70\nScore:,{700 + i}.0\nScenario:,Found In Stats\n")
+    for _ in range(2):
+        c.post(f"/profiles/{pid}/aim", data={"action": "k_import_stats", "files": (_io.BytesIO(buf.getvalue()), "stats.zip")},
+               content_type="multipart/form-data")
+    aim = json.loads((store.data_dir / "profiles" / str(pid) / "stats" / "aim.json").read_text())
+    assert len(aim["kovaaks"]) == 6
+    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    assert "Found In Stats" in page and "6 runs" in page
+    # someone who plays KovaaK's gets the coach's KovaaK's warm-up by default
+    assert "KovaaK&#39;s warm-up from the coach" in page.split('id="warmup"')[1][:600]
+    # teammates see the page but can't import into this player's scores
+    mate = make_user(app, c, "mate")
+    tid = store.create_team(store.user_by_name("manuel").id, "Squad")
+    store.update_team(tid, members=[{"pid": pid, "kind": "starter"}])
+    store.add_team_access(tid, store.user_by_name("mate").id)
+    assert mate.post(f"/profiles/{pid}/aim", data={"action": "k_import_stats", "files": (_io.BytesIO(b"x"), "a.csv")},
+                     content_type="multipart/form-data").status_code == 403
+    c.post(f"/profiles/{pid}/aim", data={"action": "k_clear_stats"})
+    assert "kovaaks" not in json.loads((store.data_dir / "profiles" / str(pid) / "stats" / "aim.json").read_text())

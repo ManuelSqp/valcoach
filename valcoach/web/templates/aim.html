@@ -4,13 +4,32 @@
 {% macro use(r) -%}
   {%- if r.kind == 'aimlabs' or r.kind == 'link' -%}
   <a class="btn sm {{ 'primary' if r.kind == 'aimlabs' }}" href="{{ r.url }}" target="_blank" rel="noopener noreferrer nofollow">{{ 'Open in Aimlabs' if r.kind == 'aimlabs' or is_aimlabs(r.url) else 'Open link' }}</a>
+  {%- elif r.kind == 'kovaaksfile' -%}
+  <a class="btn sm primary" href="{{ r.url }}" download>Download for KovaaK's</a>
   {%- elif r.kind == 'kovaaks' -%}
   <span class="code"><code>{{ r.code }}</code><button type="button" class="btn sm ghost" data-copy="{{ r.code }}">Copy code</button></span>
   {%- endif -%}
 {%- endmacro %}
+{% macro num(v) %}{{ '%.0f'|format(v) if v >= 1000 or v <= -1000 else '%g'|format(v) }}{% endmacro %}
 {% macro tags(r) %}{% for f in r.focus %}<span class="ft">{{ focus.get(f, f) }}</span>{% endfor %}{% endmacro %}
 {% block head %}
 <style>
+.kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.kpl{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.kpl-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}.kpl-h b{font-size:16px}
+.kitems{margin:0 0 12px;padding-left:20px}.kitems li{margin:6px 0;font-size:14px}
+.kitems .kn,.ks .kn{font-weight:650}.kitems .kr{margin-left:6px;color:var(--muted);font-variant-numeric:tabular-nums}
+.kmeta{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:12.5px;margin-top:2px}
+.lv{display:inline-flex;gap:2px;vertical-align:middle}.lv i{width:6px;height:6px;border-radius:50%;background:var(--line2)}.lv i.on{background:var(--accent)}
+.mst{font-size:12px;font-weight:650;color:var(--win);background:var(--win-soft);border-radius:99px;padding:0 8px}
+.ks{display:grid;gap:2px}.ks-r{display:grid;grid-template-columns:minmax(0,1fr) 120px max-content;gap:2px 12px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.ks-r:first-child{border-top:0}.ks-r .muted{grid-column:1}.ks-r .kn{grid-column:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ks-r svg{grid-column:2;grid-row:1/3;width:120px;height:28px}.ks-r>span:last-child{grid-column:3;grid-row:1/3;text-align:right}
+.kspark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;vector-effect:non-scaling-stroke}
+.up{color:var(--win);font-weight:650}.down{color:var(--red);font-weight:650}
+.kup,.kform{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.kform input[type=text]{flex:1;min-width:220px}
+.kl{margin:0;padding-left:18px;font-size:13.5px;columns:2 260px}.kl li{margin:3px 0;break-inside:avoid}
+.linkbtn{background:none;border:0;color:var(--faint);cursor:pointer;font-size:15px;padding:0 4px}.linkbtn:hover{color:var(--red)}
 .aim-top{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(280px,1fr);gap:16px;align-items:start}
 @media(max-width:960px){.aim-top{grid-template-columns:1fr}}
 .aim-top .card,.aim-grid .card{margin:0 0 16px}
@@ -125,6 +144,83 @@
   </section>
 </div>
 
+<section class="card" id="kovaaks">
+  <h2>KovaaK's playlists from the coach</h2>
+  <p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Built from what your matches show and changed every week. Download a playlist, save it in
+    <code translate="no">FPSAimTrainer › Saved › SaveGames › Playlists</code> (it replaces last week's file), then open KovaaK's ›
+    Playlists › Local Playlists. Scenarios you don't have yet download by themselves. Set your Valorant sensitivity in KovaaK's first.</p>
+  <div class="kgrid">
+    {% for pl in plans %}
+    <div class="kpl">
+      <div class="kpl-h"><b>{{ 'Warm-up playlist' if pl.kind == 'warmup' else 'Training playlist' }}</b><span class="muted small">about {{ pl.minutes }} min</span></div>
+      <ol class="kitems">{% for it in pl['items'] %}
+        <li><span class="kn" translate="no">{{ it.name }}</span><span class="kr">×{{ it.runs }}</span>
+          <span class="kmeta"><span class="ft">{{ focus.get(it.focus, it.focus|capitalize) }}</span><span class="lv" title="Level {{ it.level }} of 3">{% for i in range(3) %}<i class="{{ 'on' if i < it.level }}"></i>{% endfor %}</span>
+          {% if it.best is not none %}<span class="muted">best {{ num(it.best) }} · last {{ num(it['last']) }}</span>{% endif %}
+          {% if it.mastered %}<span class="mst">steady at your best</span>{% endif %}</span></li>{% endfor %}</ol>
+      <a class="btn sm primary" href="{{ url_for('aim_kovaaks', pid=p.id, kind=pl.kind) }}" download>Download for KovaaK's</a>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="small muted" style="margin:10px 0 0">Why these: {% for x in need %}{{ x.why }} {% endfor %}Once you're steady near your best on a scenario (imported scores), the coach moves you to a harder one of the same kind.</p>
+</section>
+
+<div class="aim-top aim-grid">
+<section class="card" id="kscores">
+  <h2>Your KovaaK's scores</h2>
+  {% if kstats %}
+  <div class="ks">{% for x in kstats %}
+    <div class="ks-r"><span class="kn" translate="no">{{ x.name }}</span>
+      <span class="muted small">{{ x.runs }} runs · best {{ num(x.best) }} · last {{ num(x['last']) }}</span>
+      {% set top = x.spark|max %}{% set low = x.spark|min %}
+      <svg class="kspark" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true">{% set n = x.spark|length %}{% set pts = [] %}{% for v in x.spark %}{% set _ = pts.append(((loop.index0 * 120 / ([n - 1, 1]|max))|round(1)) ~ ',' ~ ((26 - (v - low) / ([top - low, 1]|max) * 24)|round(1))) %}{% endfor %}<polyline points="{{ pts|join(' ') }}"/></svg>
+      <span class="small">{% if x.mastered %}<span class="mst">steady at your best</span>{% elif x.trend is not none %}<span class="{{ 'up' if x.trend > 0.02 else ('down' if x.trend < -0.02 else 'muted') }}">{{ '%+d'|format((x.trend * 100)|round|int) }}%</span>{% endif %}</span>
+    </div>{% endfor %}</div>
+  <p class="small muted" style="margin:8px 0 0">{{ kruns }} runs imported. Days with a KovaaK's run count as warm-up days in <i>Does warming up help?</i></p>
+  {% else %}<p class="muted small" style="margin:0 0 8px">No scores yet. KovaaK's saves every run as a file in <code translate="no">FPSAimTrainer\stats</code>.</p>{% endif %}
+  {% if can_log %}
+  <form method="post" enctype="multipart/form-data" class="kup">
+    <input type="hidden" name="action" value="k_import_stats">
+    <input type="file" name="files" accept=".csv,.zip" multiple required aria-label="KovaaK's stats files">
+    <button class="btn sm">Import scores</button>
+  </form>
+  <p class="small muted" style="margin:6px 0 0">Pick the newest <code>.csv</code> files from the stats folder, or zip the whole folder and pick the zip. Runs already imported are skipped, so importing the whole folder again is fine. Scenarios the coach doesn't know yet are added to your list.</p>
+  {% if kstats %}<form method="post" data-q="Remove all imported KovaaK's scores?" onsubmit="return confirm(this.dataset.q)" style="margin-top:8px"><input type="hidden" name="action" value="k_clear_stats"><button class="btn sm ghost danger">Remove the scores</button></form>{% endif %}
+  {% endif %}
+</section>
+
+<section class="card" id="kscen">
+  <h2>Scenarios the coach picks from <span class="muted small" style="font-weight:500">{{ n_scen }}</span></h2>
+  <p class="small muted" style="margin:-4px 0 10px">Names must match KovaaK's exactly. Add your favourites, or import playlist files: every scenario in them joins the list.</p>
+  <details><summary class="small">Show the list</summary>
+    {% for f, items in scen_by_focus.items() %}<h3 style="margin:12px 0 4px">{{ focus.get(f, f|capitalize) }}</h3>
+    <ul class="kl">{% for s in items %}<li><span translate="no">{{ s.name }}</span> <span class="lv" title="Level {{ s.level }} of 3">{% for i in range(3) %}<i class="{{ 'on' if i < s.level }}"></i>{% endfor %}</span>
+      <span class="muted small">{% if s.source == 'builtin' %}built in{% elif s.source == 'team' %}{{ s.source_name }}{% else %}yours{% endif %}</span>
+      {% if s.source == 'mine' or (s.source == 'team' and (s.tid in owned or s.added_by == user.id)) %}<form method="post" style="display:inline"><input type="hidden" name="action" value="k_remove_scenario"><input type="hidden" name="name" value="{{ s.name }}"><input type="hidden" name="scope" value="{{ 'team:' ~ s.tid if s.source == 'team' else 'me' }}"><button class="linkbtn" title="Remove">×</button></form>{% endif %}</li>{% endfor %}</ul>
+    {% endfor %}
+  </details>
+  <h3 style="margin:14px 0 6px">Import playlists</h3>
+  <form method="post" enctype="multipart/form-data" class="kform">
+    <input type="hidden" name="action" value="k_import_playlist">
+    <input type="file" name="files" accept=".json" multiple required aria-label="KovaaK's playlist files">
+    <label class="small"><input type="checkbox" name="as_routine" value="1" checked> also add each playlist as a routine (with its share code)</label>
+    <select name="scope" style="width:auto"><option value="me">Only me</option>{% for t in teams %}<option value="team:{{ t.id }}">Team {{ t.name }}</option>{% endfor %}</select>
+    <button class="btn sm">Import</button>
+  </form>
+  <p class="small muted" style="margin:6px 0 0">From <code translate="no">FPSAimTrainer › Saved › SaveGames › Playlists</code>, or files a friend sends you.</p>
+  <h3 style="margin:14px 0 6px">Add one scenario</h3>
+  <form method="post" class="kform">
+    <input type="hidden" name="action" value="k_add_scenario">
+    <input type="text" name="name" maxlength="120" required placeholder="Exact name, e.g. 1wall 6targets small" aria-label="Scenario name">
+    <div class="fsel">{% for k, v in focus.items() if k not in ('warmup', 'spray') %}<label><input type="checkbox" name="focus" value="{{ k }}"> {{ v }}</label>{% endfor %}</div>
+    <select name="level" style="width:auto" aria-label="Level"><option value="1">Easy</option><option value="2" selected>Medium</option><option value="3">Hard</option></select>
+    <select name="scope" style="width:auto"><option value="me">Only me</option>{% for t in teams %}<option value="team:{{ t.id }}">Team {{ t.name }}</option>{% endfor %}</select>
+    <button class="btn sm">Add</button>
+  </form>
+  <p class="small muted" style="margin:6px 0 0">Nothing ticked: the coach guesses what it trains from the name.</p>
+</section>
+</div>
+
 <section class="card" id="library">
   <h2>Library</h2>
   <div class="chips" id="chips"><button type="button" class="on" data-f="">All</button>{% for k, v in focus.items() %}<button type="button" data-f="{{ k }}">{{ v }}</button>{% endfor %}</div>
@@ -155,7 +251,7 @@
   <form method="post" class="addf">
     <input type="hidden" name="action" value="add">
     <label>Name<input type="text" name="name" maxlength="60" required placeholder="e.g. Tuesday flick playlist"></label>
-    <label>What it is<select name="kind" id="kind">{% for k, v in kinds.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+    <label>What it is<select name="kind" id="kind">{% for k in addable %}<option value="{{ k }}">{{ kinds[k] }}</option>{% endfor %}</select></label>
     <label>Minutes<input name="minutes" type="number" min="1" max="90" value="10"></label>
     <label>Save for<select name="scope"><option value="me">Only me</option>{% for t in teams %}<option value="team:{{ t.id }}">Team {{ t.name }}</option>{% endfor %}</select></label>
     <label class="full" data-k="aimlabs link">Link<input name="url" type="url" maxlength="400" placeholder="https://"></label>

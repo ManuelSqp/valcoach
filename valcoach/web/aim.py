@@ -16,8 +16,11 @@ from pathlib import Path
 from flask import abort, flash, g, redirect, render_template, request, url_for
 
 from ..stats import aim as am
+from ..stats import kovaaks as kv
 
 MAX_ROUTINES = 60
+MAX_SCENARIOS = 300                  # people's own scenarios, per user and per team
+MAX_UPLOAD_FILES = 2000
 MAX_LOG = 400
 _lock = threading.RLock()
 
@@ -51,8 +54,19 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         """The teams this player is in that this user can see."""
         return [t for t in store.teams_for_user(uid) if any(m["pid"] == pid for m in t.member_list)]
 
+    def coach_files(pid: int) -> list[dict]:
+        """The two KovaaK's playlists the coach writes, as routines (downloaded from the Aim page)."""
+        how = ("Download it, save it in FPSAimTrainer › Saved › SaveGames › Playlists (replace last week's file), "
+               "then open KovaaK's › Playlists › Local Playlists.")
+        return [{"id": "k-warmup", "name": "KovaaK's warm-up from the coach", "kind": "kovaaksfile", "minutes": 10,
+                 "focus": ["warmup", "flicks", "micro"], "steps": how, "code": "",
+                 "url": f"/profiles/{int(pid)}/aim/kovaaks/warmup.json"},
+                {"id": "k-training", "name": "KovaaK's training from the coach", "kind": "kovaaksfile", "minutes": 25,
+                 "focus": ["flicks", "micro", "reaction", "switching"], "steps": how, "code": "",
+                 "url": f"/profiles/{int(pid)}/aim/kovaaks/training.json"}]
+
     def library(pid: int, uid: int) -> list[dict]:
-        out = [dict(r, source="builtin", source_name="valcoach") for r in am.BUILTIN]
+        out = [dict(r, source="builtin", source_name="valcoach") for r in am.BUILTIN + coach_files(pid)]
         for t in teams_of(pid, uid):
             out += [dict(r, source="team", tid=t.id, source_name=t.name) for r in _read(team_path(t.id), {}).get("routines", [])]
         out += [dict(r, source="mine", source_name="your routines") for r in _read(user_path(uid), {}).get("routines", [])]
@@ -66,9 +80,26 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
 
     def warmup_of(pid: int, uid: int) -> dict | None:
         lib = library(pid, uid)
-        mine = _read(player_path(pid), {}).get("warmup")
+        pdata = _read(player_path(pid), {})
         tw = next((team_warmup(t) for t in teams_of(pid, uid) if team_warmup(t)), None)
-        return am.warmup_for(lib, mine, tw)
+        # someone who plays KovaaK's (scores imported) gets the coach's KovaaK's warm-up by default
+        return am.warmup_for(lib, pdata.get("warmup"), tw or ("k-warmup" if pdata.get("kovaaks") else None))
+
+    def scenarios(pid: int, uid: int) -> list[dict]:
+        """Every scenario the coach may use for this player: built in, the teams', this user's own."""
+        out = {s["name"]: s for s in kv.builtin()}
+        for t in teams_of(pid, uid):
+            for s in _read(team_path(t.id), {}).get("scenarios", []):
+                out.setdefault(s["name"], dict(s, source="team", tid=t.id, source_name=t.name))
+        for s in _read(user_path(uid), {}).get("scenarios", []):
+            out.setdefault(s["name"], dict(s, source="mine", source_name="yours"))
+        return list(out.values())
+
+    def plan(pid: int, uid: int, kind: str, rows=None) -> dict:
+        if rows is None:
+            rows = filter_rows(sr.games(pid).rows(), "everything")
+        return kv.build(kind, am.needs(rows), scenarios(pid, uid), _read(player_path(pid), {}).get("kovaaks", []),
+                        week=kv.week_id())
 
     def done_today(pid: int, rid: str) -> bool:
         today = date.today().isoformat()
@@ -93,9 +124,16 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         team_warm = {t.id: team_warmup(t) for t in teams}
         recent = sorted(log, key=lambda x: x.get("t", 0), reverse=True)[:10]
         names = {r["id"]: r["name"] for r in lib}
+        runs = pdata.get("kovaaks", [])
+        scen = scenarios(pid, uid)
+        by_focus: dict[str, list] = {}
+        for s in sorted(scen, key=lambda s: (s["level"], s["name"].lower())):
+            by_focus.setdefault(s["focus"][0] if s.get("focus") else "flicks", []).append(s)
         return render_template("aim.html", p=p, active_pid=pid, tab="aim", can_edit=can_edit, can_log=can_log(p, can_edit, uid),
                                lib=lib, need=need, picks=am.pick(lib, need), warm=warm, mine_warm=pdata.get("warmup"),
-                               done=done, effect=am.effect(rows, log), recent=recent, names=names, teams=teams, team_warm=team_warm,
+                               done=done, effect=am.effect(rows, log, kv.run_days(runs)), recent=recent, names=names, teams=teams, team_warm=team_warm,
+                               plans=[plan(pid, uid, k, rows) for k in kv.KINDS], kstats=kv.summary(runs)[:16], kruns=len(runs),
+                               scen_by_focus=by_focus, n_scen=len(scen), addable=am.ADDABLE,
                                owned={t.id for t in teams if t.owner_id == uid}, focus=am.FOCUS, kinds=am.KINDS,
                                scores={r["id"]: am.scores(log, r["id"]) for r in lib}, is_aimlabs=am.is_aimlabs,
                                min_games=am.MIN_GAMES)
@@ -111,6 +149,8 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         act = f.get("action")
         rid = f.get("rid", "")
         teams = {t.id: t for t in teams_of(p.id, uid)}
+        if act and act.startswith("k_"):
+            return kovaaks_post(p, can_edit, uid, act, teams)
         with _lock:
             if act == "add":
                 r, err = am.clean({**f, "focus": f.getlist("focus")})
@@ -194,6 +234,150 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
             _write(player_path(p.id), d)
         return back(p.id)
 
+    # ------------------------------------------------------------------ KovaaK's
+    def scope_path(scope: str, uid: int, teams: dict):
+        if scope.startswith("team:") and scope[5:].isdigit() and int(scope[5:]) in teams:
+            t = teams[int(scope[5:])]
+            return team_path(t.id), t.name
+        return user_path(uid), "your scenarios"
+
+    def add_scenarios(path: Path, items: list[dict], uid: int) -> int:
+        """Scenarios into a library (skips names it already has, built-in ones included)."""
+        d = _read(path, {})
+        have = {s["name"] for s in d.get("scenarios", [])} | {n for n, _, _ in kv.BUILTIN}
+        added = 0
+        for it in items:
+            if it["name"] in have or len(d.get("scenarios", [])) >= MAX_SCENARIOS:
+                continue
+            d.setdefault("scenarios", []).append({"name": it["name"], "focus": it["focus"], "level": it["level"],
+                                                  "added_by": uid, "by": g.user.display_name or g.user.username})
+            have.add(it["name"])
+            added += 1
+        if added:
+            _write(path, d)
+        return added
+
+    def files_of(field: str) -> list:
+        fs = [f for f in request.files.getlist(field) if f and f.filename][:MAX_UPLOAD_FILES]
+        if not fs:
+            flash("Choose one or more files first.", "error")
+        return fs
+
+    def kovaaks_post(p, can_edit: bool, uid: int, act: str, teams: dict):
+        f = request.form
+        back_to = redirect(url_for("aim", pid=p.id) + "#kovaaks")
+        with _lock:
+            if act == "k_add_scenario":
+                name = kv.clean_name(f.get("name"))
+                if not name:
+                    flash("Write the scenario's name exactly as KovaaK's shows it.", "error")
+                    return back_to
+                focus = [x for x in f.getlist("focus") if x in am.FOCUS][:3] or kv.guess(name)[0]
+                try:
+                    level = max(1, min(3, int(f.get("level") or 2)))
+                except ValueError:
+                    level = 2
+                path, where = scope_path(f.get("scope", "me"), uid, teams)
+                n = add_scenarios(path, [{"name": name, "focus": focus, "level": level}], uid)
+                flash(f"Added {name} to {where}." if n else f"{name} is already in the list.", "ok" if n else "error")
+                return back_to
+            if act == "k_remove_scenario":
+                name = f.get("name", "")
+                path, _ = scope_path(f.get("scope", "me"), uid, teams)
+                d = _read(path, {})
+                s = next((x for x in d.get("scenarios", []) if x["name"] == name), None)
+                if s is None:
+                    abort(404)
+                t = teams.get(int(f["scope"][5:])) if f.get("scope", "").startswith("team:") else None
+                if t is not None and not (t.owner_id == uid or s.get("added_by") == uid):
+                    abort(403)
+                d["scenarios"] = [x for x in d["scenarios"] if x["name"] != name]
+                _write(path, d)
+                flash(f"Removed {name}.", "ok")
+                return back_to
+            if act == "k_import_playlist":
+                fs = files_of("files")
+                if not fs:
+                    return back_to
+                path, where = scope_path(f.get("scope", "me"), uid, teams)
+                added = routines = bad = 0
+                for fh in fs:
+                    pl = kv.read_playlist(fh.read(200_000))
+                    if pl is None:
+                        bad += 1
+                        continue
+                    added += add_scenarios(path, [{"name": n, "focus": kv.guess(n)[0], "level": kv.guess(n)[1]}
+                                                  for n, _ in pl["scenarios"]], uid)
+                    if f.get("as_routine") and pl["code"]:
+                        d = _read(path, {})
+                        if not any(r.get("code") == pl["code"] for r in d.get("routines", [])) and len(d.get("routines", [])) < MAX_ROUTINES:
+                            tags = []
+                            for n, _ in pl["scenarios"]:
+                                tags += [t for t in kv.guess(n)[0] if t not in tags]
+                            d.setdefault("routines", []).append({
+                                "id": am.new_id(), "name": pl["name"], "kind": "kovaaks", "code": pl["code"], "url": "",
+                                "minutes": max(1, round(sum(r for _, r in pl["scenarios"]) * kv.SECONDS_PER_RUN / 60)),
+                                "focus": tags[:4] or ["flicks"], "added_by": uid, "by": g.user.display_name or g.user.username,
+                                "steps": "Scenarios: " + ", ".join(f"{n.strip()} ×{r}" for n, r in pl["scenarios"])[:550]})
+                            _write(path, d)
+                            routines += 1
+                msg = [f"New scenarios for the coach: {added}."]
+                if routines:
+                    msg.append(f"Playlists added as routines: {routines}.")
+                if bad:
+                    msg.append(f"Files that weren't KovaaK's playlists: {bad}.")
+                flash(" ".join(msg), "ok" if added or routines else "error")
+                return back_to
+            if not can_log(p, can_edit, uid):
+                abort(403)
+            if act == "k_import_stats":
+                fs = files_of("files")
+                if not fs:
+                    return back_to
+                runs, bad = [], 0
+                for fh in fs:
+                    name = fh.filename or ""
+                    if not name.lower().endswith((".csv", ".zip")):
+                        bad += 1
+                        continue
+                    r, b = kv.read_upload(name, fh.read())
+                    runs += r
+                    bad += b
+                d = _read(player_path(p.id), {})
+                d["kovaaks"], new = kv.merge_runs(d.get("kovaaks", []), runs)
+                _write(player_path(p.id), d)
+                # scenarios found in the scores that the coach doesn't know yet: into your own list
+                known = {s["name"] for s in scenarios(p.id, uid)}
+                unknown = sorted({r["s"] for r in runs} - known)
+                learned = add_scenarios(user_path(uid), [{"name": n, "focus": kv.guess(n)[0], "level": kv.guess(n)[1]}
+                                                         for n in unknown], uid) if unknown else 0
+                msg = [f"New runs imported: {new} ({len(runs) - new} were already there)."]
+                if learned:
+                    msg.append(f"New scenarios the coach can use now: {learned}.")
+                if bad:
+                    msg.append(f"Files that couldn't be read: {bad}.")
+                flash(" ".join(msg), "ok" if runs else "error")
+                return back_to
+            if act == "k_clear_stats":
+                d = _read(player_path(p.id), {})
+                d.pop("kovaaks", None)
+                _write(player_path(p.id), d)
+                flash("KovaaK's scores removed.", "ok")
+                return back_to
+        abort(400)
+
+    @app.get("/profiles/<int:pid>/aim/kovaaks/<kind>.json")
+    def aim_kovaaks(pid: int, kind: str):
+        """The playlist file for KovaaK's (always the same file name, so a new one replaces last week's)."""
+        p, _ = view_profile(pid)
+        if kind not in kv.KINDS:
+            abort(404)
+        data = kv.playlist_file(plan(pid, g.user.id, kind), p.name)
+        resp = app.response_class(json.dumps(data, indent=2, ensure_ascii=False), mimetype="application/json")
+        resp.headers["Content-Disposition"] = f'attachment; filename="valcoach_{kind}.json"'
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
     # ------------------------------------------------------------------ for other pages
     def member_pid(t, uid: int) -> int | None:
         """The team member linked to this user (or named like his in-game name)."""
@@ -220,7 +404,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         rid = team_warmup(t)
         if not rid:
             return None
-        lib = {r["id"]: r for r in am.BUILTIN}
+        lib = {r["id"]: r for r in am.BUILTIN + coach_files(0)}
         lib.update({r["id"]: r for r in _read(team_path(t.id), {}).get("routines", [])})
         return lib.get(rid)
 
