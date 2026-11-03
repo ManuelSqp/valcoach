@@ -4,6 +4,15 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 4.1.1
+- KovaaK's playlists from the coach carry the date (DD-MM-YYYY) in their name and file name, e.g.
+  *valcoach warm-up 03-11-2026* in `valcoach_warmup_03-11-2026.json`: older ones can stay in the Playlists folder and
+  you can tell them apart. A second download on the same day has the same name and replaces that day's file.
+- The training playlist is no longer the warm-up with more runs: it plays **other scenarios** than that day's
+  warm-up, at most two runs each (about 10–13 different ones), medium first and then harder ones for what your
+  matches need, and ends with something different (a kind you don't train otherwise, often tracking). A scenario
+  is only repeated when your scenario list has nothing new left.
+
 ## 4.1.0
 - **KovaaK's playlists from the coach** (Practice › Aim): a **warm-up** (~10 min) and a **training** playlist (~25 min),
   built from what your matches show and changed every week. *Download for KovaaK's*, save the file in

@@ -2319,10 +2319,12 @@ def test_kovaaks_playlists_scores_and_scenarios(app):
     page = c.get(f"/profiles/{pid}/aim").data.decode()
     assert "KovaaK's playlists from the coach" in page and "Download for KovaaK's" in page
     r = c.get(f"/profiles/{pid}/aim/kovaaks/warmup.json")
-    assert r.status_code == 200 and "valcoach_warmup.json" in r.headers["Content-Disposition"]
+    assert r.status_code == 200 and "valcoach_warmup_" in r.headers["Content-Disposition"]
     data = r.get_json()
     assert data["scenarioList"] and all(set(x) == {"scenario_name", "play_Count"} for x in data["scenarioList"])
     assert c.get(f"/profiles/{pid}/aim/kovaaks/other.json").status_code == 404
+    tr = c.get(f"/profiles/{pid}/aim/kovaaks/training.json").get_json()   # training: other scenarios than the warm-up
+    assert not {x["scenario_name"] for x in data["scenarioList"]} & {x["scenario_name"] for x in tr["scenarioList"]}
     # import a playlist: its unknown scenario joins your list, the playlist becomes a routine with its share code
     pl = json.dumps({"playlistName": "Friend's list", "shareCode": "KovaaKsFriendList", "scenarioList": [
         {"scenario_name": "Tile Frenzy", "play_Count": 1}, {"scenario_name": "Totally New Scenario", "play_Count": 2}]})

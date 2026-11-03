@@ -259,15 +259,21 @@ def mastered(scores: list[float]) -> bool:
 KINDS = {"warmup": ("warm-up", 10), "training": ("training", 25)}
 
 
-def build(kind: str, needs: list[dict], catalog: list[dict], runs: list[dict] | None = None, week: str = "") -> dict:
+def build(kind: str, needs: list[dict], catalog: list[dict], runs: list[dict] | None = None, week: str = "",
+          exclude: set[str] | frozenset = frozenset()) -> dict:
     """needs: the Aim page's [{focus: [...], weight, why}]. catalog: [{name, focus, level}].
-    -> {kind, title, minutes, items: [{name, runs, focus, level, why, best, last}]}
+    exclude: scenarios to leave out (the training playlist leaves out the warm-up's).
+    -> {kind, title, minutes, items: [{name, runs, focus, level, why, best, last, mastered}]}
 
-    Warm-up: two easy scenarios first, then the most needed focus at medium level, few runs each.
-    Training: more runs on what you need, harder scenarios where you're steady near your best (mastered),
-    easier ones where a focus has no scenario you've played yet. The pick changes every week (week = seed)."""
+    Warm-up: two easy openers, then one run each of medium scenarios for what you need.
+    Training: different scenarios from the warm-up, in blocks per need (medium, then hard), at most two runs each,
+    plus something different to finish (a kind you don't train otherwise). Harder scenarios where you're steady
+    near your best (imported scores). The pick changes every week (week = seed) and repeats a scenario only when
+    the list has nothing new left."""
     label, minutes = KINDS.get(kind, KINDS["warmup"])
+    training = kind == "training"
     total = max(4, round(minutes * 60 / SECONDS_PER_RUN))
+    per_max = 2 if training else 1
     stats = {x["name"]: x for x in summary(runs or [])}
     weights: dict[str, float] = defaultdict(float)
     why: dict[str, str] = {}
@@ -283,20 +289,21 @@ def build(kind: str, needs: list[dict], catalog: list[dict], runs: list[dict] | 
         weights.update({"flicks": 2, "micro": 1, "switching": 1})
 
     def rank(s: dict) -> str:                            # stable within a week, different next week
-        return hashlib.sha1(f"{week}|{s['name']}".encode()).hexdigest()
+        return hashlib.sha1(f"{week}|{kind}|{s['name']}".encode()).hexdigest()
 
-    def pool(focus: str, level: int) -> list[dict]:
-        c = [s for s in catalog if focus in s["focus"]]
-        if not c:
-            return []
-        # the level you're at: one up once you master a scenario of this focus, else the asked one
-        if any(stats.get(s["name"], {}).get("mastered") for s in c if s["level"] == level):
-            level = min(3, level + 1)
-        exact = [s for s in c if s["level"] == level] or sorted(c, key=lambda s: abs(s["level"] - level))
-        return sorted(exact, key=rank)
+    def level_for(focus: str, level: int) -> int:
+        # one level up once you're steady at your best on a scenario of this kind at that level
+        c = [s for s in catalog if focus in s["focus"] and s["level"] == level]
+        return min(3, level + 1) if any(stats.get(s["name"], {}).get("mastered") for s in c) else level
+
+    def candidates(focus: str, level: int) -> list[dict]:
+        """Scenarios of this kind, the asked level first, then the nearest levels; not used yet."""
+        level = level_for(focus, level)
+        c = [s for s in catalog if focus in s["focus"] and s["name"] not in used]
+        return sorted(c, key=lambda s: (abs(s["level"] - level), rank(s)))
 
     items: list[dict] = []
-    used: set[str] = set()
+    used: set[str] = set(exclude)
 
     def add(s: dict, n: int, reason: str, focus: str) -> int:
         if s["name"] in used or n <= 0:
@@ -308,40 +315,56 @@ def build(kind: str, needs: list[dict], catalog: list[dict], runs: list[dict] | 
         return n
 
     left = total
-    warm = [s for s in catalog if "warmup" in s["focus"] and s["level"] == 1]
-    for s in sorted(warm, key=rank)[:2]:
-        left -= add(s, 1, "warm-up: big targets, slow and clean", "warmup")
+    openers = sorted((s for s in catalog if "warmup" in s["focus"] and s["level"] == 1 and s["name"] not in used), key=rank)
+    for s in openers[:1 if training else 2]:
+        left -= add(s, 1, "warm-up: big targets, slow and clean" if not training else "to start: big targets, slow and clean", "warmup")
     order = sorted(((f, w) for f, w in weights.items() if f != "warmup"), key=lambda x: -x[1])
     share = sum(w for _, w in order) or 1
+    room = left - (2 if training else 0)                  # training keeps a little room for something different
     for f, w in order:
-        if left <= 0:
-            break
-        want = max(1, round((total - 2) * w / share))
-        level = 2 if kind == "training" else (1 if f in ("tracking", "switching") else 2)
-        per = 2 if kind == "training" else 1
-        for s in pool(f, level):
+        want = max(1, round(room * w / share))
+        for level in ((2, 3) if training else (2,)):       # training: medium first, then the harder ones
+            for s in candidates(f, level)[:max(1, want // per_max + (want % per_max > 0))]:
+                if want <= 0 or left <= 0:
+                    break
+                if training and level == 2 and s["level"] > 2 and want > per_max:
+                    continue                               # keep the hard ones for the second half of the block
+                got = add(s, min(per_max, want, left), why.get(f) or f, f)
+                want -= got
+                left -= got
             if want <= 0 or left <= 0:
                 break
-            n = min(per, want, left)
-            got = add(s, n, why.get(f) or f, f)
-            want -= got
-            left -= got
-    # anything left: one more run of the most needed scenarios
-    i = 0
-    while left > 0 and items and i < 50:
-        it = items[2 + (i % max(1, len(items) - 2))] if len(items) > 2 else items[i % len(items)]
-        it["runs"] += 1
+    # training: finish with something you don't train otherwise, so it isn't the same thing over and over
+    if training:
+        others = [f for f in ("tracking", "switching", "reaction", "flicks", "micro") if f not in weights]
+        others += [f for f, _ in reversed(order)]
+        for f in others:
+            if left <= 0:
+                break
+            for s in candidates(f, 2)[:2]:
+                if left <= 0:
+                    break
+                left -= add(s, min(per_max, left), "something different", f)
+    # still room: new scenarios of what you need, before anything is repeated
+    for f, _ in order:
+        for s in candidates(f, 2):
+            if left <= 0:
+                break
+            left -= add(s, min(per_max, left), why.get(f) or f, f)
+    i = 0                                                  # the list has nothing new left: one more run
+    while left > 0 and items and i < 100:
+        items[i % len(items)]["runs"] += 1
         left -= 1
         i += 1
     return {"kind": kind, "title": label, "minutes": round(sum(x["runs"] for x in items) * SECONDS_PER_RUN / 60),
             "items": items}
 
 
-def playlist_file(plan: dict, player: str) -> dict:
-    """The JSON KovaaK's reads (same fields as its own playlist files). Saving it under the same file name
-    every time replaces last week's playlist."""
+def playlist_file(plan: dict, player: str, day: date | None = None) -> dict:
+    """The JSON KovaaK's reads (same fields as its own playlist files). The date is in the name (DD-MM-YYYY),
+    so older playlists stay next to the new one and you can tell them apart."""
     return {
-        "playlistName": f"valcoach {plan['title']} ({player})"[:60],
+        "playlistName": f"valcoach {plan['title']} {stamp(day)} ({player})"[:60],
         "playlistId": 0,
         "authorSteamId": "",
         "authorName": "valcoach",
@@ -352,6 +375,15 @@ def playlist_file(plan: dict, player: str) -> dict:
         "shareCode": "",
         "version": 31,
     }
+
+
+def stamp(day: date | None = None) -> str:
+    """DD-MM-YYYY, for playlist names and file names."""
+    return (day or date.today()).strftime("%d-%m-%Y")
+
+
+def file_name(kind: str, day: date | None = None) -> str:
+    return f"valcoach_{kind}_{stamp(day)}.json"
 
 
 def run_days(runs: list[dict]) -> set[str]:
