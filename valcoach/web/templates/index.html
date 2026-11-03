@@ -74,6 +74,7 @@ a.li:hover .li-t{text-decoration:underline;text-decoration-color:var(--accent)}
       <div class="wk-meta">
         {% if a %}<span>Next match <b>{{ 'today' if a.today else a.label }}</b></span>{% endif %}
         {% if f %}<span>Your focus <b>{{ f.focus }}</b></span>{% endif %}
+        {% if x.warm %}<span>Warm up first: <a href="{{ url_for('aim', pid=x.warm.pid) }}#warmup"><b>{{ x.warm.routine.name }}</b></a> ({{ x.warm.routine.minutes }} min)</span>{% endif %}
         {% if not x.map and not a %}<span>Set match days under Premier to see who can play.</span>{% endif %}
       </div>
       <div class="wk-acts">

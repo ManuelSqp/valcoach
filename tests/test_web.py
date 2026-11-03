@@ -2219,3 +2219,56 @@ def test_small_fixes_37(app):
     assert "broken" in page
     boot = _json.loads(page.split('id="draft-boot">')[1].split("</script>")[0])
     assert len(boot["draft"]["data"]["slots"]) == 5 and boot["draft"]["data"]["status"] == "idea"
+
+
+def test_aim_routines_and_warmup(app):
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    pid = add_profile(c)
+    uid = store.user_by_name("manuel").id
+    tid = store.create_team(uid, "Squad")
+    store.update_team(tid, members=[{"pid": pid, "kind": "starter", "user_id": uid}], maps=["Lotus"])
+    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    assert "Your warm-up before matches" in page and "Range warm-up" in page
+    # links must be http(s), codes plain
+    c.post(f"/profiles/{pid}/aim", data={"action": "add", "name": "Evil", "kind": "link", "url": "javascript:alert(1)"})
+    c.post(f"/profiles/{pid}/aim", data={"action": "add", "name": "Bad code", "kind": "kovaaks", "code": "<script>"})
+    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    assert "Evil" not in page and "Bad code" not in page
+    c.post(f"/profiles/{pid}/aim", data={"action": "add", "name": "Flicks AL", "kind": "aimlabs", "url": "https://go.aimlabs.com/x",
+                                         "focus": ["flicks", "warmup"], "minutes": "12", "scope": f"team:{tid}"})
+    c.post(f"/profiles/{pid}/aim", data={"action": "add", "name": "Mine KK", "kind": "kovaaks", "code": "KovaaKsWarmup-1", "focus": ["tracking"]})
+    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    assert "Flicks AL" in page and "Mine KK" in page and 'rel="noopener noreferrer nofollow"' in page
+    team_r = json.loads((store.data_dir / "teams" / str(tid) / "aim.json").read_text())["routines"][0]
+    # the owner makes it the team's warm-up: practice plan, match screen
+    c.post(f"/profiles/{pid}/aim", data={"action": "team_warmup", "tid": str(tid), "rid": team_r["id"]})
+    c.post(f"/teams/{tid}/practice", data={"action": "remake"})
+    assert "Warm-up: Flicks AL" in c.get(f"/teams/{tid}/practice").data.decode()
+    assert "Flicks AL" in c.get(f"/teams/{tid}/match").data.decode()
+    # done with a score, shown in the log; a bad score is refused
+    c.post(f"/profiles/{pid}/aim", data={"action": "done", "rid": team_r["id"], "score": "87,5"})
+    assert c.post(f"/profiles/{pid}/aim", data={"action": "done", "rid": team_r["id"], "score": "lots"}).status_code == 302
+    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    assert "score 87.5" in page and "Done today" in page
+    assert c.post(f"/profiles/{pid}/aim", data={"action": "done", "rid": "nope"}).status_code == 400
+    # redirect back only to this site
+    r = c.post(f"/profiles/{pid}/aim", data={"action": "warmup", "rid": "b-hsdm", "next": "//evil.example/x"})
+    assert r.headers["Location"].endswith(f"/profiles/{pid}/aim")
+    # a teammate sees the team routine but can't remove it or set the team warm-up
+    mate = make_user(app, c, "mate")
+    store.add_team_access(tid, store.user_by_name("mate").id)
+    assert "Flicks AL" in mate.get(f"/profiles/{pid}/aim").data.decode()
+    assert "Mine KK" not in mate.get(f"/profiles/{pid}/aim").data.decode()
+    assert mate.post(f"/profiles/{pid}/aim", data={"action": "remove", "rid": team_r["id"], "scope": f"team:{tid}"}).status_code == 403
+    assert mate.post(f"/profiles/{pid}/aim", data={"action": "team_warmup", "tid": str(tid), "rid": "b-range"}).status_code == 403
+    assert mate.post(f"/profiles/{pid}/aim", data={"action": "done", "rid": "b-range"}).status_code == 403
+    stranger = make_user(app, c, "stranger")
+    assert stranger.get(f"/profiles/{pid}/aim").status_code == 404
+    # 30 minutes before the match: one warm-up push run per team and day
+    ext = app.extensions["valcoach"]
+    tick = ext["aim"]["tick"]
+    ext["minutes_to_match"] = lambda t: 30
+    assert tick() == [tid] and tick() == []
+    c.post(f"/profiles/{pid}/aim", data={"action": "remove", "rid": team_r["id"], "scope": f"team:{tid}"})
+    assert "<h3>Flicks AL" not in c.get(f"/profiles/{pid}/aim").data.decode()     # the log keeps its name

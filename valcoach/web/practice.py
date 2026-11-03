@@ -70,7 +70,8 @@ def register(app, store, sr, get_team) -> None:
         from .availability import DEFAULT_DAYS
         brief = t.sync_info.get("brief") or {}
         return {"map": m, "strats": strats, "lineups": lineups, "habits": pr.team_habits(members), "personal": personal,
-                "review": review, "match_days": brief.get("days") or DEFAULT_DAYS, "focus": focus, "evening": evening_items(t)}
+                "review": review, "match_days": brief.get("days") or DEFAULT_DAYS, "focus": focus, "evening": evening_items(t),
+                "warmup": (ext.get("aim") or {}).get("team_routine", lambda _t: None)(t)}
 
     def evening_items(t) -> list[dict]:
         """Items from the newest review evening sent to the plan in the last 8 days (kept when the plan is made again)."""
@@ -118,7 +119,9 @@ def register(app, store, sr, get_team) -> None:
 
     def links(t, plan: dict) -> dict:
         m = plan.get("map")
+        me = (app.extensions["valcoach"].get("aim") or {}).get("card", lambda *_: None)(t, g.user.id)
         return {"brief": url_for("team_match", tid=t.id) if m else "", "habits": "",
+                "aim": url_for("aim", pid=me["pid"]) + "#warmup" if me else "",
                 "strats": url_for("team_strats", tid=t.id) + (f"#map-{m}" if m else ""),
                 "lineups": url_for("team_lineups", tid=t.id, map=m) if m else url_for("team_lineups", tid=t.id)}
 

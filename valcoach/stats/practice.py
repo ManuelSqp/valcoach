@@ -61,7 +61,8 @@ def team_habits(members: dict[str, dict]) -> list[dict]:
 def build(week: str, start: date, cfg: dict, ctx: dict) -> dict:
     """ctx: map, strats {attack: [names], defense: [names]}, lineups {agent: n}, comp_agents, habits [team_habits],
     personal {name: [habit titles]}, review {title, url}, match_days [weekday ints], focus (str),
-    evening [{title, detail, minutes, who, url, evening}] (from the last review evening)."""
+    evening [{title, detail, minutes, who, url, evening}] (from the last review evening),
+    warmup {name, minutes, kind, steps, code} (the team's aim warm-up, if it has one)."""
     days = week_days(start, cfg.get("days") or DEFAULT_DAYS)
     total = int(cfg.get("minutes") or 90)
     habits = ctx.get("habits") or []
@@ -78,7 +79,14 @@ def build(week: str, start: date, cfg: dict, ctx: dict) -> dict:
                           "who": who, "link": link, "done": False})
             left -= minutes
 
-        add("warmup", "Warm-up", "Range: 5 min bots on hard, then a deathmatch. Everyone on time, voice on.", 10)
+        w = ctx.get("warmup")
+        if w:
+            how = w.get("steps") or {"aimlabs": "the Aimlabs playlist", "kovaaks": f"KovaaK's code {w.get('code', '')}",
+                                     "link": "the linked routine"}.get(w.get("kind"), "")
+            add("warmup", f"Warm-up: {w['name']}", (how + " " if how else "") + "Everyone on time, voice on.",
+                int(w.get("minutes") or 10), link="aim")
+        else:
+            add("warmup", "Warm-up", "Range: 5 min bots on hard, then a deathmatch. Everyone on time, voice on.", 10)
         before_match = any(((d.weekday() + k) % 7) in match_days for k in (0, 1)) and m
         if before_match:
             add("prep", f"Match prep: {m}", "Go through the match-day brief together, then open the match screen: "

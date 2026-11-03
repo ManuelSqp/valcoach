@@ -27,6 +27,7 @@ main.page{max-width:1760px}
 .cp .fo{font-size:13px;color:var(--muted);line-height:1.35}
 .cp.me{background:var(--accent-soft);margin:0 -10px;padding:10px;border-radius:10px;border-top-color:transparent}
 .cp.me .who::after{content:"you";font-size:11px;font-weight:700;color:var(--accent-ink);background:var(--accent);border-radius:5px;padding:0 5px;margin-left:8px;vertical-align:2px}
+.warmcard .wn b{font-size:17px}.warmcard.done{opacity:.75}
 .pl{border-top:1px solid var(--line);padding:14px 0 6px}.pl:first-of-type{border-top:0;padding-top:4px}
 .pl h3{font-size:19px;margin:0 0 4px}.pl .idea{margin:0 0 8px;color:var(--muted)}
 .pl .timing{display:inline-block;font-size:13px;font-weight:650;padding:2px 9px;border-radius:6px;background:var(--panel3);margin-bottom:8px}
@@ -84,6 +85,17 @@ body[data-side=attack] [data-side-only=attack],body[data-side=defense] [data-sid
         <div class="fo">{% if fo.get(pk.player) %}Focus: {{ fo[pk.player] }}{% elif pk.note %}{{ pk.note }}{% else %}&nbsp;{% endif %}</div></div>
       {% else %}<p class="empty-s">No comp yet: mark a draft as <i>Our comp</i> under <a href="{{ url_for('team_drafts', tid=t.id, map=sel) }}">Drafts</a>.</p>{% endfor %}
     </section>
+    {% if warm %}{% set wr = warm.routine %}
+    <section class="card warmcard {{ 'done' if warm.done }}"><h2>Warm up<a href="{{ url_for('aim', pid=warm.pid) }}#warmup">Aim</a></h2>
+      <div class="wn"><b>{{ wr.name }}</b> <span class="small muted">{{ wr.minutes }} min</span></div>
+      {% if wr.kind == 'steps' and wr.steps %}<div class="small muted" style="margin:4px 0 8px">{{ wr.steps|truncate(160) }}</div>{% endif %}
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">
+        {% if wr.kind in ('aimlabs', 'link') %}<a class="btn sm {{ 'primary' if not warm.done }}" href="{{ wr.url }}" target="_blank" rel="noopener noreferrer nofollow">{{ 'Open in Aimlabs' if wr.kind == 'aimlabs' else 'Open link' }}</a>
+        {% elif wr.kind == 'kovaaks' %}<code class="small">{{ wr.code }}</code>{% endif %}
+        {% if warm.done %}<span class="small" style="color:var(--win);font-weight:700">Done today</span>
+        {% else %}<form method="post" action="{{ url_for('aim', pid=warm.pid) }}"><input type="hidden" name="action" value="done"><input type="hidden" name="rid" value="{{ wr.id }}"><input type="hidden" name="next" value="{{ request.full_path }}"><button class="btn sm">Done</button></form>{% endif %}
+      </div>
+    </section>{% endif %}
     {% set a = b.avail %}{% if a %}
     <section class="card"><h2>Who's playing<a href="{{ url_for('team_availability', tid=t.id) }}">{{ 'Today' if a.today else a.label }}</a></h2>
       <div class="roster">{% for m in a.yes + a.maybe + a.unknown + a.no %}{% set st = a.state[m.pid] or 'unknown' %}<span class="rc {{ st }}"><i>{{ {'yes': '✓', 'maybe': '?', 'no': '✕', 'unknown': '·'}[st] }}</i>{{ m.name }}</span>{% endfor %}</div>

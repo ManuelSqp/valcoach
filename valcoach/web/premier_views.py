@@ -217,6 +217,7 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
     app.extensions["valcoach"]["week_map"] = lambda t: week_map(t)[0]
     app.extensions["valcoach"]["next_avail"] = next_avail
     app.extensions["valcoach"]["match_window"] = lambda t: match_window(t)
+    app.extensions["valcoach"]["minutes_to_match"] = lambda t: minutes_to_match(t)
 
     # ------------------------------------------------------------------ pages
     def ctx(t, tab2: str, **kw) -> dict:
@@ -344,6 +345,19 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
                                                            pool=pool(t), discord=t.discord_info))
 
     # ------------------------------------------------------------------ match screen (second screen)
+    def minutes_to_match(t, now: datetime | None = None) -> float | None:
+        """Minutes until today's match time (negative once it started), or None when today isn't a match day."""
+        from .availability import DEFAULT_DAYS
+        now = now or datetime.now()
+        b = brief_cfg(t)
+        if now.weekday() not in (b.get("days") or DEFAULT_DAYS):
+            return None
+        try:
+            hh, mm = (int(x) for x in str(b.get("time") or "20:00").split(":"))
+        except ValueError:
+            return None
+        return (now.replace(hour=hh, minute=mm, second=0, microsecond=0) - now).total_seconds() / 60
+
     def match_window(t, now: datetime | None = None) -> bool:
         """True from 90 min before the match time to 3 h after it, on match days (server time)."""
         from .availability import DEFAULT_DAYS
@@ -398,6 +412,7 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
         return render_template("team_match.html", **ctx(t, "match", b=b, sel=m, maps=maps, plans=plans, strats=strats,
                                                          lineups=lineups, comp_agents=comp_agents, me_name=me_name,
                                                          opponents=opponents, opp=opp, live=match_window(t),
+                                                         warm=(app.extensions["valcoach"].get("aim") or {}).get("card", lambda *_: None)(t, g.user.id),
                                                          side=request.args.get("side") if request.args.get("side") in ("attack", "defense") else "attack"))
 
     @app.post("/teams/<int:tid>/premier/brief/post")
