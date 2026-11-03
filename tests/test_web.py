@@ -2103,3 +2103,29 @@ def test_share_report_pwa_push_and_match_screen(app, monkeypatch):
     assert "embed=1" in page and c.get(f"/teams/{tid}/match?map=Nowhere").status_code == 404
     assert 'class="vc-side"' not in c.get(f"/teams/{tid}/strats/1?play=1&embed=1").data.decode()
     assert other.get(f"/teams/{tid}/match").status_code == 404
+
+
+def test_habits_page_and_practice_plan(app, monkeypatch):
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    pid = add_profile(c)
+    assert "No games yet" in c.get(f"/profiles/{pid}/habits").data.decode()
+    tid = store.create_team(store.user_by_name("manuel").id, "Squad")
+    store.update_team(tid, members=[{"pid": pid, "kind": "starter"}], maps=["Lotus"])
+    store.create_strat(tid, 1, "Lotus", "attack", "A split")
+    page = c.get(f"/teams/{tid}/practice").data.decode()
+    assert "Practice plan" in page and "Warm-up" in page and "A split" in page
+    import re as _re
+    day = _re.search(r'data-day="([\d-]+)"', page).group(1)
+    item = _re.search(r'class="pi[^"]*" data-id="(\w+)"', page).group(1)
+    r = c.post(f"/api/teams/{tid}/practice", json={"action": "tick", "day": day, "id": item, "done": True}).get_json()
+    assert r["done"] == 1
+    assert c.post(f"/api/teams/{tid}/practice", json={"action": "add", "day": day, "title": "Pistol rounds", "minutes": 20}).get_json()["ok"]
+    assert "Pistol rounds" in c.get(f"/teams/{tid}/practice").data.decode()
+    mate = make_user(app, c, "mate")
+    store.add_team_access(tid, store.user_by_name("mate").id)
+    assert mate.post(f"/api/teams/{tid}/practice", json={"action": "remove", "day": day, "id": item}).status_code == 403
+    assert mate.post(f"/teams/{tid}/practice", data={"days": ["0"], "time": "18:00", "minutes": "60"}).status_code in (403, 404)
+    c.post(f"/teams/{tid}/practice", data={"days": ["0", "2"], "time": "18:30", "minutes": "60"})
+    page = c.get(f"/teams/{tid}/practice").data.decode()
+    assert "18:30" in page and "Mon" in page

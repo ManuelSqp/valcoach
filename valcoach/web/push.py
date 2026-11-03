@@ -16,7 +16,8 @@ import threading
 from datetime import date
 
 KINDS = {"report": ("Report ready", "When a coaching report you started is done or failed."),
-         "match": ("Match day", "90 minutes before your match time, with a link to the match screen.")}
+         "match": ("Match day", "90 minutes before your match time, with a link to the match screen."),
+         "practice": ("Practice", "60 minutes before a practice session, with what's on the plan.")}
 
 
 def available() -> bool:

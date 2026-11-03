@@ -184,6 +184,40 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         return render_template("agents_roles.html", p=p, active_pid=pid, queue=queue, queues=QUEUE_TABS, tab="agents",
                                can_edit=can_edit, o=o, import_status=sr.status(f"import:{pid}"))
 
+    def coach_said(p) -> list[dict]:
+        """What reports and Premier reviews told this player to fix (for the habit tracker)."""
+        from ..stats.habits import coach_lines, review_lines
+        out = []
+        for j in store.jobs(p.id, 60):
+            path = store.resolve(j.json_path) if j.status == "done" and j.json_path else None
+            if path is None or not path.exists():
+                continue
+            try:
+                rep = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            date = (rep.get("meta") or {}).get("started_at") or j.started_at_match or j.created_at
+            out += coach_lines(rep, p.name, date, f"Report {j.map} {j.score}".strip(), url_for("job_report", jid=j.id))
+        pj = app.extensions["valcoach"].get("premier")
+        if pj:
+            for t in store.teams_for_user(g.user.id):
+                if not any(m.get("pid") == p.id for m in t.member_list):
+                    continue
+                for r in pj.reviews(t.id)[:30]:
+                    out += review_lines(r, p.name, url_for("team_review_page", tid=t.id, match_id=r.get("match_id", "")))
+        return sorted(out, key=lambda c: c.get("date") or "", reverse=True)
+
+    @app.get("/profiles/<int:pid>/habits")
+    def habits(pid: int):
+        """Habits that cost rounds, game by game, and whether they're going away."""
+        from ..stats.habits import fmt_date, track
+        p, can_edit = view_profile(pid)
+        queue = queue_arg("everything")
+        rows = filter_rows(sr.games(pid).rows(), queue)
+        h = track(rows, coach_said(p))
+        return render_template("habits.html", p=p, active_pid=pid, queue=queue, queues=QUEUE_TABS, tab="habits",
+                               can_edit=can_edit, h=h, fmt_date=fmt_date, own=sr.read_own_focus(pid))
+
     def pro_context(p, queue: str, pro: str | None = None) -> dict:
         from ..stats.style import load_pros, match_pros, profile, video_queries
         roles.load(cache_dir)
@@ -505,6 +539,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
                                      "queue_arg": queue_arg, "queues": QUEUE_TABS})
     from .lineups import register as register_lineups
     register_lineups(app, store, get_team, KNOWN_MAPS)
+    from .practice import register as register_practice
+    register_practice(app, store, sr, get_team)
     from .drafts import register as register_drafts
     register_drafts(app, store, get_team, {"team_context": team_context, "owner_rows": owner_rows}, KNOWN_MAPS)
 

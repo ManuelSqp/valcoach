@@ -309,7 +309,8 @@ main.page{overflow-wrap:break-word}
   .nav-top .admin{flex-direction:row;gap:2px}
   .nav-top .side-bottom .si{font-size:0;gap:0;padding:8px;position:relative}
   .nav-top .side-bottom .si .badge{position:absolute;top:4px;right:4px;width:8px;height:8px;padding:0;border-radius:50%;font-size:0}
-  .nav-top .me-text{display:none}.nav-top .me-link{padding:4px}
+  .nav-top .me-link{padding:4px 10px 4px 4px;gap:8px}.nav-top .me-text b{font-size:13.5px;max-width:110px}
+  .nav-top .me-text .uptime{font-size:11px}
   .nav-top .me{gap:2px}
   .nav-top .page{padding-top:26px}
 }
@@ -318,6 +319,7 @@ main.page{overflow-wrap:break-word}
   .nav-top .side-nav>.si,.nav-top .ngroup>.sg-head{padding:7px 9px}
 }
 @media(min-width:901px) and (max-width:1240px){
+  .nav-top .me-text{display:none}.nav-top .me-link{padding:4px}
   .nav-top .ctx-t{display:none}.nav-top .ctxpick>summary::after{display:none}
   .nav-top .logo{font-size:0;gap:0}
   .nav-top .side-nav>.si,.nav-top .ngroup>.sg-head{padding:7px 7px;font-size:14px}
