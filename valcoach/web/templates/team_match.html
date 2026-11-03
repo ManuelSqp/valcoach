@@ -111,7 +111,8 @@ body[data-side=attack] [data-side-only=attack],body[data-side=defense] [data-sid
     <section class="card opp"><h2>{{ opp.name }}<a href="{{ url_for('team_scouted', tid=t.id, team_id=opp.id) }}">{{ opp.record }}, full scouting</a></h2>
       {% if opp.map.games %}<div class="small muted">On {{ sel }}: {{ opp.map.wins }}–{{ opp.map.games - opp.map.wins }}</div>{% endif %}
       {% for c in opp.comps %}<div class="oc">{% for ag in c.agents %}{{ ai(ag, 26) }}{% endfor %}<span class="small muted" style="align-self:center">{{ c.games }}×</span></div>{% endfor %}
-      <ul class="ln">{% for l in (opp.lines or opp.general) %}<li>{{ l }}</li>{% endfor %}</ul>
+      {% set shown = opp.lines or opp.general %}
+      <ul class="ln">{% for l in shown %}<li>{{ l }}</li>{% endfor %}{% for l in opp.econ if l not in shown %}<li>{{ l }}</li>{% endfor %}</ul>
     </section>{% endif %}
     <section class="card">
       <h2>Strats<a href="{{ url_for('team_strats', tid=t.id) }}#map-{{ sel }}">Strat book</a></h2>

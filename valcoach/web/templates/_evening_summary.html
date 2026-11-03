@@ -1,0 +1,41 @@
+{# The review evening's summary (the page reloads it while people mark). #}
+<section class="card {{ 'ended' if ev.finished }}" id="summary">
+  <h2>Summary{% if not ev.finished %} <span class="muted small" style="font-weight:500">so far; it's final when the host ends the evening</span>{% endif %}</h2>
+  <div class="cnt">
+    <div><b>{{ summary.marked_rounds }}<span style="font-size:18px;color:var(--muted)">/{{ summary.rounds }}</span></b><span>rounds marked</span></div>
+    <div class="f"><b>{{ summary.counts.fault }}</b><span>my fault</span></div>
+    <div class="g"><b>{{ summary.counts.good }}</b><span>good</span></div>
+    <div class="t"><b>{{ summary.counts.talk }}</b><span>talk about it</span></div>
+  </div>
+  <div class="sum-grid" style="margin-top:12px">
+    <div>
+      <h3>What keeps coming up</h3>
+      {% for x in summary.themes %}<div class="th"><b>{{ x.text|capitalize }}: {{ x.rounds }} rounds</b><p>{{ x.title }}: {{ x.detail }}</p></div>
+      {% else %}<p class="muted small">Nothing yet: a theme shows up when two or more of the rounds you flagged (my fault, talk about it) have the same cause.</p>{% endfor %}
+      <h3 style="margin-top:16px">Into the practice plan</h3>
+      {% if summary.plan %}<ul class="plan" style="padding-left:18px;margin:0">{% for p in summary.plan %}<li>{{ p.title }}{% if p.who != 'team' %} ({{ p.who|join(', ') }}){% endif %}<span>{{ p.minutes }} min</span></li>{% endfor %}</ul>
+      <div class="row" style="gap:8px;margin-top:10px">
+        {% if host %}<form method="post" action="{{ url_for('team_evening_plan', tid=t.id, sid=ev.id) }}"><button class="btn sm primary">{{ 'Add again' if ev.planned else 'Add to the practice plan' }}</button></form>{% endif %}
+        {% if g.team_owner and discord %}<form method="post" action="{{ url_for('team_evening_post', tid=t.id, sid=ev.id) }}"><button class="btn sm ghost">Post to Discord</button></form>{% endif %}
+        {% if ev.planned %}<a class="small" href="{{ url_for('team_practice', tid=t.id) }}">Open the practice plan</a>{% endif %}
+      </div>
+      {% else %}<p class="muted small">Comes from the themes above and from players with several rounds of the same kind.</p>
+      {% if g.team_owner and discord and summary.marked_rounds %}<form method="post" action="{{ url_for('team_evening_post', tid=t.id, sid=ev.id) }}"><button class="btn sm ghost">Post to Discord</button></form>{% endif %}{% endif %}
+    </div>
+    <div>
+      <h3>Rounds to talk about</h3>
+      {% for x in summary.talk %}<div class="tr"><a href="#r{{ x.n }}" data-go="{{ x.n }}">Round {{ x.n }}</a> <span class="muted">{{ 'won' if x.won else 'lost' }}, {{ x.side }}{% if x.why %}, {{ x.why|join(', ') }}{% endif %}</span>
+        {% if x.who %}<div class="small">Asked by {{ x.who|join(', ') }}</div>{% endif %}
+        {% if x.notes %}<ul>{% for n in x.notes %}<li><b>{{ n.who }}</b>: {{ n.note }}</li>{% endfor %}</ul>{% endif %}</div>
+      {% else %}<p class="muted small">No round marked "talk about it" yet.</p>{% endfor %}
+    </div>
+    <div>
+      <h3>Every player</h3>
+      {% for p in summary.players %}<div class="ps"><b>{{ p.name }}</b>
+        <div class="rr">{% if p.fault %}my fault in R{{ p.fault|join(', R') }}{% endif %}{% if p.fault and p.good %} · {% endif %}{% if p.good %}good in R{{ p.good|join(', R') }}{% endif %}{% if p.talk %}{{ ' · ' if p.fault or p.good }}talk: R{{ p.talk|join(', R') }}{% endif %}</div>
+        {% if p.focus %}<div class="fo">To work on: <b>{{ p.focus.title }}</b> ({{ p.focus.rounds }} of his rounds: {{ p.focus.text }})</div>{% endif %}
+        {% if p.notes %}<ul style="margin:4px 0 0;padding-left:18px;color:var(--muted)">{% for n in p.notes %}<li>R{{ n.n }}: {{ n.note }}</li>{% endfor %}</ul>{% endif %}
+      </div>{% else %}<p class="muted small">Nobody has marked a round yet.</p>{% endfor %}
+    </div>
+  </div>
+</section>

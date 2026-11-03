@@ -26,6 +26,8 @@ def clean_draft(data: dict, pids: set[int], agents: set[str]) -> dict:
     """Draft JSON as saved by any team member: keep only well-typed fields. Players must be team
     members and agents real agents, so another member's browser only ever gets known values."""
     out = empty_data()
+    if not isinstance(data, dict):
+        return out
     slots = data.get("slots") if isinstance(data.get("slots"), list) else []
     for i, s in enumerate(slots[:SLOTS]):
         if not isinstance(s, dict):
@@ -62,6 +64,7 @@ def register(app, store, get_team, helpers: dict, known_maps: list[str]) -> None
         d = store.draft(did)
         if d is None or d["team_id"] != tid:
             abort(404)
+        d["data"] = clean_draft(d["data"], {m["pid"] for m in t.member_list}, {a["name"] for a in agent_list()})
         return t, d
 
     def roster(t) -> tuple[list[dict], dict]:
@@ -135,7 +138,7 @@ def register(app, store, get_team, helpers: dict, known_maps: list[str]) -> None
             elif src.startswith("copy:") and src[5:].isdigit():
                 old = store.draft(int(src[5:]))
                 if old and old["team_id"] == tid:
-                    data = old["data"]
+                    data = old["data"] if isinstance(old["data"], dict) else empty_data()
                     name = name or f"{old['name']} (copy)"
             else:                                             # empty: the starters in order, no agents
                 for i, p in enumerate([p for p in players if p["kind"] == "starter"][:SLOTS]):
@@ -153,6 +156,9 @@ def register(app, store, get_team, helpers: dict, known_maps: list[str]) -> None
             wm = fn(t) if fn and t.premier_info.get("tag") else None
             sel = wm if wm in maps else next((m for m in maps if counts.get(m)), maps[0] if maps else "")
         drafts = store.drafts(tid, sel) if sel else []
+        known_pids, known_agents = {m["pid"] for m in t.member_list}, {a["name"] for a in agent_list()}
+        for d in drafts:                       # old or damaged drafts: only well-typed fields reach the page
+            d["data"] = clean_draft(d["data"], known_pids, known_agents)
         cur = None
         if request.args.get("d", "").isdigit():
             cur = next((d for d in drafts if d["id"] == int(request.args["d"])), None)

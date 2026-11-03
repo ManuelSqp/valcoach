@@ -3,6 +3,9 @@
 {% macro dur(s) %}{% if s is none %}–{% elif s < 60 %}{{ s }} s{% elif s < 3600 %}{{ s // 60 }} min{% elif s < 86400 %}{{ s // 3600 }} h {{ (s % 3600) // 60 }} min{% else %}{{ s // 86400 }} d {{ (s % 86400) // 3600 }} h{% endif %}{% endmacro %}
 {% block head %}
 <style>
+.mload{margin:2px 0 6px}.mload .mbar{display:block;height:6px;max-width:260px;border-radius:99px;background:var(--red-soft);margin-top:4px;overflow:hidden}
+.mload .mbar i{display:block;height:100%;background:var(--win);border-radius:99px}.mload.cpu .mbar{background:var(--red-soft)}
+.mload .mwarn{display:block;font-size:12.5px;color:var(--red);margin-top:3px}
 .ogrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;align-items:start}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
 .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px}
@@ -50,7 +53,12 @@
     <dl class="kv">
       <dt>Model</dt><dd>{{ model_name }}</dd>
       <dt>Status</dt><dd>{% if model.reachable %}<span style="color:var(--win)">reachable</span> · {{ model.installed }} models installed{% else %}<span class="err">not reachable{% if model.error %} ({{ model.error }}){% endif %}</span>{% endif %}</dd>
-      <dt>In memory</dt><dd>{% for m in model.loaded %}{{ m.name }} ({{ m.vram }} VRAM){{ ', ' if not loop.last }}{% else %}nothing loaded right now{% endfor %}</dd>
+      <dt>In memory</dt><dd>{% for m in model.loaded %}<div class="mload {{ m.where }}"><b>{{ m.name }}</b>
+        {% if m.where == 'gpu' %}{{ m.size }}, all on the GPU{% elif m.where == 'cpu' %}{{ m.size }}, all on the CPU{% else %}{{ m.vram }} of {{ m.size }} on the GPU ({{ (m.share * 100)|round|int }}%){% endif %}{% if m.context %} · context {{ '{:,}'.format(m.context) }} tokens{% endif %}
+        <span class="mbar" aria-hidden="true"><i style="width:{{ (m.share * 100)|round|int }}%"></i></span>
+        {% if m.where != 'gpu' %}<span class="mwarn">{{ 'Part of the model runs on the CPU: writing is much slower. Use a smaller model or a shorter context, or close other programs that use GPU memory.' if m.where == 'split' else 'The model runs on the CPU only: writing is very slow. Check that Ollama sees the GPU.' }}</span>{% endif %}
+        </div>{% else %}nothing loaded right now (Ollama loads the model with the first request){% endfor %}
+        <div class="small muted" style="margin-top:4px">The size is what the model takes while it runs (weights and context), so it can differ from its size on disk.</div></dd>
       <dt>Last 24 h</dt><dd>{{ model.requests_day }} requests{% if model.avg_s is not none %} · {{ model.avg_s }} s on average · {{ '{:,}'.format(model.tokens_day) }} tokens written{% endif %}</dd>
     </dl>
   </section>

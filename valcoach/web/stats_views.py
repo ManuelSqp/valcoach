@@ -577,6 +577,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     register_lineups(app, store, get_team, KNOWN_MAPS)
     from .practice import register as register_practice
     register_practice(app, store, sr, get_team)
+    from .evening import register as register_evening
+    register_evening(app, store, sr, get_team)
     from .drafts import register as register_drafts
     register_drafts(app, store, get_team, {"team_context": team_context, "owner_rows": owner_rows}, KNOWN_MAPS)
 

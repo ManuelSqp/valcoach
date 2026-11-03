@@ -70,7 +70,46 @@ def register(app, store, sr, get_team) -> None:
         from .availability import DEFAULT_DAYS
         brief = t.sync_info.get("brief") or {}
         return {"map": m, "strats": strats, "lineups": lineups, "habits": pr.team_habits(members), "personal": personal,
-                "review": review, "match_days": brief.get("days") or DEFAULT_DAYS, "focus": focus}
+                "review": review, "match_days": brief.get("days") or DEFAULT_DAYS, "focus": focus, "evening": evening_items(t)}
+
+    def evening_items(t) -> list[dict]:
+        """Items from the newest review evening sent to the plan in the last 8 days (kept when the plan is made again)."""
+        fn = ext_evenings()
+        if fn is None:
+            return []
+        now = datetime.now().timestamp()
+        for ev in fn(t.id):
+            if ev.get("plan_items") and now - float(ev.get("planned_at") or 0) < 8 * 86400:
+                return [dict(x, evening=ev["id"], url=url_for("team_evening_session", tid=t.id, sid=ev["id"]) + "#summary")
+                        for x in ev["plan_items"]]
+        return []
+
+    def ext_evenings():
+        return app.extensions["valcoach"].get("evenings")
+
+    def add_evening(t, ev: dict) -> int:
+        """Put a review evening's items on the next practice day of this week (today counts); returns how many."""
+        week = week_id()
+        plan = read(t.id, week) or make(t, week)
+        today = date.today().isoformat()
+        day = next((d for d in plan["days"] if d["date"] >= today), None)
+        if day is None:
+            return 0
+        have = {(it.get("evening"), it["title"]) for d in plan["days"] for it in d["items"]}
+        n = 0
+        for x in ev.get("plan_items") or []:
+            if (ev["id"], x["title"]) in have:
+                continue
+            day["items"].insert(1 if day["items"] else 0, {
+                "id": pr._id(), "kind": "evening", "title": x["title"][:100], "detail": x.get("detail", "")[:400],
+                "minutes": int(x.get("minutes") or 15), "who": x.get("who") or "team", "evening": ev["id"],
+                "link": url_for("team_evening_session", tid=t.id, sid=ev["id"]) + "#summary", "done": False})
+            n += 1
+        write(t.id, plan)
+        # a plan made just now already has them (the evening's items go into every new plan for 8 days)
+        return sum(1 for d in plan["days"] for it in d["items"] if it.get("evening") == ev["id"])
+
+    app.extensions["valcoach"]["practice_add"] = add_evening
 
     def make(t, week: str) -> dict:
         plan = pr.build(week, pr.monday(), cfg_of(t), context(t))

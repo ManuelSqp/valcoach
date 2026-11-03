@@ -19,6 +19,10 @@
 @media(max-width:600px){.pl{grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr))}.pl .x{display:none}}
 .mapcard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
 .mapcard.wk{border-color:var(--amber)}
+.rtypes{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.rt{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.rt-n{font-size:12.5px;color:var(--muted)}.rt b{font-size:22px;font-variant-numeric:tabular-nums;font-family:var(--font-num)}
+.mu{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;font-size:13px}
 </style>
 {% endblock %}
 {% block content %}
@@ -68,6 +72,26 @@
     <span class="x">{{ p.kd }}</span><span class="x">{{ p.acs }}</span>
   </div>
   {% else %}<p class="muted">No players found.</p>{% endfor %}
+</section>
+
+{% set ec = s.economy or {} %}
+<section class="card" style="margin-top:14px">
+  <h2>Round types</h2>
+  {% if not ec.rounds %}<p class="muted small" style="margin:0">Scouted before 3.7, or the matches have no round data: press <b>Scout again</b> (matches already read are cached, so it's quick).</p>
+  {% else %}
+  <p class="small muted" style="margin:-4px 0 10px">Their buys from {{ ec.rounds }} rounds: eco under 2,000 credits average, force 2,000–3,900, full buy above.</p>
+  <div class="rtypes">
+    {% for x in ec.kinds %}<div class="rt"><span class="rt-n">{{ x.text }}</span><b>{{ (x.wr * 100)|round|int if x.wr is not none else '–' }}{{ '%' if x.wr is not none }}</b><span class="muted small">{{ x.won }} of {{ x.rounds }} won · {{ (x.share * 100)|round|int }}% of rounds</span></div>{% endfor %}
+  </div>
+  <div class="rtypes" style="margin-top:10px">
+    {% set al = ec.after_pistol_loss %}
+    <div class="rt"><span class="rt-n">After a lost pistol</span>{% if al.rounds %}<b>{{ (al.force_share * 100)|round|int }}% buy</b><span class="muted small">{{ al.force }} force, {{ al.full }} full, {{ al.eco }} save · {{ al.won }} of {{ al.rounds }} won</span>{% else %}<b>–</b>{% endif %}</div>
+    <div class="rt"><span class="rt-n">Round after a won pistol</span><b>{{ (ec.bonus.wr * 100)|round|int if ec.bonus.wr is not none else '–' }}{{ '%' if ec.bonus.wr is not none }}</b><span class="muted small">{{ ec.bonus.won }} of {{ ec.bonus.rounds }} won</span></div>
+    <div class="rt"><span class="rt-n">After they plant</span><b>{{ (ec.postplant.wr * 100)|round|int if ec.postplant.wr is not none else '–' }}{{ '%' if ec.postplant.wr is not none }}</b><span class="muted small">{{ ec.postplant.won }} of {{ ec.postplant.rounds }} won</span></div>
+    <div class="rt"><span class="rt-n">Retakes (their opponent planted)</span><b>{{ (ec.retake.wr * 100)|round|int if ec.retake.wr is not none else '–' }}{{ '%' if ec.retake.wr is not none }}</b><span class="muted small">{{ ec.retake.won }} of {{ ec.retake.rounds }} won</span></div>
+  </div>
+  <div class="mu">{% for x in ec.matchups if x.rounds %}<span><b>{{ x.title }}</b> {{ (x.wr * 100)|round|int }}% <span class="muted">({{ x.rounds }})</span></span>{% endfor %}</div>
+  {% endif %}
 </section>
 
 <section class="card" style="margin-top:14px">

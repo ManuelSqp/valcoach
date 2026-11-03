@@ -156,3 +156,99 @@ def _solo_vs_premade(rows: list[dict]) -> dict:
     f = lambda rs: {"games": len(rs), "wr": (sum(r["won"] for r in rs) / len(rs)) if rs else None,  # noqa: E731
                     "acs": (sum(r["acs"] for r in rs) / len(rs)) if rs else None}
     return {"solo": f(solo), "party": f(party)}
+
+
+# ---------------------------------------------------------------------------
+# round types of a scouted team (from parsed matches, not game rows)
+# ---------------------------------------------------------------------------
+def _avg_loadout(rnd, team: str) -> int:
+    vals = [s.loadout_value for s in rnd.stats.values() if s.team == team]
+    return round(sum(vals) / len(vals)) if vals else 0
+
+
+def round_types(items: list) -> dict:
+    """items: [(Match, team)] of one team (a scouted opponent). Their buys and win rates per round type,
+    what they do after a lost pistol, the round after a won pistol, post-plants and retakes."""
+    k = defaultdict(lambda: [0, 0])
+    mu = defaultdict(lambda: [0, 0])
+    after_loss = {"force": 0, "full": 0, "eco": 0, "rounds": 0, "won": 0}
+    bonus = [0, 0]
+    pp, rt = [0, 0], [0, 0]
+    total = 0
+    for m, team in items:
+        other = m.other_team(team)
+        prev_won: dict[int, bool] = {}
+        for rnd in m.rounds:
+            if not rnd.stats:
+                continue
+            no, won = rnd.number, rnd.winning_team == team
+            ours, theirs = _avg_loadout(rnd, team), _avg_loadout(rnd, other)
+            kk, ok = kind(no, ours), kind(no, theirs)
+            total += 1
+            k[kk][0] += won
+            k[kk][1] += 1
+            if kk != "pistol" and ok != "pistol":
+                mu[(kk, ok)][0] += won
+                mu[(kk, ok)][1] += 1
+            if no in (2, 14) and (no - 1) in prev_won:
+                if prev_won[no - 1]:
+                    bonus[0] += won
+                    bonus[1] += 1
+                else:
+                    after_loss["rounds"] += 1
+                    after_loss["won"] += won
+                    after_loss[kk if kk in ("force", "full") else "eco"] += 1
+            prev_won[no] = won
+            if rnd.plant is not None:
+                planted_by_them = rnd.plant.team == team if rnd.plant.team else rnd.attacking_team == team
+                tgt = pp if planted_by_them else rt
+                tgt[0] += 1
+                tgt[1] += won
+    out: dict = {"rounds": total}
+    if not total:
+        return out
+    out["kinds"] = [dict(kind=x, text=KIND_TEXT[x], share=k[x][1] / total, **_rate(*k[x])) for x in KINDS]
+    out["matchups"] = [dict(title=t, us=a, them=b, **_rate(*mu[(a, b)])) for a, b, t, _ in MATCHUPS]
+    n = after_loss["rounds"]
+    out["after_pistol_loss"] = {**after_loss, "force_share": (after_loss["force"] + after_loss["full"]) / n if n else None,
+                                "wr": after_loss["won"] / n if n else None}
+    out["bonus"] = _rate(*bonus)
+    out["postplant"] = _rate(pp[1], pp[0])
+    out["retake"] = _rate(rt[1], rt[0])
+    out["lines"] = scout_lines(out)
+    return out
+
+
+def scout_lines(o: dict) -> list[str]:
+    """What to expect from a scouted team's economy, only with enough rounds."""
+    lines = []
+    al = o.get("after_pistol_loss") or {}
+    if al.get("rounds", 0) >= 3:
+        fs = al["force_share"]
+        if fs >= 0.6:
+            lines.append(f"After a lost pistol they force-buy {fs:.0%} of the time ({al['rounds']} rounds): expect SMGs, "
+                         "shotguns and armor in round 2. Keep distance, play together, don't peek alone.")
+        elif fs <= 0.3:
+            lines.append(f"After a lost pistol they mostly save ({1 - fs:.0%}): round 2 should be yours, "
+                         "take space slowly and don't give them guns.")
+    m = {x["title"]: x for x in o.get("matchups") or []}
+    eco = m.get("Eco against a full buy") or {}
+    if eco.get("rounds", 0) >= 6 and eco["wr"] >= 0.25:
+        lines.append(f"Dangerous on eco: they win {eco['wr']:.0%} of their saving rounds against full buys. "
+                     "Expect a stack or a rush, don't take free duels.")
+    ae = m.get("Anti-eco") or {}
+    if ae.get("rounds", 0) >= 6 and ae["wr"] < 0.75:
+        lines.append(f"They lose {1 - ae['wr']:.0%} of their anti-eco rounds: a well-played save round against them can win.")
+    pi = next((x for x in o.get("kinds") or [] if x["kind"] == "pistol"), None)
+    if pi and pi["rounds"] >= 6 and (pi["wr"] >= 0.65 or pi["wr"] <= 0.35):
+        lines.append(f"Pistol rounds: they win {pi['wr']:.0%}" + (", have a fixed pistol plan per side." if pi["wr"] >= 0.65 else "."))
+    if o.get("postplant", {}).get("rounds", 0) >= 8:
+        r = o["postplant"]["wr"]
+        if r >= 0.75:
+            lines.append(f"Strong post-plants ({r:.0%} won after they plant): stop the plant or retake with utility together.")
+        elif r <= 0.55:
+            lines.append(f"Weak post-plants (only {r:.0%} won after they plant): retakes against them are worth playing.")
+    if o.get("retake", {}).get("rounds", 0) >= 8 and o["retake"]["wr"] >= 0.4:
+        lines.append(f"They retake well ({o['retake']['wr']:.0%} of the rounds where their opponent planted): "
+                     "hold the post-plant from safe spots and play for time.")
+    return lines

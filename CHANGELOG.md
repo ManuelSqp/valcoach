@@ -4,6 +4,27 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 3.7.0
+- **Review evening** (Practice): go through one match round by round together, on a shared screen or each on his own.
+  - Pick any match two or more of you played (or *Review it together* on a Premier review). Whoever starts it hosts:
+    he moves from round to round, everyone who follows the host jumps along. Arrow keys move, *Key rounds only*
+    jumps through the rounds that decided the match.
+  - Every round: won or lost and how, both teams' buys, the first kill, the plant, who was alive at the end, deaths
+    nobody traded, the kill feed, your five players' numbers and the minimap replay.
+  - Everyone marks his own round: **my fault**, **good** or **talk about it** (keys 1, 2, 3), with a short note.
+    The strip at the top shows which rounds are marked; everyone's marks show up live.
+  - **Summary:** the rounds to talk about with the notes, every player's rounds, and what keeps coming up in the
+    rounds you flagged (deaths nobody traded, thrown leads, post-plants...). The host puts that into this week's
+    practice plan (it stays in when the plan is made again), the owner can post it to Discord.
+- **Round types for scouted opponents** (Opponents › a team): their pistol, eco, force and full-buy win rates, what
+  they buy after a lost pistol, the round after a won pistol, post-plants and retakes, with lines like *after a lost
+  pistol they force-buy 70% of the time*. The important ones also show up in *How to play them* and on the match
+  screen. Teams scouted before 3.7 get it with *Scout again* (the matches are cached, so it's quick).
+- **Server page:** how much of the model is in GPU memory (*9.1 of 12 GB on the GPU*), a warning when part of it
+  runs on the CPU, and the context length.
+- Fixes: sub-points on *What's new* are a list again instead of one long line; a damaged draft no longer breaks the
+  Drafts page; error pages no longer show a menu entry as the current page.
+
 ## 3.6.0
 - **Agents & roles › an agent in detail** (*Details* next to every agent):
   - **Progress over time:** your combat score game by game (5-game average) with each win and loss, and your first

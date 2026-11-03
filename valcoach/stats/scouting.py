@@ -110,6 +110,8 @@ def summarize(items: list[tuple[Match, str]], cache_dir: Path) -> dict:
         out["maps"][mp] = {"games": r["games"], "wins": r["wins"], "rounds": r["rounds"], "rounds_won": r["rounds_won"],
                            "comps": [{"agents": list(a), "games": c} for a, c in comps.most_common(2)],
                            "attack": f.get("attack", {}), "defense": f.get("defense", {}), "sides": side_rates(ms, mp)}
+    from .rounds import round_types
+    out["economy"] = round_types(items)
     return out
 
 
@@ -151,6 +153,8 @@ def general_lines(s: dict) -> list[str]:
         r = p["won"] / p["played"]
         if r >= .65 or r <= .35:
             lines.append(f"Pistols: they won {p['won']} of {p['played']}" + (": prepare your pistol plan." if r >= .65 else "."))
+    # their economy (scouted with 3.7 or later); the pistol line above already covers pistols
+    lines += [x for x in (s.get("economy") or {}).get("lines", []) if not x.startswith("Pistol")][:3]
     return lines
 
 

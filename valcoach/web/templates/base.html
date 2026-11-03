@@ -17,7 +17,8 @@
 {% if ui and ui.style != 'classic' %}<link rel="stylesheet" href="{{ url_for('static', filename='styles/' ~ ui.style ~ '.css') }}?v={{ app_version }}">{% endif %}
 {% if ui and ui.anim.tabs %}<style>@view-transition{navigation:auto}</style>{% endif %}
 </head>
-{% set ep = request.endpoint or '' %}
+{# an error page shows no page of the menu as the current one #}
+{% set ep = '' if error_page is defined and error_page else (request.endpoint or '') %}
 {% set embed = request.args.get('embed') == '1' %}
 {% set cur_tid = t.id if (t is defined and t and t.id is defined) else None %}
 <body class="skin-{{ ui.style if ui else 'classic' }}{{ ' nav-top' if user and ui and ui.nav == 'top' }}{% if ui %}{% for k, v in ui.anim.items() if v %} a-{{ k }}{% endfor %}{% endif %}{{ ' no-side' if not user }}{{ ' no-side embed' if embed }}" {% if user %}data-search="{{ url_for('search_index') }}"{% endif %}>
@@ -67,6 +68,7 @@
       ('training', 'Training', ('training',), 'p', ''),
       ('habits', 'Habits', ('habits',), 'p', ''),
       ('team_practice', 'Practice plan', ('team_practice',), 't', ''),
+      ('team_evening', 'Review evening', ('team_evening', 'team_evening_session'), 't', ''),
       ('team_focus', 'Weekly focus', ('team_focus',), 't', ''),
       ('quiz', 'Quiz', ('quiz',), 'p', nav_quiz if navP and nav_me and navP.id == nav_me.id and nav_quiz else ''),
       ('pros', 'Pros & videos', ('pros',), 'p', '')]),

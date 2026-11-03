@@ -11,7 +11,11 @@
   const PLAYER = Object.fromEntries(B.players.map(p => [p.pid, p]));
   const ROLES = ['Duelist', 'Initiator', 'Controller', 'Sentinel'];
 
-  const d = B.draft, data = d.data;
+  const d = B.draft;
+  if (!d) return;
+  const data = d.data && typeof d.data === 'object' ? d.data : (d.data = {});
+  if (!Array.isArray(data.slots)) data.slots = [];
+  data.slots = data.slots.map(s => (s && typeof s === 'object') ? s : {pid: null, agent: '', alt: '', note: ''}).slice(0, 5);
   while (data.slots.length < 5) data.slots.push({pid: null, agent: '', alt: '', note: ''});
   let selSlot = null, dirty = false, timer = null;
 
