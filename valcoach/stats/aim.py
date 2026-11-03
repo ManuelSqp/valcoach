@@ -15,8 +15,11 @@ from urllib.parse import urlparse
 from . import habits as hb
 
 FOCUS = {"warmup": "Warm-up", "crosshair": "Crosshair placement", "flicks": "Flicks", "micro": "Micro-adjusting",
-         "tracking": "Tracking", "spray": "Spray control", "peeking": "Peeking & first shots"}
-KINDS = {"aimlabs": "Aimlabs playlist", "kovaaks": "KovaaK's playlist", "link": "Link", "steps": "In game"}
+         "tracking": "Tracking", "spray": "Spray control", "peeking": "Peeking & first shots",
+         "switching": "Target switching", "reaction": "Reaction"}
+KINDS = {"aimlabs": "Aimlabs playlist", "kovaaks": "KovaaK's playlist", "link": "Link", "steps": "In game",
+         "kovaaksfile": "KovaaK's playlist from the coach"}
+ADDABLE = ("aimlabs", "kovaaks", "link", "steps")      # kinds people can add (the coach's files are made for them)
 CODE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{3,63}")
 MAX_STEPS = 600
 MIN_GAMES = 5                     # games on each side before "did it help" says anything
@@ -47,7 +50,7 @@ def new_id() -> str:
 def clean(form: dict) -> tuple[dict | None, str]:
     """A routine from a form, or (None, why not). Links must be http(s); codes are letters, numbers, - and _."""
     name = str(form.get("name") or "").strip()[:60]
-    kind = form.get("kind") if form.get("kind") in KINDS else ""
+    kind = form.get("kind") if form.get("kind") in ADDABLE else ""
     if not name:
         return None, "Give the routine a name."
     if not kind:
@@ -91,7 +94,7 @@ def needs(rows: list[dict]) -> list[dict]:
                     "why": f"Your headshot rate is {aim['now']:.0%} in your last games (it starts to cost duels under {aim['bad_at']:.0%})."})
     op = by.get("opening")
     if op and op["now"] is not None and (op["problem"] or op["now"] > op["bad_at"] - 0.05):
-        out.append({"focus": ["peeking", "flicks"], "weight": 3 if op["problem"] else 1, "key": "opening",
+        out.append({"focus": ["peeking", "flicks", "reaction"], "weight": 3 if op["problem"] else 1, "key": "opening",
                     "why": f"You lose {op['now']:.0%} of the first duels you're in."})
     if not out:
         out.append({"focus": ["warmup"], "weight": 1, "key": "",
@@ -136,9 +139,10 @@ def _local_day(started_at: str) -> str:
     return d.astimezone().date().isoformat()
 
 
-def effect(rows: list[dict], log: list[dict]) -> dict:
-    """Headshot rate in games on days you warmed up against the other days since your first warm-up."""
-    days = {x["date"] for x in log if x.get("date")}
+def effect(rows: list[dict], log: list[dict], extra_days: set[str] | None = None) -> dict:
+    """Headshot rate in games on days you warmed up against the other days since your first warm-up.
+    extra_days: days with an aim trainer run (KovaaK's scores) count as warm-up days too."""
+    days = {x["date"] for x in log if x.get("date")} | set(extra_days or ())
     out: dict = {"days": len(days), "with": {"games": 0, "hs": None}, "without": {"games": 0, "hs": None}, "ready": False}
     if not days:
         return out

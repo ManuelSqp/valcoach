@@ -4,6 +4,24 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 4.1.0
+- **KovaaK's playlists from the coach** (Practice › Aim): a **warm-up** (~10 min) and a **training** playlist (~25 min),
+  built from what your matches show and changed every week. *Download for KovaaK's*, save the file in
+  `FPSAimTrainer › Saved › SaveGames › Playlists` (it replaces last week's) and open it under *Local Playlists*;
+  scenarios you don't have yet download by themselves.
+  - A low headshot rate gets micro-adjusting and head-level scenarios, losing first duels gets reaction and peeking
+    ones, and so on. Each scenario shows what it trains, its level and your best and last score.
+  - The coach's warm-up is a routine like the others: tick it off, make it your or the team's warm-up (match screen,
+    Home, practice plan, the push before the match). Anyone with imported scores gets it as the default warm-up.
+- **Your KovaaK's scores:** import the `.csv` files from `FPSAimTrainer › stats` (or the folder as a zip; runs already
+  imported are skipped). Per scenario: runs, best, last, a small chart and the trend. Once you're steady near your best
+  on a scenario, the next playlists use harder ones of the same kind. Days with a KovaaK's run count as warm-up days
+  in *Does warming up help?*
+- **More scenarios for the coach:** 53 are built in (all from well-known playlists). Add your own: import playlist
+  files (every scenario in them joins the list, and the playlist itself becomes a routine with its share code), add
+  one by hand with what it trains and its level, or let them come in with your scores. Per user or for the whole team.
+- German: messages made of several sentences are translated sentence by sentence.
+
 ## 4.0.0
 - **Deutsch:** the whole interface in German, picked per user under Account › Look & feel › Language (English stays
   the default). Menus, every page, buttons, messages, confirmations, the minimap replay and notifications on your

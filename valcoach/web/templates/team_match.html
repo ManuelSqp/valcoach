@@ -91,6 +91,7 @@ body[data-side=attack] [data-side-only=attack],body[data-side=defense] [data-sid
       {% if wr.kind == 'steps' and wr.steps %}<div class="small muted" style="margin:4px 0 8px">{{ wr.steps|truncate(160) }}</div>{% endif %}
       <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">
         {% if wr.kind in ('aimlabs', 'link') %}<a class="btn sm {{ 'primary' if not warm.done }}" href="{{ wr.url }}" target="_blank" rel="noopener noreferrer nofollow">{{ 'Open in Aimlabs' if wr.kind == 'aimlabs' else 'Open link' }}</a>
+        {% elif wr.kind == 'kovaaksfile' %}<a class="btn sm {{ 'primary' if not warm.done }}" href="{{ wr.url }}" download>Download for KovaaK's</a>
         {% elif wr.kind == 'kovaaks' %}<code class="small">{{ wr.code }}</code>{% endif %}
         {% if warm.done %}<span class="small" style="color:var(--win);font-weight:700">Done today</span>
         {% else %}<form method="post" action="{{ url_for('aim', pid=warm.pid) }}"><input type="hidden" name="action" value="done"><input type="hidden" name="rid" value="{{ wr.id }}"><input type="hidden" name="next" value="{{ request.full_path }}"><button class="btn sm">Done</button></form>{% endif %}

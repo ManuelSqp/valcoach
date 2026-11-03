@@ -26,6 +26,9 @@ def test_lookup_exact_numbers_and_patterns():
                   "lost": "verloren", "Team {x}, # points": "Team {x}, # Punkte"})
     assert c2.lookup("Swap every 3 rounds. (4 of the rounds: lost.)") == "Alle 3 Runden tauschen. (4 der Runden: verloren.)"
     assert c2.lookup("Team Red#RED, 300 points") == "Team Red#RED, 300 Punkte"
+    # a message of several sentences: one by one, only when every sentence is known
+    assert c2.text("Swap every 2 rounds. Team A, 5 points") == "Alle 2 Runden tauschen. Team A, 5 Punkte"
+    assert c2.text("Swap every 2 rounds. Something new.") == "Swap every 2 rounds. Something new."
 
 
 def test_translate_html_text_and_attributes_but_not_scripts():

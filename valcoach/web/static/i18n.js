@@ -78,7 +78,12 @@
     if (!exact || !s || !/[A-Za-z]/.test(s)) return s;
     const core = s.trim();
     if (done.has(core.replace(/\s+/g, ' '))) return s;
-    const t = lookup(core.replace(/\s+/g, ' '));
+    const norm = core.replace(/\s+/g, ' ');
+    let t = lookup(norm);
+    if (t == null) {                    // several sentences (messages): one by one, only if all are known
+      const parts = norm.split(/(?<=[.!?])\s+(?=[A-Z0-9])/);
+      if (parts.length > 1) { const tr = parts.map(p => lookup(p)); if (tr.every(x => x != null)) t = tr.join(' '); }
+    }
     if (t == null) return s;
     const i = s.indexOf(core);
     return s.slice(0, i) + t + s.slice(i + core.length);
