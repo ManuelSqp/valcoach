@@ -334,7 +334,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         if not src:
             return None                        # not a browser (CLI, scripts): SameSite cookies still apply
         if urlsplit(src).netloc not in {request.host, request.headers.get("X-Forwarded-Host", "")}:
-            return render_template("error.html", code=403,
+            return render_template("error.html", error_page=True, code=403,
                                    msg="This form was sent from another website and was blocked."), 403
         return None
 
@@ -517,7 +517,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 add("player", f"{p.name} · {lbl}", url_for(ep, pid=p.id))
         for t in store.teams_for_user(g.user.id):
             tabs = [("team", "comps"), ("team_premier", "this week"), ("team_availability", "availability"), ("team_brief", "match-day brief"),
-                    ("team_division", "opponents"), ("team_match", "match screen"), ("team_practice", "practice plan"), ("team_drafts", "drafts"),
+                    ("team_division", "opponents"), ("team_match", "match screen"), ("team_practice", "practice plan"), ("team_evening", "review evening"), ("team_drafts", "drafts"),
                     ("team_plans", "game plans"), ("team_strats", "strat book"), ("team_lineups", "lineups"),
                     ("team_focus", "weekly focus"), ("team_roles_page", "roles"), ("team_notes", "notes")]
             if t.owner_id == g.user.id:
@@ -1347,15 +1347,15 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
 
     @app.errorhandler(403)
     def forbidden(_):
-        return render_template("error.html", code=403, msg="You can't do this here: it's for admins or the team owner."), 403
+        return render_template("error.html", error_page=True, code=403, msg="You can't do this here: it's for admins or the team owner."), 403
 
     @app.errorhandler(413)
     def too_large(_):
-        return render_template("error.html", code=413, msg="This request is too big."), 413
+        return render_template("error.html", error_page=True, code=413, msg="This request is too big."), 413
 
     @app.errorhandler(404)
     def not_found(_):
-        return render_template("error.html", code=404, msg="Not found."), 404
+        return render_template("error.html", error_page=True, code=404, msg="Not found."), 404
 
     from .stats_views import register as register_stats
     register_stats(app, store, stats_runner, get_profile)
@@ -1373,27 +1373,36 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
 
 
 def _changelog() -> list[dict]:
-    """CHANGELOG.md -> [{version, items: [html]}] (a tiny Markdown subset: headings, bullets, **bold**, `code`)."""
+    """CHANGELOG.md -> [{version, items: [{text, sub: [html]}]}] (a tiny Markdown subset: headings, bullets with one
+    level of sub-bullets ("  - "), **bold**, *italic*, `code`; indented lines continue the bullet above)."""
     import html
     import re
     p = Path(__file__).resolve().parents[2] / "CHANGELOG.md"
     if not p.exists():
         return []
-    out, cur, item = [], None, None
+    out, cur = [], None
     for line in p.read_text(encoding="utf-8").splitlines():
         if line.startswith("## "):
             cur = {"version": line[3:].strip(), "items": []}
             out.append(cur)
-            item = None
-        elif cur is not None and line.startswith("- "):
-            item = line[2:].strip()
-            cur["items"].append(item)
-        elif cur is not None and line.startswith("  ") and line.strip() and cur["items"]:
-            cur["items"][-1] += " " + line.strip()
+        elif cur is None or not line.strip():
+            continue
+        elif line.startswith("- "):
+            cur["items"].append({"text": line[2:].strip(), "sub": []})
+        elif not cur["items"]:
+            continue
+        elif re.match(r"^ {2,3}- ", line):
+            cur["items"][-1]["sub"].append(line.strip()[2:].strip())
+        elif line.startswith("    ") and cur["items"][-1]["sub"]:
+            cur["items"][-1]["sub"][-1] += " " + line.strip()
+        elif line.startswith("  "):
+            cur["items"][-1]["text"] += " " + line.strip()
+
+    def fmt(i: str) -> str:
+        return re.sub(r"\*([^*]+)\*", r"<i>\1</i>",
+                      re.sub(r"`([^`]+)`", r"<code>\1</code>", re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", html.escape(i))))
     for v in out:
-        v["items"] = [re.sub(r"\*([^*]+)\*", r"<i>\1</i>",
-                             re.sub(r"`([^`]+)`", r"<code>\1</code>", re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", html.escape(i))))
-                      for i in v["items"]]
+        v["items"] = [{"text": fmt(i["text"]), "sub": [fmt(x) for x in i["sub"]]} for i in v["items"]]
     return out
 
 

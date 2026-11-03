@@ -60,7 +60,8 @@ def team_habits(members: dict[str, dict]) -> list[dict]:
 
 def build(week: str, start: date, cfg: dict, ctx: dict) -> dict:
     """ctx: map, strats {attack: [names], defense: [names]}, lineups {agent: n}, comp_agents, habits [team_habits],
-    personal {name: [habit titles]}, review {title, url}, match_days [weekday ints], focus (str)."""
+    personal {name: [habit titles]}, review {title, url}, match_days [weekday ints], focus (str),
+    evening [{title, detail, minutes, who, url, evening}] (from the last review evening)."""
     days = week_days(start, cfg.get("days") or DEFAULT_DAYS)
     total = int(cfg.get("minutes") or 90)
     habits = ctx.get("habits") or []
@@ -101,7 +102,13 @@ def build(week: str, start: date, cfg: dict, ctx: dict) -> dict:
             if lu and not before_match:
                 agents = ", ".join(f"{a} ({n})" for a, n in sorted(lu.items(), key=lambda kv: -kv[1])[:3])
                 add("lineups", f"{m} lineups", f"Each player practises his saved lineups: {agents}.", 10, link="lineups")
-        if ctx.get("review") and i == 0:
+        if i == 0:                          # what the last review evening found
+            for x in (ctx.get("evening") or [])[:3]:
+                items.append({"id": _id(), "kind": "evening", "title": x["title"][:100], "detail": x.get("detail", "")[:400],
+                              "minutes": int(x.get("minutes") or 15), "who": x.get("who") or "team", "link": x.get("url", ""),
+                              "evening": x.get("evening", ""), "done": False})
+                left -= int(x.get("minutes") or 15)
+        if ctx.get("review") and i == 0 and not ctx.get("evening"):
             add("review", "Review together", f"Open {ctx['review']['title']} and go through the rounds that decided it.",
                 15, link=ctx["review"]["url"])
         if left >= 15:

@@ -729,3 +729,44 @@ def test_rows_v5_utility_economy_teammates(imported):
     assert d["games"] >= 1 and d["compare"] and d["utility"][0]["name"] == "Smoke" and d["trend"]
     gr = grid(rows)
     assert agent in gr["agents"] and any(k.startswith(agent + "|") for k in gr["cells"])
+
+
+def test_review_evening_summary_and_scouted_round_types():
+    from valcoach.stats import evening as ev
+    rounds = [{"n": n, "won": n % 2 == 0, "side": "attack", "score": "0–0", "tags": tags, "why": [ev.THEMES[t][0] for t in tags]}
+              for n, tags in [(1, ["pistol_lost", "untraded"]), (2, []), (3, ["lead_lost", "untraded"]), (4, []), (5, ["untraded", "opening_lost"]),
+                              (6, []), (7, ["opening_lost"])]]
+    marks = {"1": {"A": {"m": "fault", "note": "too early"}}, "3": {"A": {"m": "fault"}, "B": {"m": "talk", "note": "call?"}},
+             "5": {"B": {"m": "fault"}}, "7": {"B": {"m": "fault"}}, "2": {"A": {"m": "good"}}, "9": {"A": {"m": "fault"}},
+             "4": {"A": {"m": "bogus"}}}
+    s = ev.summarize({"rounds": rounds, "marks": marks})
+    assert s["counts"] == {"fault": 4, "good": 1, "talk": 1}
+    assert s["themes"][0]["tag"] == "untraded" and s["themes"][0]["rounds"] == 3
+    assert [x["n"] for x in s["talk"]] == [1, 3]
+    b = next(p for p in s["players"] if p["name"] == "B")
+    assert b["fault"] == [5, 7] and b["focus"]["title"] == "First-duel drill"
+    # the team items already cover B's first duels, so there's no extra item just for him
+    assert [p["title"] for p in s["plan"]] == ["From the review evening: trade drill", "From the review evening: first-duel drill"]
+    s2 = ev.summarize({"rounds": rounds, "marks": {"5": {"B": {"m": "fault"}}, "7": {"B": {"m": "fault"}}, "1": {"A": {"m": "fault"}}}})
+    assert any(p["who"] == ["B"] for p in s2["plan"]) or s2["themes"]
+    assert ev.key_rounds([{"n": 1, "won": False, "tags": ["lead_lost"], "buy": None},
+                          {"n": 2, "won": True, "tags": [], "buy": {"us": "eco", "them": "full"}},
+                          {"n": 3, "won": True, "tags": [], "buy": {"us": "full", "them": "full"}}]) == [1, 2]
+    text = ev.discord_text({"map": "Bind", "score": "13–11", "opponent": "X"}, s, "Squad")
+    assert "Bind" in text and "trade drill" in text.lower()
+
+
+def test_round_facts_and_round_types_on_synthetic(tmp_path):
+    import synth
+    from valcoach.parse import parse_match
+    from valcoach.stats import evening as ev
+    from valcoach.stats.rounds import round_types
+    files = synth.write_all(tmp_path, with_vod=False, n_rounds=6)
+    m = parse_match(json.loads(Path(files["match"]).read_text()))
+    side = m.teams[0]
+    facts = ev.round_facts(m, side)
+    assert len(facts) == 6 and all(set(f) >= {"n", "won", "kills", "players", "tags", "alive"} for f in facts)
+    assert ev.our_side(m, {p.puuid for p in m.players_on(side)}) == side
+    assert ev.our_side(m, set()) is None
+    rt = round_types([(m, side)])
+    assert rt["rounds"] == 6 and sum(k["rounds"] for k in rt["kinds"]) == 6 and isinstance(rt["lines"], list)

@@ -2135,3 +2135,87 @@ def test_habits_page_and_practice_plan(app, monkeypatch):
     c.post(f"/teams/{tid}/practice", data={"days": ["0", "2"], "time": "18:30", "minutes": "60"})
     page = c.get(f"/teams/{tid}/practice").data.decode()
     assert "18:30" in page and "Mon" in page
+
+
+def test_review_evening(app):
+    import json as _json
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    raw = _json.loads((store.data_dir / "cache" / "matches" / f"{MATCH_ID}.json").read_text())
+    players = raw.get("data", raw)["players"]
+    side = players[0]["team_id"]
+    ours = [p for p in players if p["team_id"] == side][:2]
+    pids = [add_profile(c, name=p["name"], tag="#" + p["tag"]) for p in ours]
+    uid = store.user_by_name("manuel").id
+    tid = store.create_team(uid, "Squad")
+    store.update_team(tid, members=[{"pid": pid, "kind": "starter", "puuid": p["puuid"], **({"user_id": uid} if i == 0 else {})}
+                                    for i, (pid, p) in enumerate(zip(pids, ours))], maps=["Testmap"])
+    assert "Pick a match" in c.get(f"/teams/{tid}/review-evening").data.decode()
+    assert c.post(f"/teams/{tid}/review-evening", data={"match_id": "../etc"}).status_code == 400
+    r = c.post(f"/teams/{tid}/review-evening", data={"match_id": MATCH_ID})
+    assert r.status_code == 302
+    sid = r.headers["Location"].rstrip("/").split("/")[-1]
+    page = c.get(f"/teams/{tid}/review-evening/{sid}").data.decode()
+    assert "Your mark" in page and "ev-boot" in page and ours[0]["name"] in page
+    boot = _json.loads(page.split('id="ev-boot">')[1].split("</script>")[0])
+    assert boot["me"] == ours[0]["name"] and boot["host"] and len(boot["rounds"]) == 6
+    api = f"/api/teams/{tid}/review-evening/{sid}"
+    st = c.post(api, json={"action": "mark", "round": 1, "player": ours[0]["name"], "mark": "fault", "note": "too early"}).get_json()
+    assert st["marks"]["1"][ours[0]["name"]]["m"] == "fault"
+    assert c.post(api, json={"action": "mark", "round": 99, "player": ours[0]["name"], "mark": "good"}).status_code == 400
+    assert c.post(api, json={"action": "mark", "round": 1, "player": "someone else", "mark": "good"}).status_code == 400
+    assert c.post(api, json={"action": "mark", "round": 1, "player": ours[1]["name"], "mark": "lol"}).status_code == 400
+    c.post(api, json={"action": "mark", "round": 2, "player": ours[1]["name"], "mark": "talk", "note": "<b>why</b>"})
+    assert c.post(api, json={"action": "goto", "round": 3}).get_json()["current"] == 3
+    summary = c.get(f"/teams/{tid}/review-evening/{sid}/summary").data.decode()
+    assert "too early" in summary and "<b>why</b>" not in summary and "&lt;b&gt;why" in summary
+    # a teammate can mark but not move everyone or delete
+    mate = make_user(app, c, "mate")
+    store.add_team_access(tid, store.user_by_name("mate").id)
+    assert mate.post(api, json={"action": "goto", "round": 2}).status_code == 403
+    assert mate.post(api, json={"action": "mark", "round": 3, "player": ours[1]["name"], "mark": "good"}).status_code == 200
+    assert mate.post(f"/teams/{tid}/review-evening/{sid}/delete").status_code == 403
+    assert mate.get(f"/api/teams/{tid}/review-evening/{sid}").get_json()["current"] == 3
+    # strangers see nothing; made-up ids are 404
+    stranger = make_user(app, c, "stranger")
+    assert stranger.get(f"/teams/{tid}/review-evening/{sid}").status_code == 404
+    assert c.get(f"/teams/{tid}/review-evening/zzz").status_code == 404
+    rp = c.get(f"/teams/{tid}/review-evening/{sid}/replay.json").get_json()
+    assert "rounds" in rp
+    assert c.get("/replay.js").status_code == 200
+    assert c.post(api, json={"action": "finish"}).get_json()["finished"]
+    r = c.post(f"/teams/{tid}/review-evening/{sid}/plan")
+    assert r.status_code == 302
+    if r.headers["Location"].endswith("/practice"):        # themes found: they're on the practice plan now
+        assert "From the review evening" in c.get(f"/teams/{tid}/practice").data.decode()
+    else:
+        assert "#summary" in r.headers["Location"]
+    assert c.post(f"/teams/{tid}/review-evening/{sid}/delete").status_code == 302
+    assert c.get(f"/teams/{tid}/review-evening/{sid}").status_code == 404
+
+
+def test_small_fixes_37(app):
+    import json as _json
+    from valcoach.web.overview import loaded_model
+    c = setup_admin(app)
+    # Ollama memory: all on the GPU, split, CPU only
+    assert loaded_model({"name": "m", "size": 4 * 2**30, "size_vram": 4 * 2**30})["where"] == "gpu"
+    sp = loaded_model({"name": "m", "size": 10 * 2**30, "size_vram": 6 * 2**30})
+    assert sp["where"] == "split" and round(sp["share"], 1) == 0.6
+    assert loaded_model({"name": "m", "size": 10 * 2**30, "size_vram": 0})["where"] == "cpu"
+    # What's new: sub-bullets are their own list
+    page = c.get("/changelog").data.decode()
+    assert "<ul><li><b>Progress over time:</b>" in page
+    # error pages don't mark a menu entry as the current page
+    assert 'aria-current="page"' not in c.get("/teams/999").data.decode()
+    # a damaged draft doesn't break the drafts page
+    store = app.extensions["valcoach"]["store"]
+    pid = add_profile(c)
+    tid = store.create_team(store.user_by_name("manuel").id, "Squad")
+    store.update_team(tid, members=[{"pid": pid, "kind": "starter"}], maps=["Lotus"])
+    did = store.create_draft(tid, 1, "Lotus", "broken", {})
+    store._exec("UPDATE drafts SET data = ? WHERE id = ?", (_json.dumps({"slots": "x", "status": "weird"}), did))
+    page = c.get(f"/teams/{tid}/drafts?map=Lotus&d={did}").data.decode()
+    assert "broken" in page
+    boot = _json.loads(page.split('id="draft-boot">')[1].split("</script>")[0])
+    assert len(boot["draft"]["data"]["slots"]) == 5 and boot["draft"]["data"]["status"] == "idea"

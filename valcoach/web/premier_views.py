@@ -392,6 +392,7 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
                 mp = (s.get("maps") or {}).get(m) or {}
                 opp = {"id": oid, "name": s.get("name"), "tag": s.get("tag", ""), "record": f"{s.get('wins', 0)}–{s.get('losses', 0)}",
                        "map": mp, "lines": map_lines(s, m) if m else [], "general": general_lines(s)[:3],
+                       "econ": [x for x in (s.get("economy") or {}).get("lines", []) if not x.startswith("Pistol")][:2],
                        "comps": (mp.get("comps") or [])[:2]}
         roles.load(cache_dir)
         return render_template("team_match.html", **ctx(t, "match", b=b, sel=m, maps=maps, plans=plans, strats=strats,

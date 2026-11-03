@@ -19,7 +19,7 @@
 .pi .x{background:none;border:0;color:var(--faint);cursor:pointer;font-size:16px;padding:0 4px}.pi .x:hover{color:var(--red)}
 .k-habit .tt::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);margin-right:7px;vertical-align:2px}
 .k-map .tt::before,.k-lineups .tt::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--blue);margin-right:7px;vertical-align:2px}
-.k-prep .tt::before,.k-review .tt::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:7px;vertical-align:2px}
+.k-prep .tt::before,.k-review .tt::before,.k-evening .tt::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:7px;vertical-align:2px}
 .addf{display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
 .addf input[name=title]{flex:1}.addf input[name=minutes]{width:70px}
 .days{display:flex;gap:6px;flex-wrap:wrap}.days label{display:inline-flex;margin:0;cursor:pointer}
@@ -54,7 +54,7 @@
       {% if it.detail %}<div class="dt">{{ it.detail }}</div>{% endif %}
       <div class="meta">{% if it.who != 'team' %}<span class="who">{% for n in it.who %}<span>{{ n }}</span> {% endfor %}</span>{% endif %}
         {% set ln = links.get(it.link) if it.link in links else it.link %}{% if it.link == 'habits' %}{% set ln = '' %}{% endif %}
-        {% if ln %}<a href="{{ ln }}">{{ {'brief': 'Match screen', 'strats': 'Strat book', 'lineups': 'Lineups'}.get(it.link, 'Open the review' if it.kind == 'review' else 'Open') }}</a>{% endif %}
+        {% if ln %}<a href="{{ ln }}">{{ {'brief': 'Match screen', 'strats': 'Strat book', 'lineups': 'Lineups'}.get(it.link, 'Open the review' if it.kind == 'review' else ('Open the review evening' if it.kind == 'evening' else 'Open')) }}</a>{% endif %}
         {% if it.done and it.by %}<span class="muted">ticked by {{ it.by }}</span>{% elif it.kind == 'own' and it.by %}<span class="muted">added by {{ it.by }}</span>{% endif %}</div>
     </div>
     {% endfor %}

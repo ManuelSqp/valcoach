@@ -68,6 +68,23 @@ def henrik_usage(now: float | None = None) -> dict:
             "limits_age_s": int(now - LIMITS["at"]) if LIMITS.get("at") else None}
 
 
+def loaded_model(m: dict) -> dict:
+    """One entry of Ollama's /api/ps: how much of the model is in GPU memory. `size` is everything the model
+    takes right now (weights + context), `size_vram` the part of it on the GPU; the rest runs on the CPU (slow)."""
+    size, vram = int(m.get("size") or 0), int(m.get("size_vram") or 0)
+    share = vram / size if size else (1.0 if vram else 0.0)
+    if not size and not vram:
+        where = "cpu"
+    elif share >= 0.995:
+        where = "gpu"
+    elif vram == 0:
+        where = "cpu"
+    else:
+        where = "split"
+    return {"name": m.get("name", "?"), "size": human(size), "vram": human(vram), "share": share, "where": where,
+            "context": int(m.get("context_length") or 0), "until": str(m.get("expires_at") or "")[:16].replace("T", " ")}
+
+
 def model_usage(url: str, now: float | None = None) -> dict:
     from ..coach.ollama import RECENT
     now = now or time.time()
@@ -82,7 +99,7 @@ def model_usage(url: str, now: float | None = None) -> dict:
             out["reachable"] = True
             ps = requests.get(f"{url.rstrip('/')}/api/ps", timeout=2)
             if ps.ok:
-                out["loaded"] = [{"name": m.get("name", "?"), "vram": human(m.get("size_vram") or 0)} for m in ps.json().get("models", [])]
+                out["loaded"] = [loaded_model(m) for m in ps.json().get("models", [])]
         except (requests.RequestException, ValueError) as e:
             out["error"] = e.__class__.__name__
         return out

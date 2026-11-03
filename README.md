@@ -1,6 +1,6 @@
 # valcoach v2
 
-**Version 3.6.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 3.7.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -26,7 +26,7 @@ unzip valcoach-v2.zip && cd valcoach-v2
 /opt/homebrew/opt/python@3.11/bin/python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                     # 151 tests, ~3 min, builds a synthetic match + VOD
+pytest -q                     # 155 tests, ~3 min, builds a synthetic match + VOD
 ollama pull qwen3.8:27b       # default; alternatives below
 ```
 
@@ -92,7 +92,7 @@ Then in the browser:
 One menu on the left (☰ on a phone). At the top you pick the **team** and the **player** it works on; opening a team
 or player page picks it for you. Below: *Match day* (This week, Availability, Match-day brief, Opponents),
 *Strategy* (Comps, Drafts, Game plans, Strat book, Lineups), *Performance* (Matches & reports, Stats & maps,
-Agents & roles, Rounds & economy, Teammates, Rank & progress), *Practice* (Training, Habits, Practice plan, Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes,
+Agents & roles, Rounds & economy, Teammates, Rank & progress), *Practice* (Training, Habits, Practice plan, Review evening, Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes,
 Player & playbook, Team settings). Ctrl+K searches everything. *Home* shows what's up today. The look (10 styles,
 light or dark, menu on the left or at the top) is under Account.
 
@@ -104,6 +104,8 @@ can be shared as a read-only link (on its page: *Make a share link*).
 **Habits and practice:** *Practice › Habits* tracks six habits that cost rounds game by game (gone, getting better,
 still there, getting worse) and checks whether the coach's tips worked. *Practice › Practice plan* makes the team's
 week of practice from those habits, the week's map, its strats and lineups, with reminders on Discord and your phone.
+*Practice › Review evening* goes through one match round by round together: the host moves, everyone follows on his
+own screen and marks his own rounds (my fault, good, talk about it); the summary goes into the practice plan.
 
 ### What's in a report
 

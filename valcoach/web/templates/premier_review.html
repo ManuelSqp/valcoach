@@ -20,7 +20,8 @@
 <div class="row between" style="margin-bottom:12px">
   <div><h1 style="margin:0"><span class="wl {{ 'w' if r.won else 'l' }}" style="font-size:14px;vertical-align:middle">{{ 'Won' if r.won else 'Lost' }}</span> {{ r.score }} on {{ r.map }}</h1>
     <div class="muted small">vs {% if r.opponent_id %}<a href="{{ url_for('team_scouted', tid=t.id, team_id=r.opponent_id) }}" title="Their scouting page (if scouted)">{{ r.opponent }}</a>{% else %}{{ r.opponent }}{% endif %} · {{ (r.started_at or '')[:10] }}{% if r.tournament %} · playoffs{% endif %}{% if r.model %} · written by {{ r.model }}{% endif %}</div></div>
-  {% if g.team_owner %}<form method="post" action="{{ url_for('team_reviews_run', tid=t.id) }}"><input type="hidden" name="force" value="{{ r.match_id }}"><span class="row" style="gap:6px">{% include "_llm_pick.html" %}<button class="btn sm ghost">Review again</button></span></form>{% endif %}
+  <span class="row" style="gap:8px"><a class="btn sm" href="{{ url_for('team_evening', tid=t.id, match=r.match_id) }}" title="Go through the rounds together, everyone marks his own">Review it together</a>
+  {% if g.team_owner %}<form method="post" action="{{ url_for('team_reviews_run', tid=t.id) }}"><input type="hidden" name="force" value="{{ r.match_id }}"><span class="row" style="gap:6px">{% include "_llm_pick.html" %}<button class="btn sm ghost">Review again</button></span></form>{% endif %}</span>
 </div>
 <div class="grid2" style="align-items:start">
   <section class="card">
