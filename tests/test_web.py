@@ -2272,3 +2272,39 @@ def test_aim_routines_and_warmup(app):
     assert tick() == [tid] and tick() == []
     c.post(f"/profiles/{pid}/aim", data={"action": "remove", "rid": team_r["id"], "scope": f"team:{tid}"})
     assert "<h3>Flicks AL" not in c.get(f"/profiles/{pid}/aim").data.decode()     # the log keeps its name
+
+
+def test_german_interface_and_language_switch(app):
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    page = c.get("/account").data.decode()
+    assert "Log out" in page and 'lang="en"' in page and "i18n.js" not in page
+    c.post("/account", data={"look": "1", "style": "classic", "nav": "side", "lang": "de"})
+    page = c.get("/account").data.decode()
+    assert 'lang="de"' in page and "Abmelden" in page and "Log out" not in page and "i18n.js" in page
+    c.post("/account", data={"look": "1", "style": "neon", "nav": "top"})          # keeps the language
+    assert "Abmelden" in c.get("/account").data.decode()
+    assert c.get("/i18n/de.json").get_json()["Log out"] == "Abmelden"
+    assert c.get("/i18n/en.json").status_code == 404
+    # the coach's text and people's notes are not touched
+    pid = add_profile(c)
+    tid = store.create_team(store.user_by_name("manuel").id, "Squad")
+    store.update_team(tid, members=[{"pid": pid, "kind": "starter"}], maps=["Lotus"])
+    store.add_team_note(tid, store.user_by_name("manuel").id, "Fall back after your first kill on Ascent")
+    page = c.get(f"/teams/{tid}/notes").data.decode()
+    assert "Notizen" in page and "Fall back after your first kill on Ascent" in page
+    # login page: the browser's language, or the switch on the page
+    anon = app.test_client()
+    assert "Anmelden" in anon.get("/login", headers={"Accept-Language": "de-CH,de;q=0.9"}).data.decode()
+    assert "Log in" in anon.get("/login", headers={"Accept-Language": "en-US"}).data.decode()
+    r = anon.get("/lang/de?next=/login")
+    assert r.status_code == 302 and "vc-lang=de" in r.headers.get("Set-Cookie", "")
+    assert "Anmelden" in anon.get("/login").data.decode()
+    assert anon.get("/lang/de?next=//evil.example").headers["Location"].endswith("/login")
+    assert anon.get("/lang/xx").status_code == 404
+    # Discord posts follow the team's language
+    from valcoach import discord
+    info = {"prep_url": "https://discord.com/api/webhooks/1/abc", "lang": "de"}
+    store.update_team(tid, discord=info)
+    content, embeds = discord._translate(discord._lang(info["prep_url"]), "Posted to Discord", [{"title": "Rounds that decided it"}])
+    assert content == "Auf Discord gepostet" and embeds[0]["title"] == "Entscheidende Runden"

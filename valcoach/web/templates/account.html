@@ -9,6 +9,9 @@
 .sprev{display:block;width:100%;height:auto;aspect-ratio:8/5;border-radius:6px;background:var(--panel3);object-fit:cover}
 .sname{font-weight:700;font-size:13px}.sdesc{font-size:11.5px;color:var(--muted);line-height:1.35}
 .navopts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.langopts{display:flex;gap:8px;flex-wrap:wrap}
+.langopt{display:inline-flex;align-items:center;gap:8px;margin:0;padding:9px 16px;border:2px solid var(--line);border-radius:var(--radius);background:var(--panel2);font-size:14.5px;font-weight:650;cursor:pointer}
+.langopt:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
 .navopt{display:flex;gap:12px;align-items:center;margin:0;padding:10px 12px;border:2px solid var(--line);border-radius:var(--radius);background:var(--panel2);color:var(--text);font-size:13px;font-weight:400;cursor:pointer}
 .navopt:hover{border-color:var(--line2)}.navopt:has(input:checked){border-color:var(--accent)}.navopt:has(input:focus-visible){box-shadow:var(--focus)}
 .navopt b{display:block;font-weight:700;font-size:14px}
@@ -55,6 +58,10 @@
     </label>
     {% endfor %}
   </div>
+  <h2 style="margin-top:18px">Language</h2>
+  <div class="langopts" role="radiogroup" aria-label="Language">{% for key, label in langs.items() %}
+    <label class="langopt"><input type="radio" name="lang" value="{{ key }}" {{ 'checked' if ui.lang == key }}><span translate="no">{{ label }}</span></label>{% endfor %}</div>
+  <p class="small muted" style="margin:6px 0 0">Menus, pages, messages and notifications. The coach's own texts stay in each player's coaching language (Player &amp; playbook).</p>
   <h2 style="margin-top:18px">Menu</h2>
   <div class="navopts">{% for key, (label, desc) in navs.items() %}
     <label class="navopt"><input type="radio" name="nav" value="{{ key }}" {{ 'checked' if ui.nav == key }} class="sr-only">

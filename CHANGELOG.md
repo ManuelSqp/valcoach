@@ -4,6 +4,23 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 4.0.0
+- **Deutsch:** the whole interface in German, picked per user under Account › Look & feel › Language (English stays
+  the default). Menus, every page, buttons, messages, confirmations, the minimap replay and notifications on your
+  phone. The login page follows the browser's language and has a Deutsch / English switch.
+  - **Discord posts** have their own language per team (Team settings › Discord › Language of the posts).
+  - The coach's texts (reports, reviews, tips, quiz) stay in each player's coaching language, as before. People's
+    own notes, strat names and drafts are never changed.
+  - The change notes on *What's new* stay in English.
+  - How it works: pages are written in English and translated on the way out from one list
+    (`valcoach/i18n/de.json`). Text that scripts add later goes through the same list in the browser. Anything
+    missing from the list simply stays English, so a new feature never breaks the German interface.
+- **Menu at the top fits any width:** the bar measures itself and shrinks step by step only as far as needed
+  (icons, your name and uptime, the picker names, the logo text, spacing, finally group icons only). Long player and team
+  names or the longer German labels no longer run into the icons on the right.
+- Examples and placeholders are generic now (`Name#TAG`, *teammate1* in the example playbook, all regions in the
+  region hint) instead of one player's names.
+
 ## 3.8.0
 - **Aim** (Practice, per player): aim routines and a warm-up before matches.
   - **Routines:** five built-in ones for the Range and Deathmatch (warm-up, headshot-only, peeking, micro-adjusting,

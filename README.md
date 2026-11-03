@@ -1,6 +1,6 @@
 # valcoach
 
-**Version 3.8.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.0.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -26,13 +26,13 @@ unzip valcoach-v2.zip && cd valcoach-v2
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                     # 157 tests, ~3 min, builds a synthetic match + VOD
+pytest -q                     # 162 tests, ~3 min, builds a synthetic match + VOD
 ollama pull qwen3.8:27b       # default; alternatives below
 ```
 
 ### Which model
 
-Any Ollama model works; set it in *Settings → Ollama → Model*. dio:
+Any Ollama model works; set it in *Settings → Ollama → Model*. Some good choices:
 
 | Model | Download | Notes |
 |---|---|---|
@@ -93,6 +93,11 @@ or player page picks it for you. Below: *Match day* (This week, Availability, Ma
 Agents & roles, Rounds & economy, Teammates, Rank & progress), *Practice* (Training, Habits, Aim, Practice plan, Review evening, Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes,
 Player & playbook, Team settings). Ctrl+K searches everything. *Home* shows what's up today. The look (10 styles,
 light or dark, menu on the left or at the top) is under Account.
+
+**Deutsch / English:** every user picks the interface language under Account › Look & feel (the login page
+follows the browser, or the switch above the form). Menus, pages, messages, notifications and, per team, the
+Discord posts are translated; the coach's own texts stay in each player's coaching language. Translations live
+in `valcoach/i18n/de.json` (`#` = any number, `{name}` = any text); a missing line simply stays English.
 
 **On your phone or a second screen:** Account › *Install as an app* puts valcoach on your home screen (no app
 store) and turns on notifications (report ready, match day). *Match day › Match screen* shows the comp, plans,

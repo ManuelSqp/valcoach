@@ -2,6 +2,7 @@
 {% block title %}{{ {'login': 'Log in', 'signup': 'Create account', 'setup': 'Set up'}[mode] }} · valcoach{% endblock %}
 {% block content %}
 <div class="authlogo"><span class="logo"><span class="logo-mark" aria-hidden="true"></span>valcoach</span></div>
+<div class="authlang" translate="no">{% for key, label in langs.items() %}<a href="{{ url_for('set_lang', lang=key, next=request.full_path) }}" class="{{ 'on' if lang == key }}" hreflang="{{ key }}" lang="{{ key }}">{{ label }}</a>{% endfor %}</div>
 <form method="post" class="card authcard" autocomplete="on">
   {% if mode == 'setup' %}
     <h1>Create the admin account</h1>
@@ -24,7 +25,7 @@
     {% if mode != 'login' %}<div class="hint">At least {{ min_password }} characters.</div>{% endif %}</div>
   {% if mode != 'login' %}
   <div class="field"><label>In-game name <span class="muted">(optional)</span></label><input type="text" name="display_name" placeholder="Name#TAG" maxlength="40" value="{{ display_name or '' }}">
-    <div class="hint">What teammates see, e.g. <code>adv1ce#LFT</code>. If it matches a player in a team you're added to, you're linked to it.</div></div>
+    <div class="hint">What teammates see, e.g. <code>Name#TAG</code>. If it matches a player in a team you're added to, you're linked to it.</div></div>
   <div class="field"><label>Repeat password</label><input type="password" name="password2" required autocomplete="new-password" minlength="{{ min_password }}"></div>
   {% endif %}
 

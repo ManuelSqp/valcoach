@@ -11,9 +11,10 @@ code{background:var(--ink);border:1px solid var(--line);border-radius:4px;paddin
 {% endblock %}
 {% block content %}
 <div class="pagehead"><div><h1>What's new</h1></div></div>
+{% if lang != 'en' %}<p class="small muted">The change notes are only in English.</p>{% endif %}
 <p class="sub">You're on <b>{{ app_version }}</b>. Updating: unzip the new version over your install (keep <code>data/</code>),
   <code>pip install -e .</code>, <code>sudo systemctl restart valcoach</code>.</p>
-<section class="card">
+<section class="card" translate="no" lang="en">
   {% for v in versions %}
   <div class="ver-block {{ 'current' if v.version == app_version }}">
     <h3>{{ v.version }}{% if v.version == app_version %}<span class="tag">running</span>{% endif %}</h3>

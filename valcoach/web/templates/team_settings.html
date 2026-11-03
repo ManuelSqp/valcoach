@@ -87,6 +87,9 @@
     <span class="small">from</span>
     <select name="weekly_hour" style="width:auto">{% for h in range(24) %}<option value="{{ h }}" {{ 'selected' if (discord.weekly_hour|default(18))|int == h }}>{{ '%02d' % h }}:00</option>{% endfor %}</select>
   </div>
+  <div class="field" style="margin-top:10px"><label for="dlang">Language of the posts</label>
+    <select id="dlang" name="lang" style="width:auto">{% for key, label in langs.items() %}<option value="{{ key }}" {{ 'selected' if (discord.lang or 'en') == key }}>{{ label }}</option>{% endfor %}</select>
+    <div class="hint">For everything valcoach posts here. The coach's own texts stay in each player's coaching language.</div></div>
   <div class="row"><button class="btn primary">Save Discord settings</button><button class="btn ghost" name="test" value="1">Save and send a test message</button></div>
 </form>
 

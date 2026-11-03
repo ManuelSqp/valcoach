@@ -88,6 +88,10 @@ def send(store, user_id: int, title: str, body: str, url: str = "/", tag: str = 
             return 0
     _, priv = keys(store)
     claim = store.get("push_claim") or "mailto:valcoach@localhost"
+    u = store.user(user_id)
+    if u is not None and u.ui.get("lang", "en") != "en":
+        from ..i18n import tr
+        title, body = tr(title, u.ui["lang"]), tr(body, u.ui["lang"])
     payload = {"title": title, "body": body, "url": url, "tag": tag or kind or "valcoach"}
 
     def run():

@@ -40,7 +40,8 @@ HISTORY_TTL_S = 120
 HISTORY_PAGE = 10     # full matches per page (each uncached match costs one API request)
 STORED_PAGE = 20      # stored-archive rows per page (one API request per page)
 PLAYBOOK_EXAMPLE = (Path(__file__).parent / "playbook_example.yaml").read_text()
-PUBLIC_ENDPOINTS = {"login", "signup", "setup", "static", "shared_report", "shared_vod", "manifest", "service_worker", "offline"}
+PUBLIC_ENDPOINTS = {"login", "signup", "setup", "static", "shared_report", "shared_vod", "manifest", "service_worker", "offline",
+                    "i18n_catalog", "set_lang"}
 MAX_LOGIN_FAILS = 5
 LOCKOUT_S = 600
 MAX_CACHE_ENTRIES = 200                # match-list cache (one entry per player / queue / page)
@@ -48,6 +49,7 @@ MAX_TRACKED_LOGINS = 1000              # failed-login records kept for the locko
 
 
 from .ui import fonts_url, ui_prefs
+from .. import i18n
 from ..coach.llm import month_cost as claude_month_cost
 from . import backup as _backups
 from .models import choices as model_choices, last_choice, picked as picked_model
@@ -313,6 +315,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             "min_password": MIN_PASSWORD,
             "app_version": __version__,
             "ui": user.ui if user else ui_prefs({}),
+            "lang": getattr(g, "lang", i18n.DEFAULT),
+            "langs": i18n.LANGS,
             "ui_fonts": fonts_url(user.ui["style"]) if user else "",
             "app_started": int(started_at),
             "server_now": int(time.time()),
@@ -341,6 +345,9 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
     @app.before_request
     def load_user():
         g.user = None
+        # people not logged in: the language they picked on the login page, else their browser's
+        g.lang = request.cookies.get("vc-lang") if request.cookies.get("vc-lang") in i18n.LANGS else \
+            i18n.pick(request.headers.get("Accept-Language"))
         if store.user_count() == 0:
             # fresh install (or upgrade from the version without accounts): create the admin first
             if request.endpoint not in ("setup", "static"):
@@ -351,6 +358,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             u = store.user(uid)
             if u and not u.disabled and session.get("sk") == u.session_key:
                 g.user = u
+                g.lang = u.ui["lang"]
                 if request.endpoint != "static" and _stale(u.last_seen, 60):
                     store.touch_user(u.id)             # "last active" on the Users page
             else:
@@ -369,6 +377,53 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 return jsonify(error="login required"), 401
             return redirect(url_for("login", next=request.path))
         return None
+
+    def _discord_lang(url: str) -> str | None:
+        for t in store.all_teams():
+            info = t.discord_info or {}
+            if url in {info.get(k) for k in ("prep_url", "focus_url", "review_url", "clips_url")}:
+                return info.get("lang")
+        return None
+    from .. import discord as _discord
+    _discord.LANG_OF = _discord_lang
+
+    @app.after_request
+    def translate_page(resp):
+        """Pages for people who use another language than English: translated on the way out (see i18n)."""
+        lang = getattr(g, "lang", i18n.DEFAULT)
+        if lang != i18n.DEFAULT and resp.mimetype == "text/html" and not resp.direct_passthrough and resp.status_code != 304:
+            try:
+                resp.set_data(i18n.translate_html(resp.get_data(as_text=True), lang))
+            except Exception:
+                pass                                 # better English than no page
+        return resp
+
+    @app.get("/i18n/<lang>.json")
+    def i18n_catalog(lang: str):
+        if lang not in i18n.LANGS or lang == i18n.DEFAULT:
+            abort(404)
+        resp = jsonify(i18n.client_catalog(lang))
+        resp.headers["Cache-Control"] = "public, max-age=86400"
+        return resp
+
+    @app.get("/lang/<lang>")
+    def set_lang(lang: str):
+        """The language switch on the login page (a cookie; logged-in users pick it under Account)."""
+        if lang not in i18n.LANGS:
+            abort(404)
+        nxt = request.args.get("next") or url_for("login")
+        if not nxt.startswith("/") or nxt.startswith("//") or "\\" in nxt:
+            nxt = url_for("login")
+        resp = redirect(nxt)
+        resp.set_cookie("vc-lang", lang, max_age=365 * 86400, samesite="Lax", secure=request.is_secure, httponly=True)
+        if g.user is not None:
+            try:
+                prefs = json.loads(g.user.prefs or "{}")
+            except ValueError:
+                prefs = {}
+            prefs["lang"] = lang
+            store.update_user(g.user.id, prefs=json.dumps(prefs))
+        return resp
 
     @app.route("/setup", methods=["GET", "POST"])
     def setup():
@@ -463,8 +518,10 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 old_prefs = json.loads(g.user.prefs or "{}")
             except ValueError:
                 old_prefs = {}
-            for k in ("home_seen", "home_prev", "notify"):
-                if old_prefs.get(k):
+            if f.get("lang") in i18n.LANGS:
+                prefs["lang"] = f.get("lang")
+            for k in ("home_seen", "home_prev", "notify", "lang"):
+                if old_prefs.get(k) and k not in prefs:
                     prefs[k] = old_prefs[k]
             from .ui import NAVS
             prefs["nav"] = f.get("nav") if f.get("nav") in NAVS else (old_prefs.get("nav") if old_prefs.get("nav") in NAVS else "side")

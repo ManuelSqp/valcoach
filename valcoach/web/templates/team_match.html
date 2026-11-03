@@ -26,7 +26,7 @@ main.page{max-width:1760px}
 .cp .who{font-weight:700;font-size:16px}.cp .who small{font-weight:500;color:var(--muted);font-size:13px;margin-left:6px}
 .cp .fo{font-size:13px;color:var(--muted);line-height:1.35}
 .cp.me{background:var(--accent-soft);margin:0 -10px;padding:10px;border-radius:10px;border-top-color:transparent}
-.cp.me .who::after{content:"you";font-size:11px;font-weight:700;color:var(--accent-ink);background:var(--accent);border-radius:5px;padding:0 5px;margin-left:8px;vertical-align:2px}
+.cp.me .who .youb{font-size:11px;font-weight:700;color:var(--accent-ink);background:var(--accent);border-radius:5px;padding:0 5px;margin-left:8px;vertical-align:2px}
 .warmcard .wn b{font-size:17px}.warmcard.done{opacity:.75}
 .pl{border-top:1px solid var(--line);padding:14px 0 6px}.pl:first-of-type{border-top:0;padding-top:4px}
 .pl h3{font-size:19px;margin:0 0 4px}.pl .idea{margin:0 0 8px;color:var(--muted)}
@@ -81,7 +81,7 @@ body[data-side=attack] [data-side-only=attack],body[data-side=defense] [data-sid
       {% set fo = {} %}{% for f in b.focus or [] %}{% set _ = fo.update({f.player: f.focus}) %}{% endfor %}
       {% for pk in (b.comp.picks if b.comp else []) %}
       <div class="cp {{ 'me' if pk.player == me_name }}">{{ ai(pk.agent, 40) }}
-        <div class="who">{{ pk.player }}<small>{{ pk.agent }}{% if pk.alt %} or {{ pk.alt }}{% endif %}</small></div>
+        <div class="who">{{ pk.player }}{% if pk.player == me_name %}<span class="youb">you</span>{% endif %}<small>{{ pk.agent }}{% if pk.alt %} or {{ pk.alt }}{% endif %}</small></div>
         <div class="fo">{% if fo.get(pk.player) %}Focus: {{ fo[pk.player] }}{% elif pk.note %}{{ pk.note }}{% else %}&nbsp;{% endif %}</div></div>
       {% else %}<p class="empty-s">No comp yet: mark a draft as <i>Our comp</i> under <a href="{{ url_for('team_drafts', tid=t.id, map=sel) }}">Drafts</a>.</p>{% endfor %}
     </section>

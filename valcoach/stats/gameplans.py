@@ -54,7 +54,7 @@ def write_plans(llm, map_name: str, facts: dict, lineup: list[dict], callouts: l
     for p in out.get("plans", []):
         by = {s.get("player"): s for s in p.get("steps", [])}
         p["steps"] = [by.get(n, {"player": n, "what": ""}) for n in players]
-        for s in p["steps"]:                      # "adv1ce: smoke B" -> "smoke B" (the name is shown already)
+        for s in p["steps"]:                      # "Player: smoke B" -> "smoke B" (the name is shown already)
             w = (s.get("what") or "").strip()
             for pre in (f"{s['player']}:", f"{s['player']} -", f"{s['player']} –"):
                 if w.lower().startswith(pre.lower()):

@@ -38,7 +38,10 @@ def ui_prefs(raw: dict | None) -> dict:
     style = raw.get("style") if raw.get("style") in STYLES else "classic"
     anim = raw.get("anim") if isinstance(raw.get("anim"), dict) else {}
     nav = raw.get("nav") if raw.get("nav") in NAVS else "side"
-    return {"style": style, "nav": nav, "anim": {k: bool(anim.get(k, True)) for k in ANIMATIONS}}
+    from ..i18n import DEFAULT, LANGS
+    lang = raw.get("lang") if raw.get("lang") in LANGS else DEFAULT
+    return {"style": style, "nav": nav, "lang": lang, "explicit_lang": raw.get("lang") in LANGS,
+            "anim": {k: bool(anim.get(k, True)) for k in ANIMATIONS}}
 
 
 def fonts_url(style: str) -> str:

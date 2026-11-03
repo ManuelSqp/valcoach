@@ -30,7 +30,7 @@
   <div class="grid2">
     <div class="field"><label>Username</label><input type="text" name="username" required pattern="[A-Za-z0-9._\-]{3,32}" title="3–32 letters, digits, . _ -" autocapitalize="none"></div>
     <div class="field"><label>In-game name <span class="muted">(optional)</span></label><input type="text" name="display_name" placeholder="Name#TAG" maxlength="40">
-    <div class="hint">What teammates see, e.g. <code>adv1ce#LFT</code>. If it matches a player in a team you're added to, you're linked to it.</div></div>
+    <div class="hint">What teammates see, e.g. <code>Name#TAG</code>. If it matches a player in a team you're added to, you're linked to it.</div></div>
     <div class="field"><label>Initial password</label><input type="text" name="password" required minlength="{{ min_password }}" autocomplete="off">
       <div class="hint">Give it to them; they can change it under their account.</div></div>
     <div class="field"><label>Recordings folder on this server (optional)</label><input type="text" name="vod_dir" placeholder="/Volumes/recordings/teammate">

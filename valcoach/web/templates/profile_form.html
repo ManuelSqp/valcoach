@@ -6,11 +6,11 @@
 {% else %}{{ vc.pagehead('Add a player', [('Players', url_for('index') ~ '#players')], "The Riot ID is used to load this player's matches from HenrikDev.") }}{% endif %}
 <form method="post" class="card">
   <div class="grid2">
-    <div class="field"><label>Riot name</label><input type="text" name="name" value="{{ v.name }}" placeholder="adv1ce" required autofocus></div>
-    <div class="field"><label>Tag (without #)</label><input type="text" name="tag" value="{{ v.tag }}" placeholder="LFT" required></div>
+    <div class="field"><label>Riot name</label><input type="text" name="name" value="{{ v.name }}" placeholder="Name" required autofocus></div>
+    <div class="field"><label>Tag (without #)</label><input type="text" name="tag" value="{{ v.tag }}" placeholder="TAG" required></div>
     <div class="field"><label>Region</label>
       <select name="region">{% for r in regions %}<option value="{{ r }}" {{ 'selected' if v.region == r }}>{{ r|upper }}</option>{% endfor %}</select>
-      <div class="hint">Switzerland / Europe = EU</div></div>
+      <div class="hint">Europe = EU, North America = NA, Asia-Pacific = AP</div></div>
     <div class="field"><label>Platform</label>
       <select name="platform">{% for pl in platforms %}<option value="{{ pl }}" {{ 'selected' if v.platform == pl }}>{{ pl|upper }}</option>{% endfor %}</select></div>
     <div class="field"><label>Default coaching</label>
