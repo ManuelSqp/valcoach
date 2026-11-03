@@ -4,6 +4,15 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 3.3.0
+- **Unrated counts too:** *Import match history* / *Load new games* now also load your Unrated games (the last
+  ~60 with round data and up to 300 older ones, like Competitive and Premier). The first import after the update
+  takes a bit longer and uses more HenrikDev requests; later ones only fetch what's new.
+- Two more queue tabs on Stats & maps, Agents & roles, Rank & progress and Pros & videos: **Unrated** and
+  **Everything** (ranked + Unrated). *All ranked* stays Competitive + Premier, so your ranked numbers don't change.
+  Team comps can use *Everything* too (Team settings › Use games from).
+- Rank over time still only uses Competitive (Unrated has no RR).
+
 ## 3.2.0
 - **Agents & roles** (Performance › Agents & roles, per player):
   - **What you pick:** the agent class you play most (Duelist, Initiator, Controller, Sentinel) with games and win
