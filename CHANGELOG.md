@@ -4,6 +4,30 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 3.5.0
+- **Habit tracker** (Practice › Habits, per player): six habits that cost rounds, measured game by game: dying far
+  from the team, deaths nobody trades, losing the first duel, rounds without impact, a low headshot rate, and dying
+  at the same spot (named, e.g. *Dying at B Main on attack*).
+  - Your last 10 games with round data against the 20 before: **Gone**, **Getting better**, **Still there**,
+    **Getting worse** or **Fine**, with both numbers, the line where it starts to cost rounds, and a small chart of
+    the last 20 games.
+  - **What the coach said:** problems named in your reports and Premier reviews are matched to a habit by their
+    words, with the numbers before and after that report: *better since*, *no change since*, *worse since*. Tips that
+    don't match a number are listed below, the most repeated first.
+  - A drill for every habit that's still there, and *Make it my focus* for this week.
+- **Practice plan** (Practice › Practice plan, per team): this week's sessions, made instantly every Monday (no
+  model needed) from the team's habits, this week's map and its strats and lineups, and the newest Premier review.
+  - Every session: warm-up, a team drill for the habit most players still have (with who it's for), the week's map
+    (attack strats one day, defense the next, then lineups), a review together, and play time. The practice before a
+    match day becomes match prep with the brief and the match screen.
+  - Anyone in the team ticks items off and adds their own; the owner sets days, start time and length, makes it again
+    and posts it to Discord. Below: each starter's two open habits with a solo drill.
+  - Reminder 60 minutes before each session: on Discord (switch it on) and as a push notification (*Practice*,
+    can be switched off under Account).
+- **Menu at the top:** your name and the uptime next to your avatar, like in the left menu (hidden on narrow
+  screens).
+- Ctrl+K finds Habits, Match screen and Practice plan.
+
 ## 3.4.0
 - **Match screen** (Match day › Match screen): everything for the match you're playing on one page, made for a
   second monitor or a phone next to you. The map, an **Attack / Defense** switch (keys `A` / `D`), the comp with

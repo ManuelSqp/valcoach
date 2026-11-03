@@ -39,7 +39,7 @@
     </details>
     <details class="ctxpick">
       <summary><span class="avatar" aria-hidden="true">{{ navP.name[:1]|upper if navP else '+' }}</span><span class="ctx-t"><small>Player{% if navP and nav_me and navP.id == nav_me.id %} · you{% endif %}</small><b>{{ navP.name if navP else 'No player yet' }}</b></span></summary>
-      <div class="ctx-menu">{% for np in nav_profiles %}<a href="{{ url_for(ep if ep in ('stats', 'agents_roles', 'progress', 'training', 'quiz', 'pros', 'profile') else 'stats', pid=np.id) }}" class="{{ 'on' if navP and np.id == navP.id }}" data-pid="{{ np.id }}">{{ np.name }}<span class="tagname">#{{ np.tag }}</span>{% if nav_me and np.id == nav_me.id %}<span class="you">you</span>{% endif %}</a>{% endfor %}
+      <div class="ctx-menu">{% for np in nav_profiles %}<a href="{{ url_for(ep if ep in ('stats', 'agents_roles', 'habits', 'progress', 'training', 'quiz', 'pros', 'profile') else 'stats', pid=np.id) }}" class="{{ 'on' if navP and np.id == navP.id }}" data-pid="{{ np.id }}">{{ np.name }}<span class="tagname">#{{ np.tag }}</span>{% if nav_me and np.id == nav_me.id %}<span class="you">you</span>{% endif %}</a>{% endfor %}
         <a class="add" href="{{ url_for('profile_new') }}" data-nav="new">Add a player</a></div>
     </details>
   </div>
@@ -63,6 +63,8 @@
       ('progress', 'Rank & progress', ('progress',), 'p', '')]),
     ('practice', 'Practice', 'practice', [
       ('training', 'Training', ('training',), 'p', ''),
+      ('habits', 'Habits', ('habits',), 'p', ''),
+      ('team_practice', 'Practice plan', ('team_practice',), 't', ''),
       ('team_focus', 'Weekly focus', ('team_focus',), 't', ''),
       ('quiz', 'Quiz', ('quiz',), 'p', nav_quiz if navP and nav_me and navP.id == nav_me.id and nav_quiz else ''),
       ('pros', 'Pros & videos', ('pros',), 'p', '')]),
