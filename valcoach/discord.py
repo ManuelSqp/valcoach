@@ -45,11 +45,40 @@ def channel(info: dict | None, kind: str = "prep") -> str:
     return next((info[k] for k in CHANNELS.get(kind, CHANNELS["prep"]) if info.get(k)), "")
 
 
+# webhook URL -> interface language of the team it belongs to (set by the web app; English when unknown)
+LANG_OF = None
+
+
+def _lang(url: str) -> str | None:
+    try:
+        return LANG_OF(url) if LANG_OF else None
+    except Exception:
+        return None
+
+
+def _translate(lang: str | None, content: str, embeds: list[dict]) -> tuple[str, list[dict]]:
+    if not lang or lang == "en":
+        return content, embeds
+    from .i18n import tr
+    out = []
+    for e in embeds:
+        e = dict(e)
+        for k in ("title", "description"):
+            if e.get(k):
+                e[k] = tr(e[k], lang)
+        if e.get("fields"):
+            e["fields"] = [dict(f, name=tr(f.get("name", ""), lang), value=tr(f.get("value", ""), lang)) for f in e["fields"]]
+        if (e.get("footer") or {}).get("text"):
+            e["footer"] = dict(e["footer"], text=tr(e["footer"]["text"], lang))
+        out.append(e)
+    return tr(content, lang), out
+
+
 def post(url: str, content: str = "", embeds: list[dict] | None = None, session=None, mentions: list[str] | None = None) -> None:
     """mentions: Discord user IDs that may be pinged (<@id> in content); nobody else, no @everyone."""
     if not valid_url(url):
         raise DiscordError("That's not a Discord webhook URL")
-    embeds = embeds or []
+    content, embeds = _translate(_lang(url), content, embeds or [])
     chunks = [embeds[i:i + MAX_EMBEDS] for i in range(0, len(embeds), MAX_EMBEDS)] or [[]]
     for i, chunk in enumerate(chunks):
         allowed = {"parse": [], "users": [m for m in (mentions or []) if str(m).isdigit()][:20]} if mentions else {"parse": []}
@@ -74,6 +103,7 @@ def post_file(url: str, content: str, filename: str, data: bytes, session=None, 
     import json as _json
     if not valid_url(url):
         raise DiscordError("That's not a Discord webhook URL")
+    content, _ = _translate(_lang(url), content, [])
     payload = {"username": "valcoach", "allowed_mentions": {"parse": []}, "content": _cut(content, 1900)}
     r = _send(session, url, data={"payload_json": _json.dumps(payload)},
               files={"files[0]": (filename, data, content_type)}, timeout=60)

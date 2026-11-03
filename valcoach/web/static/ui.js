@@ -140,3 +140,25 @@
   });
   document.querySelectorAll('[data-cmdk]').forEach(b => b.addEventListener('click', open));
 })();
+
+// Menu at the top: shrink the bar step by step until everything fits (long names, longer labels in German,
+// more menu entries). Measured, so it works for any width and any content.
+(function () {
+  const body = document.body;
+  if (!body.classList.contains('nav-top')) return;
+  const bar = document.getElementById('side'), nav = bar && bar.querySelector('.side-nav');
+  if (!bar || !nav) return;
+  const STEPS = 8;
+  body.classList.add('fitjs');
+  const over = () => nav.scrollWidth > nav.clientWidth + 1 || bar.scrollWidth > bar.clientWidth + 1;
+  function fit() {
+    if (window.innerWidth <= 900) return;        // phones: the drawer
+    for (let i = 1; i <= STEPS; i++) body.classList.remove('fit' + i);
+    for (let i = 1; i <= STEPS && over(); i++) body.classList.add('fit' + i);
+  }
+  let t = null;
+  window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(fit, 80); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  new MutationObserver(() => { clearTimeout(t); t = setTimeout(fit, 80); }).observe(nav, {childList: true, subtree: true, characterData: true});
+  fit();
+})();

@@ -23,7 +23,7 @@
             {% for m in members %}<option value="{{ m.pid }}">About {{ players[m.pid].name }}</option>{% endfor %}</select>
           <select name="map" style="width:auto"><option value="">Any map</option>{% for mp in maps %}<option>{{ mp }}</option>{% endfor %}</select>
         </div>
-        <textarea name="text" rows="3" style="min-height:70px;font-family:inherit;font-size:14px" placeholder="e.g. Burn gets pushed by 2 on B every time: whoever's on C rotates early to play with him." required maxlength="2000"></textarea>
+        <textarea name="text" rows="3" style="min-height:70px;font-family:inherit;font-size:14px" placeholder="e.g. Our B anchor gets pushed by 2 every time: whoever's on C rotates early to play with him." required maxlength="2000"></textarea>
         <div class="row between" style="margin-top:8px"><span class="hint">Everyone in the team sees notes. The coach doesn't change them.</span><button class="btn primary">Add note</button></div>
       </form>
     </section>

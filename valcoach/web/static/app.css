@@ -314,21 +314,45 @@ main.page{overflow-wrap:break-word}
   .nav-top .me{gap:2px}
   .nav-top .page{padding-top:26px}
 }
+/* The bar shrinks step by step until it fits (ui.js measures it: names, the language and the number of
+   entries change how much room it needs). Without the script, fixed widths do a rougher job. */
+@media(min-width:901px){
+  .nav-top.fit1 .side-nav>.si svg,.nav-top.fit1 .ngroup>.sg-head svg{display:none}
+  .nav-top.fit1 .side-nav>.si,.nav-top.fit1 .ngroup>.sg-head{padding:7px 9px}
+  .nav-top.fit2 .me-text{display:none}.nav-top.fit2 .me-link{padding:4px}
+  .nav-top.fit3 .ctx-t b{max-width:70px}
+  .nav-top.fit4 .ctx-t{display:none}.nav-top.fit4 .ctxpick>summary::after{display:none}
+  .nav-top.fit5 .logo{font-size:0;gap:0}
+  .nav-top.fit5 .side-nav>.si,.nav-top.fit5 .ngroup>.sg-head{padding:7px 7px;font-size:14px}
+  .nav-top.fit6 .ngroup>.sg-head::after{display:none}
+  .nav-top.fit6 .side-nav>.si,.nav-top.fit6 .ngroup>.sg-head{padding:7px 5px;font-size:13.5px}
+  .nav-top.fit6 .vc-side{padding:8px 10px;gap:4px}
+  .nav-top.fit7 .side-nav>.si,.nav-top.fit7 .ngroup>.sg-head{padding:6px 4px;font-size:12.5px}
+  .nav-top.fit7 .side-search{display:none}
+  /* last step: the groups as icons only (their names show in the dropdown's items anyway) */
+  .nav-top.fit8 .side-nav>.si,.nav-top.fit8 .ngroup>.sg-head{font-size:0;gap:0;padding:7px 8px}
+  .nav-top.fit8 .side-nav>.si svg,.nav-top.fit8 .ngroup>.sg-head svg{display:inline-block}
+  .nav-top.fit8 .sg-name{display:none}
+}
 @media(min-width:901px) and (max-width:1560px){
-  .nav-top .side-nav>.si svg,.nav-top .ngroup>.sg-head svg{display:none}
-  .nav-top .side-nav>.si,.nav-top .ngroup>.sg-head{padding:7px 9px}
+  .nav-top:not(.fitjs) .side-nav>.si svg,.nav-top:not(.fitjs) .ngroup>.sg-head svg{display:none}
+  .nav-top:not(.fitjs) .side-nav>.si,.nav-top:not(.fitjs) .ngroup>.sg-head{padding:7px 9px}
 }
 @media(min-width:901px) and (max-width:1240px){
-  .nav-top .me-text{display:none}.nav-top .me-link{padding:4px}
-  .nav-top .ctx-t{display:none}.nav-top .ctxpick>summary::after{display:none}
-  .nav-top .logo{font-size:0;gap:0}
-  .nav-top .side-nav>.si,.nav-top .ngroup>.sg-head{padding:7px 7px;font-size:14px}
+  .nav-top:not(.fitjs) .me-text{display:none}.nav-top:not(.fitjs) .me-link{padding:4px}
+  .nav-top:not(.fitjs) .ctx-t{display:none}.nav-top:not(.fitjs) .ctxpick>summary::after{display:none}
+  .nav-top:not(.fitjs) .logo{font-size:0;gap:0}
+  .nav-top:not(.fitjs) .side-nav>.si,.nav-top:not(.fitjs) .ngroup>.sg-head{padding:7px 7px;font-size:14px}
 }
 @media(min-width:901px) and (max-width:1060px){
-  .nav-top .ngroup>.sg-head::after{display:none}
-  .nav-top .side-nav>.si,.nav-top .ngroup>.sg-head{padding:7px 6px;font-size:13.5px}
-  .nav-top .vc-side{padding:8px 10px;gap:4px}
+  .nav-top:not(.fitjs) .ngroup>.sg-head::after{display:none}
+  .nav-top:not(.fitjs) .side-nav>.si,.nav-top:not(.fitjs) .ngroup>.sg-head{padding:7px 6px;font-size:13.5px}
+  .nav-top:not(.fitjs) .vc-side{padding:8px 10px;gap:4px}
 }
 /* a page shown inside another (the match screen opens strats this way) */
 body.embed{background:var(--bg)}body.embed .page{max-width:none;padding:12px 14px}
 .sn .badge.live{background:var(--red);color:#fff}
+
+.authlang{display:flex;justify-content:center;gap:4px;margin:-6px 0 14px}
+.authlang a{font-size:13px;padding:3px 10px;border-radius:99px;color:var(--muted);text-decoration:none}
+.authlang a.on{background:var(--panel3);color:var(--text);font-weight:650}

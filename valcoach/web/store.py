@@ -255,7 +255,7 @@ class User:
     disabled: int
     created_at: str
     last_login: str
-    display_name: str = ""     # in-game name, e.g. adv1ce#LFT
+    display_name: str = ""     # in-game name, e.g. Name#TAG
     prefs: str = "{}"          # JSON: look & feel (style, animation switches)
     perms: str = ""            # extra rights an admin gave this user, comma separated (e.g. "overview")
     last_seen: str = ""        # last page or API call while logged in (updated at most once a minute)

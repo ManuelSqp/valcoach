@@ -8,7 +8,7 @@
 .pdays{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px;align-items:start}
 .pday{margin:0}.pday header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
 .pday h2{margin:0;font-size:22px;font-weight:800;font-stretch:72%}.pday header span{font-size:13px;color:var(--muted)}
-.pday.today{border-color:var(--accent)}.pday.today h2::after{content:"Today";font-size:12px;font-weight:700;color:var(--accent-ink);background:var(--accent);border-radius:5px;padding:1px 6px;margin-left:8px;vertical-align:4px;font-family:var(--font)}
+.pday.today{border-color:var(--accent)}.pday .tday{font-size:12px;font-weight:700;color:var(--accent-ink);background:var(--accent);border-radius:5px;padding:1px 6px;margin-left:8px;vertical-align:4px;font-family:var(--font);font-stretch:100%}
 .pi{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:4px 10px;padding:11px 0;border-top:1px solid var(--line);align-items:start}
 .pi input{margin-top:3px;width:17px;height:17px}
 .pi .tt{font-weight:650}.pi .min{font-size:12.5px;color:var(--muted);white-space:nowrap}
@@ -45,7 +45,7 @@
 <div class="pdays">
 {% for d in plan.days %}
   <section class="card pday {{ 'today' if d.date == today_iso }}" data-day="{{ d.date }}">
-    <header><h2>{{ d.label }}</h2><span>{{ d.time }} · {{ d['items']|sum(attribute='minutes') }} min</span></header>
+    <header><h2>{{ d.label }}{% if d.date == today_iso %}<span class="tday">Today</span>{% endif %}</h2><span>{{ d.time }} · {{ d['items']|sum(attribute='minutes') }} min</span></header>
     {% for it in d['items'] %}
     <div class="pi k-{{ it.kind }} {{ 'done' if it.done }}" data-id="{{ it.id }}">
       <input type="checkbox" {{ 'checked' if it.done }} aria-label="Done: {{ it.title }}">

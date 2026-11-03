@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="{{ lang or 'en' }}" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -13,6 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="valcoach">
 <script>try{const t=localStorage.getItem('vc-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+{% if lang and lang != 'en' %}<script src="{{ url_for('static', filename='i18n.js') }}?v={{ app_version }}" data-catalog="{{ url_for('i18n_catalog', lang=lang) }}?v={{ app_version }}" defer></script>{% endif %}
 {% block head %}{% endblock %}
 {% if ui and ui.style != 'classic' %}<link rel="stylesheet" href="{{ url_for('static', filename='styles/' ~ ui.style ~ '.css') }}?v={{ app_version }}">{% endif %}
 {% if ui and ui.anim.tabs %}<style>@view-transition{navigation:auto}</style>{% endif %}
@@ -85,7 +86,7 @@
     {% set usable = [] %}{% for e, lbl, eps, need, badge in items %}{% if (need == 't' and navT) or (need == 'o' and navT and navT.owner_id == user.id) or (need == 'p' and navP) %}{% set _ = usable.append((e, lbl, eps, need, badge)) %}{% endif %}{% endfor %}
     {% set has_on = [] %}{% for x in usable if ep in x[2] %}{% set _ = has_on.append(1) %}{% endfor %}
     <details class="ngroup" data-g="{{ gid }}" {{ 'open' if (has_on or gid in ('match', 'perf')) and ui.nav != 'top' }} {{ 'data-here' if has_on }}>
-      <summary class="si sg-head">{{ nav_ico(gico) }}<span class="sg-name">{{ glabel }}</span></summary>
+      <summary class="si sg-head" title="{{ glabel }}">{{ nav_ico(gico) }}<span class="sg-name">{{ glabel }}</span></summary>
       <div class="sg-items">
         {% for e, lbl, eps, need, badge in usable %}{% set on = ep in eps %}
         <a class="sn {{ 'on' if on }}" href="{{ url_for(e, tid=navT.id) if need in ('t', 'o') else url_for(e, pid=navP.id) }}" {% if on %}aria-current="page"{% endif %}><span>{{ lbl }}</span>{% if badge %}<span class="badge {{ 'hot' if e == 'quiz' }}{{ ' live' if e == 'team_match' }}">{{ badge }}</span>{% endif %}</a>

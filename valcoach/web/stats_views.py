@@ -852,6 +852,9 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
                 return redirect(url_for("team_settings", tid=tid) + "#discord")
             if v or f.get(f"clear_{k}"):
                 info[k] = v
+        from ..i18n import LANGS
+        if f.get("lang") in LANGS:
+            info["lang"] = f.get("lang")
         info["weekly"] = bool(f.get("weekly"))
         try:
             info["weekly_day"] = max(0, min(6, int(f.get("weekly_day", 0))))
