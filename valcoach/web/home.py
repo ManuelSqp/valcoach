@@ -63,6 +63,13 @@ def today(app, store, sr, user, since: float) -> dict:
         if mine:
             x["own"] = sr.read_own_focus(mine["pid"])
         x["focus"] = sr.my_focus(t, user.id)
+        x["warm"] = None
+        if x["live"] and "aim" in ext:          # match day: your warm-up, until it's ticked off
+            try:
+                w = ext["aim"]["card"](t, user.id)
+                x["warm"] = w if w and not w["done"] else None
+            except Exception:
+                x["warm"] = None
         out["teams"].append(x)
         # what's new since the last visit (by others)
         for s in store.strats(t.id):

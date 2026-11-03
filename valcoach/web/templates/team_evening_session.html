@@ -136,7 +136,7 @@ main.page{max-width:1640px}
       <h2>Your mark</h2>
       <div class="me-pick"><span>You are</span><select id="me">{% for p in ev.players %}<option value="{{ p.name }}" {{ 'selected' if p.name == me }}>{{ p.name }} ({{ p.agent }})</option>{% endfor %}</select></div>
       <div class="mk" id="mk">{% for k, lbl in marks.items() %}<button type="button" data-m="{{ k }}">{{ lbl }}<kbd>{{ loop.index }}</kbd></button>{% endfor %}</div>
-      <div class="note"><input id="note" maxlength="200" placeholder="Note (optional): what happened, what you'd do next time"><button class="btn sm ghost" id="notesave">Save note</button></div>
+      <div class="note"><input type="text" id="note" maxlength="200" placeholder="Note (optional): what happened, what you'd do next time"><button class="btn sm ghost" id="notesave">Save note</button></div>
       <div class="saved" id="saved"></div>
     </section>
     <section class="card o3">

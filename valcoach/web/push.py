@@ -7,6 +7,8 @@ messages go to all of a user's subscriptions, gone ones (404 / 410) are removed.
 What is sent (each can be switched off per user under Account):
   report   a coaching report you started is done (or failed)
   match    match day: 90 minutes before the match time, with a link to the match screen
+  practice 60 minutes before a practice session
+  warmup   30 minutes before the match: your aim warm-up
 iOS shows them only for the app added to the home screen (iOS 16.4+); everything needs HTTPS.
 """
 from __future__ import annotations
@@ -17,7 +19,8 @@ from datetime import date
 
 KINDS = {"report": ("Report ready", "When a coaching report you started is done or failed."),
          "match": ("Match day", "90 minutes before your match time, with a link to the match screen."),
-         "practice": ("Practice", "60 minutes before a practice session, with what's on the plan.")}
+         "practice": ("Practice", "60 minutes before a practice session, with what's on the plan."),
+         "warmup": ("Warm-up", "30 minutes before your match: your aim warm-up.")}
 
 
 def available() -> bool:

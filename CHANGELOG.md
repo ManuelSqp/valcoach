@@ -4,6 +4,22 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 3.8.0
+- **Aim** (Practice, per player): aim routines and a warm-up before matches.
+  - **Routines:** five built-in ones for the Range and Deathmatch (warm-up, headshot-only, peeking, micro-adjusting,
+    spray), plus your own and your team's: an **Aimlabs share link** (opens Aimlabs and offers the playlist), a
+    **KovaaK's share code** (with a copy button), any other link, or steps. Each says what it trains.
+  - **For you:** the routines that fit what your matches show: a low headshot rate → crosshair placement and
+    micro-adjusting, losing first duels → peeking and flicks. Match data shows *that* you lose duels, not *why*,
+    so the page says so and you can pick anything else.
+  - **Your warm-up:** the one you pick, else the team's warm-up (the owner sets it), else the
+    shortest routine marked *Warm-up* (yours and the team's before the built-in ones).
+    It shows on the match screen and the Home banner on match days, is the warm-up item in the practice plan, and
+    comes as a notification 30 minutes before the match (Account › Notifications › Warm-up).
+  - **Done today**, with an optional score you type in (valcoach can't read Aimlabs or KovaaK's). Your scores per
+    routine are listed, and after a few weeks the page compares your headshot rate on warm-up days with the other days.
+- Inputs without a type no longer look greyed out (review evening note, new aim form).
+
 ## 3.7.0
 - **Review evening** (Practice): go through one match round by round together, on a shared screen or each on his own.
   - Pick any match two or more of you played (or *Review it together* on a Premier review). Whoever starts it hosts:

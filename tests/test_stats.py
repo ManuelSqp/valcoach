@@ -770,3 +770,23 @@ def test_round_facts_and_round_types_on_synthetic(tmp_path):
     assert ev.our_side(m, set()) is None
     rt = round_types([(m, side)])
     assert rt["rounds"] == 6 and sum(k["rounds"] for k in rt["kinds"]) == 6 and isinstance(rt["lines"], list)
+
+
+def test_aim_routines_pick_and_effect():
+    from valcoach.stats import aim
+    r, err = aim.clean({"name": "x", "kind": "link", "url": "javascript:alert(1)"})
+    assert r is None and "https" in err
+    r, _ = aim.clean({"name": "KK", "kind": "kovaaks", "code": "Abc-123", "focus": ["tracking", "bogus"], "minutes": "500"})
+    assert r["code"] == "Abc-123" and r["focus"] == ["tracking"] and r["minutes"] == 90
+    assert aim.clean({"name": "s", "kind": "steps"})[0] is None
+    need = [{"focus": ["crosshair", "micro"], "weight": 3, "why": "hs"}]
+    lib = [dict(x, source="builtin") for x in aim.BUILTIN] + [dict(r, source="mine", focus=["micro", "crosshair"])]
+    picks = aim.pick(lib, need)
+    assert picks[0]["name"] == "KK" and picks[0]["why"] == "hs"
+    assert aim.warmup_for(lib, None)["source"] == "builtin" and aim.warmup_for(lib, "b-spray")["id"] == "b-spray"
+    assert aim.needs([])[0]["focus"] == ["warmup"]
+    rows = [{"source": "full", "shots": [3, 7, 0] if i % 2 else [1, 9, 0], "started_at": f"2026-10-{10 + i:02d}T12:00:00Z"} for i in range(12)]
+    log = [{"date": f"2026-10-{10 + i:02d}", "routine": "b-range"} for i in range(12) if i % 2]
+    e = aim.effect(rows, log)
+    assert e["ready"] and round(e["with"]["hs"], 2) == 0.3 and round(e["without"]["hs"], 2) == 0.1 and e["diff"] > 0
+    assert not aim.effect(rows, [])["ready"]

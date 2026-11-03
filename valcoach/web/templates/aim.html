@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% import "_ui.html" as vc %}
+{% block title %}Aim · {{ p.riot_id }} · valcoach{% endblock %}
+{% macro use(r) -%}
+  {%- if r.kind == 'aimlabs' or r.kind == 'link' -%}
+  <a class="btn sm {{ 'primary' if r.kind == 'aimlabs' }}" href="{{ r.url }}" target="_blank" rel="noopener noreferrer nofollow">{{ 'Open in Aimlabs' if r.kind == 'aimlabs' or is_aimlabs(r.url) else 'Open link' }}</a>
+  {%- elif r.kind == 'kovaaks' -%}
+  <span class="code"><code>{{ r.code }}</code><button type="button" class="btn sm ghost" data-copy="{{ r.code }}">Copy code</button></span>
+  {%- endif -%}
+{%- endmacro %}
+{% macro tags(r) %}{% for f in r.focus %}<span class="ft">{{ focus.get(f, f) }}</span>{% endfor %}{% endmacro %}
+{% block head %}
+<style>
+.aim-top{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(280px,1fr);gap:16px;align-items:start}
+@media(max-width:960px){.aim-top{grid-template-columns:1fr}}
+.aim-top .card,.aim-grid .card{margin:0 0 16px}
+.warm{border-color:var(--accent)}
+.warm .lbl{font-size:13px;color:var(--muted);margin:0 0 6px}
+.warm .nm{font-family:var(--font-head);font-size:clamp(30px,4vw,44px);font-weight:850;font-stretch:72%;line-height:1;margin:0}
+.warm .meta{font-size:13.5px;color:var(--muted);margin:8px 0 12px}
+.steps{font-size:14.5px;line-height:1.55;margin:0 0 12px;max-width:68ch}
+.acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.acts input[name=score]{width:110px}
+.done-tag{font-size:13px;font-weight:700;color:var(--win);background:var(--win-soft);padding:4px 10px;border-radius:99px}
+.code{display:inline-flex;gap:6px;align-items:center}.code code{font-size:14px;padding:5px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);user-select:all}
+.ft{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;background:var(--panel3);color:var(--muted);margin:0 4px 4px 0}
+.pk{padding:12px 0;border-top:1px solid var(--line)}.pk:first-of-type{border-top:0;padding-top:2px}
+.pk b{font-size:15.5px}.pk .why{font-size:13.5px;color:var(--muted);margin:3px 0 8px}
+.need{font-size:14px;margin:0 0 10px;padding-left:18px}.need li{margin:4px 0}
+.eff{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 10px}
+.eff div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.eff span{display:block;font-size:12.5px;color:var(--muted)}.eff b{font-size:26px;font-family:var(--font-num);font-weight:800;font-stretch:72%}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.chips button{font:inherit;font-size:13px;padding:5px 11px;border-radius:99px;border:1px solid var(--line2);background:transparent;color:var(--muted);cursor:pointer}
+.chips button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:650}
+.lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.rt{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.rt.is-warm{border-color:var(--accent)}
+.rt h3{margin:0;font-size:15.5px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.rt h3 small{font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
+.rt .src{font-size:12px;color:var(--faint)}
+.rt .st{font-size:13px;color:var(--muted);line-height:1.45}
+.rt .row2{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:auto;padding-top:4px}
+.rt form{display:inline}
+.sc{font-size:12.5px;color:var(--muted)}
+.addf{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 14px}
+.addf .full{grid-column:1/-1}
+.addf label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);margin:0}
+.fsel{display:flex;gap:6px;flex-wrap:wrap}.fsel label{flex-direction:row;align-items:center;gap:5px;font-size:13.5px;color:var(--text);padding:4px 10px;border:1px solid var(--line2);border-radius:99px;cursor:pointer}
+.log{list-style:none;margin:0;padding:0}.log li{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;padding:7px 0;border-top:1px solid var(--line)}
+.log li:first-child{border-top:0}.log span{color:var(--muted)}
+</style>
+{% endblock %}
+{% block content %}
+{{ vc.pagehead('Aim', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+   'Routines for Aimlabs, KovaaK\'s and the Range, picked from what your matches show') }}
+
+{% set wid = warm.id if warm else '' %}
+<div class="aim-top">
+  <section class="card warm" id="warmup">
+    {% if warm %}
+    <p class="lbl">Your warm-up before matches</p>
+    <h2 class="nm">{{ warm.name }}</h2>
+    <div class="meta">{{ warm.minutes }} min · {{ kinds[warm.kind] }} · from {{ warm.source_name }}{% if not mine_warm %} (picked for you{% for t in teams if team_warm.get(t.id) == warm.id %}, {{ t.name }}'s warm-up{% endfor %}){% endif %}</div>
+    {% if warm.steps %}<p class="steps">{{ warm.steps }}</p>{% endif %}
+    <div class="acts">
+      {{ use(warm) }}
+      {% if can_log %}
+        {% if warm.id in done %}<span class="done-tag">Done today</span>
+          <form method="post"><input type="hidden" name="action" value="undo"><input type="hidden" name="rid" value="{{ warm.id }}"><button class="btn sm ghost">Undo</button></form>
+        {% else %}
+          <form method="post" class="acts"><input type="hidden" name="action" value="done"><input type="hidden" name="rid" value="{{ warm.id }}">
+            <input type="text" name="score" inputmode="decimal" placeholder="Score (optional)" aria-label="Score (optional)"><button class="btn sm primary">Done</button></form>
+        {% endif %}
+      {% endif %}
+    </div>
+    {% for t in teams if t.id in owned %}
+    <form method="post" class="acts" style="margin-top:14px"><input type="hidden" name="action" value="team_warmup"><input type="hidden" name="tid" value="{{ t.id }}">
+      <label class="small muted" for="tw-{{ t.id }}" style="margin:0">{{ t.name }}'s warm-up</label>
+      <select id="tw-{{ t.id }}" name="rid" style="width:auto"><option value="">None (everyone picks his own)</option>{% for r in lib if r.source != 'mine' %}<option value="{{ r.id }}" {{ 'selected' if team_warm.get(t.id) == r.id }}>{{ r.name }} ({{ r.minutes }} min)</option>{% endfor %}</select>
+      <button class="btn sm ghost">Save</button></form>
+    {% endfor %}
+    <p class="small muted" style="margin:12px 0 0">Also on the match screen, in the practice plan, and as a notification 30 minutes before the match (Account › Notifications).</p>
+    {% else %}<p class="muted" style="margin:0">No warm-up routine yet.</p>{% endif %}
+  </section>
+
+  <section class="card">
+    <h2>What your matches show</h2>
+    <ul class="need">{% for x in need %}<li>{{ x.why }}</li>{% endfor %}</ul>
+    <p class="small muted" style="margin:0">Match data shows that you lose duels, not why. Whether it's tracking or flicking is a guess: pick another routine if it doesn't feel right.</p>
+  </section>
+</div>
+
+<div class="aim-top aim-grid">
+  <section class="card">
+    <h2>For you</h2>
+    {% for r in picks %}
+    <div class="pk"><b>{{ r.name }}</b> <span class="muted small">{{ r.minutes }} min · {{ r.source_name }}</span>
+      <div class="why">{{ r.why }}</div>
+      <div class="acts">{{ use(r) }}
+        {% if can_log and r.id != wid %}<form method="post"><input type="hidden" name="action" value="warmup"><input type="hidden" name="rid" value="{{ r.id }}"><button class="btn sm ghost">Make it my warm-up</button></form>{% endif %}
+        {% if can_log and r.id != wid %}{% if r.id in done %}<span class="done-tag">Done today</span>{% else %}<form method="post"><input type="hidden" name="action" value="done"><input type="hidden" name="rid" value="{{ r.id }}"><button class="btn sm ghost">Done today</button></form>{% endif %}{% endif %}
+      </div>
+      {% if r.steps %}<details class="small" style="margin-top:6px"><summary>Steps</summary><p class="steps" style="font-size:13.5px;margin:6px 0 0">{{ r.steps }}</p></details>{% endif %}
+    </div>
+    {% else %}<p class="muted small">Add a routine for the things above and it shows up here.</p>{% endfor %}
+  </section>
+
+  <section class="card">
+    <h2>Does warming up help?</h2>
+    {% if not effect.days %}
+    <p class="muted small" style="margin:0">Tick your warm-up off on the days you do it. After a few weeks this compares your headshot rate on those days with the days without.</p>
+    {% else %}
+    <div class="eff">
+      <div><span>Days with a warm-up</span><b>{{ (effect.with.hs * 100)|round(1) if effect.with.hs is not none else '–' }}{{ '%' if effect.with.hs is not none }}</b><span>{{ effect.with.games }} game{{ 's' if effect.with.games != 1 }}</span></div>
+      <div><span>Days without</span><b>{{ (effect.without.hs * 100)|round(1) if effect.without.hs is not none else '–' }}{{ '%' if effect.without.hs is not none }}</b><span>{{ effect.without.games }} game{{ 's' if effect.without.games != 1 }}</span></div>
+    </div>
+    {% if effect.ready %}
+    <p class="small" style="margin:0">{% if effect.diff >= 0.01 %}Your headshot rate is {{ (effect.diff * 100)|round(1) }} points higher on days you warm up.{% elif effect.diff <= -0.01 %}No sign it helps yet: {{ (-effect.diff * 100)|round(1) }} points lower on warm-up days. Try a different routine.{% else %}About the same either way so far.{% endif %}
+      It's a comparison, not proof: other things change from day to day too.</p>
+    {% else %}<p class="small muted" style="margin:0">Needs {{ min_games }} games on each side; {{ effect.days }} warm-up day{{ 's' if effect.days != 1 }} so far.</p>{% endif %}
+    {% endif %}
+    {% if recent %}<h3 style="margin-top:14px">Last done</h3>
+    <ul class="log">{% for x in recent %}<li><b>{{ x.name }}</b><span>{{ x.date }}{% if x.score is not none %} · score {{ '%g'|format(x.score) }}{% endif %}</span></li>{% endfor %}</ul>{% endif %}
+  </section>
+</div>
+
+<section class="card" id="library">
+  <h2>Library</h2>
+  <div class="chips" id="chips"><button type="button" class="on" data-f="">All</button>{% for k, v in focus.items() %}<button type="button" data-f="{{ k }}">{{ v }}</button>{% endfor %}</div>
+  <div class="lib">
+    {% for r in lib %}{% set sc = scores.get(r.id) or [] %}
+    <div class="rt {{ 'is-warm' if r.id == wid }}" data-focus="{{ r.focus|join(' ') }}">
+      <h3>{{ r.name }}<small>{{ r.minutes }} min</small></h3>
+      <div class="src">{{ kinds[r.kind] }} · {{ 'built in' if r.source == 'builtin' else (r.source_name if r.source == 'team' else 'yours') }}{% if r.by and r.source == 'team' %}, added by {{ r.by }}{% endif %}</div>
+      <div>{{ tags(r) }}</div>
+      {% if r.steps %}<div class="st">{{ r.steps }}</div>{% endif %}
+      {% if sc %}<div class="sc">Your scores: {% for x in sc[-6:] %}{{ '%g'|format(x.score) }}{{ ' → ' if not loop.last }}{% endfor %}</div>{% endif %}
+      <div class="row2">{{ use(r) }}
+        {% if can_log and r.id != wid %}<form method="post"><input type="hidden" name="action" value="warmup"><input type="hidden" name="rid" value="{{ r.id }}"><button class="btn sm ghost">My warm-up</button></form>{% endif %}
+        {% if can_log %}{% if r.id in done %}<span class="done-tag">Done today</span>{% else %}<form method="post"><input type="hidden" name="action" value="done"><input type="hidden" name="rid" value="{{ r.id }}"><button class="btn sm ghost">Done today</button></form>{% endif %}{% endif %}
+        {% for t in teams if team_warm.get(t.id) == r.id %}<span class="ft">{{ t.name }}'s warm-up</span>{% endfor %}
+        {% if r.source == 'mine' or (r.source == 'team' and (r.tid in owned or r.added_by == user.id)) %}
+        <form method="post" data-q="Remove {{ r.name }}?" onsubmit="return confirm(this.dataset.q)"><input type="hidden" name="action" value="remove"><input type="hidden" name="rid" value="{{ r.id }}"><input type="hidden" name="scope" value="{{ 'team:' ~ r.tid if r.source == 'team' else 'me' }}"><button class="btn sm ghost danger">Remove</button></form>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card" id="add">
+  <h2>Add a routine</h2>
+  <p class="small muted" style="margin:-4px 0 12px">In Aimlabs: open your playlist, press <i>Share</i> and paste the link here (opening it starts Aimlabs and offers the playlist).
+    In KovaaK's: copy the playlist's share code. Or write down steps for the Range or Deathmatch.</p>
+  <form method="post" class="addf">
+    <input type="hidden" name="action" value="add">
+    <label>Name<input type="text" name="name" maxlength="60" required placeholder="e.g. Tuesday flick playlist"></label>
+    <label>What it is<select name="kind" id="kind">{% for k, v in kinds.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+    <label>Minutes<input name="minutes" type="number" min="1" max="90" value="10"></label>
+    <label>Save for<select name="scope"><option value="me">Only me</option>{% for t in teams %}<option value="team:{{ t.id }}">Team {{ t.name }}</option>{% endfor %}</select></label>
+    <label class="full" data-k="aimlabs link">Link<input name="url" type="url" maxlength="400" placeholder="https://"></label>
+    <label class="full" data-k="kovaaks" hidden>KovaaK's share code<input type="text" name="code" maxlength="64" autocomplete="off"></label>
+    <label class="full">Steps or notes<textarea name="steps" rows="3" maxlength="600" placeholder="What to do, in order (needed for In game)"></textarea></label>
+    <div class="full"><span class="small muted">Trains</span><div class="fsel">{% for k, v in focus.items() %}<label><input type="checkbox" name="focus" value="{{ k }}" {{ 'checked' if k == 'warmup' }}> {{ v }}</label>{% endfor %}</div></div>
+    <div class="full"><button class="btn primary">Add the routine</button></div>
+  </form>
+</section>
+<script>
+(function () {
+  const chips = document.getElementById('chips');
+  chips.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    chips.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('.rt').forEach(r => { r.hidden = !!b.dataset.f && !r.dataset.focus.split(' ').includes(b.dataset.f); });
+  });
+  document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; } catch (e) { b.textContent = 'Select and copy'; }
+    setTimeout(() => { b.textContent = 'Copy code'; }, 1800);
+  }));
+  const kind = document.getElementById('kind');
+  const sync = () => document.querySelectorAll('[data-k]').forEach(l => { l.hidden = !l.dataset.k.split(' ').includes(kind.value); });
+  kind.addEventListener('change', sync); sync();
+})();
+</script>
+{% endblock %}

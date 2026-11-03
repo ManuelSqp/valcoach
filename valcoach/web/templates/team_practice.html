@@ -54,7 +54,7 @@
       {% if it.detail %}<div class="dt">{{ it.detail }}</div>{% endif %}
       <div class="meta">{% if it.who != 'team' %}<span class="who">{% for n in it.who %}<span>{{ n }}</span> {% endfor %}</span>{% endif %}
         {% set ln = links.get(it.link) if it.link in links else it.link %}{% if it.link == 'habits' %}{% set ln = '' %}{% endif %}
-        {% if ln %}<a href="{{ ln }}">{{ {'brief': 'Match screen', 'strats': 'Strat book', 'lineups': 'Lineups'}.get(it.link, 'Open the review' if it.kind == 'review' else ('Open the review evening' if it.kind == 'evening' else 'Open')) }}</a>{% endif %}
+        {% if ln %}<a href="{{ ln }}">{{ {'brief': 'Match screen', 'strats': 'Strat book', 'lineups': 'Lineups', 'aim': 'Your warm-up'}.get(it.link, 'Open the review' if it.kind == 'review' else ('Open the review evening' if it.kind == 'evening' else 'Open')) }}</a>{% endif %}
         {% if it.done and it.by %}<span class="muted">ticked by {{ it.by }}</span>{% elif it.kind == 'own' and it.by %}<span class="muted">added by {{ it.by }}</span>{% endif %}</div>
     </div>
     {% endfor %}
