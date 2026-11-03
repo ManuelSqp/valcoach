@@ -181,8 +181,44 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
                 if m.get("pid") == pid and m.get("roles"):
                     team_set.append({"team": t.name, "tid": t.id, "roles": m["roles"]})
         o = overview(rows, team_set, meta_share)
+        from ..stats.agentroles import agent_detail, grid
+        sel = request.args.get("agent") or ""
+        detail = None
+        if sel and any(a["agent"] == sel for a in o["agents"]):
+            names = {}
+            try:
+                a = agents_reg.find(name=sel)
+                slot_map = {"Grenade": "grenade", "Ability1": "ability1", "Ability2": "ability2", "Ultimate": "ultimate"}
+                names = {slot_map[ab["slot"]]: ab["name"] for ab in (a or {}).get("abilities", []) if ab.get("slot") in slot_map}
+            except Exception:
+                pass
+            detail = agent_detail(rows, sel, names)
+        old = sum(1 for r in rows if r.get("source") == "full" and r.get("v", 1) < 5)
         return render_template("agents_roles.html", p=p, active_pid=pid, queue=queue, queues=QUEUE_TABS, tab="agents",
-                               can_edit=can_edit, o=o, import_status=sr.status(f"import:{pid}"))
+                               can_edit=can_edit, o=o, import_status=sr.status(f"import:{pid}"), grid=grid(rows),
+                               sel=sel, detail=detail, old_rows=old)
+
+    @app.get("/profiles/<int:pid>/rounds")
+    def rounds_page(pid: int):
+        """Round types & economy: pistols, ecos, forces, full buys and how the buys line up."""
+        from ..stats.rounds import economy
+        p, can_edit = view_profile(pid)
+        queue = queue_arg()
+        rows = filter_rows(sr.games(pid).rows(), queue)
+        old = sum(1 for r in rows if r.get("source") == "full" and r.get("v", 1) < 5)
+        return render_template("rounds.html", p=p, active_pid=pid, queue=queue, queues=QUEUE_TABS, tab="rounds",
+                               can_edit=can_edit, e=economy(rows), old_rows=old)
+
+    @app.get("/profiles/<int:pid>/teammates")
+    def teammates_page(pid: int):
+        """Who you win with."""
+        from ..stats.rounds import teammates
+        p, can_edit = view_profile(pid)
+        queue = queue_arg("everything")
+        rows = filter_rows(sr.games(pid).rows(), queue)
+        old = sum(1 for r in rows if r.get("source") == "full" and r.get("v", 1) < 5)
+        return render_template("teammates.html", p=p, active_pid=pid, queue=queue, queues=QUEUE_TABS, tab="teammates",
+                               can_edit=can_edit, d=teammates(rows), old_rows=old)
 
     def coach_said(p) -> list[dict]:
         """What reports and Premier reviews told this player to fix (for the habit tracker)."""

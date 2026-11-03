@@ -20,7 +20,7 @@ from ..parse import parse_match
 from . import roles
 
 QUEUES = ("competitive", "premier", "unrated")
-ROW_VERSION = 4            # bump when rows from full matches gain fields; old rows are rebuilt from the cache
+ROW_VERSION = 5            # bump when rows from full matches gain fields; old rows are rebuilt from the cache
 ISOLATED_UNITS = 2000      # ~20 m to the nearest living teammate
 TRADE_MS = 3000
 Log = Callable[[str], None]
@@ -76,6 +76,11 @@ def row_from_match(match: Match, puuid: str, mi: MapInfo | None) -> dict | None:
         "retake": [0, 0],     # defense rounds they planted while you were alive: [rounds, won]
         "postplant": [0, 0],  # attack rounds your team planted while you were alive: [rounds, won]
         "tier": me.tier or "",   # v4: rank shown in the match (Progress › rank over time)
+        # v5: utility, economy per round, teammates, everyone's numbers by agent
+        "casts": casts(me.ability_casts) if match.has_utility else None,
+        "econ": [],           # per round: [round number, side, won, your loadout, team average, enemy average]
+        "mates": [{"name": p.riot_id, "premade": bool(me.party_id) and p.party_id == me.party_id}
+                  for p in match.players_on(team) if p.puuid != puuid],
     }
     dmg = 0
     for rnd in match.rounds:
@@ -132,6 +137,7 @@ def row_from_match(match: Match, puuid: str, mi: MapInfo | None) -> dict | None:
                 assisted = True
             dead.add(k.victim)
         _late_round(row, match, rnd, puuid, team, opp, side)
+        row["econ"].append(_econ(rnd, puuid, team, opp, side))
         for di in death_infos(match, rnd, mi):
             if di.kill.victim == puuid:
                 died = True
@@ -146,7 +152,51 @@ def row_from_match(match: Match, puuid: str, mi: MapInfo | None) -> dict | None:
             row["survived"][side] += 1
     row["adr"] = round(dmg / n, 1)
     row["lobby"] = lobby_metrics(match)
+    row["lobby_agents"] = lobby_agents(match, puuid)
     return row
+
+
+SLOTS = ("grenade", "ability1", "ability2", "ultimate")
+
+
+def casts(ac: dict) -> dict[str, int]:
+    """Riot sends ability1 or ability_1: one name per slot."""
+    out = {s: 0 for s in SLOTS}
+    for k, v in (ac or {}).items():
+        k = k.lower().replace("_", "")
+        if k in out:
+            out[k] += int(v or 0)
+    return out
+
+
+def _econ(rnd, puuid: str, team: str, opp: str, side: str) -> list:
+    own = [s.loadout_value for s in rnd.stats.values() if s.team == team]
+    them = [s.loadout_value for s in rnd.stats.values() if s.team == opp]
+    me = rnd.stats.get(puuid)
+    return [rnd.number, side, int(rnd.winning_team == team), me.loadout_value if me else 0,
+            round(sum(own) / len(own)) if own else 0, round(sum(them) / len(them)) if them else 0]
+
+
+def lobby_agents(match: Match, puuid: str) -> list[list]:
+    """Everyone else in the match by agent: [agent, ACS, kills, deaths, assists, opening duels (per round),
+    headshot share, grenade, ability1, ability2, ultimate casts (per round, None without utility data)]."""
+    n = len(match.rounds) or 1
+    openings: dict[str, int] = {}
+    for rnd in match.rounds:
+        if rnd.kills:
+            for pu in (rnd.kills[0].killer, rnd.kills[0].victim):
+                if pu:
+                    openings[pu] = openings.get(pu, 0) + 1
+    out = []
+    for p in match.players.values():
+        if p.puuid == puuid:
+            continue
+        shots = p.headshots + p.bodyshots + p.legshots
+        c = casts(p.ability_casts) if match.has_utility else None
+        out.append([p.agent, round(p.score / n, 1), round(p.kills / n, 3), round(p.deaths / n, 3), round(p.assists / n, 3),
+                    round(openings.get(p.puuid, 0) / n, 3), round(p.headshots / shots, 3) if shots else None]
+                   + ([round(c[s] / n, 3) for s in SLOTS] if c else [None] * 4))
+    return out
 
 
 def _late_round(row: dict, match: Match, rnd, puuid: str, team: str, opp: str, side: str) -> None:

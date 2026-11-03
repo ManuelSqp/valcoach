@@ -12,7 +12,7 @@ from valcoach.stats import roles  # noqa: E402
 from valcoach.stats.aggregate import (by_agent, by_map, filter_rows, local_meta, map_detail,  # noqa: E402
                                       pattern, summary)
 from valcoach.stats.comp import Pool, best_comp, parse_meta, pick_helper, team_plan  # noqa: E402
-from valcoach.stats.games import GameStore, import_games  # noqa: E402
+from valcoach.stats.games import ROW_VERSION, GameStore, import_games  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -250,7 +250,7 @@ def test_lobby_backfilled_from_cache(tmp_path, cache, history):
             (cache / "matches" / f"{mid}.json").write_text(json.dumps({"status": 200, "data": copy.deepcopy(raw)}))
     gs.save(data)
     import_games(sh.FakeHenrik(history, full_depth=4), "eu", "pc", "adv1ce", "LFT", gs, cache)
-    assert all("lobby" in r and r["v"] == 4 and "iso" in r and "clutch" in r and "tier" in r for r in gs.rows() if r["source"] == "full")
+    assert all("lobby" in r and r["v"] == ROW_VERSION and "iso" in r and "clutch" in r and "tier" in r for r in gs.rows() if r["source"] == "full")
 
 
 def test_pro_list_and_matching():
@@ -476,7 +476,7 @@ def test_secrets_stay_out_of_network_errors(tmp_path, monkeypatch):
 def test_rows_v3_clutch_duels_retakes(imported):
     gs, _, _ = imported
     full = [r for r in gs.rows() if r.get("source") == "full"]
-    assert full and all(r["v"] == 4 and isinstance(r["tier"], str) for r in full)
+    assert full and all(r["v"] == ROW_VERSION and isinstance(r["tier"], str) for r in full)
     r = full[0]
     assert len(r["shots"]) == 3 and all(isinstance(x, int) for x in r["shots"])
     assert r["duels"] and all(isinstance(d[0], int) and d[1] in (0, 1) for d in r["duels"])
@@ -706,3 +706,26 @@ def test_make_llm_choices():
     assert isinstance(make_llm(cfg, "claude:claude-haiku-5-5"), ClaudeLLM)
     cfg.llm = "claude:claude-opus-5-5"
     assert make_llm(cfg).model == "claude-opus-5-5"
+
+
+def test_rows_v5_utility_economy_teammates(imported):
+    from valcoach.stats.agentroles import agent_detail, grid
+    from valcoach.stats.rounds import economy, kind, teammates
+    gs, _, _ = imported
+    rows = gs.rows()
+    full = [r for r in rows if r["source"] == "full"]
+    r = full[0]
+    assert r["v"] >= 5 and set(r["casts"]) == {"grenade", "ability1", "ability2", "ultimate"}
+    assert len(r["econ"]) == r["rounds"] and len(r["econ"][0]) == 6
+    assert len(r["mates"]) == 4 and all("#" in m["name"] for m in r["mates"])
+    assert len(r["lobby_agents"]) == 9 and isinstance(r["lobby_agents"][0][0], str)
+    e = economy(rows)
+    assert e["rounds"] == sum(x["rounds"] for x in full) and sum(k["rounds"] for k in e["kinds"]) == e["rounds"]
+    assert kind(1, 800) == "pistol" and kind(5, 1500) == "eco" and kind(5, 3000) == "force" and kind(5, 4500) == "full"
+    t = teammates(rows)
+    assert t["games"] == len(full) and t["mates"] and t["mates"][0]["games"] >= 3
+    agent = full[0]["agent"]
+    d = agent_detail(rows, agent, {"grenade": "Smoke"})
+    assert d["games"] >= 1 and d["compare"] and d["utility"][0]["name"] == "Smoke" and d["trend"]
+    gr = grid(rows)
+    assert agent in gr["agents"] and any(k.startswith(agent + "|") for k in gr["cells"])

@@ -1,6 +1,6 @@
 # valcoach v2
 
-**Version 3.5.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 3.6.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -26,7 +26,7 @@ unzip valcoach-v2.zip && cd valcoach-v2
 /opt/homebrew/opt/python@3.11/bin/python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                     # 150 tests, ~3 min, builds a synthetic match + VOD
+pytest -q                     # 151 tests, ~3 min, builds a synthetic match + VOD
 ollama pull qwen3.8:27b       # default; alternatives below
 ```
 
@@ -92,7 +92,7 @@ Then in the browser:
 One menu on the left (☰ on a phone). At the top you pick the **team** and the **player** it works on; opening a team
 or player page picks it for you. Below: *Match day* (This week, Availability, Match-day brief, Opponents),
 *Strategy* (Comps, Drafts, Game plans, Strat book, Lineups), *Performance* (Matches & reports, Stats & maps,
-Agents & roles, Rank & progress), *Practice* (Training, Habits, Practice plan, Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes,
+Agents & roles, Rounds & economy, Teammates, Rank & progress), *Practice* (Training, Habits, Practice plan, Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes,
 Player & playbook, Team settings). Ctrl+K searches everything. *Home* shows what's up today. The look (10 styles,
 light or dark, menu on the left or at the top) is under Account.
 
@@ -151,7 +151,11 @@ queue from the stored archive (summaries only, 20 per request). *Update* later o
   Competitive, Premier, Unrated, or Everything).
 - **Agents & roles** (its own page): every agent you played with all numbers (sortable, per map on click), the
   agent class you pick most, the team role your habits fit (0–100 per role, from first fights, trades, fights far
-  from the team, holding a site, assists, Operator), whether the two match, and three agents to try.
+  from the team, holding a site, assists, Operator), whether the two match, and three agents to try. *Details* on
+  an agent: progress over time, utility per ability and you against everyone else on that agent in your matches;
+  plus an agent × map grid.
+- **Rounds & economy**: pistol / eco / force / full-buy win rates, uneven buys, bonus rounds, post-plants and retakes.
+- **Teammates**: who you win with (games, win rate, your ACS with them, premade or random).
 - **One map in detail**: your agents there, team win rate per side, where you take opening duels and how often
   you win them, where you die and how often that gets traded, and what's played at your level (all 10 players
   of your matches). Short findings are listed only when there's enough data behind them.

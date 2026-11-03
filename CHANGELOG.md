@@ -4,6 +4,24 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 3.6.0
+- **Agents & roles › an agent in detail** (*Details* next to every agent):
+  - **Progress over time:** your combat score game by game (5-game average) with each win and loss, and your first
+    games on the agent against your latest (ACS, win rate, K/D).
+  - **Utility per agent:** how often you use each ability per round (by name, e.g. Updraft, Tailwind), against
+    everyone else on that agent in your matches, with a note when you use something much less than others.
+  - **You against your lobbies:** combat score, kills, deaths, assists, first duels and headshot rate against every
+    other player on the same agent in your matches, with where you stand (*better than 63 %*).
+- **Agent × map:** win rate and games for every agent on every map in one grid, good and bad cells coloured.
+- **Rounds & economy** (Performance): pistol, eco, force and full-buy win rates (per side), uneven buys (anti-eco,
+  force against a full buy, eco against a full buy...), the bonus round after a won pistol, post-plants, retakes,
+  and rounds where you bought while the team saved. Plain-language findings when something stands out.
+- **Teammates** (Performance): everyone you played with 3+ times: games, win rate, your combat score with them, premade
+  or random, on which maps; best and weakest duo; solo against with a party.
+- Games now also store ability use, every round's buys, your teammates and everyone's numbers by agent. Games loaded
+  before 3.6 get them with the next *Load new games* (rebuilt from the stored matches, nothing is downloaded again;
+  the nightly sync does it for team members). The pages say when that's still missing.
+
 ## 3.5.0
 - **Habit tracker** (Practice › Habits, per player): six habits that cost rounds, measured game by game: dying far
   from the team, deaths nobody trades, losing the first duel, rounds without impact, a low headshot rate, and dying

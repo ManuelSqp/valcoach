@@ -39,7 +39,7 @@
     </details>
     <details class="ctxpick">
       <summary><span class="avatar" aria-hidden="true">{{ navP.name[:1]|upper if navP else '+' }}</span><span class="ctx-t"><small>Player{% if navP and nav_me and navP.id == nav_me.id %} · you{% endif %}</small><b>{{ navP.name if navP else 'No player yet' }}</b></span></summary>
-      <div class="ctx-menu">{% for np in nav_profiles %}<a href="{{ url_for(ep if ep in ('stats', 'agents_roles', 'habits', 'progress', 'training', 'quiz', 'pros', 'profile') else 'stats', pid=np.id) }}" class="{{ 'on' if navP and np.id == navP.id }}" data-pid="{{ np.id }}">{{ np.name }}<span class="tagname">#{{ np.tag }}</span>{% if nav_me and np.id == nav_me.id %}<span class="you">you</span>{% endif %}</a>{% endfor %}
+      <div class="ctx-menu">{% for np in nav_profiles %}<a href="{{ url_for(ep if ep in ('stats', 'agents_roles', 'rounds_page', 'teammates_page', 'habits', 'progress', 'training', 'quiz', 'pros', 'profile') else 'stats', pid=np.id) }}" class="{{ 'on' if navP and np.id == navP.id }}" data-pid="{{ np.id }}">{{ np.name }}<span class="tagname">#{{ np.tag }}</span>{% if nav_me and np.id == nav_me.id %}<span class="you">you</span>{% endif %}</a>{% endfor %}
         <a class="add" href="{{ url_for('profile_new') }}" data-nav="new">Add a player</a></div>
     </details>
   </div>
@@ -60,6 +60,8 @@
       ('profile', 'Matches & reports', ('profile', 'coach', 'notes', 'job'), 'p', ''),
       ('stats', 'Stats & maps', ('stats',), 'p', ''),
       ('agents_roles', 'Agents & roles', ('agents_roles',), 'p', ''),
+      ('rounds_page', 'Rounds & economy', ('rounds_page',), 'p', ''),
+      ('teammates_page', 'Teammates', ('teammates_page',), 'p', ''),
       ('progress', 'Rank & progress', ('progress',), 'p', '')]),
     ('practice', 'Practice', 'practice', [
       ('training', 'Training', ('training',), 'p', ''),

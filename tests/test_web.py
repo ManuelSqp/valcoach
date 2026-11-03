@@ -563,6 +563,12 @@ def test_stats_teams_and_pick_helper(app, monkeypatch):
     assert "What you pick" in page and "What your habits fit" in page and "All your agents" in page
     assert 'data-agent="Jett"' in page and "Not played yet" in page
     assert c.get(f"/profiles/{me}/agents?queue=premier").status_code == 200
+    jett = c.get(f"/profiles/{me}/agents?agent=Jett").data.decode()
+    assert "Jett in detail" in jett and "Utility per round" in jett and "Agent × map" in jett
+    page = c.get(f"/profiles/{me}/rounds").data.decode()
+    assert "Rounds &amp; economy" in page and "Pistol rounds" in page and "Anti-eco" in page
+    page = c.get(f"/profiles/{me}/teammates").data.decode()
+    assert "Teammates" in page and "red-0" in page
 
     # the other four starters + a sub, each with their own history
     ids = {"adv1ce": me}

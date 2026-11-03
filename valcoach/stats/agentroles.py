@@ -139,3 +139,102 @@ def _verdict(o: dict) -> str:
     elif best and best == pref:
         s += f" Your numbers are best on {pref} too."
     return s
+
+
+# ---------------------------------------------------------------------------
+# agent × map, one agent in detail (progress, utility, you vs your lobbies)
+# ---------------------------------------------------------------------------
+SLOTS = ("grenade", "ability1", "ability2", "ultimate")
+SLOT_KEY = {"grenade": "C", "ability1": "Q", "ability2": "E", "ultimate": "X"}
+
+
+def grid(rows: list[dict]) -> dict:
+    """Games and win rate for every agent on every map."""
+    agents = [a["agent"] for a in by_agent(rows)]
+    maps = [m["map"] for m in by_map(rows)]
+    cells = {}
+    for r in rows:
+        c = cells.setdefault(f"{r['agent']}|{r['map']}", [0, 0.0])
+        c[0] += 1
+        c[1] += r["won"]
+    return {"agents": agents, "maps": maps,
+            "cells": {k: {"games": n, "wr": w / n, "wr_s": smooth(w, n)} for k, (n, w) in cells.items()}}
+
+
+def _mine(r: dict) -> dict:
+    n = r["rounds"] or 1
+    h, b, lg = (r.get("shots") or [0, 0, 0])[:3]
+    out = {"acs": r["acs"], "kpr": r["kills"] / n, "dpr": r["deaths"] / n, "apr": r["assists"] / n,
+           "opr": (r.get("fk", 0) + r.get("fd", 0)) / n if r.get("source") == "full" else None,
+           "hs": h / (h + b + lg) if h + b + lg else None}
+    c = r.get("casts")
+    for s in SLOTS:
+        out[s] = (c[s] / n) if c else None
+    return out
+
+
+def _pct_rank(v: float, pop: list[float], higher_better: bool = True) -> float:
+    if not pop:
+        return 0.5
+    below = sum(1 for x in pop if x < v) + 0.5 * sum(1 for x in pop if x == v)
+    p = below / len(pop)
+    return p if higher_better else 1 - p
+
+
+LOBBY_COLS = {"acs": 1, "kpr": 2, "dpr": 3, "apr": 4, "opr": 5, "hs": 6, "grenade": 7, "ability1": 8, "ability2": 9, "ultimate": 10}
+COMPARE = [("acs", "Combat score", True, "num"), ("kpr", "Kills per round", True, "num2"), ("dpr", "Deaths per round", False, "num2"),
+           ("apr", "Assists per round", True, "num2"), ("opr", "In the first duel (share of rounds)", None, "pct"),
+           ("hs", "Headshot rate", True, "pct")]
+
+
+def agent_detail(rows: list[dict], agent: str, abilities: dict[str, str] | None = None) -> dict:
+    """One agent: progress game by game, utility per ability, and you against everyone on that agent in your matches."""
+    on = sorted([r for r in rows if r.get("agent") == agent], key=lambda r: r.get("started_at") or "")
+    out: dict = {"agent": agent, "role": agent_roles.role_of(agent), "games": len(on)}
+    if not on:
+        return out
+    # progress: rolling 5-game ACS and win rate, first games against the latest
+    acs = [r["acs"] for r in on]
+    roll = [sum(acs[max(0, i - 4): i + 1]) / len(acs[max(0, i - 4): i + 1]) for i in range(len(acs))]
+    out["trend"] = [{"acs": round(roll[i]), "won": on[i]["won"], "date": (on[i].get("started_at") or "")[:10],
+                     "map": on[i].get("map")} for i in range(len(on))]
+    k = min(5, len(on) // 2)
+    if k >= 2:
+        first, last = on[:k], on[-k:]
+        f = lambda rs: {"acs": sum(r["acs"] for r in rs) / len(rs), "wr": sum(r["won"] for r in rs) / len(rs),  # noqa: E731
+                        "kd": sum(r["kills"] for r in rs) / max(1, sum(r["deaths"] for r in rs))}
+        out["first"], out["last"], out["k"] = f(first), f(last), k
+    # you vs everyone else on this agent in your matches
+    mine = [_mine(r) for r in on]
+    others = [x for r in rows for x in (r.get("lobby_agents") or []) if x and x[0] == agent]
+    out["others"] = len(others)
+    comp = []
+    for key, label, hb, fmt in COMPARE:
+        mv = [m[key] for m in mine if m[key] is not None]
+        ov = [x[LOBBY_COLS[key]] for x in others if x[LOBBY_COLS[key]] is not None]
+        if not mv:
+            continue
+        me_avg = sum(mv) / len(mv)
+        row = {"key": key, "label": label, "fmt": fmt, "me": me_avg, "them": (sum(ov) / len(ov)) if ov else None,
+               "n": len(ov), "higher_better": hb}
+        if ov and len(ov) >= 5 and hb is not None:
+            row["pct"] = _pct_rank(me_avg, ov, hb)
+        comp.append(row)
+    out["compare"] = comp
+    # utility per ability (per round)
+    util = []
+    has = [m for m in mine if m["grenade"] is not None]
+    for s in SLOTS:
+        mv = [m[s] for m in has]
+        ov = [x[LOBBY_COLS[s]] for x in others if x[LOBBY_COLS[s]] is not None]
+        if not mv:
+            continue
+        me_avg, them = sum(mv) / len(mv), (sum(ov) / len(ov)) if ov else None
+        util.append({"slot": s, "key": SLOT_KEY[s], "name": (abilities or {}).get(s) or SLOT_KEY[s], "me": me_avg, "them": them,
+                     "n": len(ov), "diff": (me_avg / them - 1) if them else None})
+    out["utility"] = util
+    out["utility_games"] = len(has)
+    low = [u for u in util if u["diff"] is not None and u["diff"] < -0.25 and u["slot"] != "ultimate" and u["n"] >= 5]
+    out["utility_note"] = (f"You use {', '.join(u['name'] for u in low)} less than others on {agent} "
+                           f"({', '.join(f'{u['diff']:.0%}' for u in low)}): utility not used is free value lost.") if low else None
+    return out
