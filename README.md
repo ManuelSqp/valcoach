@@ -19,11 +19,11 @@ VOD ──► kill-feed sync ──► minimap tracking ┤   (rotations, stacks
 
 ---
 
-## 1. Install (on the Mac Studio, where Ollama runs)
+## 1. Install
 
 ```bash
 unzip valcoach-v2.zip && cd valcoach-v2
-/opt/homebrew/opt/python@3.11/bin/python3.11 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q                     # 157 tests, ~3 min, builds a synthetic match + VOD
@@ -32,20 +32,18 @@ ollama pull qwen3.8:27b       # default; alternatives below
 
 ### Which model
 
-Any Ollama model works; set it in *Settings → Ollama → Model*. Good choices
-for a 64 GB Mac Studio:
+Any Ollama model works; set it in *Settings → Ollama → Model*. dio:
 
 | Model | Download | Notes |
 |---|---|---|
-| `qwen3.8:27b` (default) | ~18 GB | Dense, newest Qwen; same family as your fine-tune |
+| `qwen3.8:27b` (default) | ~18 GB | Dense, newest Qwen |
 | `gemma4:26b` | ~16 GB | MoE, only ~4B active per token, so much faster per round |
 | `gemma4:31b` | ~19 GB | Dense; the bigger Gemma |
 
 Both families are reasoning models. *Settings → Reasoning* is **Off** by
 default (fast; the task is turning facts into feedback, not puzzle-solving).
 Try **On** if the feedback is shallow. Compare models by coaching the same
-match with each and use *Run again*. `-mlx` tags may be faster on Apple Silicon,
-but check that a test run works with them before switching.
+match with each and use *Run again*.
 
 **Claude (optional).** With an Anthropic API key under *Settings → Claude*,
 Claude Haiku, Sonnet and Opus show up in the model picker next to every button
@@ -61,10 +59,10 @@ server overview. The key can also come from `ANTHROPIC_API_KEY`.
 
 ```bash
 source .venv/bin/activate
-valcoach web                  # http://<mac-ip>:10070, reachable from your LAN
+valcoach web                  # http://<ip>:10070
 ```
 
-Options: `--port 10070`, `--host 127.0.0.1` (this Mac only), `--data data`
+Options: `--port 10070`, `--host 127.0.0.1` (this PC only), `--data data`
 (folder for the database, cache, uploads and reports).
 
 On the first start you create the **admin account**. If you used an earlier
@@ -294,21 +292,21 @@ so coaching them can fail.
   `Origin` header). Behind a reverse proxy, keep the original `Host` header or
   set `X-Forwarded-Host`.
 - Forgotten admin password: run
-  `python -c "from valcoach.web.store import Store; s=Store('data'); s.set_password(s.user_by_name('manuel').id, 'new-password')"`
+  `python -c "from valcoach.web.store import Store; s=Store('data'); s.set_password(s.user_by_name('user').id, 'new-password')"`
   in the project folder.
 
 Only open the app on your LAN or behind your reverse proxy (with HTTPS). It
-holds your API key and serves the uploaded VODs.
+holds your API key(s) and serves the uploaded VODs.
 
 ### Where do the recordings come from?
 
-The VOD is recorded on the gaming PC, but the app runs on the Mac. Either:
+The VOD is recorded on the gaming PC, but the app runs wherever. Either:
 
-- **Upload** in the browser on the gaming PC (coach page → *Upload a file*). It
+- **Upload** in the browser on PC (coach page → *Upload a file*). It
   shows a progress bar; a 3–5 GB VOD takes about a minute over gigabit LAN. The file
   goes up in 16 MB pieces (no request may be bigger than 17 MB), so a proxy in front of
   the app must allow at least that. Or:
-- **Share the recordings folder** (SMB) from the PC or a NAS, mount it on the Mac,
+- **Share the recordings folder** (SMB) from the PC or a NAS, mount it on the Server,
   and set it as the user's recordings folder under *Users*. The coach page then lists the
   files and pre-selects the one saved right after the match.
 
@@ -369,7 +367,7 @@ anchor (the VOD time of one kill).
 on the first start of the web app to pre-fill Settings and create your profile.
 
 ```bash
-valcoach history                                   # your last 10 matches
+valcoach history                                   # last 10 matches
 valcoach coach latest --vod match.mp4              # full run, writes output/*.html
 valcoach coach <match_id> --no-llm                 # facts only
 valcoach calibrate-minimap <match_id> match.mp4    # debug images in output/calibration/

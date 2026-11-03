@@ -3,9 +3,9 @@
 # Copy to config.toml and fill in. config.toml is git-ignored.
 
 [player]
-name = "adv1ce"          # Riot name (without tag)
-tag = "LFT"              # Riot tag
-region = "eu"            # eu | na | ap | kr | latam | br
+name = "usermane"          # Riot name (without tag)
+tag = "tag"              # Riot tag
+region = "region"            # eu | na | ap | kr | latam | br
 platform = "pc"
 
 [henrik]
