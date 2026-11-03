@@ -101,7 +101,7 @@ a.li:hover .li-t{text-decoration:underline;text-decoration-color:var(--accent)}
   {% set me = td.me %}
   {% if me %}
   <section class="panel" aria-label="You">
-    <header><h2>{{ me.p.name }}</h2><a href="{{ url_for('stats', pid=me.p.id) }}">Stats &amp; agents</a></header>
+    <header><h2>{{ me.p.name }}</h2><a href="{{ url_for('stats', pid=me.p.id) }}">Stats &amp; maps</a></header>
     {% if not me.games %}<div class="li"><span class="li-i warn">{{ ic('dl') }}</span><span class="li-t">No games yet<span class="li-s">Import your match history to get stats and reports.</span></span>
       <form method="post" action="{{ url_for('stats_import', pid=me.p.id) }}"><button class="btn sm primary">Import</button></form></div>{% endif %}
     <a class="li" href="{{ url_for('training', pid=me.p.id) }}#routine"><span class="li-i {{ 'ok' if me.warmup_done else 'warn' }}">{{ ic('fire') }}</span>

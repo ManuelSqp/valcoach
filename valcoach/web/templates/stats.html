@@ -39,7 +39,7 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--panel3)}tr.sel td{bac
 {% endblock %}
 {% block content %}
 {% import "_ui.html" as vc %}
-{% call vc.pagehead('Stats & agents', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+{% call vc.pagehead('Stats & maps', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
     data.games|length ~ ' games stored' ~ ((', updated ' ~ (data.updated|localtime)) if data.updated else '')) %}
   {% if can_edit %}<form method="post" action="{{ url_for('stats_import', pid=p.id) }}">
     <input type="hidden" name="queue" value="{{ queue }}"><input type="hidden" name="map" value="{{ sel or '' }}">

@@ -4,6 +4,22 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 3.2.0
+- **Agents & roles** (Performance › Agents & roles, per player):
+  - **What you pick:** the agent class you play most (Duelist, Initiator, Controller, Sentinel) with games and win
+    rate per class, your most played agent, the class where your numbers are best compared with your own average,
+    and the role a team owner set for you.
+  - **What your habits fit:** the team role your games point to (Entry, Second entry, Lurker, Anchor, Support) with
+    the numbers behind it, all role scores 0–100, and IGL / Operator on top when they score high. Says *clear fit*,
+    *leaning* or *no clear role yet*.
+  - **Suggestion:** whether the two match, if not which class suits your habits better, a note when your team gave
+    you a different role, and three agents to try (the most picked at your level first).
+  - **All your agents:** every agent you played with games, win rate, ACS, K/D, ADR, KAST, first duels and how many
+    of them you won, best map; sort by any column, open the numbers per map. Agents you haven't played yet below.
+  - All ranked / Competitive / Premier like the other pages.
+- *Stats & agents* is now called **Stats & maps** (its focus is the maps; the agents have their own page).
+- Ctrl+K finds the new page and the newer team pages (This week, Availability, Match-day brief, Opponents).
+
 ## 3.1.0
 - **Menu at the top or on the left** (Account › Look & feel › Menu). *At the top* puts the same menu in a bar across
   the page: the team and player pickers, then *Home* and the five groups as dropdowns (they close when you click

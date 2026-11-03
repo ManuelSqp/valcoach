@@ -48,7 +48,7 @@
 {% if pros_error %}<div class="flash error">The edited pro list in Settings can't be read ({{ pros_error }}); using the built-in list.</div>{% endif %}
 
 {% if not prof.games %}
-<section class="card"><h2>No games yet</h2><p>Import your history on the <a href="{{ url_for('stats', pid=p.id) }}">Stats &amp; agents</a> tab first.</p></section>
+<section class="card"><h2>No games yet</h2><p>Import your history on the <a href="{{ url_for('stats', pid=p.id) }}">Stats &amp; maps</a> tab first.</p></section>
 {% else %}
 
 <div class="grid2">

@@ -58,7 +58,7 @@
       <text x="{{ c.x0 }}" y="{{ c.bottom }}">{{ c.first }}</text><text x="{{ c.x1 }}" y="{{ c.bottom }}" text-anchor="end">{{ c.last }}</text>
     </svg>{% else %}<p class="muted small">The line appears after a few ranked games.</p>{% endif %}
   </div>
-  <p class="small muted" style="margin:8px 0 0">{% if rank_src == 'rr' %}Rank and RR after each ranked game (HenrikDev's rank history, kept here so older games stay). Green = RR won, red = lost. Hover for the game; ringed dots have a coaching report (click).{% else %}From the rank shown in each ranked match (no RR yet: press <i>Import</i> on Stats &amp; agents to load the RR history).{% endif %}</p>
+  <p class="small muted" style="margin:8px 0 0">{% if rank_src == 'rr' %}Rank and RR after each ranked game (HenrikDev's rank history, kept here so older games stay). Green = RR won, red = lost. Hover for the game; ringed dots have a coaching report (click).{% else %}From the rank shown in each ranked match (no RR yet: press <i>Import</i> on Stats &amp; maps to load the RR history).{% endif %}</p>
 </section>
 {% endif %}
 
@@ -97,7 +97,7 @@
   <p class="small" style="margin:10px 0 0">Retakes (they planted while you were alive): <b>{{ retake[1] }} of {{ retake[0] }}</b> won{% if retake[0] %} ({{ (retake[1] / retake[0])|pct }}){% endif %} ·
     Post-plants (your team planted, you alive): <b>{{ postplant[1] }} of {{ postplant[0] }}</b> won{% if postplant[0] %} ({{ (postplant[1] / postplant[0])|pct }}){% endif %}</p>
   <p class="small muted" style="margin:6px 0 0">From {{ n_v3 }} games with round data.</p>
-  {% else %}<p class="muted">Needs games with round data: press <i>Import</i> on Stats &amp; agents (older games are re-read from the cache automatically).</p>{% endif %}
+  {% else %}<p class="muted">Needs games with round data: press <i>Import</i> on Stats &amp; maps (older games are re-read from the cache automatically).</p>{% endif %}
 </section>
 {% endif %}
 {% endblock %}

@@ -158,6 +158,32 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             pick=pick, pick_map=pick_map, locked=locked + [""] * (4 - len(locked)),
             recent=rows[:12])
 
+    @app.get("/profiles/<int:pid>/agents")
+    def agents_roles(pid: int):
+        """Every agent's numbers, the class you prefer, and the role your habits fit."""
+        from ..stats.agentroles import overview
+        p, can_edit = view_profile(pid)
+        roles.load(cache_dir)
+        queue = queue_arg()
+        rows = filter_rows(sr.games(pid).rows(), queue)
+        # what teams at your level pick (all maps together), from the matches of everyone in this workspace
+        meta = local_meta(filter_rows(owner_rows(p.owner_id), queue))
+        picks, teams = {}, 0
+        for m in meta.values():
+            teams += 2 * m["games"]
+            for a in m["agents"]:
+                picks[a["agent"]] = picks.get(a["agent"], 0) + a["picks"]
+        meta_share = {a: n / teams for a, n in picks.items()} if teams else {}
+        # roles a team owner set for this player
+        team_set = []
+        for t in store.teams_for_user(g.user.id):
+            for m in t.member_list:
+                if m.get("pid") == pid and m.get("roles"):
+                    team_set.append({"team": t.name, "tid": t.id, "roles": m["roles"]})
+        o = overview(rows, team_set, meta_share)
+        return render_template("agents_roles.html", p=p, active_pid=pid, queue=queue, queues=QUEUE_TABS, tab="agents",
+                               can_edit=can_edit, o=o, import_status=sr.status(f"import:{pid}"))
+
     def pro_context(p, queue: str, pro: str | None = None) -> dict:
         from ..stats.style import load_pros, match_pros, profile, video_queries
         roles.load(cache_dir)

@@ -488,7 +488,7 @@ class StatsRunner:
             picked = pick(found)
             self._log(key, f"· {len(found)} moments in your last {read} games with round data, {len(picked)} picked")
             if len(picked) < 3:
-                raise RuntimeError("Not enough moments yet: play a few more games and press Import on Stats & agents.")
+                raise RuntimeError("Not enough moments yet: play a few more games and press Import on Stats & maps.")
             llm, cfg = self._llm(p, llm_choice)
             self._log(key, f"· writing the questions with {llm.model} ...")
             qs = write_quiz(llm, picked, p.language, self.read_quiz(pid).get("bank") or [])

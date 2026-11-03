@@ -486,11 +486,13 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         seen = set()
         for p in store.profiles(g.user.id):
             seen.add(p.id)
-            add("player", p.riot_id, url_for("stats", pid=p.id), "stats & agents")
-            for ep, lbl in (("progress", "progress"), ("training", "training"), ("pros", "pro & videos"), ("profile", "matches & reports")):
+            add("player", p.riot_id, url_for("stats", pid=p.id), "stats & maps")
+            for ep, lbl in (("agents_roles", "agents & roles"), ("progress", "rank & progress"), ("training", "training"),
+                            ("quiz", "quiz"), ("pros", "pros & videos"), ("profile", "matches & reports")):
                 add("player", f"{p.name} · {lbl}", url_for(ep, pid=p.id))
         for t in store.teams_for_user(g.user.id):
-            tabs = [("team", "comps"), ("team_premier", "premier"), ("team_division", "division & scouting"), ("team_drafts", "drafts"),
+            tabs = [("team", "comps"), ("team_premier", "this week"), ("team_availability", "availability"), ("team_brief", "match-day brief"),
+                    ("team_division", "opponents"), ("team_drafts", "drafts"),
                     ("team_plans", "game plans"), ("team_strats", "strat book"), ("team_lineups", "lineups"),
                     ("team_focus", "weekly focus"), ("team_roles_page", "roles"), ("team_notes", "notes")]
             if t.owner_id == g.user.id:

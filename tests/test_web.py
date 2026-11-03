@@ -546,6 +546,7 @@ def test_stats_teams_and_pick_helper(app, monkeypatch):
     synth.write_agent_cache(Path(app.extensions["valcoach"]["store"].data_dir) / "cache")
     me = add_profile(c)
     assert b"No stats yet" in c.get(f"/profiles/{me}/stats").data
+    assert b"No games yet" in c.get(f"/profiles/{me}/agents").data
     r = c.post(f"/profiles/{me}/stats/import")
     assert r.status_code == 302
     st = _wait_stats(app, f"import:{me}")
@@ -557,6 +558,11 @@ def test_stats_teams_and_pick_helper(app, monkeypatch):
     assert "Your team still needs: <b>Controller</b>" in page
     assert c.get("/agent-icon/Jett").status_code == 200
     assert c.get("/agent-icon/Nobody").status_code == 404
+    # agents & roles: every agent, what you pick, what your habits fit
+    page = c.get(f"/profiles/{me}/agents").data.decode()
+    assert "What you pick" in page and "What your habits fit" in page and "All your agents" in page
+    assert 'data-agent="Jett"' in page and "Not played yet" in page
+    assert c.get(f"/profiles/{me}/agents?queue=premier").status_code == 200
 
     # the other four starters + a sub, each with their own history
     ids = {"adv1ce": me}
@@ -585,6 +591,7 @@ def test_stats_teams_and_pick_helper(app, monkeypatch):
     other = make_user(app, c, "friend")
     assert other.get(f"/teams/{tid}").status_code == 404
     assert other.get(f"/profiles/{me}/stats").status_code == 404
+    assert other.get(f"/profiles/{me}/agents").status_code == 404
     app.extensions["valcoach"]["stats"].shutdown()
 
 
