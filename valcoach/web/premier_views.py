@@ -216,6 +216,7 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
     app.extensions["valcoach"]["premier"] = pj
     app.extensions["valcoach"]["week_map"] = lambda t: week_map(t)[0]
     app.extensions["valcoach"]["next_avail"] = next_avail
+    app.extensions["valcoach"]["match_window"] = lambda t: match_window(t)
 
     # ------------------------------------------------------------------ pages
     def ctx(t, tab2: str, **kw) -> dict:
@@ -341,6 +342,62 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
             abort(404)
         return render_template("premier_brief.html", **ctx(t, "overview", b=brief(t, m) if m else {"map": None},
                                                            pool=pool(t), discord=t.discord_info))
+
+    # ------------------------------------------------------------------ match screen (second screen)
+    def match_window(t, now: datetime | None = None) -> bool:
+        """True from 90 min before the match time to 3 h after it, on match days (server time)."""
+        from .availability import DEFAULT_DAYS
+        now = now or datetime.now()
+        b = brief_cfg(t)
+        if now.weekday() not in (b.get("days") or DEFAULT_DAYS):
+            return False
+        try:
+            hh, mm = (int(x) for x in str(b.get("time") or "20:00").split(":"))
+        except ValueError:
+            return False
+        start = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        mins = (now - start).total_seconds() / 60
+        return -90 <= mins <= 180
+
+    @app.get("/teams/<int:tid>/match")
+    def team_match(tid: int):
+        """Everything for the match you're playing, on one screen: comp, plans, strats, lineups, the opponent."""
+        from .lineups import clip_info
+        t = get_team(tid)
+        maps = pool(t)
+        m = request.args.get("map") or week_map(t)[0] or (maps[0] if maps else None)
+        if m and m not in maps and m not in known_maps:
+            abort(404)
+        b = brief(t, m) if m else {"map": None}
+        plans = (sr.read_plans(t.id, m) or {}).get("plans", []) if m else []
+        strats = [x for x in store.strats(t.id) if x["map"] == m]
+        comp_agents = [p["agent"] for p in (b.get("comp") or {}).get("picks", [])]
+        lineups = store.lineups(t.id, m) if m else []
+        for r in lineups:
+            r["clip"] = clip_info(r["url"]) if r.get("url") else None
+        lineups.sort(key=lambda r: (r["agent"] not in comp_agents, r["agent"], r.get("site") or "", r["title"]))
+        # you: the member linked to your account (or named like your in-game name)
+        me_name = ""
+        for mm in t.member_list:
+            p = store.profile(mm["pid"])
+            if p and (mm.get("user_id") == g.user.id or (g.user.display_name and p.riot_id.lower() == g.user.display_name.lower())):
+                me_name = p.name
+        idx = pj.scout_index(t.id)
+        opponents = sorted(((tm["id"], tm["name"]) for tm in (idx.get("teams") or {}).values()), key=lambda x: x[1].lower())
+        opp = None
+        oid = request.args.get("opp", "")
+        if oid:
+            s = pj.scouted(tid, oid)
+            if s:
+                mp = (s.get("maps") or {}).get(m) or {}
+                opp = {"id": oid, "name": s.get("name"), "tag": s.get("tag", ""), "record": f"{s.get('wins', 0)}–{s.get('losses', 0)}",
+                       "map": mp, "lines": map_lines(s, m) if m else [], "general": general_lines(s)[:3],
+                       "comps": (mp.get("comps") or [])[:2]}
+        roles.load(cache_dir)
+        return render_template("team_match.html", **ctx(t, "match", b=b, sel=m, maps=maps, plans=plans, strats=strats,
+                                                         lineups=lineups, comp_agents=comp_agents, me_name=me_name,
+                                                         opponents=opponents, opp=opp, live=match_window(t),
+                                                         side=request.args.get("side") if request.args.get("side") in ("attack", "defense") else "attack"))
 
     @app.post("/teams/<int:tid>/premier/brief/post")
     def team_brief_post(tid: int):

@@ -20,6 +20,7 @@ class JobRunner:
         self.store = store
         self.workers = max(1, workers)
         self.ex = ThreadPoolExecutor(max_workers=self.workers, thread_name_prefix="coach")
+        self.on_finish = None          # (job_id, status) -> None, e.g. a push notification
 
     def recover(self) -> None:
         """After a restart: running jobs were interrupted, queued ones start again."""
@@ -74,11 +75,20 @@ class JobRunner:
             st.update_job(job_id, status="done", html_path=str(res.html), json_path=str(res.json),
                           map=res.map_name, score=res.score, started_at_match=res.started_at,
                           finished_at=now())
+            self._finished(job_id, "done")
         except Exception as e:  # report every failure on the job page
             tb = traceback.format_exc(limit=4)
             log("✗ " + str(e))
             log(tb)
             st.update_job(job_id, status="error", error=str(e) or e.__class__.__name__, finished_at=now())
+            self._finished(job_id, "error")
+
+    def _finished(self, job_id: str, status: str) -> None:
+        if self.on_finish:
+            try:
+                self.on_finish(job_id, status)
+            except Exception:
+                pass
 
     def team_roles(self, owner_id: int | None) -> dict[str, list[str]]:
         """'name#tag' (lower case) -> roles assigned on this user's team pages."""

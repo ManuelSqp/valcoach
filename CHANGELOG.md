@@ -4,6 +4,26 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
 `pip install -e .`, `sudo systemctl restart valcoach`.
 
+## 3.4.0
+- **Match screen** (Match day › Match screen): everything for the match you're playing on one page, made for a
+  second monitor or a phone next to you. The map, an **Attack / Defense** switch (keys `A` / `D`), the comp with
+  everyone's agent and weekly focus, who's playing, the game plans for that side with every player's step, your
+  strats (*Play* opens them right there), lineups for that side (your agent first) and, once you know who you got,
+  the opponent's scouting. Your own lines are highlighted. `F` for full screen.
+- **"Live" from your match times:** valcoach doesn't read the game, but it knows your match days and match time
+  (*Brief before each match*). From 90 minutes before until 3 hours after, Home shows *Open match screen* first and
+  the menu marks *Match screen* as **Live**.
+- **Install valcoach as an app** (Account › Install as an app): on Android, iPhone, Windows and Mac. Own icon,
+  own window, starts fast (the look is kept on the device), and an *offline* page when the server isn't reachable.
+  No app store. Pages and your data are never stored on the device.
+- **Push notifications** (Account, per device): *Report ready* when a coaching report you started is done (or
+  failed), and *Match day* 90 minutes before your match with a link to the match screen. Switch each kind on or off;
+  *Send a test*. iPhone and iPad need the installed app (iOS 16.4+). The server makes its own keys; nothing goes
+  through a third-party service except the browser's own push service. Needs HTTPS (you have it through NPM).
+- **Share a report:** *Make a share link* on a finished report's page: a read-only link a teammate can open
+  without an account (the recording plays too). *Stop sharing* turns the link off at once.
+- New dependency: `pywebpush` (installed by `pip install -e .`).
+
 ## 3.3.0
 - **Unrated counts too:** *Import match history* / *Load new games* now also load your Unrated games (the last
   ~60 with round data and up to 300 older ones, like Competitive and Premier). The first import after the update

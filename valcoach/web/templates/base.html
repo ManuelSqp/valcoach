@@ -6,15 +6,22 @@
 <title>{% block title %}valcoach{% endblock %}</title>
 <link rel="preload" href="{{ url_for('static', filename='fonts/archivo-latin.woff2') }}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v={{ app_version }}">
+<link rel="manifest" href="{{ url_for('manifest') }}">
+<meta name="theme-color" content="#0e131b">
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/favicon-32.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="valcoach">
 <script>try{const t=localStorage.getItem('vc-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
 {% block head %}{% endblock %}
 {% if ui and ui.style != 'classic' %}<link rel="stylesheet" href="{{ url_for('static', filename='styles/' ~ ui.style ~ '.css') }}?v={{ app_version }}">{% endif %}
 {% if ui and ui.anim.tabs %}<style>@view-transition{navigation:auto}</style>{% endif %}
 </head>
 {% set ep = request.endpoint or '' %}
+{% set embed = request.args.get('embed') == '1' %}
 {% set cur_tid = t.id if (t is defined and t and t.id is defined) else None %}
-<body class="skin-{{ ui.style if ui else 'classic' }}{{ ' nav-top' if user and ui and ui.nav == 'top' }}{% if ui %}{% for k, v in ui.anim.items() if v %} a-{{ k }}{% endfor %}{% endif %}{{ ' no-side' if not user }}" {% if user %}data-search="{{ url_for('search_index') }}"{% endif %}>
-{% if user %}
+<body class="skin-{{ ui.style if ui else 'classic' }}{{ ' nav-top' if user and ui and ui.nav == 'top' }}{% if ui %}{% for k, v in ui.anim.items() if v %} a-{{ k }}{% endfor %}{% endif %}{{ ' no-side' if not user }}{{ ' no-side embed' if embed }}" {% if user %}data-search="{{ url_for('search_index') }}"{% endif %}>
+{% if user and not embed %}
 <aside class="vc-side" id="side" aria-label="Main">
   <div class="side-top">
     <a class="logo" href="{{ url_for('index') }}" aria-label="valcoach home"><span class="logo-mark" aria-hidden="true"></span>valcoach</a>
@@ -39,6 +46,7 @@
   {% set nav_groups = [
     ('match', 'Match day', 'match', [
       ('team_premier', 'This week', ('team_premier', 'team_review_page'), 't', nav_week.get(navT.id, '') if navT else ''),
+      ('team_match', 'Match screen', ('team_match',), 't', 'Live' if navT and nav_live.get(navT.id) else ''),
       ('team_availability', 'Availability', ('team_availability',), 't', ''),
       ('team_brief', 'Match-day brief', ('team_brief',), 't', ''),
       ('team_division', 'Opponents', ('team_division', 'team_scouted'), 't', '')]),
@@ -73,7 +81,7 @@
       <summary class="si sg-head">{{ nav_ico(gico) }}<span class="sg-name">{{ glabel }}</span></summary>
       <div class="sg-items">
         {% for e, lbl, eps, need, badge in usable %}{% set on = ep in eps %}
-        <a class="sn {{ 'on' if on }}" href="{{ url_for(e, tid=navT.id) if need in ('t', 'o') else url_for(e, pid=navP.id) }}" {% if on %}aria-current="page"{% endif %}><span>{{ lbl }}</span>{% if badge %}<span class="badge {{ 'hot' if e == 'quiz' }}">{{ badge }}</span>{% endif %}</a>
+        <a class="sn {{ 'on' if on }}" href="{{ url_for(e, tid=navT.id) if need in ('t', 'o') else url_for(e, pid=navP.id) }}" {% if on %}aria-current="page"{% endif %}><span>{{ lbl }}</span>{% if badge %}<span class="badge {{ 'hot' if e == 'quiz' }}{{ ' live' if e == 'team_match' }}">{{ badge }}</span>{% endif %}</a>
         {% endfor %}
         {% if not usable %}<a class="sn add" href="{{ url_for('teams') if gid in ('match', 'strat') else url_for('profile_new') }}"><span>{{ 'Create a team first' if gid in ('match', 'strat') else 'Add a player first' }}</span></a>{% endif %}
       </div>
@@ -101,10 +109,10 @@
 <div class="scrim" id="scrim" hidden></div>
 {% endif %}
 <main class="page">
-  {% if user and not has_api_key and ep != 'settings' %}
+  {% if user and not has_api_key and ep != 'settings' and not embed %}
   <div class="banner">No HenrikDev API key yet. {% if user.is_admin %}<a href="{{ url_for('settings') }}" title="Settings">Add it in Settings</a> so matches can be loaded.{% else %}Ask the admin to add one so matches can be loaded.{% endif %}</div>
   {% endif %}
-  {% if new_version and ep != 'changelog' %}
+  {% if new_version and ep != 'changelog' and not embed %}
   <div class="flash ok">valcoach was updated to <b>{{ app_version }}</b>. <a href="{{ url_for('changelog') }}" title="What's new">See what's new</a></div>
   {% endif %}
   {% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}{% endwith %}
@@ -152,6 +160,8 @@
 })();
 </script>
 <div id="toasts" aria-live="polite"></div>
+<script>if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.vcInstall = e; document.dispatchEvent(new Event('vc-installable')); });</script>
 <script src="{{ url_for('static', filename='ui.js') }}?v={{ app_version }}" defer></script>
 </body>
 </html>

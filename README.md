@@ -1,6 +1,6 @@
 # valcoach v2
 
-**Version 3.3.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 3.4.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -26,7 +26,7 @@ unzip valcoach-v2.zip && cd valcoach-v2
 /opt/homebrew/opt/python@3.11/bin/python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                     # 146 tests, ~3 min, builds a synthetic match + VOD
+pytest -q                     # 147 tests, ~3 min, builds a synthetic match + VOD
 ollama pull qwen3.8:27b       # default; alternatives below
 ```
 
@@ -95,6 +95,11 @@ or player page picks it for you. Below: *Match day* (This week, Availability, Ma
 Agents & roles, Rank & progress), *Practice* (Training, Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes,
 Player & playbook, Team settings). Ctrl+K searches everything. *Home* shows what's up today. The look (10 styles,
 light or dark, menu on the left or at the top) is under Account.
+
+**On your phone or a second screen:** Account › *Install as an app* puts valcoach on your home screen (no app
+store) and turns on notifications (report ready, match day). *Match day › Match screen* shows the comp, plans,
+strats, lineups and the opponent for the match you're playing, with an Attack / Defense switch. A finished report
+can be shared as a read-only link (on its page: *Make a share link*).
 
 ### What's in a report
 

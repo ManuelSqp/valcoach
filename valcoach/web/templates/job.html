@@ -21,6 +21,26 @@
   <div class="flash error" id="err" style="display:{{ 'block' if j.error else 'none' }};margin:14px 0 0">{{ j.error }}</div>
 </section>
 
+{% if j.status == 'done' %}
+<section class="card" id="share">
+  <h2>Share this report</h2>
+  {% if j.share_token %}{% set link = url_for('shared_report', token=j.share_token, _external=True) %}
+  <p class="small muted" style="margin:-4px 0 10px">Anyone with this link can read the report, without an account. They can't vote, ask the coach or change anything{{ ', and they can watch the recording' if j.vod_path }}.</p>
+  <div class="row" style="gap:8px"><input type="text" readonly value="{{ link }}" id="sharelink" style="flex:1;min-width:240px" onclick="this.select()">
+    <button type="button" class="btn sm" id="copyshare">Copy</button>
+    <form method="post" action="{{ url_for('job_share', jid=j.id) }}"><input type="hidden" name="off" value="1"><button class="btn sm ghost danger">Stop sharing</button></form></div>
+  <script>document.getElementById('copyshare').addEventListener('click', async () => {
+    const v = document.getElementById('sharelink').value;
+    try { await navigator.clipboard.writeText(v); window.valcoachToast && window.valcoachToast('Link copied'); }
+    catch (e) { document.getElementById('sharelink').select(); } });</script>
+  {% else %}
+  <form method="post" action="{{ url_for('job_share', jid=j.id) }}" class="row" style="gap:10px">
+    <button class="btn sm">Make a share link</button>
+    <span class="small muted">A read-only link for a teammate without an account{{ ', recording included' if j.vod_path }}. You can turn it off any time.</span></form>
+  {% endif %}
+</section>
+{% endif %}
+
 <section class="card">
   <h2>Progress</h2>
   <pre class="log" id="log">{{ j.log or 'Waiting…' }}</pre>

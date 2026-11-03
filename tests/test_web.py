@@ -2041,3 +2041,65 @@ def test_backups_and_discord_channels(app, tmp_path):
     # Discord: each kind of post finds its channel
     info = {"prep_url": "P", "focus_url": "F", "review_url": "R"}
     assert channel(info, "review") == "R" and channel(info, "clip") == "P" and channel(info, "focus") == "F" and channel({}, "prep") == ""
+
+
+def test_share_report_pwa_push_and_match_screen(app, monkeypatch):
+    from valcoach.web import push
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    pid = add_profile(c)
+    # a finished report
+    store.create_job("sh1", pid, MATCH_ID, "both")
+    rep = store.data_dir / "reports" / "sh1"
+    rep.mkdir(parents=True, exist_ok=True)
+    (rep / "r.html").write_text("<html><body><h1>Ascent 13-9</h1><video src=\"/jobs/sh1/vod\"></video></body></html>")
+    store.update_job("sh1", status="done", html_path=str(rep / "r.html"), map="Ascent", score="13-9")
+    assert "Make a share link" in c.get("/jobs/sh1").data.decode()
+    c.post("/jobs/sh1/share")
+    tok = store.job("sh1").share_token
+    assert len(tok) >= 20 and f"/share/{tok}" in c.get("/jobs/sh1").data.decode()
+    anon = app.test_client()
+    r = anon.get(f"/share/{tok}")
+    page = r.data.decode()
+    assert r.status_code == 200 and "Ascent 13-9" in page and "read only" in page and f"/share/{tok}/vod" in page
+    assert "/jobs/sh1/vod" not in page and "VALCOACH_FB" not in page
+    assert anon.get("/share/" + "x" * 30).status_code == 404 and anon.get("/jobs/sh1/report").status_code == 302
+    other = make_user(app, c, "mate")
+    assert other.post("/jobs/sh1/share").status_code == 404                   # only the owner shares
+    c.post("/jobs/sh1/share", data={"off": "1"})
+    assert anon.get(f"/share/{tok}").status_code == 404
+    # installable app
+    m = anon.get("/manifest.webmanifest").get_json()
+    assert m["display"] == "standalone" and any(i["purpose"] == "maskable" for i in m["icons"])
+    sw = anon.get("/sw.js")
+    assert sw.status_code == 200 and "showNotification" in sw.data.decode() and anon.get("/offline").status_code == 200
+    assert 'rel="manifest"' in c.get("/").data.decode()
+    # push: subscribe, test, notification settings, report-ready message
+    if push.available():
+        assert c.get("/api/push/key").get_json()["key"]
+        assert c.post("/api/push/subscribe", json={"endpoint": "http://evil", "keys": {}}).status_code == 400
+        assert c.post("/api/push/subscribe", json={"endpoint": "https://push.example/abc", "keys": {"p256dh": "k", "auth": "a"}}).get_json()["devices"] == 1
+        sent = []
+        monkeypatch.setattr(push, "_send_one", lambda store_, sub, payload, priv, claim: sent.append(payload) or True)
+        assert c.post("/api/push/test").get_json()["devices"] == 1 and sent[-1]["title"] == "valcoach"
+        app.extensions["valcoach"]["runner"].on_finish("sh1", "done")
+        import time as _t
+        _t.sleep(0.3)
+        assert sent[-1]["title"] == "Report ready: Ascent 13-9" and sent[-1]["url"] == "/jobs/sh1/report"
+        c.post("/account", data={"notify": "1"})                               # everything off
+        n = len(sent)
+        app.extensions["valcoach"]["runner"].on_finish("sh1", "done")
+        _t.sleep(0.3)
+        assert len(sent) == n
+        assert "pywebpush" not in c.get("/account").data.decode()
+        c.post("/api/push/unsubscribe", json={"endpoint": "https://push.example/abc"})
+        assert store.push_subs() == []
+    # match screen
+    tid = store.create_team(store.user_by_name("manuel").id, "Squad")
+    store.update_team(tid, members=[{"pid": pid, "kind": "starter"}], maps=["Bind", "Ascent"])
+    store.create_strat(tid, 1, "Ascent", "defense", "Stack B")
+    page = c.get(f"/teams/{tid}/match?map=Ascent&side=defense").data.decode()
+    assert "Match screen" in page and "Stack B" in page and 'data-side="defense" class="on"' in page
+    assert "embed=1" in page and c.get(f"/teams/{tid}/match?map=Nowhere").status_code == 404
+    assert 'class="vc-side"' not in c.get(f"/teams/{tid}/strats/1?play=1&embed=1").data.decode()
+    assert other.get(f"/teams/{tid}/match").status_code == 404
