@@ -22,6 +22,10 @@
 .navpic b:nth-of-type(1){top:9px;background:var(--accent);right:30px}.navpic.top b:nth-of-type(1){top:17px}
 .navpic b:nth-of-type(2){top:20px}.navpic.top b:nth-of-type(2){top:28px}
 .navpic b:nth-of-type(3){top:31px}.navpic.top b:nth-of-type(3){top:39px}
+.widthpic{flex:none;position:relative;width:72px;height:48px;border-radius:6px;background:var(--bg);border:1px solid var(--line2);overflow:hidden}
+.widthpic i{position:absolute;top:8px;bottom:8px;border-radius:3px;background:var(--panel3);border:1px solid var(--line2)}
+.widthpic.narrow i{left:18px;right:18px}.widthpic.full i{left:4px;right:4px}
+.widthpic.auto i{left:18px;right:18px;border-style:dashed}
 .anims{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
 .switch{display:flex;gap:10px;align-items:flex-start;margin:0;color:var(--text);font-size:13px;cursor:pointer;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel2)}
 .switch input{position:absolute;opacity:0;width:1px;height:1px}
@@ -68,6 +72,11 @@
       <span class="navpic {{ key }}" aria-hidden="true"><i></i><b></b><b></b><b></b></span>
       <span><b>{{ label }}</b><span class="small muted">{{ desc }}</span></span></label>{% endfor %}</div>
   <p class="small muted" style="margin:6px 0 0">On a phone the menu is always behind the ☰ button.</p>
+  <h2 style="margin-top:18px">Page width</h2>
+  <div class="navopts">{% for key, (label, desc) in widths.items() %}
+    <label class="navopt"><input type="radio" name="width" value="{{ key }}" {{ 'checked' if ui.width == key }} class="sr-only">
+      <span class="widthpic {{ key }}" aria-hidden="true"><i></i></span>
+      <span><b>{{ label }}</b><span class="small muted">{{ desc }}</span></span></label>{% endfor %}</div>
   <h2 style="margin-top:18px">Animations</h2>
   <div class="anims">{% for key, (label, desc) in animations.items() %}
     <label class="switch"><input type="checkbox" name="anim_{{ key }}" value="1" {{ 'checked' if ui.anim[key] }}><span class="tr" aria-hidden="true"></span>

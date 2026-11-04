@@ -1,6 +1,6 @@
 # valcoach
 
-**Version 4.1.2** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.2.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -26,7 +26,7 @@ git clone https://github.com/ManuelSqp/valcoach.git && cd valcoach
 python3 -m venv .venv          # Python 3.11 or newer
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                     # ~160 tests, ~3 min, builds a synthetic match + VOD
+pytest -q                     # ~170 tests, ~3 min, builds a synthetic match + VOD
 ollama pull qwen3.8:27b       # default; alternatives below
 ```
 
@@ -70,6 +70,17 @@ local model finishes the job if the API can't be used. Nightly reviews and the
 weekly focus use *Model for automatic jobs*. Costs per day and month are on the
 server overview. The key can also come from `ANTHROPIC_API_KEY`.
 
+**Web search (optional).** Under *Settings → Web search* the coach can look things up instead of guessing (patch
+changes, abilities, pros, KovaaK's playlists and share codes) in *Ask the coach*, in the questions about a round of a
+report and on the Aim page; answers list the pages they used. Two ways:
+- **SearXNG**, your own search server (free, nothing leaves your network except the searches). It has to answer
+  JSON: in SearXNG's `settings.yml` set `search: formats: [html, json]` and restart it. Enter its URL (or set
+  `SEARXNG_URL`).
+- **Claude's web search** with the Anthropic key: US$ 10 per 1,000 searches plus tokens, counted in the Claude budget.
+
+The model decides per question whether to search (at most three searches) and reads the top pages. Pages are only
+fetched from public addresses, never from the server itself or your LAN.
+
 ## 2. Start the web app
 
 ```bash
@@ -105,9 +116,9 @@ Then in the browser:
 One menu on the left (☰ on a phone). At the top you pick the **team** and the **player** it works on; opening a team
 or player page picks it for you. Below: *Match day* (This week, Availability, Match-day brief, Opponents),
 *Strategy* (Comps, Drafts, Game plans, Strat book, Lineups), *Performance* (Matches & reports, Stats & maps,
-Agents & roles, Rounds & economy, Teammates, Rank & progress), *Practice* (Training, Habits, Aim, Practice plan, Review evening, Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes,
+Agents & roles, Rounds & economy, Teammates, Rank & progress), *Practice* (Training, Habits, Aim, Ask the coach, Practice plan, Review evening, Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes,
 Player & playbook, Team settings). Ctrl+K searches everything. *Home* shows what's up today. The look (10 styles,
-light or dark, menu on the left or at the top) is under Account.
+light or dark, menu on the left or at the top, centred or full width) is under Account.
 
 **Deutsch / English:** every user picks the interface language under Account › Look & feel (the login page
 follows the browser, or the switch above the form). Menus, pages, messages, notifications and, per team, the
@@ -129,7 +140,12 @@ your matches and sets your warm-up, which shows on the match screen, in the prac
 For KovaaK's the coach writes the playlists itself: download one (dated DD-MM-YYYY in its name), save it in
 `FPSAimTrainer/Saved/SaveGames/Playlists` and it shows up under *Local Playlists*. Import your KovaaK's scores (the `.csv` files in `FPSAimTrainer/stats`, or the
 folder as a zip) and it moves you to harder scenarios once you're steady at your best. More scenarios: import any
-playlist file, add one by hand, or let them come in with your scores.
+playlist file, add one by hand, or let them come in with your scores. *Playlists from the community* suggests public
+KovaaK's playlists by share code (paste it under *Sandbox › Online Playlists › Enter Share Code*), and with web search
+the coach finds more online.
+
+**Ask the coach:** *Practice › Ask the coach* is a chat with the coach about one player. It knows the player's stats,
+habits, aim and KovaaK's scores and remembers the conversation (per user and player).
 
 ### What's in a report
 

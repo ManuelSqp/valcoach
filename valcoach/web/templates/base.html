@@ -22,7 +22,7 @@
 {% set ep = '' if error_page is defined and error_page else (request.endpoint or '') %}
 {% set embed = request.args.get('embed') == '1' %}
 {% set cur_tid = t.id if (t is defined and t and t.id is defined) else None %}
-<body class="skin-{{ ui.style if ui else 'classic' }}{{ ' nav-top' if user and ui and ui.nav == 'top' }}{% if ui %}{% for k, v in ui.anim.items() if v %} a-{{ k }}{% endfor %}{% endif %}{{ ' no-side' if not user }}{{ ' no-side embed' if embed }}" {% if user %}data-search="{{ url_for('search_index') }}"{% endif %}>
+<body class="skin-{{ ui.style if ui else 'classic' }}{{ ' nav-top' if user and ui and ui.nav == 'top' }}{{ ' w-' ~ ui.width if user and ui and ui.width != 'auto' }}{% if ui %}{% for k, v in ui.anim.items() if v %} a-{{ k }}{% endfor %}{% endif %}{{ ' no-side' if not user }}{{ ' no-side embed' if embed }}" {% if user %}data-search="{{ url_for('search_index') }}"{% endif %}>
 {% if user and not embed %}
 <aside class="vc-side" id="side" aria-label="Main">
   <div class="side-top">
@@ -41,7 +41,7 @@
     </details>
     <details class="ctxpick">
       <summary><span class="avatar" aria-hidden="true">{{ navP.name[:1]|upper if navP else '+' }}</span><span class="ctx-t"><small>Player{% if navP and nav_me and navP.id == nav_me.id %} · you{% endif %}</small><b>{{ navP.name if navP else 'No player yet' }}</b></span></summary>
-      <div class="ctx-menu">{% for np in nav_profiles %}<a href="{{ url_for(ep if ep in ('stats', 'agents_roles', 'rounds_page', 'teammates_page', 'habits', 'aim', 'progress', 'training', 'quiz', 'pros', 'profile') else 'stats', pid=np.id) }}" class="{{ 'on' if navP and np.id == navP.id }}" data-pid="{{ np.id }}">{{ np.name }}<span class="tagname">#{{ np.tag }}</span>{% if nav_me and np.id == nav_me.id %}<span class="you">you</span>{% endif %}</a>{% endfor %}
+      <div class="ctx-menu">{% for np in nav_profiles %}<a href="{{ url_for(ep if ep in ('stats', 'agents_roles', 'rounds_page', 'teammates_page', 'habits', 'aim', 'ask_coach', 'progress', 'training', 'quiz', 'pros', 'profile') else 'stats', pid=np.id) }}" class="{{ 'on' if navP and np.id == navP.id }}" data-pid="{{ np.id }}">{{ np.name }}<span class="tagname">#{{ np.tag }}</span>{% if nav_me and np.id == nav_me.id %}<span class="you">you</span>{% endif %}</a>{% endfor %}
         <a class="add" href="{{ url_for('profile_new') }}" data-nav="new">Add a player</a></div>
     </details>
   </div>
@@ -69,6 +69,7 @@
       ('training', 'Training', ('training',), 'p', ''),
       ('habits', 'Habits', ('habits',), 'p', ''),
       ('aim', 'Aim', ('aim',), 'p', ''),
+      ('ask_coach', 'Ask the coach', ('ask_coach',), 'p', ''),
       ('team_practice', 'Practice plan', ('team_practice',), 't', ''),
       ('team_evening', 'Review evening', ('team_evening', 'team_evening_session'), 't', ''),
       ('team_focus', 'Weekly focus', ('team_focus',), 't', ''),

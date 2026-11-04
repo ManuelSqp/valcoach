@@ -13,8 +13,9 @@ import time
 from datetime import date
 from pathlib import Path
 
-from flask import abort, flash, g, redirect, render_template, request, url_for
+from flask import abort, flash, g, jsonify, redirect, render_template, request, url_for
 
+from ..coach import websearch as ws
 from ..stats import aim as am
 from ..stats import kovaaks as kv
 
@@ -38,6 +39,11 @@ def _write(path: Path, data: dict) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False))
     tmp.replace(path)
+
+
+def player_runs(sr, pid: int) -> list[dict]:
+    """A player's imported KovaaK's runs."""
+    return _read(sr.games(pid).path.parent / "aim.json", {}).get("kovaaks", [])
 
 
 def register(app, store, sr, view_profile, filter_rows) -> None:
@@ -130,6 +136,10 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         names = {r["id"]: r["name"] for r in lib}
         runs = pdata.get("kovaaks", [])
         scen = scenarios(pid, uid)
+        have = {(r.get("code") or "").lower() for r in lib if r.get("code")}
+        shared_all: dict[str, list] = {}
+        for x in kv.shared():
+            shared_all.setdefault(x["group"], []).append(dict(x, added=x["code"].lower() in have))
         by_focus: dict[str, list] = {}
         for s in sorted(scen, key=lambda s: (s["level"], s["name"].lower())):
             by_focus.setdefault(s["focus"][0] if s.get("focus") else "flicks", []).append(s)
@@ -140,7 +150,8 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                                scen_by_focus=by_focus, n_scen=len(scen), addable=am.ADDABLE,
                                owned={t.id for t in teams if t.owner_id == uid}, focus=am.FOCUS, kinds=am.KINDS,
                                scores={r["id"]: am.scores(log, r["id"]) for r in lib}, is_aimlabs=am.is_aimlabs,
-                               min_games=am.MIN_GAMES)
+                               min_games=am.MIN_GAMES, shared_pick=kv.suggest(need, runs, 4, have), shared_all=shared_all,
+                               shared_groups=kv.SHARED_GROUPS, n_shared=len(kv.SHARED), search_on=bool(ws.provider(store)))
 
     def back(pid: int):
         nxt = request.form.get("next") or ""
@@ -332,6 +343,34 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                     msg.append(f"Files that weren't KovaaK's playlists: {bad}.")
                 flash(" ".join(msg), "ok" if added or routines else "error")
                 return back_to
+            if act == "k_add_shared":                # a community playlist (built-in list or found online) as a routine
+                code = (f.get("code") or "").strip()
+                known = {x["code"].lower(): x for x in kv.shared()}
+                if not am.CODE_RE.fullmatch(code) or not code.lower().startswith("kovaaks"):
+                    flash("That isn't a KovaaK's share code.", "error")
+                    return redirect(url_for("aim", pid=p.id) + "#kshared")
+                base = known.get(code.lower())
+                name = (base["name"] if base else " ".join((f.get("name") or "").split())[:60]) or code
+                focus = base["focus"] if base else (kv.guess(name)[0] or ["flicks"])
+                path, where = scope_path(f.get("scope", "me"), uid, teams)
+                d = _read(path, {})
+                if any((r.get("code") or "").lower() == code.lower() for r in d.get("routines", [])):
+                    flash(f"{name} is already in {where}.", "error")
+                    return redirect(url_for("aim", pid=p.id) + "#kshared")
+                if len(d.get("routines", [])) >= MAX_ROUTINES:
+                    flash(f"{where} already has {MAX_ROUTINES} routines: remove one first.", "error")
+                    return redirect(url_for("aim", pid=p.id) + "#kshared")
+                src = f.get("url", "").strip()
+                steps = (f"By {base['author']}. " if base else "") + "In KovaaK's: Sandbox › Online Playlists › Enter Share Code; it downloads every scenario."
+                if not base and src.startswith(("https://", "http://")):
+                    steps += f" Found on {src[:200]}"
+                d.setdefault("routines", []).append({
+                    "id": am.new_id(), "name": name, "kind": "kovaaks", "code": code, "url": "",
+                    "minutes": 20, "focus": [x for x in focus if x in am.FOCUS][:4] or ["flicks"], "steps": steps[:am.MAX_STEPS],
+                    "added_by": uid, "by": g.user.display_name or g.user.username})
+                _write(path, d)
+                flash(f"Added {name} to {where.replace('scenarios', 'routines')}.", "ok")
+                return redirect(url_for("aim", pid=p.id) + "#kshared")
             if not can_log(p, can_edit, uid):
                 abort(403)
             if act == "k_import_stats":
@@ -381,6 +420,26 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         resp.headers["Content-Disposition"] = f'attachment; filename="{kv.file_name(kind)}"'
         resp.headers["Cache-Control"] = "no-store"
         return resp
+
+    @app.get("/api/profiles/<int:pid>/aim/find-playlists")
+    def aim_find_playlists(pid: int):
+        """KovaaK's share codes on the web for what this player's aim needs (Settings › Web search)."""
+        view_profile(pid)
+        search = ws.searcher(store)
+        if search is None:
+            return jsonify(error="Web search isn't set up (Settings › Web search)."), 400
+        rows = filter_rows(sr.games(pid).rows(), "everything")
+        focus = []
+        for x in am.needs(rows):
+            focus += [f for f in x["focus"] if f not in focus and f != "warmup"]
+        words = {"crosshair": "crosshair placement", "micro": "micro flicks", "flicks": "flicking", "peeking": "peeking",
+                 "reaction": "reactivity", "switching": "target switching", "tracking": "tracking"}
+        queries = ["KovaaK's playlist share code Valorant"] + [f"KovaaK's share code {words[f]} playlist" for f in focus[:2] if f in words]
+        have = {(r.get("code") or "").lower() for r in library(pid, g.user.id) if r.get("code")} | {x["code"].lower() for x in kv.shared()}
+        found, errors = ws.find_share_codes(search, queries, have)
+        for x in found:
+            x["focus"] = [am.FOCUS.get(f, f) for f in kv.guess(x["name"])[0]]
+        return jsonify(found=found, searched=queries, errors=errors[:2])
 
     # ------------------------------------------------------------------ for other pages
     def member_pid(t, uid: int) -> int | None:

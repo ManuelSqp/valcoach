@@ -23,6 +23,10 @@ STYLES = {
 # where the menu sits (phones always get the ☰ drawer)
 NAVS = {"side": ("On the left", "A column with every group open or closed, like a file browser."),
         "top": ("At the top", "A bar across the page; each group opens as a dropdown. More room for wide pages.")}
+# how wide the page may get
+WIDTHS = {"auto": ("Like the style", "Full width only in Data terminal, the others stay centred."),
+          "narrow": ("Centred", "At most about 1240 px, easier to read on a wide screen."),
+          "full": ("Full width", "The whole window, in every style: more tables and charts at once.")}
 # switch -> (label, what it does)
 ANIMATIONS = {
     "count": ("Numbers count up", "Stats roll up from 0 when a page opens."),
@@ -38,9 +42,10 @@ def ui_prefs(raw: dict | None) -> dict:
     style = raw.get("style") if raw.get("style") in STYLES else "classic"
     anim = raw.get("anim") if isinstance(raw.get("anim"), dict) else {}
     nav = raw.get("nav") if raw.get("nav") in NAVS else "side"
+    width = raw.get("width") if raw.get("width") in WIDTHS else "auto"
     from ..i18n import DEFAULT, LANGS
     lang = raw.get("lang") if raw.get("lang") in LANGS else DEFAULT
-    return {"style": style, "nav": nav, "lang": lang, "explicit_lang": raw.get("lang") in LANGS,
+    return {"style": style, "nav": nav, "width": width, "lang": lang, "explicit_lang": raw.get("lang") in LANGS,
             "anim": {k: bool(anim.get(k, True)) for k in ANIMATIONS}}
 
 

@@ -10,7 +10,9 @@ Restore: stop valcoach, unpack the archive into the data folder (it contains val
 profiles/, teams/, reports/ ...), start valcoach again."""
 from __future__ import annotations
 
+import errno
 import json
+import os
 import sqlite3
 import tarfile
 import tempfile
@@ -33,6 +35,31 @@ def _keep(store) -> int:
         return max(1, min(365, int(store.get("backup_keep") or 14)))
     except ValueError:
         return 14
+
+
+def explain(e: BaseException, folder: Path | str) -> str:
+    """A failed write in words: a read-only folder is almost always the service's sandbox, not the disk."""
+    if isinstance(e, OSError) and e.errno in (errno.EROFS, errno.EACCES, errno.EPERM):
+        why = "is read-only for valcoach" if e.errno == errno.EROFS else "isn't writable for the user valcoach runs as"
+        return (f"The backup folder {folder} {why}. If valcoach runs as a systemd service, it may only write to its data "
+                f"folder: add the line ReadWritePaths={folder} to the [Service] part of valcoach.service, then "
+                "sudo systemctl daemon-reload and sudo systemctl restart valcoach. Otherwise check the folder's owner "
+                "(sudo chown) or leave the folder empty to keep backups in the data folder.")
+    return str(e)[:300]
+
+
+def check_folder(folder: Path | str) -> str:
+    """'' when valcoach can write backups to this folder, else why not (for Settings)."""
+    d = Path(folder).expanduser()
+    if not d.is_dir():
+        return f"Backup folder not found on this server: {folder}"
+    probe = d / f".valcoach-write-test-{os.getpid()}"
+    try:
+        probe.write_bytes(b"")
+        probe.unlink()
+    except OSError as e:
+        return explain(e, folder)
+    return ""
 
 
 def list_backups(store) -> list[dict]:
@@ -93,7 +120,7 @@ def run(store) -> dict:
         f = make_backup(store)
         res = {"ok": True, "at": time.time(), "file": f.name, "size": f.stat().st_size, "secs": round(time.time() - t0, 1)}
     except Exception as e:
-        res = {"ok": False, "at": time.time(), "error": str(e)[:300]}
+        res = {"ok": False, "at": time.time(), "error": explain(e, backup_dir(store))[:600]}
     store.set("backup_last", json.dumps(res))
     return res
 

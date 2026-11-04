@@ -37,6 +37,15 @@ _usage_lock = threading.Lock()
 _usage_file: Path | None = None
 
 
+def claude_search_model(store) -> str:
+    """The model that runs Claude web searches: the cheapest one offered (Haiku if it's in the list)."""
+    offered = [m.strip() for m in (store.get("claude_models") or "").split(",") if m.strip()]
+    for m in offered:
+        if "haiku" in m:
+            return m
+    return min(offered, key=lambda m: PRICES.get(m, max(PRICES.values()))[0]) if offered else "claude-haiku-5-5"
+
+
 class ClaudeError(RuntimeError):
     """The API can't be used right now (key, credit, budget, network): the local model may take over."""
 

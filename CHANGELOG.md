@@ -4,6 +4,30 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart valcoach` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.2.0
+- **Ask the coach** (*Practice › Ask the coach*): a chat with the coach about one player. It knows the player's recent
+  form, agents, maps, habits, what their aim needs and their KovaaK's scores, and remembers the conversation (per user
+  and player; *New conversation* starts over). Answers are written in the background, with the model picker like
+  everywhere else.
+- **Web search for the coach** (*Settings › Web search*, optional): with your own **SearXNG** server (free; it must
+  allow JSON, see the README) or **Claude's web search** (Anthropic key, US$ 10 per 1,000 searches, in the Claude
+  budget). For each question the model decides whether to look something up (patch changes, abilities, pros,
+  KovaaK's playlists; at most three searches), reads the best pages and answers with the pages it used as links.
+  Also in *Ask the coach about this round* in reports. Pages are only read from public addresses (never the server
+  itself, your LAN or cloud metadata, also after redirects), at most 600 KB, text only. A *Test* button checks it.
+- **KovaaK's playlists from the community** on the Aim page: 39 public playlists by share code (the Valorant /
+  Counter-Strike routines, ones for a single problem such as micro-flicks, peeking or reactivity, and the Voltaic
+  fundamentals by level), from the community list at github.com/officialpure/Resources. The four that fit what your
+  matches show, at about your level (from your imported scores), are on top; *Add to routines* puts one in your or
+  your team's routines. Paste the code in KovaaK's under *Sandbox › Online Playlists › Enter Share Code* and it
+  downloads every scenario. With web search, *Search the web* finds more share codes online.
+- **Page width** under Account › Look & feel: *Like the style* (as before: only Data terminal uses the whole width),
+  *Centred* or *Full width*, for every style.
+- **Backups to a read-only folder are explained**: instead of *[Errno 30] Read-only file system* the error says that
+  the systemd service may only write to its data folder and which `ReadWritePaths=` line to add. Saving a backup folder
+  in Settings now checks that valcoach can actually write there.
+- German for everything new.
+
 ## 4.1.2
 - **Fix: valcoach didn't start on Python 3.11.** One line in the agent details (utility note) used nested f-string
   quotes, which only Python 3.12+ can read, although 3.11 is supported. 3.12 and 3.13 (Docker) weren't affected.

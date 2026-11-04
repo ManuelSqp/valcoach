@@ -68,6 +68,16 @@
 .fsel{display:flex;gap:6px;flex-wrap:wrap}.fsel label{flex-direction:row;align-items:center;gap:5px;font-size:13.5px;color:var(--text);padding:4px 10px;border:1px solid var(--line2);border-radius:99px;cursor:pointer}
 .log{list-style:none;margin:0;padding:0}.log li{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;padding:7px 0;border-top:1px solid var(--line)}
 .log li:first-child{border-top:0}.log span{color:var(--muted)}
+.shgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.sh{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.sh-h{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.sh-h b{font-size:15.5px}
+.shcode{display:block;font-size:12.5px;padding:5px 9px;border-radius:7px;background:var(--bg);border:1px solid var(--line);user-select:all;overflow-wrap:anywhere;margin-top:auto}
+.shacts{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.shadd{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0}
+.shadd select{width:auto;max-width:150px;font-size:13px;padding:5px 26px 5px 8px;min-height:0;height:auto}
+.shl{margin:0;padding-left:18px;font-size:13.5px}.shl li{margin:5px 0}
+.shl code{font-size:12px;padding:1px 6px;border-radius:5px;background:var(--panel2);border:1px solid var(--line);user-select:all;overflow-wrap:anywhere}
+.linkcopy{background:none;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:12.5px;padding:0 4px}
 </style>
 {% endblock %}
 {% block content %}
@@ -163,6 +173,46 @@
     {% endfor %}
   </div>
   <p class="small muted" style="margin:10px 0 0">Why these: {% for x in need %}{{ x.why }} {% endfor %}Once you're steady near your best on a scenario (imported scores), the coach moves you to a harder one of the same kind.</p>
+</section>
+
+{% macro shared_add(x, label='Add to my routines', scope=true) -%}
+<form method="post" class="shadd"><input type="hidden" name="action" value="k_add_shared"><input type="hidden" name="code" value="{{ x.code }}">
+  {% if x.url %}<input type="hidden" name="name" value="{{ x.name }}"><input type="hidden" name="url" value="{{ x.url }}">{% endif %}
+  {% if teams and scope %}<select name="scope" style="width:auto" aria-label="Add to"><option value="me">Mine</option>{% for t in teams %}<option value="team:{{ t.id }}">{{ t.name }}</option>{% endfor %}</select>{% endif %}
+  <button class="btn sm ghost">{{ label }}</button></form>
+{%- endmacro %}
+<section class="card" id="kshared">
+  <h2>Playlists from the community</h2>
+  <p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Public KovaaK's playlists by their share code. Copy a code, then in KovaaK's go to
+    Sandbox › Online Playlists › Enter Share Code. KovaaK's downloads every scenario in it.</p>
+  <div class="shgrid">
+    {% for x in shared_pick %}
+    <div class="sh">
+      <div class="sh-h"><b>{{ x.name }}</b><span class="lv" title="Level {{ x.level }} of 3">{% for i in range(3) %}<i class="{{ 'on' if i < x.level }}"></i>{% endfor %}</span></div>
+      <div class="muted small">by <span translate="no">{{ x.author }}</span></div>
+      <div>{% for f in x.focus %}<span class="ft">{{ focus.get(f, f) }}</span>{% endfor %}</div>
+      {% if x.why %}<div class="small muted">{{ x.why }}</div>{% endif %}
+      <code class="shcode" translate="no">{{ x.code }}</code>
+      <div class="shacts"><button type="button" class="btn sm primary" data-copy="{{ x.code }}">Copy code</button>{{ shared_add(x, 'Add to routines') }}</div>
+    </div>
+    {% else %}<p class="muted small">Every playlist that fits is already in your routines.</p>{% endfor %}
+  </div>
+  <details style="margin-top:12px"><summary class="small">All {{ n_shared }} playlists</summary>
+    {% for gid, items in shared_all.items() %}<h3 style="margin:12px 0 4px">{{ shared_groups[gid] }}</h3>
+    <ul class="shl">{% for x in items %}<li><b>{{ x.name }}</b> <span class="lv" title="Level {{ x.level }} of 3">{% for i in range(3) %}<i class="{{ 'on' if i < x.level }}"></i>{% endfor %}</span>
+      <span class="muted small">{% for f in x.focus %}{{ focus.get(f, f) }}{{ ', ' if not loop.last }}{% endfor %}</span>
+      <code translate="no">{{ x.code }}</code><button type="button" class="linkcopy" data-copy="{{ x.code }}" title="Copy code">copy</button>
+      {% if x.added %}<span class="mst">in your routines</span>{% else %}{{ shared_add(x, 'Add to my routines', false) }}{% endif %}</li>{% endfor %}</ul>
+    {% endfor %}
+    <p class="small muted" style="margin:8px 0 0">From the community list at <a href="https://github.com/officialpure/Resources/blob/main/Sharecodes.md" target="_blank" rel="noopener noreferrer">github.com/officialpure/Resources</a>. Some codes are a few years old: if KovaaK's can't find one, remove it again.</p>
+  </details>
+  {% if search_on %}
+  <h3 style="margin:16px 0 6px">Find more online</h3>
+  <p class="small muted" style="margin:0 0 8px">Searches the web for share codes that fit what your aim needs. Check what you find in KovaaK's before you rely on it.</p>
+  <button type="button" class="btn sm" id="kfind">Search the web</button> <span class="small muted" id="kfindst"></span>
+  <ul class="shl" id="kfound"></ul>
+  <template id="kfoundtpl">{{ shared_add({'code': '__CODE__', 'name': '__NAME__', 'url': '__URL__'}, 'Add') }}</template>
+  {% endif %}
 </section>
 
 <div class="aim-top aim-grid">
@@ -269,10 +319,37 @@
     chips.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
     document.querySelectorAll('.rt').forEach(r => { r.hidden = !!b.dataset.f && !r.dataset.focus.split(' ').includes(b.dataset.f); });
   });
-  document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; } catch (e) { b.textContent = 'Select and copy'; }
-    setTimeout(() => { b.textContent = 'Copy code'; }, 1800);
-  }));
+  document.addEventListener('click', async e => {
+    const b = e.target.closest('[data-copy]'); if (!b) return;
+    const was = b.dataset.was || (b.dataset.was = b.textContent);
+    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = window.vcT ? vcT('Copied') : 'Copied'; }
+    catch (err) { b.textContent = window.vcT ? vcT('Select and copy') : 'Select and copy'; }
+    setTimeout(() => { b.textContent = was; }, 1800);
+  });
+  const kfind = document.getElementById('kfind');
+  if (kfind) kfind.addEventListener('click', async () => {
+    const st = document.getElementById('kfindst'), out = document.getElementById('kfound'), tpl = document.getElementById('kfoundtpl');
+    const T = x => window.vcT ? vcT(x) : x;
+    kfind.disabled = true; st.textContent = T('Searching…'); out.innerHTML = '';
+    try {
+      const r = await fetch({{ url_for('aim_find_playlists', pid=p.id)|tojson }}, {credentials: 'same-origin'});
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      st.textContent = j.found.length ? T(`${j.found.length} found`) : T('No new share codes found.') + (j.errors.length ? ' ' + j.errors[0] : '');
+      for (const x of j.found) {
+        const li = document.createElement('li');
+        const b = document.createElement('b'); b.textContent = x.name; li.append(b, ' ');
+        if (x.focus.length) { const f = document.createElement('span'); f.className = 'muted small'; f.textContent = x.focus.join(', ') + ' '; li.append(f); }
+        const c = document.createElement('code'); c.translate = false; c.textContent = x.code; li.append(c);
+        const cp = document.createElement('button'); cp.type = 'button'; cp.className = 'linkcopy'; cp.dataset.copy = x.code; cp.textContent = T('copy'); li.append(cp);
+        const a = document.createElement('a'); a.href = x.url; a.target = '_blank'; a.rel = 'noopener noreferrer nofollow'; a.className = 'small'; a.textContent = T('source'); a.title = x.title; li.append(a, ' ');
+        const form = tpl.content.firstElementChild.cloneNode(true);
+        form.querySelector('[name=code]').value = x.code; form.querySelector('[name=name]').value = x.name; form.querySelector('[name=url]').value = x.url;
+        li.append(form); out.append(li);
+      }
+    } catch (err) { st.textContent = err.message; }
+    kfind.disabled = false;
+  });
   const kind = document.getElementById('kind');
   const sync = () => document.querySelectorAll('[data-k]').forEach(l => { l.hidden = !l.dataset.k.split(' ').includes(kind.value); });
   kind.addEventListener('change', sync); sync();

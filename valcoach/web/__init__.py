@@ -523,8 +523,9 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             for k in ("home_seen", "home_prev", "notify", "lang"):
                 if old_prefs.get(k) and k not in prefs:
                     prefs[k] = old_prefs[k]
-            from .ui import NAVS
+            from .ui import NAVS, WIDTHS
             prefs["nav"] = f.get("nav") if f.get("nav") in NAVS else (old_prefs.get("nav") if old_prefs.get("nav") in NAVS else "side")
+            prefs["width"] = f.get("width") if f.get("width") in WIDTHS else (old_prefs.get("width") if old_prefs.get("width") in WIDTHS else "auto")
             store.update_user(g.user.id, prefs=json.dumps(prefs))
             flash(f"Style: {STYLES[prefs['style']][0]}.", "ok")
             return redirect(url_for("account") + "#look")
@@ -555,9 +556,9 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                     flash("Password changed. Other devices were logged out.", "ok")
             return redirect(url_for("account"))
         usage = store.usage_by_user().get(g.user.id, {"profiles": 0, "jobs": 0})
-        from .ui import ANIMATIONS, NAVS, STYLES
+        from .ui import ANIMATIONS, NAVS, STYLES, WIDTHS
         from .push import KINDS, available as push_ok, wants
-        return render_template("account.html", navs=NAVS, push_kinds=KINDS, push_ok=push_ok(),
+        return render_template("account.html", navs=NAVS, widths=WIDTHS, push_kinds=KINDS, push_ok=push_ok(),
                                push_on={k: wants(g.user, k) for k in KINDS}, push_devices=len(store.push_subs(g.user.id)), usage=usage, vod_root=vod_root(g.user), styles=STYLES, animations=ANIMATIONS)
 
     # -------------------------------------------------------------- quick search (Ctrl+K)
@@ -569,7 +570,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         for p in store.profiles(g.user.id):
             seen.add(p.id)
             add("player", p.riot_id, url_for("stats", pid=p.id), "stats & maps")
-            for ep, lbl in (("agents_roles", "agents & roles"), ("rounds_page", "rounds & economy"), ("teammates_page", "teammates"), ("habits", "habits"), ("aim", "aim & warm-up"), ("progress", "rank & progress"), ("training", "training"),
+            for ep, lbl in (("agents_roles", "agents & roles"), ("rounds_page", "rounds & economy"), ("teammates_page", "teammates"), ("habits", "habits"), ("aim", "aim & warm-up"), ("ask_coach", "ask the coach"), ("progress", "rank & progress"), ("training", "training"),
                             ("quiz", "quiz"), ("pros", "pros & videos"), ("profile", "matches & reports")):
                 add("player", f"{p.name} · {lbl}", url_for(ep, pid=p.id))
         for t in store.teams_for_user(g.user.id):
@@ -1282,8 +1283,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 bd = f.get("backup_dir", "").strip()
                 if bd and not Path(bd).expanduser().is_absolute():
                     errors.append("Backup folder: give the full path, e.g. /mnt/nas/valcoach-backups")
-                elif bd and not Path(bd).expanduser().is_dir():
-                    errors.append(f"Backup folder not found on this server: {bd}")
+                elif bd and (why := _backups.check_folder(bd)):
+                    errors.append(why)
                 else:
                     store.set("backup_dir", bd)
                 try:
@@ -1313,6 +1314,21 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 store.set("claude_fallback", "1" if f.get("claude_fallback") else "0")
                 if f["llm_auto"] in {c["value"] for c in model_choices(store, g.user)}:
                     store.set("llm_auto", f["llm_auto"])
+            if "search_provider" in f:                   # Web search
+                from ..coach.websearch import PROVIDERS
+                sp = f.get("search_provider", "")
+                su = f.get("searxng_url", "").strip().rstrip("/")
+                if su and not re.fullmatch(r"https?://[^\s/]+(/[^\s]*)?", su):
+                    errors.append("SearXNG URL: the full address, e.g. http://10.0.0.5:8080")
+                else:
+                    store.set("searxng_url", su)
+                if sp in PROVIDERS:
+                    if sp == "searxng" and not su:
+                        errors.append("Web search: enter your SearXNG URL first.")
+                    elif sp == "claude" and not store.get("claude_api_key"):
+                        errors.append("Web search with Claude needs the Anthropic API key (Claude section).")
+                    else:
+                        store.set("search_provider", sp)
             if f.get("youtube_api_key", "").strip():
                 store.set("youtube_api_key", f["youtube_api_key"].strip())
             if f.get("clear_youtube_key"):
@@ -1339,7 +1355,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         models, ollama_error = ollama_models()
         s = store.settings()
         from ..stats.style import DEFAULT_PROS
-        return render_template("settings.html", s=s, key_set=bool(s["henrik_api_key"]),
+        from ..coach.websearch import PROVIDERS as search_providers
+        return render_template("settings.html", s=s, key_set=bool(s["henrik_api_key"]), search_providers=search_providers,
                                yt_hint=("…" + s["youtube_api_key"][-4:]) if s["youtube_api_key"] else "",
                                pros_text=s["pros_yaml"] or DEFAULT_PROS.read_text(), pros_custom=bool(s["pros_yaml"]),
                                key_hint=("…" + s["henrik_api_key"][-4:]) if s["henrik_api_key"] else "",
@@ -1392,6 +1409,17 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                     return jsonify(ok=not missing, msg="Works: the key was accepted." +
                                    (f" Not available to this key: {', '.join(missing)}." if missing else ""))
                 return jsonify(ok=False, msg="The key was refused." if r.status_code in (401, 403) else f"Anthropic answered HTTP {r.status_code}.")
+            if what == "search":
+                from ..coach.websearch import SearchError, provider, searcher
+                fn = searcher(store)
+                if fn is None:
+                    return jsonify(ok=False, msg="Web search is off (or its URL / key is missing).")
+                try:
+                    hits = fn("Valorant patch notes", 3)
+                except SearchError as e:
+                    return jsonify(ok=False, msg=str(e)[:200])
+                return jsonify(ok=bool(hits), msg=(f"Works: {len(hits)} results, e.g. {hits[0]['title'][:60]}" if hits
+                                                   else f"{provider(store)} answered, but found nothing."))
             if what == "ollama":
                 from ..coach.ollama import Ollama
                 Ollama(store.get("ollama_url"), store.get("ollama_model")).check()

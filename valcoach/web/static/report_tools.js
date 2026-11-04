@@ -26,7 +26,8 @@
   }
 
   // ------------------------------------------------------------- ask the coach
-  const qaHtml = x => `<div class="qa"><div class="q">${esc(x.q)}</div><div class="a">${esc(x.a)}</div>${x.model ? `<div class="m">${esc(x.model)}</div>` : ''}</div>`;
+  const srcHtml = x => (x.sources && x.sources.length) ? `<div class="m">${x.sources.map((s, i) => `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer nofollow" title="${esc(s.url)}">[${i + 1}] ${esc(s.title)}</a>`).join(' · ')}</div>` : '';
+  const qaHtml = x => `<div class="qa"><div class="q">${esc(x.q)}</div><div class="a">${esc(x.a)}</div>${srcHtml(x)}${x.model ? `<div class="m">${esc(x.model)}</div>` : ''}</div>`;
   const pick = () => C.llm && C.llm.length > 1 ? `<select name="llm" title="Which model answers">${C.llm.map(c => `<option value="${esc(c.value)}" ${c.value === C.llm_last ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select>` : '';
   fetch(C.ask_url).then(r => r.json()).then(all => {
     document.querySelectorAll('.round[id^="r"]').forEach(el => {

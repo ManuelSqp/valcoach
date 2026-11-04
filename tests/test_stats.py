@@ -849,3 +849,52 @@ def test_kovaaks_files_scores_and_playlists():
     assert f["scenarioList"][0] == {"scenario_name": w["items"][0]["name"], "play_Count": 1} and f["version"] == 31
     assert kv.guess("VoxTargetSwitch xsmall 200%") == (["switching", "micro"], 3)
     assert kv.guess("Smooth Strafe Track Easy")[0][0] == "tracking"
+
+
+def test_web_search_helpers_and_community_playlists():
+    from valcoach.coach import websearch as ws
+    from valcoach.stats import kovaaks as kv
+
+    class R:
+        def __init__(self, code, data):
+            self.status_code, self._d = code, data
+
+        def json(self):
+            return self._d
+
+    class S:
+        def get(self, url, params=None, **k):
+            assert url == "http://sx:8080/search" and params["format"] == "json"
+            return R(200, {"results": [{"title": "<b>Jett</b> guide", "url": "https://a.org/j", "content": "dash &amp; updraft"},
+                                       {"title": "dup", "url": "https://a.org/j"}, {"title": "bad", "url": "javascript:x"}]})
+    out = ws.searxng("http://sx:8080/", "jett unique query", 5, session=S())
+    assert out == [{"title": "Jett guide", "url": "https://a.org/j", "snippet": "dash & updraft"}]
+
+    class Forbidden:
+        def get(self, *a, **k):
+            return R(403, {})
+    try:
+        ws.searxng("http://sx:8080", "other query", session=Forbidden())
+        raise AssertionError("expected SearchError")
+    except ws.SearchError as e:
+        assert "formats" in str(e)
+    # pages on the LAN, the server itself or cloud metadata are never read
+    for u in ("http://127.0.0.1/", "http://10.0.0.1/x", "http://169.254.169.254/latest", "file:///etc/passwd",
+              "http://user:pw@example.org/", "http://[::1]/"):
+        assert not ws.public_url(u), u
+    assert ws.html_text("<html><script>x()</script><nav>menu</nav><p>Hello <b>you</b></p><p>Line 2</p>") == "Hello you\nLine 2"
+    src, err = ws.research(lambda q, n: [{"title": q, "url": f"https://x.org/{q}", "snippet": "s"}], ["a", "b", "a"],
+                           reader=lambda u, n: "page " + u)
+    assert [s["n"] for s in src] == [1, 2] and src[0]["text"] == "page https://x.org/a" and not err
+    assert ws.cited(src, [2, "1", 9, "x", 2]) == [{"title": "b", "url": "https://x.org/b"}, {"title": "a", "url": "https://x.org/a"}]
+    assert "[1] a (https://x.org/a)" in ws.sources_block(src)
+
+    def broken(q, n):
+        raise ws.SearchError("SearXNG isn't reachable")
+    assert ws.research(broken, ["q"]) == ([], ["SearXNG isn't reachable"])
+    # community playlists: what fits the needs, at about your level, without the ones you have
+    need = [{"focus": ["peeking", "flicks", "reaction"], "weight": 3, "why": "first duels"}]
+    picks = kv.suggest(need, [], 4)
+    assert picks and all(set(p["focus"]) & {"peeking", "flicks", "reaction"} for p in picks) and picks[0]["why"] == "first duels"
+    assert picks[0]["code"] not in {p["code"] for p in kv.suggest(need, [], 4, {picks[0]["code"].upper()})}
+    assert len({x["code"] for x in kv.shared()}) == len(kv.SHARED) and all(ws.SHARE_CODE_RE.fullmatch(x["code"]) for x in kv.shared())
