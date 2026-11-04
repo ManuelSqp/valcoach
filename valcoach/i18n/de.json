@@ -1079,6 +1079,7 @@
 "Not enough games with round data yet (needs 5 per player). Press": "Noch nicht genug Spiele mit Rundendaten (braucht 5 pro Spieler). Drück",
 "Not enough moments yet: play a few more games and press Import on Stats & maps.": "Noch nicht genug Momente: Spiel noch ein paar Spiele und drück „Importieren“ auf Stats & Maps.",
 "Not found.": "Nicht gefunden.",
+"Something went wrong on the server. Try again; if it keeps happening, check the server log.": "Auf dem Server ist etwas schiefgegangen. Versuch es nochmal; wenn es wieder passiert, schau ins Server-Log.",
 "Not helpful: the coach avoids lines like this": "Nicht hilfreich: Der Coach vermeidet solche Zeilen",
 "Not played yet": "Noch nicht gespielt",
 "Not posted": "Nicht gepostet",

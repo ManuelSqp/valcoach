@@ -190,7 +190,7 @@ def learn_path(agent: str, rows: list[dict], maps: list[str], pros: list[dict]) 
     on_maps = Counter(r["map"] for r in on if r["map"] in maps)
     pro = next((p for p in pros if agent in (p.get("agents") or [])[:2]), None) or next((p for p in pros if agent in (p.get("agents") or [])), None)
     steps = [
-        {"title": f"Learn the kit", "done": games >= 1,
+        {"title": "Learn the kit", "done": games >= 1,
          "what": f"Watch a short {agent} guide, then try every ability in the Range.",
          "link": YT + quote_plus(f"{agent} guide valorant")},
         {"title": "5 games in unrated or Swiftplay", "done": games >= 5, "what": f"{games} of 5 played.",

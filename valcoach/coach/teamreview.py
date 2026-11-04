@@ -6,7 +6,7 @@ Facts are computed here from the match data; the model only writes the words.
 """
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 import yaml

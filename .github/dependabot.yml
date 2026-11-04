@@ -1,0 +1,9 @@
+# Keeps the versions of the GitHub Actions used in .github/workflows up to date (one PR per update, monthly).
+# Python packages aren't included: pyproject.toml uses minimum versions (>=) without a lock file,
+# so pip already installs the newest release.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

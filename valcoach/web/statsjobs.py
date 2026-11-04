@@ -121,7 +121,6 @@ class StatsRunner:
         return key
 
     def _tips(self, key: str, pid: int, map_name: str, queue: str, all_rows: list[dict], llm_choice: str = "") -> None:
-        from ..coach.ollama import Ollama
         from ..stats.aggregate import filter_rows
         from ..stats.tips import write_tips
         p = self.store.profile(pid)
@@ -170,7 +169,6 @@ class StatsRunner:
         return key
 
     def _watch(self, key: str, pid: int, queue: str, prof: dict, matches: list[dict], jobs: list[dict], llm_choice: str = "") -> None:
-        from ..coach.ollama import Ollama
         from ..stats.tips import write_watch_guide
         from ..stats.youtube import search
         p = self.store.profile(pid)

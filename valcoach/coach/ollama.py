@@ -22,6 +22,8 @@ RECENT: "deque[tuple[float, float, int, str]]" = deque(maxlen=5000)
 
 
 class Ollama:
+    retry_wait_s = 2.0          # first wait before retrying an unreachable/busy server (then doubled, max 8 s)
+
     def __init__(self, url: str, model: str, temperature: float = 0.3, num_ctx: int = 16384,
                  timeout_s: int = 300, think: str = ""):
         self.url = url.rstrip("/")
@@ -58,7 +60,11 @@ class Ollama:
         if self.think:
             payload["think"] = self.think == "on"
         last_err = None
-        for _ in range(retries + 1):
+        for attempt in range(retries + 1):
+            if attempt and not isinstance(last_err, ValueError):
+                # Ollama unreachable or busy (e.g. still loading the model): wait 2, 4, 8 s before trying again.
+                # A reply that wasn't valid JSON is retried right away: that's the model, not the server.
+                time.sleep(min(self.retry_wait_s * 2 ** (attempt - 1), 8.0))
             t0 = time.monotonic()
             try:
                 r = requests.post(f"{self.url}/api/chat", json=payload, timeout=self.timeout_s)

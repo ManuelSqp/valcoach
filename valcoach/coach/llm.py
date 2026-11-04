@@ -204,7 +204,7 @@ class WithFallback:
     def chat_json(self, system: str, user: str, schema: dict, **kw) -> dict:
         if self.fallback is None:
             try:
-                return self.primary.chat_json(system, user, schema)
+                return self.primary.chat_json(system, user, schema, **kw)
             except ClaudeError as e:
                 self._switch(e)
         return self.fallback.chat_json(system, user, schema, **kw)

@@ -12,7 +12,6 @@ from datetime import date, datetime, timedelta
 from flask import abort, flash, g, jsonify, redirect, render_template, request, url_for
 
 from ..stats import roles
-from ..stats.premier_schedule import current
 
 STATES = ("yes", "maybe", "no")
 DAYS_AHEAD = 14

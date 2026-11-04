@@ -133,7 +133,7 @@ def _verdict(o: dict) -> str:
     if set_by_team and o["strength"] != "open" and sug not in set_by_team:
         s += f" Your team has you as {' / '.join(set_by_team)}; your habits point to {sug}: worth a talk."
     elif set_by_team and sug in set_by_team:
-        s += f" That's also the role your team gave you."
+        s += " That's also the role your team gave you."
     if best and best != pref:
         s += f" You also win more and score higher on {best} than on {pref}."
     elif best and best == pref:
@@ -236,5 +236,5 @@ def agent_detail(rows: list[dict], agent: str, abilities: dict[str, str] | None 
     out["utility_games"] = len(has)
     low = [u for u in util if u["diff"] is not None and u["diff"] < -0.25 and u["slot"] != "ultimate" and u["n"] >= 5]
     out["utility_note"] = (f"You use {', '.join(u['name'] for u in low)} less than others on {agent} "
-                           f"({', '.join(f'{u['diff']:.0%}' for u in low)}): utility not used is free value lost.") if low else None
+                           f"({', '.join(format(u['diff'], '.0%') for u in low)}): utility not used is free value lost.") if low else None
     return out

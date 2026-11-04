@@ -1,4 +1,4 @@
-# Runs the test suite on every pull request and on pushes to main, so nothing broken gets merged.
+# Runs the linter and the test suite on every pull request and on pushes to main, so nothing broken gets merged.
 # The tests build their own synthetic matches and a short synthetic VOD: no API keys, no Ollama needed.
 name: tests
 
@@ -8,14 +8,31 @@ on:
     branches: [main]
 
 jobs:
-  pytest:
+  lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - run: pip install "ruff>=0.6"
+      # Settings are in pyproject.toml ([tool.ruff]); target-version py311 also catches syntax 3.11 can't run.
+      - run: ruff check valcoach tests
+
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest version pyproject.toml allows (requires-python) and the one most servers run.
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
           cache: pip
       - name: ffmpeg (clips)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg

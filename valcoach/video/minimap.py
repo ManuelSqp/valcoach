@@ -449,7 +449,6 @@ def describe_track(track: RoundTrack, bucket_s: float = 10.0) -> dict:
         return {}
     end = max(p.t_round_s for p in track.points)
     timeline = []
-    prev = None
     t = 0.0
     while t <= end:
         allies = track.zone_counts("ally", t, t + bucket_s)

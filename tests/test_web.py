@@ -1024,7 +1024,7 @@ def test_nightly_sync_and_sortable_roles(app):
 
 
 # ---------------------------------------------------------------------------
-# review fixes (see CHANGES.md)
+# review fixes (see notes/review-fixes-2.15.md)
 def test_bad_ids_and_anchor_inputs(app):
     c = setup_admin(app)
     pid = add_profile(c)
@@ -1327,7 +1327,9 @@ def test_premier_scouting_veto_reviews_and_brief(app, monkeypatch):
         _wait_stats(app, f"import:{m['pid']}")
     page = c.get(f"/teams/{tid}/premier").data.decode()
     assert "This week" in page and "Premier matches" in page and "Season schedule" in page
-    assert ">Corrode<" in page or "built-in schedule" in page or "known yet" in page     # before the API schedule is read
+    # the week's map box: from the built-in or the API schedule (whichever is read first), or not known yet.
+    # Don't check for a specific map: the schedule moves on every week, so a hard-coded map breaks the test.
+    assert "Premier week" in page or "known yet" in page
     _wait_stats(app, f"schedule:{tid}")
 
     # scout the division: our own team is skipped, the rival gets a page, the empty team too
@@ -1499,7 +1501,7 @@ def test_clip_info():
 
 
 def test_availability_and_subs(app):
-    from datetime import date, timedelta
+    from datetime import date
     from valcoach.web.availability import day_summary, match_days, summary_line
     c = setup_admin(app)
     store = app.extensions["valcoach"]["store"]
@@ -1760,8 +1762,6 @@ def test_discord_mentions_are_limited():
 
 
 def test_model_picker_claude_permission_and_runs(app, monkeypatch):
-    import synth_history as sh
-    from valcoach import pipeline
     from valcoach.coach import llm as L
     from valcoach.coach.ollama import Ollama
     import valcoach.web.models as wm
@@ -1862,7 +1862,7 @@ def test_ask_the_coach_and_clips(app, monkeypatch, synthetic):
     assert c.post(f"/api/jobs/{job.id}/ask", json={"round": 2, "question": ""}).status_code == 400
     r = c.post(f"/api/jobs/{job.id}/ask", json={"round": 2, "question": "Should I have saved?"})
     assert r.status_code == 200 and r.get_json()["pending"]
-    for _ in range(100):
+    for _ in range(300):                      # up to 30 s: a busy machine is slower than 10 s
         s = c.get(f"/api/jobs/{job.id}/ask?round=2").get_json()
         if not s["pending"]:
             break
