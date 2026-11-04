@@ -22,6 +22,7 @@ from __future__ import annotations
 import html as _html
 import ipaddress
 import logging
+import os
 import re
 import socket
 import time
@@ -29,6 +30,7 @@ from html.parser import HTMLParser
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 import requests
+import urllib3
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +44,7 @@ BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101
 DDG_URL = "https://html.duckduckgo.com/html/"
 _cache: dict[tuple[str, str], tuple[float, list[dict]]] = {}
 CACHE_S = 6 * 3600
+CACHE_MAX = 500                    # searches kept (the oldest go first)
 
 
 NAMES = {"duckduckgo": "DuckDuckGo", "searxng": "SearXNG", "claude": "Claude's web search"}
@@ -136,6 +139,13 @@ def searcher(store):
     return with_backup(main, _one(store, backup(store)))
 
 
+def _remember(provider: str, query: str, out: list[dict]) -> None:
+    _cache[(provider, query)] = (time.time(), out)
+    if len(_cache) > CACHE_MAX:                       # dicts keep insertion order: drop the oldest
+        for k in list(_cache)[: len(_cache) - CACHE_MAX]:
+            _cache.pop(k, None)
+
+
 # ----------------------------------------------------------------------------- providers
 def _clean(s, limit: int = 400) -> str:
     s = re.sub(r"<[^>]+>", " ", str(s or ""))
@@ -222,7 +232,7 @@ def duckduckgo(query: str, n: int = 6, session=None) -> list[dict]:
         raise SearchError("duckduckgo", "http", f"HTTP {r.status_code}")
     out = ddg_results(text)
     if out:
-        _cache[("duckduckgo", query)] = (time.time(), out)
+        _remember("duckduckgo", query, out)
     return out[:n]
 
 
@@ -251,7 +261,7 @@ def searxng(base: str, query: str, n: int = 6, session=None) -> list[dict]:
             continue
         seen.add(url)
         out.append({"title": _clean(x.get("title"), 160) or url, "url": url, "snippet": _clean(x.get("content"))})
-    _cache[("searxng", query)] = (time.time(), out)
+    _remember("searxng", query, out)
     return out[:n]
 
 
@@ -304,64 +314,101 @@ def claude(api_key: str, model: str, query: str, n: int = 6, budget_usd: float =
                     if quote and quote not in results[url]["snippet"]:
                         results[url]["snippet"] = (results[url]["snippet"] + " " + quote).strip()[:600]
     out = list(results.values())
-    _cache[("claude", query)] = (time.time(), out)
+    _remember("claude", query, out)
     return out[:n]
 
 
 # ----------------------------------------------------------------------------- reading a page
+def _public_ip(host: str, port: int) -> str | None:
+    """The address to connect to, when every address of the host is public (else None)."""
+    try:
+        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+    except (socket.gaierror, UnicodeError, OSError):
+        return None
+    ips = [ipaddress.ip_address(i[4][0].split("%")[0]) for i in infos]
+    if not ips or any(not ip.is_global or ip.is_multicast for ip in ips):
+        return None
+    return str(ips[0])
+
+
 def public_url(url: str) -> bool:
     """http(s) on a public address: never the server itself, the LAN or cloud metadata."""
+    return _target(url) is not None
+
+
+def _target(url: str) -> tuple[str, str, int, str, str] | None:
+    """(scheme, host, port, ip, path) for a public http(s) URL, else None."""
     try:
         p = urlparse(url)
+        port = p.port or (443 if p.scheme == "https" else 80)
     except ValueError:
-        return False
+        return None
     if p.scheme not in ("http", "https") or not p.hostname or p.username or p.password:
-        return False
-    try:
-        infos = socket.getaddrinfo(p.hostname, p.port or (443 if p.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
-    except (socket.gaierror, UnicodeError, OSError):
-        return False
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0].split("%")[0])
-        if not ip.is_global or ip.is_multicast:
-            return False
-    return bool(infos)
+        return None
+    ip = _public_ip(p.hostname, port)
+    if ip is None:
+        return None
+    return p.scheme, p.hostname, port, ip, (p.path or "/") + (f"?{p.query}" if p.query else "")
+
+
+def _ca_bundle() -> str:
+    return os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get("SSL_CERT_FILE") or requests.utils.DEFAULT_CA_BUNDLE_PATH
+
+
+def _get_pinned(scheme: str, host: str, port: int, ip: str, path: str):
+    """GET on exactly the address that was checked (no second DNS lookup that could answer differently, i.e.
+    DNS rebinding). HTTPS still checks the certificate for the host name."""
+    timeout = urllib3.Timeout(connect=PAGE_TIMEOUT, read=PAGE_TIMEOUT)
+    if scheme == "https":
+        pool = urllib3.HTTPSConnectionPool(ip, port, timeout=timeout, retries=False, maxsize=1, server_hostname=host,
+                                           assert_hostname=host, cert_reqs="CERT_REQUIRED", ca_certs=_ca_bundle())
+    else:
+        pool = urllib3.HTTPConnectionPool(ip, port, timeout=timeout, retries=False, maxsize=1)
+    default = 443 if scheme == "https" else 80
+    headers = {"Host": host if port == default else f"{host}:{port}", "User-Agent": UA,
+               "Accept": "text/html,text/plain", "Accept-Encoding": "gzip, deflate"}
+    return pool.urlopen("GET", path, headers=headers, redirect=False, preload_content=False, decode_content=True)
 
 
 def page_text(url: str, limit: int = 4000, session=None) -> str:
     """The readable text of a public web page ('' when it can't be read)."""
-    s = session or requests
+    r = None
     for _ in range(4):                                  # follow redirects ourselves, checking each address
-        if not public_url(url):
+        t = _target(url)
+        if t is None:
             return ""
         try:
-            r = s.get(url, headers={"User-Agent": UA, "Accept": "text/html,text/plain"}, timeout=PAGE_TIMEOUT,
-                      allow_redirects=False, stream=True)
-        except requests.RequestException:
+            r = _get_pinned(*t)
+        except (urllib3.exceptions.HTTPError, OSError, ValueError):
             return ""
-        if r.status_code in (301, 302, 303, 307, 308) and r.headers.get("location"):
+        if r.status in (301, 302, 303, 307, 308) and r.headers.get("location"):
             url = urljoin(url, r.headers["location"])
-            r.close()
+            r.release_conn()
+            r = None
             continue
         break
-    else:
+    if r is None:
         return ""
     try:
-        if r.status_code != 200:
+        if r.status != 200:
             return ""
         ctype = (r.headers.get("content-type") or "").lower()
         if ctype and not ctype.startswith(("text/html", "text/plain", "application/xhtml")):
             return ""
         raw = b""
-        for chunk in r.iter_content(65536):
+        for chunk in r.stream(65536):
             raw += chunk
             if len(raw) > MAX_PAGE_BYTES:
                 break
-    except requests.RequestException:
+    except (urllib3.exceptions.HTTPError, OSError):
         return ""
     finally:
-        r.close()
-    text = raw.decode(r.encoding or "utf-8", errors="replace")
+        r.release_conn()
+    m = re.search(r"charset=([\w-]+)", ctype)
+    try:
+        text = raw.decode(m.group(1) if m else "utf-8", errors="replace")
+    except LookupError:
+        text = raw.decode("utf-8", errors="replace")
     return html_text(text)[:limit]
 
 
@@ -397,7 +444,8 @@ def queries_for(llm, question: str, context: str = "", n: int = 3) -> list[str]:
     user = (f"What the coach already knows:\n{context[:3000]}\n\n" if context else "") + f"Question: {question}"
     try:
         out = llm.chat_json(QUERY_SYSTEM.format(n=n) + field_guide(QUERY_SCHEMA), user, QUERY_SCHEMA)
-    except Exception:
+    except Exception as e:                           # no queries: the coach answers without the web
+        log.info("web search: the model wrote no search queries (%s)", e)
         return []
     qs = []
     for q in out.get("queries") or []:
@@ -410,24 +458,25 @@ def queries_for(llm, question: str, context: str = "", n: int = 3) -> list[str]:
 def research(search, queries: list[str], per_query: int = 4, read: int = 3, page_chars: int = 2500,
              reader=None) -> tuple[list[dict], list[str]]:
     """Run the searches; read the best few pages. -> (sources [{n, title, url, snippet, text}], errors)"""
-    sources: list[dict] = []
-    seen: set[str] = set()
+    per: list[list[dict]] = []
     errors: list[str] = []
     for q in queries:
         try:
-            hits = search(q, per_query)
+            per.append(search(q, per_query))
         except Exception as e:                       # a broken search never breaks the answer
             log.warning("web search %r: %s", q, e)
             msg = describe(e)
             if msg not in errors:
                 errors.append(msg)
-            continue
-        for h in hits:
-            if h["url"] in seen:
-                continue
-            seen.add(h["url"])
-            sources.append(dict(h, text=""))
-    # read the top result of each query first, then the rest
+    # take turns: the best hit of every query, then the second of every query ... (so the pages that get read
+    # are the top result of each query, not three hits of the first one)
+    sources: list[dict] = []
+    seen: set[str] = set()
+    for rank in range(max((len(x) for x in per), default=0)):
+        for hits in per:
+            if rank < len(hits) and hits[rank]["url"] not in seen:
+                seen.add(hits[rank]["url"])
+                sources.append(dict(hits[rank], text=""))
     reader = reader or page_text
     for s in sources[:read]:
         s["text"] = reader(s["url"], page_chars) or ""

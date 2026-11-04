@@ -393,7 +393,7 @@ class Store:
 
     # ---- connection / migration --------------------------------------------
     def _conn(self) -> sqlite3.Connection:
-        c = sqlite3.connect(self.db_path, timeout=30)
+        c = sqlite3.connect(self.db_path, timeout=30)       # timeout = busy timeout: waits up to 30 s for a lock
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA foreign_keys = ON")
         return c
@@ -401,6 +401,11 @@ class Store:
     def _migrate(self) -> None:
         c = sqlite3.connect(self.db_path, timeout=30, isolation_level=None)
         try:
+            # WAL: readers don't wait for a writer (pages keep loading while a job saves); stays set in the file
+            try:
+                c.execute("PRAGMA journal_mode = WAL")
+            except sqlite3.OperationalError:          # e.g. a network share that can't do WAL: keep the default
+                pass
             c.execute("PRAGMA foreign_keys = OFF")     # table rebuild must not cascade-delete jobs
             c.executescript(SCHEMA)
             cols = [r[1] for r in c.execute("PRAGMA table_info(profiles)")]

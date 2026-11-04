@@ -4,6 +4,7 @@ Answers are written in the background (a local model can take a minute); the pag
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 import time
@@ -14,9 +15,12 @@ from markupsafe import Markup, escape
 from flask import flash, g, jsonify, redirect, render_template, request, url_for
 
 from ..coach import askcoach as ac
+from ..coach.llm import ClaudeError, NoAnswer, user_error
+from ..coach.ollama import OllamaError
 from ..coach import websearch as ws
 
 MAX_ITEMS = 60
+log = logging.getLogger(__name__)
 _ex = ThreadPoolExecutor(max_workers=2, thread_name_prefix="askcoach")
 _state: dict[tuple[int, int], dict] = {}            # (uid, pid) -> {"step": ..., "error": ..., "q": ...}
 _lock = threading.Lock()
@@ -98,8 +102,9 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                     tmp.replace(f)
                     _state.pop(key, None)
             except Exception as e:                       # shown once under the question box
+                log.warning("ask the coach: %s", e, exc_info=not isinstance(e, (OllamaError, ClaudeError, NoAnswer)))
                 with _lock:
-                    _state[key] = {"error": str(e)[:300] or e.__class__.__name__, "q": q}
+                    _state[key] = {"error": user_error(e), "q": q}
         _ex.submit(work)
         return jsonify(ok=True, pending=True)
 

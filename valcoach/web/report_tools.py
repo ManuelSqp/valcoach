@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import subprocess
@@ -41,6 +42,7 @@ CLIP_MAX_MB = 9.5            # Discord webhooks take ~10 MB without a boosted se
 _ex = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ask")
 _pending: dict[tuple[str, int], str] = {}          # (job, round) -> "" running | error text
 _lock = threading.Lock()
+log = logging.getLogger(__name__)
 
 
 def ask_path(report_json: Path) -> Path:
@@ -147,7 +149,8 @@ def register(app, store, get_job, llm_for, discord_url_for):
                 from ..coach.websearch import searcher
                 res = answer(llm, report, rnd, q, hist, profile.language if profile else "English", search=searcher(store))
                 if not res["answer"]:
-                    raise RuntimeError("the model gave no answer")
+                    from ..coach.llm import NoAnswer
+                    raise NoAnswer("the model gave no answer")
                 with _lock:
                     d = read_asks(jp)
                     d.setdefault("rounds", {}).setdefault(str(rnd), []).append(
@@ -157,8 +160,11 @@ def register(app, store, get_job, llm_for, discord_url_for):
                     tmp.replace(ask_path(jp))
                     _pending.pop(key, None)
             except Exception as e:                     # shown under the question box
+                from ..coach.llm import ClaudeError, NoAnswer, user_error
+                from ..coach.ollama import OllamaError
+                log.warning("ask about a round: %s", e, exc_info=not isinstance(e, (OllamaError, ClaudeError, NoAnswer)))
                 with _lock:
-                    _pending[key] = str(e)[:300] or e.__class__.__name__
+                    _pending[key] = user_error(e)
         _ex.submit(work)
         return jsonify(ok=True, pending=True)
 
