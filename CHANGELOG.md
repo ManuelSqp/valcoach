@@ -34,7 +34,9 @@ every report, and with `valcoach --version`. Update: `git pull`, `pip install -e
     (browsers read `/\` and `/<tab>/` like `//`).
   - Web search errors shown in the browser (Settings › Test, Ask the coach, the Aim page) are fixed texts now;
     the details from the search server or the exception only go to the server log.
-  - The backup folder must be a full path without `..` and can't be the root or a system folder (`/etc`, `/usr` ...).
+  - The backup folder must be a full path without `..` inside `/mnt`, `/media`, `/srv`, `/home`, `/backup(s)`,
+    `/var/backups` or the data folder. Other places: list them in the environment variable `VALCOACH_BACKUP_ROOTS`
+    (separated by `:`), e.g. in the systemd service.
 - German for everything new.
 
 ## 4.1.2

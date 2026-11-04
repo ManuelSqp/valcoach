@@ -27,7 +27,7 @@ PREFIX = "valcoach-backup-"
 
 def backup_dir(store) -> Path:
     d = (store.get("backup_dir") or "").strip()
-    folder = clean_folder(d)[0] if d else None
+    folder = clean_folder(d, store.data_dir)[0] if d else None
     return folder or store.data_dir / "backups"
 
 
@@ -49,28 +49,35 @@ def explain(e: BaseException, folder: Path | str) -> str:
     return str(e)[:300]
 
 
-SYSTEM_DIRS = ("/proc", "/sys", "/dev", "/etc", "/boot", "/bin", "/sbin", "/usr", "/lib", "/lib64", "/run", "/var/run")
+# Where an admin may point the backups (Settings › Backups): the data folder and the usual places for disks and
+# shares. Change it with the environment variable VALCOACH_BACKUP_ROOTS (folders separated by ":").
+DEFAULT_ROOTS = ("/mnt", "/media", "/srv", "/home", "/backup", "/backups", "/var/backups")
 
 
-def clean_folder(raw: str) -> tuple[Path | None, str]:
-    """An admin's backup folder: a full path, no "..", never the root or a system folder. -> (path, why not)"""
+def allowed_roots(data_dir: Path | str) -> list[str]:
+    extra = os.environ.get("VALCOACH_BACKUP_ROOTS", "")
+    roots = [x for x in extra.split(os.pathsep) if x.strip()] if extra.strip() else list(DEFAULT_ROOTS)
+    return [os.path.realpath(data_dir)] + [os.path.realpath(r.strip()) for r in roots if r.strip().startswith("/")]
+
+
+def clean_folder(raw: str, data_dir: Path | str) -> tuple[Path | None, str]:
+    """An admin's backup folder: a full path without "..", inside one of the allowed roots. -> (path, why not)"""
     raw = str(raw or "").strip()
-    if not raw or "\x00" in raw:
+    if not raw or "\x00" in raw or not os.path.isabs(os.path.expanduser(raw)):
         return None, "Backup folder: give the full path, e.g. /mnt/nas/valcoach-backups"
     if ".." in Path(raw).parts:
         return None, "Backup folder: a full path without “..”"
-    p = Path(os.path.normpath(os.path.expanduser(raw)))
-    if not p.is_absolute():
-        return None, "Backup folder: give the full path, e.g. /mnt/nas/valcoach-backups"
-    real = os.path.realpath(p)
-    if real == "/" or any(real == d or real.startswith(d + "/") for d in SYSTEM_DIRS):
-        return None, f"Backup folder: not a system folder ({real})"
-    return Path(real), ""
+    real = os.path.realpath(os.path.expanduser(raw))
+    for root in allowed_roots(data_dir):
+        if root != "/" and real.startswith(root + os.sep):     # a folder inside an allowed root
+            return Path(real), ""
+    return None, ("Backup folder: only inside " + ", ".join(DEFAULT_ROOTS) +
+                  " or the data folder (other places: the environment variable VALCOACH_BACKUP_ROOTS)")
 
 
-def check_folder(folder: Path | str) -> str:
+def check_folder(folder: Path | str, data_dir: Path | str) -> str:
     """'' when valcoach can write backups to this folder, else why not (for Settings)."""
-    d, why = clean_folder(str(folder))
+    d, why = clean_folder(str(folder), data_dir)
     if d is None:
         return why
     if not d.is_dir():

@@ -172,12 +172,18 @@ class _DDGParser(HTMLParser):
             self._buf.append(data)
 
 
+def _is_ddg(host: str | None) -> bool:
+    """duckduckgo.com itself or one of its subdomains (not e.g. evil-duckduckgo.com)."""
+    host = (host or "").lower().rstrip(".")
+    return host == "duckduckgo.com" or host.endswith(".duckduckgo.com")
+
+
 def _ddg_url(href: str) -> str:
     """DuckDuckGo sometimes links through //duckduckgo.com/l/?uddg=<the real address>."""
     if href.startswith("//"):
         href = "https:" + href
     p = urlparse(href)
-    if p.hostname and p.hostname.endswith("duckduckgo.com") and p.path.startswith("/l/"):
+    if _is_ddg(p.hostname) and p.path.startswith("/l/"):
         real = parse_qs(p.query).get("uddg", [""])[0]
         return unquote(real) if real else ""
     return href
@@ -190,7 +196,7 @@ def ddg_results(page: str) -> list[dict]:
     for x in pr.out:
         url = _ddg_url(x["url"])
         host = urlparse(url).hostname or ""
-        if not url.startswith(("http://", "https://")) or host.endswith("duckduckgo.com") or url in seen:
+        if not url.startswith(("http://", "https://")) or _is_ddg(host) or url in seen:
             continue                                     # ads go through duckduckgo.com/y.js
         seen.add(url)
         out.append({"title": _clean(x["title"], 160) or url, "url": url, "snippet": _clean(x["snippet"])})

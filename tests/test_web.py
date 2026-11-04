@@ -2008,7 +2008,8 @@ def test_home_today_nav_and_tabs(app):
     assert f'href="/profiles/{pids[2]}/training"' in page and "<b>P2</b>" in page
 
 
-def test_backups_and_discord_channels(app, tmp_path):
+def test_backups_and_discord_channels(app, tmp_path, monkeypatch):
+    monkeypatch.setenv("VALCOACH_BACKUP_ROOTS", str(tmp_path))         # a backup folder outside the data folder
     import tarfile
     from valcoach.discord import channel
     from valcoach.web import backup
@@ -2412,6 +2413,7 @@ def test_ask_the_coach_chat_with_web_search(app, monkeypatch):
 
 def test_settings_web_search_width_and_backup_message(app, tmp_path):
     import errno
+    from urllib.parse import urlparse
     from valcoach.web import backup
     c = setup_admin(app)
     store = app.extensions["valcoach"]["store"]
@@ -2436,15 +2438,19 @@ def test_settings_web_search_width_and_backup_message(app, tmp_path):
     # a read-only backup folder (the systemd sandbox) is explained, not shown as a bare Errno
     msg = backup.explain(OSError(errno.EROFS, "Read-only file system"), "/srv/backups")
     assert "ReadWritePaths=/srv/backups" in msg and "Errno" not in msg
-    assert backup.check_folder(tmp_path) == "" and "not found" in backup.check_folder(tmp_path / "nope")
-    for bad in ("/etc", "/", "/mnt/../etc", "relative/path"):
-        assert backup.check_folder(bad), bad
+    data = store.data_dir
+    (data / "bk").mkdir()
+    assert backup.check_folder(data / "bk", data) == "" and "not found" in backup.check_folder(data / "nope", data)
+    for bad in ("/etc", "/", "/mnt/../etc", "relative/path", "/usr/local/bk"):
+        assert backup.check_folder(bad, data), bad
+    assert backup.clean_folder("/mnt/nas/valcoach", data)[0] is not None
     c.post("/settings", data={"backup_keep": "14", "backup_dir": "/etc"})
     assert store.get("backup_dir") != "/etc"
     # redirects after a form or a language switch stay on this site, whatever browsers make of the target
     for evil in ("//evil.com", "/\\evil.com", "/\t/evil.com", "https://evil.com", "/%0a"):
         r = c.get("/lang/en?next=" + evil.replace("\t", "%09"))
-        assert "evil" not in r.headers["Location"], evil
+        loc = r.headers["Location"]
+        assert loc.startswith("/") and not loc.startswith("//") and not urlparse(loc).netloc, (evil, loc)
     assert c.get("/lang/en?next=/account").headers["Location"].endswith("/account")
 
 

@@ -175,10 +175,13 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         session["uid"] = user.id
         session["sk"] = user.session_key
 
-    def safe_next(default: str = "/") -> str:
+    def redirect_next(default: str = "/"):
+        """Redirect to ?next= when it's a page of this site, else to default (see urls.local_path)."""
         from .urls import local_path
-        nxt = local_path(request.args.get("next"))
-        return nxt if nxt and not urlparse(nxt).netloc and not urlparse(nxt).scheme else default
+        target = (request.args.get("next") or "").replace("\\", "")
+        if local_path(target) and not urlparse(target).netloc and not urlparse(target).scheme:
+            return redirect(target)
+        return redirect(default)
 
     def form_int(name: str, default: int, lo: int, hi: int) -> int | None:
         """Integer form field in [lo, hi]; None if it isn't one."""
@@ -412,7 +415,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         """The language switch on the login page (a cookie; logged-in users pick it under Account)."""
         if lang not in i18n.LANGS:
             abort(404)
-        resp = redirect(safe_next(url_for("login")))
+        resp = redirect_next(url_for("login"))
         resp.set_cookie("vc-lang", lang, max_age=365 * 86400, samesite="Lax", secure=request.is_secure, httponly=True)
         if g.user is not None:
             try:
@@ -465,7 +468,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             if user:
                 login_fails.pop(key, None)
                 log_in(user)
-                return redirect(safe_next())
+                return redirect_next()
             recent.append(time.time())
             flash("Wrong username or password.", "error")
             return render_template("auth.html", mode="login", username=username), 401
@@ -1279,7 +1282,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             if "backup_keep" in f:                      # Backups
                 store.set("backup_on", "1" if f.get("backup_on") else "0")
                 bd = f.get("backup_dir", "").strip()
-                if bd and (why := _backups.check_folder(bd)):
+                if bd and (why := _backups.check_folder(bd, store.data_dir)):
                     errors.append(why)
                 else:
                     store.set("backup_dir", bd)

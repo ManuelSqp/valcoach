@@ -361,7 +361,7 @@
 "Background jobs": "Hintergrundaufträge",
 "Backup failed: {x}": "Backup fehlgeschlagen: {x}",
 "Backup folder: a full path without “..”": "Backup-Ordner: ein ganzer Pfad ohne „..“",
-"Backup folder: not a system folder ({x})": "Backup-Ordner: kein Systemordner ({x})",
+"Backup folder: only inside /mnt, /media, /srv, /home, /backup, /backups, /var/backups or the data folder (other places: the environment variable VALCOACH_BACKUP_ROOTS)": "Backup-Ordner: nur in /mnt, /media, /srv, /home, /backup, /backups, /var/backups oder im Datenordner (andere Orte: Umgebungsvariable VALCOACH_BACKUP_ROOTS)",
 "Backup search": "Ersatz-Suche",
 "Backup search with Claude needs the Anthropic API key (Claude section).": "Ersatz-Suche mit Claude braucht den Anthropic-API-Key (Abschnitt Claude).",
 "Backup search: enter your SearXNG URL first.": "Ersatz-Suche: Gib zuerst deine SearXNG-URL ein.",

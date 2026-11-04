@@ -157,9 +157,9 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                                shared_groups=kv.SHARED_GROUPS, n_shared=len(kv.SHARED), search_on=bool(ws.provider(store)))
 
     def back(pid: int):
-        nxt = local_path(request.form.get("next"))
-        if nxt and not urlparse(nxt).netloc and not urlparse(nxt).scheme:
-            return redirect(nxt)
+        target = (request.form.get("next") or "").replace("\\", "")
+        if local_path(target) and not urlparse(target).netloc and not urlparse(target).scheme:
+            return redirect(target)
         return redirect(url_for("aim", pid=pid))
 
     def aim_post(p, can_edit: bool, uid: int):

@@ -371,7 +371,9 @@ journalctl -u valcoach -f                         # logs
 
 After an update: `git pull`, `pip install -e .` in the venv, then `sudo systemctl restart valcoach`.
 The service may only write to `data/`; if a recordings folder lives somewhere
-else, it still works (read-only is enough).
+else, it still works (read-only is enough). Backups to another folder (Settings › Backups) need that folder
+added to the service as `ReadWritePaths=/path/to/backups`; it must be inside `/mnt`, `/media`, `/srv`, `/home`,
+`/backup(s)` or `/var/backups`, or listed in `Environment=VALCOACH_BACKUP_ROOTS=/your/folder` (`:`-separated).
 
 **Option B: Docker Compose**
 
