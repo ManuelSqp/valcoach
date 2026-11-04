@@ -586,7 +586,7 @@ def test_team_review_trades_are_consistent(match, map_info, focus):
 
 
 # ---------------------------------------------------------------------------
-# review fixes (see CHANGES.md)
+# review fixes (see notes/review-fixes-2.15.md)
 def test_live_api_utility_shape():
     """Live API: match totals filled, every per-round cast null. Rounds must not claim "no utility"."""
     from valcoach.coach.summarize import match_stats_block, round_summary
@@ -667,7 +667,7 @@ def test_prompts_show_field_rules_to_the_model():
 def test_new_llm_features_send_their_field_rules(monkeypatch):
     """Weekly focus, map tips, game plans and the team review also tell the model what each field means."""
     from valcoach.coach.prompts import field_guide
-    from valcoach.stats import gameplans, tips, weekly
+    from valcoach.stats import tips, weekly
     for sch in (weekly.schema(), tips.schema()):
         assert field_guide(sch).count("\n- ") >= 2
     seen = []
@@ -775,3 +775,39 @@ def test_playbook_with_wrong_structure_does_not_crash(tmp_path):
         assert load_playbook(p, "Ascent") == ""
     p.write_text("maps:\n  ascent:\n    plan: default\n")
     assert "default" in load_playbook(p, "Ascent")
+
+def test_ollama_waits_before_retrying_an_unreachable_server(monkeypatch):
+    """Connection errors are retried after 2, 4 s (not instantly); a reply that isn't JSON is retried right away."""
+    import requests
+    from valcoach.coach import ollama as O
+    waits, calls = [], []
+
+    class Resp:
+        status_code = 200
+        def __init__(self, content): self._c = content
+        def json(self): return {"message": {"content": self._c}}
+
+    replies = [requests.ConnectionError("down"), requests.ConnectionError("down"), Resp("not json"), Resp('{"ok": 1}')]
+
+    def post(*a, **kw):
+        calls.append(1)
+        r = replies.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+    monkeypatch.setattr(O.requests, "post", post)
+    monkeypatch.setattr(O.time, "sleep", waits.append)
+    assert O.Ollama("http://x", "m").chat_json("s", "u", {}, retries=3) == {"ok": 1}
+    assert len(calls) == 4 and waits == [2.0, 4.0]
+
+
+def test_fallback_passes_retries_to_the_primary_model():
+    from valcoach.coach.llm import WithFallback
+    seen = {}
+
+    class Primary:
+        def chat_json(self, system, user, schema, **kw):
+            seen.update(kw)
+            return {"ok": True}
+    wf = WithFallback(Primary(), lambda: None)
+    assert wf.chat_json("s", "u", {}, retries=5) == {"ok": True} and seen == {"retries": 5}

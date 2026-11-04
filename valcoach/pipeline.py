@@ -362,7 +362,7 @@ class CoachResult:
 
 def run(cfg: Config, req: CoachRequest, log: Log = _noop) -> CoachResult:
     from .coach.engine import analyse, run_coach
-    from .coach.ollama import Ollama, OllamaError
+    from .coach.ollama import OllamaError
     from .report import render_report
 
     match = load_match(cfg, req.match, req.queue)
@@ -371,6 +371,8 @@ def run(cfg: Config, req: CoachRequest, log: Log = _noop) -> CoachResult:
     puuid = focus_player(cfg, match, req.player)
     map_info = get_map_info(cfg, match, log)
     mode = req.mode or cfg.coach.mode
+    if mode not in ("both", "team", "player"):
+        raise ValueError(f"Unknown coaching mode {mode!r}: use both, team or player.")
     me = match.players[puuid]
     log(f"· {match.map_name} · {len(match.rounds)} rounds · {me.riot_id} ({me.agent}) · mode {mode}")
 

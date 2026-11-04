@@ -1,8 +1,29 @@
 # Changelog
 
 The running version is shown next to the logo in the web app, in *Settings*, at the top of
-every report, and with `valcoach --version`. Update: unzip over your install (keep `data/`),
-`pip install -e .`, `sudo systemctl restart valcoach`.
+every report, and with `valcoach --version`. Update: `git pull`, `pip install -e .`,
+`sudo systemctl restart valcoach` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
+
+## 4.1.2
+- **Fix: valcoach didn't start on Python 3.11.** One line in the agent details (utility note) used nested f-string
+  quotes, which only Python 3.12+ can read, although 3.11 is supported. 3.12 and 3.13 (Docker) weren't affected.
+- **The tests now run on Python 3.11 and 3.12**, and a linter (ruff, settings in `pyproject.toml`) checks every pull
+  request, so syntax a supported Python can't read, undefined names and leftover imports are caught before merging.
+  Run it locally with `ruff check valcoach tests` (it comes with `pip install -e ".[dev]"`).
+- **Ollama retries wait** (2 s, then 4 s, at most 8 s) when the server can't be reached or answers with an error,
+  e.g. while it's still loading the model, instead of trying again instantly and failing. A reply that isn't valid JSON
+  is still retried right away.
+- With Claude and the local model as fallback, Claude now gets the caller's retry setting too.
+- An unknown coaching mode (not `both`, `team` or `player`) stops with a clear message instead of a crash halfway.
+- Server errors show valcoach's error page (with a hint to check the server log) instead of a bare *Internal Server Error*.
+- Dependabot keeps the GitHub Actions in the workflow up to date.
+- Tests: the Premier page test no longer expects a fixed map (it failed once the season reached week 3), and the
+  *Ask the coach* test waits longer, so it doesn't fail on a busy machine.
+- Cleanup: unused imports and variables removed; `.git` is no longer sent to Docker builds.
+- README: install and update with git instead of a zip, what the server needs (GPU memory for the model, CPU for the
+  video part, disk space for VODs), *Known limits* updated for the fixes from the first real recording.
+- `valcoach-fixes.patch` is removed (everything in it has been in the code since 2.17.0) and `CHANGES.md` moved to
+  `notes/review-fixes-2.15.md`.
 
 ## 4.1.1
 - KovaaK's playlists from the coach carry the date (DD-MM-YYYY) in their name and file name, e.g.
@@ -432,7 +453,7 @@ every report, and with `valcoach --version`. Update: unzip over your install (ke
     *Duplicate*, *Post to Discord* (#match-prep). Saves by itself; the list shows everyone's drafts per map.
   - Only team members and real agents are stored (same idea as the strat board): nothing another member saves
     can run in your browser.
-- **VOD fixes from the first real recording** (in 2.16.0 on GitHub, details in [CHANGES.md](CHANGES.md)): big
+- **VOD fixes from the first real recording** (in 2.16.0 on GitHub, details in [notes/review-fixes-2.15.md](notes/review-fixes-2.15.md)): big
   uploads no longer fill `/tmp`, ultrawide recordings (black bars) work, "Based on side" minimap orientation is
   calibrated, the minimap summary no longer counts 11 allies, your own icon is followed from your API positions.
 
@@ -445,7 +466,7 @@ every report, and with `valcoach --version`. Update: unzip over your install (ke
   - Each pro gets its own guide. *Write what to watch for <pro>* writes the selected one; *All 3 pros* writes all
     three in one go (one model run each) so switching is instant. Cards show "✓ guide written".
   - Guides written before this version still show for your closest pro.
-- **Includes Manuel's review fixes on 2.15.0** (details in [CHANGES.md](CHANGES.md)): real utility numbers from the
+- **Includes Manuel's review fixes on 2.15.0** (details in [notes/review-fixes-2.15.md](notes/review-fixes-2.15.md)): real utility numbers from the
   live API, the model now sees the field descriptions (also for the new per-pro watch guide), no "check the VOD"
   without a VOD, deathmatch / team deathmatch / gauntlet can't be coached, time-outs are detected, the strat board
   only stores typed fields (stored XSS), forms from other sites are blocked (CSRF), limits per user (reports at

@@ -1,6 +1,6 @@
 # valcoach
 
-**Version 4.1.1** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.1.2** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -22,13 +22,28 @@ VOD ──► kill-feed sync ──► minimap tracking ┤   (rotations, stacks
 ## 1. Install
 
 ```bash
-unzip valcoach-v2.zip && cd valcoach-v2
-python3 -m venv .venv
+git clone https://github.com/ManuelSqp/valcoach.git && cd valcoach
+python3 -m venv .venv          # Python 3.11 or newer
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                     # 164 tests, ~3 min, builds a synthetic match + VOD
+pytest -q                     # ~160 tests, ~3 min, builds a synthetic match + VOD
 ollama pull qwen3.8:27b       # default; alternatives below
 ```
+
+**Update:** `git pull`, then `pip install -e .` and restart the app (`sudo systemctl restart valcoach`,
+or `docker compose up -d --build`). Your `data/` folder and `config.toml` aren't in git, so they stay as they are.
+
+### What the server needs
+
+- **The model is the heavy part.** The suggested models are 16–19 GB. The coaching is fast when the whole model
+  fits in GPU memory (NVIDIA or Apple Silicon unified memory); if only part of it fits, Ollama runs the rest on the
+  CPU and every report takes much longer. The *Server* page shows how much of the model is on the GPU. A smaller model
+  or Claude (no GPU needed, see below) are the alternatives.
+- **The video part** (sync, minimap, clips) runs on the CPU with OpenCV and ffmpeg; a faster CPU just means
+  the VOD step finishes sooner.
+- **Disk space:** VODs are several GB each. Uploaded VODs are stored in `data/`, so plan space for them or delete
+  old ones.
+- **ffmpeg** for clips (`sudo apt install ffmpeg` / `brew install ffmpeg`); without it, everything else still works.
 
 ### Which model
 
@@ -202,7 +217,7 @@ stats (view only) and can write notes. Tabs on a team: **Comps**, **Game plans**
 step per player), **Weekly focus** (one focus per player), **Roles**, **Notes** (yours + tips from your matches
 together) and, for the owner, **Members, maps & Discord**.
 
-**Look & feel.** Every user picks a style (nine, from Classic to Retro arcade) and switches the animations on or
+**Look & feel.** Every user picks a style (ten, from Classic to Retro arcade) and switches the animations on or
 off under *Account › Look & feel*. **Ctrl+K** (or `/`) opens a quick search for players, team tabs, maps, drafts
 and strat boards. The strat book has a **Lineups** library with clip links per map, agent and ability.
 
@@ -333,7 +348,7 @@ sudo systemctl enable --now valcoach
 journalctl -u valcoach -f                         # logs
 ```
 
-After an update: `pip install -e .` in the venv, then `sudo systemctl restart valcoach`.
+After an update: `git pull`, `pip install -e .` in the venv, then `sudo systemctl restart valcoach`.
 The service may only write to `data/`; if a recordings folder lives somewhere
 else, it still works (read-only is enough).
 
@@ -350,7 +365,7 @@ docker compose logs -f
   valcoach finds them in the new location automatically.
 - Recordings folders: mount them at the **same path** as on the host
   (see the commented line in `docker-compose.yml`).
-- Update: replace the code, run the same `up -d --build`.
+- Update: `git pull`, then the same `up -d --build`.
 
 Use one or the other, not both (both want port 10070).
 
@@ -423,17 +438,17 @@ minimap calibrations), `profiles/<id>/` (playbook, notes), `uploads/`,
 ## 6. Known limits
 
 - Match data and coaching run on live HenrikDev data. The **video part** (sync,
-  minimap) is only tested on synthetic recordings (sync within 0.05 s,
-  calibration within 1–2 px), **not yet on a real recording**. Expect to adjust
-  the screen areas and maybe `COLOR_RANGES` once.
+  minimap) is tested automatically on synthetic recordings (sync within 0.05 s,
+  calibration within 1–2 px) and has been fixed on a first real recording (2.16/2.17:
+  ultrawide, minimap orientation, ally counts). Other recording setups (resolution,
+  HUD scale, minimap settings) may still need the screen areas or `COLOR_RANGES` adjusted once.
 - The live API has no per-round utility (ability casts are `null` per round), so
   round coaching leaves utility out; match totals are still used.
 - Without a VOD, positions are only known at kills, plants and defuses; the round
   replay estimates everything in between.
 - Ally counts from the minimap are approximate, because stacked icons merge.
 - Teammate tracking is tuned on synthetic recordings (95 % coverage, ~1.7 m median error there).
-  Real minimaps have agent portraits, utility icons and pings, so expect less until it's checked
-  on a real recording.
+  Real minimaps have agent portraits, utility icons and pings, so expect less on real recordings.
 - After you die, the minimap shows your spectated teammate's view, so your own path ends at your death.
 - Teams are shared (comps, game plans, notes, strats), but each player's coaching playbook
   is still a separate copy per profile.

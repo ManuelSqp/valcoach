@@ -1,10 +1,8 @@
 # Review fixes on top of 2.15.0 (29.10.2026)
 
-Ich han da Changes nid gschwriebe es het mich agschiese das formuliere dorum AI text wos suber zämmefast
-
-These fixes were made on 2.2.0 and 2.7.0 and lost twice when a new version was unzipped over them. To keep
-them: apply `valcoach-fixes.patch` to your source **before** building the next version
-(`patch -p1 < valcoach-fixes.patch` in the project folder, or `git apply valcoach-fixes.patch`).
+Details of the fixes listed under 2.17.0 in the [CHANGELOG](../CHANGELOG.md). They are all part of the code since
+then; this file is kept as background on why they were needed. (Before the project moved to git, they were carried
+as `valcoach-fixes.patch`, which was removed in 4.1.2.)
 
 ## Coaching quality
 

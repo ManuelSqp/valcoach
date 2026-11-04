@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "valcoach"
-version = "4.1.1"
+version = "4.1.2"
 description = "Local Valorant coach: HenrikDev match data + VOD sync + minimap parsing + Ollama coaching, with a web app"
 requires-python = ">=3.11"
 dependencies = [
@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
 valcoach = "valcoach.cli:main"
@@ -33,3 +33,20 @@ valcoach = ["web/templates/*.html", "web/static/*", "web/static/styles/*.css", "
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+# Linting only (no reformatting). target-version makes ruff reject syntax that needs a newer Python
+# than requires-python, like the nested f-string quotes that broke 3.11 in 4.1.1.
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]   # ruff's defaults: syntax errors, undefined/unused names, imports
+ignore = [
+  "E731",   # small lambdas assigned to names are fine here
+  "E741",   # `l` as a short loop name is fine here
+]
+
+[tool.ruff.lint.per-file-ignores]
+"valcoach/web/__init__.py" = ["E402"]   # some imports have to come after the app's constants
+"tests/*" = ["E702"]

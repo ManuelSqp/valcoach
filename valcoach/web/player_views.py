@@ -8,7 +8,7 @@ import json
 import time
 from datetime import date, timedelta
 
-from flask import abort, flash, g, jsonify, redirect, render_template, request, url_for
+from flask import abort, g, jsonify, redirect, render_template, request, url_for
 
 from ..stats import progress as prog
 from ..stats import roles

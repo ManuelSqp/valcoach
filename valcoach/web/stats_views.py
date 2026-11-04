@@ -520,7 +520,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
 
     @app.post("/teams/<int:tid>/notes/<int:nid>/delete")
     def team_note_delete(tid: int, nid: int):
-        t = get_team(tid)
+        get_team(tid)                       # 404 unless the user is in this team
         n = store.team_note(nid)
         if n is None or n["team_id"] != tid or (n["author_id"] != g.user.id and not g.team_owner):
             abort(404)

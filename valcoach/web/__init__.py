@@ -1414,6 +1414,12 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
     def not_found(_):
         return render_template("error.html", error_page=True, code=404, msg="Not found."), 404
 
+    @app.errorhandler(500)
+    def server_error(_):
+        # the details are in the server log (journalctl -u valcoach / docker compose logs)
+        return render_template("error.html", error_page=True, code=500,
+                               msg="Something went wrong on the server. Try again; if it keeps happening, check the server log."), 500
+
     from .stats_views import register as register_stats
     register_stats(app, store, stats_runner, get_profile)
     from .overview import register as register_overview
