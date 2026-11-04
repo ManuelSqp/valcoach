@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "valcoach"
-version = "4.2.0"
+version = "4.2.1"
 description = "Local Valorant coach: HenrikDev match data + VOD sync + minimap parsing + Ollama coaching, with a web app"
 requires-python = ">=3.11"
 dependencies = [
@@ -15,12 +15,15 @@ dependencies = [
   "pyyaml>=6.0",
   "jinja2>=3.1",
   "flask>=3.1",
+  "werkzeug>=3.1",                 # imported directly (also comes with Flask)
+  "markupsafe>=2.1",               # imported directly (also comes with Flask)
+  "urllib3>=1.26",                 # web search reads pages over the checked address (also comes with requests)
   "waitress>=3.0",
   "pywebpush>=2.0",                # push notifications for the installed app
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "pre-commit>=3"]
 
 [project.scripts]
 valcoach = "valcoach.cli:main"

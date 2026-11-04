@@ -75,6 +75,16 @@ def alive_at(match: Match, rnd: Round, team: str, t_ms: int) -> tuple[int, int]:
 
 
 def death_infos(match: Match, rnd: Round, map_info: MapInfo | None = None) -> list[DeathInfo]:
+    """Every death of the round with trade, numbers and place. Remembered on the round: the player and team
+    analysis, the stats and the team review all ask for the same round (a copy of the list each time)."""
+    key = (id(match), id(map_info))
+    memo = rnd.__dict__.setdefault("_death_infos", {})
+    if key not in memo:
+        memo[key] = _death_infos(match, rnd, map_info)
+    return list(memo[key])
+
+
+def _death_infos(match: Match, rnd: Round, map_info: MapInfo | None = None) -> list[DeathInfo]:
     out: list[DeathInfo] = []
     dead: set[str] = set()
     team_alive = {t: len(match.players_on(t)) or 5 for t in match.teams}

@@ -76,6 +76,17 @@ def _host_boot() -> float | None:
         return None
 
 
+
+def _from_proxy(addr: str | None) -> bool:
+    """A request that came through a reverse proxy we may believe (X-Forwarded-Host): one on this machine or the
+    local network. Straight from the internet the header could say anything."""
+    import ipaddress
+    try:
+        ip = ipaddress.ip_address((addr or "").split("%")[0])
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private
+
 def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: bool = True) -> Flask:
     started_at = time.time()
     store = Store(data_dir)
@@ -341,7 +352,10 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         src = request.headers.get("Origin") or request.headers.get("Referer")
         if not src:
             return None                        # not a browser (CLI, scripts): SameSite cookies still apply
-        if urlsplit(src).netloc not in {request.host, request.headers.get("X-Forwarded-Host", "")}:
+        allowed = {request.host}
+        if _from_proxy(request.remote_addr):         # behind a reverse proxy on this machine or the LAN only
+            allowed.add(request.headers.get("X-Forwarded-Host", ""))
+        if urlsplit(src).netloc not in allowed:
             return render_template("error.html", error_page=True, code=403,
                                    msg="This form was sent from another website and was blocked."), 403
         return None

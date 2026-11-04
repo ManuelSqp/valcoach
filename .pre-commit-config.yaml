@@ -1,0 +1,10 @@
+# Runs the same lint check as CI before every commit: pip install -e ".[dev]" then `pre-commit install` once.
+# It uses the ruff from your environment, so it always matches the version CI installs.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff check
+        entry: ruff check
+        language: system
+        types: [python]

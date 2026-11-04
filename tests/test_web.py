@@ -1083,6 +1083,11 @@ def test_forms_from_other_sites_are_blocked(app):
                                                      "mode": "both", "language": "English", "playbook": ""})
     assert r.status_code == 403 and b"another website" in r.data
     assert c.post("/logout", headers={"Referer": "http://evil.example/page"}).status_code == 403
+    # X-Forwarded-Host only counts from a reverse proxy on this machine / the LAN, not straight from the internet
+    fwd = {"Origin": "https://coach.example", "X-Forwarded-Host": "coach.example"}
+    assert c.post("/account", headers=fwd, data={"display_name": "x"}).status_code == 302          # proxy on the LAN
+    assert c.post("/account", headers=fwd, data={"display_name": "x"},
+                  environ_base={"REMOTE_ADDR": "8.8.8.8"}).status_code == 403                     # public address
     # the app's own pages (same host) and non-browser clients still work
     assert c.post("/profiles/new", headers={"Origin": "http://localhost"},
                   data={"name": "a", "tag": "b", "region": "eu", "platform": "pc", "mode": "both",
@@ -1874,7 +1879,8 @@ def test_ask_the_coach_and_clips(app, monkeypatch, synthetic):
     c2 = make_user(app, c, "burn")
     assert c2.post(f"/api/jobs/{job.id}/ask", json={"round": 2, "question": "x"}).status_code == 404
     # a failing model: the error comes back once
-    monkeypatch.setattr(Ollama, "chat_json", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("model down")))
+    from valcoach.coach.ollama import OllamaError
+    monkeypatch.setattr(Ollama, "chat_json", lambda *a, **k: (_ for _ in ()).throw(OllamaError("model down")))
     c.post(f"/api/jobs/{job.id}/ask", json={"round": 3, "question": "Why?"})
     for _ in range(100):
         s = c.get(f"/api/jobs/{job.id}/ask?round=3").get_json()
@@ -1882,6 +1888,15 @@ def test_ask_the_coach_and_clips(app, monkeypatch, synthetic):
             break
         time.sleep(0.1)
     assert "model down" in s["error"]
+    # anything else (a bug, a file error) never shows its text in the browser
+    monkeypatch.setattr(Ollama, "chat_json", lambda *a, **k: (_ for _ in ()).throw(OSError("/srv/secret/path")))
+    c.post(f"/api/jobs/{job.id}/ask", json={"round": 4, "question": "Why?"})
+    for _ in range(100):
+        s = c.get(f"/api/jobs/{job.id}/ask?round=4").get_json()
+        if s["error"]:
+            break
+        time.sleep(0.1)
+    assert s["error"] and "/srv/secret" not in s["error"]
     # clips from the VOD (ffmpeg); no VOD -> 404
     assert c.get(f"/jobs/{job.id}/clip?t=1").status_code == 404
     store = app.extensions["valcoach"]["store"]
@@ -2467,12 +2482,17 @@ def test_kovaaks_community_playlists(app, monkeypatch):
     r = c.post(f"/profiles/{pid}/aim", data={"action": "k_add_shared", "code": "KovaaKsAcingShamrockLowground"}, follow_redirects=True)
     assert "already in" in r.data.decode()
     c.post(f"/profiles/{pid}/aim", data={"action": "k_add_shared", "code": "<script>"})
-    assert c.get(f"/api/profiles/{pid}/aim/find-playlists").status_code == 400
+    assert c.post(f"/api/profiles/{pid}/aim/find-playlists").status_code == 400
     # found online: names come from the text in front of the code
     monkeypatch.setattr(ws, "searcher", lambda store: (lambda q, n=6: [{"title": "Codes", "url": "https://example.org/c", "snippet": ""}]))
     monkeypatch.setattr(ws, "page_text", lambda url, limit=4000, session=None:
                         "Routines\nPeek drills - KovaaKsTestingNewPeekCode\nVoltaic Iron - KovaaKsAcingShamrockLowground")
-    j = c.get(f"/api/profiles/{pid}/aim/find-playlists").get_json()
+    assert c.post(f"/api/profiles/{pid}/aim/find-playlists").get_json()["pending"]     # runs in the background
+    for _ in range(100):
+        j = c.get(f"/api/profiles/{pid}/aim/find-playlists").get_json()
+        if not j["pending"]:
+            break
+        time.sleep(0.1)
     assert [x["code"] for x in j["found"]] == ["KovaaKsTestingNewPeekCode"] and j["found"][0]["name"] == "Peek drills"
     c.post(f"/profiles/{pid}/aim", data={"action": "k_add_shared", "code": "KovaaKsTestingNewPeekCode", "name": "Peek drills",
                                          "url": "https://example.org/c"})

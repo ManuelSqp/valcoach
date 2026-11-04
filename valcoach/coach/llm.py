@@ -37,6 +37,18 @@ _usage_lock = threading.Lock()
 _usage_file: Path | None = None
 
 
+class NoAnswer(RuntimeError):
+    """The model answered, but with nothing usable."""
+
+
+def user_error(e: BaseException) -> str:
+    """What a person may see when the model couldn't answer: our own messages about the model (Ollama down,
+    no Claude key, budget used up ...), never other exceptions (paths, internals: those go to the server log)."""
+    if isinstance(e, (OllamaError, ClaudeError, NoAnswer)):
+        return str(e)[:300] or "The model didn't answer."
+    return "Something went wrong while the coach was answering. The server log has the details."
+
+
 def claude_search_model(store) -> str:
     """The model that runs Claude web searches: the cheapest one offered (Haiku if it's in the list)."""
     offered = [m.strip() for m in (store.get("claude_models") or "").split(",") if m.strip()]

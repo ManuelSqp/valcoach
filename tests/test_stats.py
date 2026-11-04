@@ -939,3 +939,54 @@ def test_duckduckgo_results_and_the_backup_search():
     except ws.SearchError as e:                       # the backup's error; only fixed texts reach the browser
         assert ws.describe(e) == "SearXNG didn't answer JSON: add json to search › formats in its settings.yml"
     assert ws.describe(ValueError("internal")) == "the search failed"
+
+
+def test_web_pages_are_read_from_the_checked_address(monkeypatch):
+    """No second DNS lookup (DNS rebinding): the connection goes to the address that was checked, with the
+    name in the Host header; a redirect to a non-public name is refused."""
+    import http.server
+    import threading
+    from valcoach.coach import websearch as ws
+    seen = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            seen.append((self.path, self.headers.get("Host")))
+            if self.path == "/r":
+                self.send_response(302)
+                self.send_header("Location", f"http://lan.test:{self.server.server_port}/p")
+                self.end_headers()
+                return
+            body = "<html><nav>menu</nav><p>Jett&#x27;s dash</p></html>".encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_port
+    try:
+        monkeypatch.setattr(ws, "_public_ip", lambda host, p: "127.0.0.1" if host == "ok.test" else None)
+        assert ws.page_text(f"http://ok.test:{port}/p?x=1") == "Jett's dash"
+        assert seen[-1] == ("/p?x=1", f"ok.test:{port}")
+        assert ws.page_text(f"http://ok.test:{port}/r") == ""          # redirect to a name that isn't public
+        assert ws.page_text(f"http://lan.test:{port}/p") == ""
+        assert not ws.public_url(f"http://lan.test:{port}/p")
+    finally:
+        srv.shutdown()
+    # the search cache doesn't grow forever
+    ws._cache.clear()
+    for i in range(ws.CACHE_MAX + 20):
+        ws._remember("duckduckgo", f"q{i}", [])
+    assert len(ws._cache) == ws.CACHE_MAX and ("duckduckgo", "q0") not in ws._cache
+    ws._cache.clear()
+    # research takes turns between the queries: the pages read are each query's best hit
+    hits = {"a": [{"title": f"a{i}", "url": f"https://a.org/{i}"} for i in range(4)],
+            "b": [{"title": f"b{i}", "url": f"https://b.org/{i}"} for i in range(4)]}
+    read = []
+    src, _ = ws.research(lambda q, n: hits[q], ["a", "b"], read=2, reader=lambda u, n: read.append(u) or "")
+    assert read == ["https://a.org/0", "https://b.org/0"] and [s["title"] for s in src[:3]] == ["a0", "b0", "a1"]

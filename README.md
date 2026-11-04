@@ -1,21 +1,25 @@
 # valcoach
 
-**Version 4.2.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.2.1** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
 with a web app so several players can use it.
 
+```mermaid
+flowchart TD
+  A["HenrikDev v4 match data"] --> B["Analysis: trades, economy, first contact,<br/>plants, clutches, isolation, positions at every kill"]
+  V["Your VOD (optional)"] --> S["Kill-feed sync"] --> M["Minimap tracking:<br/>rotations, stacks, your path"]
+  B --> F["Compact round facts"]
+  M --> F
+  F --> L{"Ollama or Claude<br/>(JSON schema output)"}
+  W["Web search (optional)"] -.-> L
+  L --> R["HTML report: round timeline, VOD jump buttons, replay"]
 ```
-HenrikDev v4 match data ──► analysis (trades, economy, first contact, plants,
-        │                     clutches, isolation, positions at every kill)
-        │                                   │
-VOD ──► kill-feed sync ──► minimap tracking ┤   (rotations, stacks, your path)
-                                            ▼
-                        compact round facts ──► Ollama (JSON schema output)
-                                            ▼
-                         HTML report with round timeline + VOD jump buttons
-```
+
+**Contents:** [Install](#1-install) · [Start the web app](#2-start-the-web-app) ·
+[Recording settings](#3-recording-settings-needed-for-the-video-part) · [Command line](#4-command-line-still-works-same-engine) ·
+[How it works](#5-how-it-works) · [Known limits](#6-known-limits) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ---
 

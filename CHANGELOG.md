@@ -4,6 +4,30 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart valcoach` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.2.1
+From code reviews of 4.2:
+- **Search the web for KovaaK's playlists runs in the background.** It reads up to six pages and used to keep one of
+  the server's few web workers busy for up to a minute; now the page asks every few seconds until it's done.
+- **Web pages are read from exactly the address that was checked.** Before, the check looked the name up and the
+  download looked it up again, so a name that changes its answer in between (DNS rebinding) could have reached the
+  LAN. HTTPS still checks the certificate for the name.
+- Web search: the pages that get read are the best hit of *each* search (before: the first three hits of the first
+  search), the search cache keeps at most 500 searches, and a model that writes no search queries is logged.
+- Errors when the coach can't answer (*Ask the coach*, questions about a round) show valcoach's own messages
+  (Ollama not reachable, no Claude key, budget used up ...); anything else shows a general message and the details
+  go to the server log.
+- `X-Forwarded-Host` only counts for the form check when the request comes from a reverse proxy on this machine or
+  the local network.
+- **The database uses SQLite's WAL mode**: pages keep loading while a job writes. Nothing to do: it switches on at
+  the next start.
+- Faster report parsing: kills are grouped by round once instead of searched for every round, and the deaths of a
+  round are worked out once instead of up to four times.
+- `knowledge/playbook.example.yaml` uses `teammate1` again, like the copy in the app.
+- `werkzeug`, `markupsafe` and `urllib3` are listed as dependencies (valcoach imports them itself).
+- New: `CONTRIBUTING.md` (setup, tests, what a pull request needs), `SECURITY.md` (how to report a problem
+  privately, what valcoach protects), `.pre-commit-config.yaml` (ruff before every commit: `pre-commit install`).
+- README: the overview is a diagram GitHub draws (Mermaid), with a table of contents below it.
+
 ## 4.2.0
 - **Ask the coach** (*Practice › Ask the coach*): a chat with the coach about one player. It knows the player's recent
   form, agents, maps, habits, what their aim needs and their KovaaK's scores, and remembers the conversation (per user

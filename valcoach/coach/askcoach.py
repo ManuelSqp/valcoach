@@ -13,6 +13,7 @@ from ..stats.aggregate import by_agent, by_map
 from ..stats.habits import track
 from ..stats.weekly import player_facts
 from . import websearch as ws
+from .llm import NoAnswer
 from .prompts import field_guide
 
 SYSTEM = """You are {player}'s Valorant coach, talking with them in a chat. Answer in {language}, like a coach who
@@ -72,6 +73,6 @@ def answer(llm, player: str, language: str, question: str, history: list[dict], 
     out = llm.chat_json(system, user, SCHEMA)
     text = str(out.get("answer") or "").strip()[:6000]
     if not text:
-        raise RuntimeError("the model gave no answer")
+        raise NoAnswer("the model gave no answer")
     return {"answer": text, "sources": ws.cited(sources, out.get("sources")), "searched": queries,
             "search_errors": errors[:2]}

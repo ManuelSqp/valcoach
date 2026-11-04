@@ -148,6 +148,9 @@ def parse_match(raw: dict) -> Match:
             player_locations=_locs(k.get("player_locations")),
         ))
     kills.sort(key=lambda k: (k.round, k.t_round_ms))
+    kills_by_round: dict[int, list[Kill]] = {}
+    for k in kills:                                  # one pass instead of a scan of every kill per round
+        kills_by_round.setdefault(k.round, []).append(k)
 
     rounds: list[Round] = []
     for i, r in enumerate(rounds_raw):
@@ -178,7 +181,7 @@ def parse_match(raw: dict) -> Match:
                 was_afk=bool(s.get("was_afk", False)),
                 stayed_in_spawn=bool(s.get("stayed_in_spawn", False)),
             )
-        rkills = [k for k in kills if k.round == idx]
+        rkills = kills_by_round.get(idx, [])
         start = None
         if rkills:
             # median is robust against odd timing entries

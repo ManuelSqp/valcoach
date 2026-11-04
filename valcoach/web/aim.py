@@ -8,8 +8,10 @@ warm-up), data/profiles/<pid>/stats/aim.json (that player's warm-up and log)."""
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
@@ -27,6 +29,10 @@ MAX_SCENARIOS = 300                  # people's own scenarios, per user and per 
 MAX_UPLOAD_FILES = 2000
 MAX_LOG = 400
 _lock = threading.RLock()
+_find_ex = ThreadPoolExecutor(max_workers=2, thread_name_prefix="kfind")
+_finds: dict[tuple[int, int], dict] = {}          # (user, player) -> the last search for share codes
+_find_lock = threading.Lock()
+log = logging.getLogger(__name__)
 
 
 def _read(path: Path, default):
@@ -424,13 +430,20 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         resp.headers["Cache-Control"] = "no-store"
         return resp
 
-    @app.get("/api/profiles/<int:pid>/aim/find-playlists")
+    @app.post("/api/profiles/<int:pid>/aim/find-playlists")
     def aim_find_playlists(pid: int):
-        """KovaaK's share codes on the web for what this player's aim needs (Settings › Web search)."""
+        """Start looking for KovaaK's share codes on the web for what this player's aim needs (Settings › Web
+        search). It runs in the background (several searches and pages can take a minute); the page polls the
+        GET below."""
         view_profile(pid)
         search = ws.searcher(store)
         if search is None:
             return jsonify(error="Web search isn't set up (Settings › Web search)."), 400
+        key = (g.user.id, pid)
+        with _find_lock:
+            if _finds.get(key, {}).get("pending"):
+                return jsonify(pending=True)
+            _finds[key] = {"pending": True, "t": time.time()}
         rows = filter_rows(sr.games(pid).rows(), "everything")
         focus = []
         for x in am.needs(rows):
@@ -439,10 +452,29 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                  "reaction": "reactivity", "switching": "target switching", "tracking": "tracking"}
         queries = ["KovaaK's playlist share code Valorant"] + [f"KovaaK's share code {words[f]} playlist" for f in focus[:2] if f in words]
         have = {(r.get("code") or "").lower() for r in library(pid, g.user.id) if r.get("code")} | {x["code"].lower() for x in kv.shared()}
-        found, errors = ws.find_share_codes(search, queries, have)
-        for x in found:
-            x["focus"] = [am.FOCUS.get(f, f) for f in kv.guess(x["name"])[0]]
-        return jsonify(found=found, searched=queries, errors=errors[:2])
+
+        def work():
+            try:
+                found, errors = ws.find_share_codes(search, queries, have)
+                for x in found:
+                    x["focus"] = [am.FOCUS.get(f, f) for f in kv.guess(x["name"])[0]]
+                res = {"found": found, "searched": queries, "errors": errors[:2]}
+            except Exception:                        # details only in the log
+                log.exception("finding KovaaK's playlists")
+                res = {"found": [], "searched": queries, "errors": ["the search failed"]}
+            with _find_lock:
+                _finds[key] = dict(res, pending=False, t=time.time())
+        _find_ex.submit(work)
+        return jsonify(pending=True)
+
+    @app.get("/api/profiles/<int:pid>/aim/find-playlists")
+    def aim_find_playlists_state(pid: int):
+        view_profile(pid)
+        with _find_lock:
+            for k in [k for k, v in _finds.items() if time.time() - v.get("t", 0) > 1800]:
+                _finds.pop(k, None)                 # forget old results
+            st = dict(_finds.get((g.user.id, pid)) or {"pending": False, "found": None})
+        return jsonify(st)
 
     # ------------------------------------------------------------------ for other pages
     def member_pid(t, uid: int) -> int | None:
