@@ -79,6 +79,9 @@ summary.si::-webkit-details-marker{display:none}
 /* ---------------------------------------------------------------- page */
 .page{width:100%;max-width:1240px;margin:0 auto;padding:28px 36px 72px}
 body.no-side .page{max-width:520px;padding-top:9vh}
+/* Account › Page width overrides the style's own width (Data terminal is full width, the rest centred) */
+body.w-narrow main.page{max-width:1240px}
+body.w-full main.page{max-width:none}
 h1{font-size:32px;line-height:1.1;font-weight:800;font-stretch:72%;letter-spacing:.005em;margin:0 0 6px}
 h1 .tag{color:var(--faint);font-weight:600}
 h2{font-size:17px;font-weight:700;font-stretch:85%;letter-spacing:.01em;margin:0 0 12px;color:var(--text);text-transform:none}

@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% import "_ui.html" as vc %}
+{% block title %}Ask the coach · {{ p.riot_id }} · valcoach{% endblock %}
+{% block head %}
+<style>
+.chat{max-width:860px;display:flex;flex-direction:column;gap:18px;margin:0 0 18px}
+.turn .q{justify-self:end;margin-left:auto;max-width:80%;width:max-content;background:var(--panel3);border:1px solid var(--line2);
+  border-radius:14px 14px 4px 14px;padding:9px 14px;font-size:14.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+.turn .a{margin-top:10px;font-size:15px;line-height:1.6;max-width:72ch;overflow-wrap:anywhere}
+.turn .a p{margin:0 0 .6em}.turn .a p:last-child{margin:0}
+.turn .meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;color:var(--faint);margin-top:6px}
+.srcs{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px}
+.srcs a{display:inline-block;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;
+  padding:3px 10px;border-radius:99px;border:1px solid var(--line2);color:var(--muted);text-decoration:none}
+.srcs a:hover{color:var(--text);border-color:var(--accent)}
+.srcs a span{color:var(--faint);margin-right:4px}
+.thinking{display:flex;gap:10px;align-items:center;font-size:14px;color:var(--muted)}
+.thinking .dots{display:inline-flex;gap:4px}.thinking .dots i{width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:.35;animation:askdot 1.2s infinite}
+.thinking .dots i:nth-child(2){animation-delay:.2s}.thinking .dots i:nth-child(3){animation-delay:.4s}
+@keyframes askdot{40%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.thinking .dots i{animation:none;opacity:1}}
+.askbox{max-width:860px;position:sticky;bottom:12px;background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.askbox textarea{width:100%;min-height:52px;max-height:220px;resize:vertical;border:0;background:transparent;padding:4px 2px;font:inherit;font-size:15px;color:var(--text)}
+.askbox textarea:focus{outline:none}.askbox:focus-within{border-color:var(--accent)}
+.askrow{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.askrow .l{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.starters{display:flex;flex-wrap:wrap;gap:8px;max-width:860px;margin:0 0 16px}
+.starters button{font:inherit;font-size:13.5px;text-align:left;padding:8px 12px;border-radius:10px;border:1px solid var(--line2);background:var(--panel2);color:var(--text);cursor:pointer}
+.starters button:hover{border-color:var(--accent)}
+.askerr{color:var(--red);font-size:13.5px;margin:0 0 10px}
+.empty-ask{max-width:62ch;color:var(--muted);font-size:14.5px;margin:0 0 14px}
+</style>
+{% endblock %}
+{% block content %}
+{% call vc.pagehead('Ask the coach', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+   'A conversation about ' ~ p.name ~ ': the coach knows the stats, habits and aim from ' ~ games ~ ' games' ~ (', and searches the web' if search_on else '')) %}
+  {% if items %}<form method="post" action="{{ url_for('ask_coach_clear', pid=p.id) }}" data-q="Start a new conversation? This one is deleted." onsubmit="return confirm(this.dataset.q)"><button class="btn sm ghost">New conversation</button></form>{% endif %}
+{% endcall %}
+
+<div class="chat" id="chat" aria-live="polite">
+  {% for it in items %}
+  <div class="turn">
+    <div class="q">{{ it.q }}</div>
+    <div class="a">{{ it.a|askfmt }}</div>
+    {% if it.sources %}<ul class="srcs">{% for s in it.sources %}<li><a href="{{ s.url }}" target="_blank" rel="noopener noreferrer nofollow" title="{{ s.url }}" translate="no"><span>{{ loop.index }}</span>{{ s.title }}</a></li>{% endfor %}</ul>{% endif %}
+    <div class="meta"><span>{{ it.t|epoch }}</span>{% if it.model %}<span translate="no">{{ it.model }}</span>{% endif %}
+      {% if it.searched %}<span>Searched: <span translate="no">{{ it.searched|join(' · ') }}</span></span>{% endif %}
+      {% if it.search_errors %}<span style="color:var(--amber)">Web search failed: {{ it.search_errors[0] }}</span>{% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if not items %}
+<p class="empty-ask">Ask anything about {{ p.name }}'s game: why something keeps going wrong, what to practise, how to play a map or an agent.
+  {% if search_on %}When the answer depends on the current patch, pros or aim trainers, the coach looks it up and shows the pages it used.
+  {% else %}Without web search the coach only knows what it learned in training, so details that change with patches can be out of date.{% if user.is_admin %} <a href="{{ url_for('settings') }}#search">Set up web search</a>{% endif %}{% endif %}</p>
+<div class="starters" id="starters">
+  <button type="button">Why do I lose so many first duels, and what should I change?</button>
+  <button type="button">Which KovaaK's playlist fits what my aim needs?</button>
+  <button type="button">What changed for my main agent in the latest patch?</button>
+  <button type="button">How should I play defence on my worst map?</button>
+</div>
+{% endif %}
+
+<p class="askerr" id="askerr" hidden></p>
+<form class="askbox" id="askform">
+  <label class="sr-only" for="askq">Your question</label>
+  <textarea id="askq" name="question" maxlength="600" placeholder="Ask the coach…" required></textarea>
+  <div class="askrow">
+    <span class="l">{% include "_llm_pick.html" %}{% if search_on %}<span>Web search: <span translate="no">{{ search_name }}</span></span>{% endif %}</span>
+    <button class="btn primary sm" id="askbtn">Ask</button>
+  </div>
+</form>
+
+<script>
+(() => {
+  const api = {{ url_for('ask_coach_post', pid=p.id)|tojson }};
+  const chat = document.getElementById('chat'), form = document.getElementById('askform'), ta = document.getElementById('askq');
+  const btn = document.getElementById('askbtn'), err = document.getElementById('askerr');
+  let shown = {{ items|length }}, timer = null;
+  const T = s => window.vcT ? vcT(s) : s;
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+  // same as the server's askfmt filter: paragraphs, line breaks, **bold**
+  const fmt = s => esc(s).split(/\n{2,}/).map(p => '<p>' + p.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>') + '</p>').join('');
+  const when = t => new Date(t * 1000).toLocaleString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'});
+  function turn(it) {
+    const d = document.createElement('div'); d.className = 'turn';
+    let h = `<div class="q">${esc(it.q)}</div>`;
+    if (it.a !== undefined) {
+      h += `<div class="a">${fmt(it.a)}</div>`;
+      if (it.sources && it.sources.length) h += '<ul class="srcs">' + it.sources.map((s, i) => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer nofollow" title="${esc(s.url)}" translate="no"><span>${i + 1}</span>${esc(s.title)}</a></li>`).join('') + '</ul>';
+      h += `<div class="meta"><span>${when(it.t)}</span>${it.model ? `<span translate="no">${esc(it.model)}</span>` : ''}${it.searched && it.searched.length ? `<span>${T('Searched:')} <span translate="no">${esc(it.searched.join(' · '))}</span></span>` : ''}${it.search_errors && it.search_errors.length ? `<span style="color:var(--amber)">${T('Web search failed:')} ${esc(it.search_errors[0])}</span>` : ''}</div>`;
+    } else {
+      h += '<div class="a thinking"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="step"></span></div>';
+    }
+    d.innerHTML = h;
+    return d;
+  }
+  let waiting = null;
+  function showWaiting(q, step) {
+    if (!waiting) { waiting = turn({q}); chat.appendChild(waiting); }
+    waiting.querySelector('.step').textContent = T(step || 'Thinking');
+  }
+  async function poll() {
+    let j;
+    try { j = await (await fetch(api, {credentials: 'same-origin'})).json(); } catch (e) { timer = setTimeout(poll, 3000); return; }
+    if (j.items.length > shown) {
+      if (waiting) { waiting.remove(); waiting = null; }
+      j.items.slice(shown).forEach(it => chat.appendChild(turn(it)));
+      shown = j.items.length;
+      chat.lastElementChild.scrollIntoView({block: 'start', behavior: 'smooth'});
+    }
+    if (j.pending) { showWaiting(j.q, j.step); timer = setTimeout(poll, 1500); return; }
+    if (waiting) { waiting.remove(); waiting = null; }
+    if (j.error) { err.textContent = j.error; err.hidden = false; ta.value = ta.value || j.q; }
+    btn.disabled = false;
+  }
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const q = ta.value.trim();
+    if (!q) return;
+    err.hidden = true; btn.disabled = true;
+    const sel = form.querySelector('select[name=llm]');
+    const r = await fetch(api, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question: q, llm: sel ? sel.value : undefined})});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { err.textContent = j.error || ('HTTP ' + r.status); err.hidden = false; btn.disabled = false; return; }
+    ta.value = '';
+    const st = document.getElementById('starters'); if (st) st.remove();
+    showWaiting(q, '');
+    waiting.scrollIntoView({block: 'start', behavior: 'smooth'});
+    clearTimeout(timer); poll();
+  });
+  ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
+  document.querySelectorAll('#starters button').forEach(b => b.onclick = () => { ta.value = b.textContent; ta.focus(); });
+  {% if pending %}btn.disabled = true; showWaiting({{ pending.q|tojson }}, {{ pending.step|tojson }});{% endif %}
+  poll();
+  if (shown) chat.lastElementChild.scrollIntoView({block: 'start'});
+})();
+</script>
+{% endblock %}

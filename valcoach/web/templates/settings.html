@@ -3,7 +3,7 @@
 {% block content %}
 <div class="pagehead"><div><div class="crumbs">Admin</div><h1>Settings</h1><div class="ctx">Server-wide settings, shared by all users. Only admins see this page. valcoach {{ app_version }}</div></div></div>
 <nav class="setnav" aria-label="Settings sections">
-  <a href="#henrik">Match data</a><a href="#ollama">Local model</a><a href="#claude">Claude</a><a href="#video">Video</a><a href="#pros">Pros &amp; videos</a><a href="#server">Server</a><a href="#backup">Backups</a>
+  <a href="#henrik">Match data</a><a href="#ollama">Local model</a><a href="#claude">Claude</a><a href="#search">Web search</a><a href="#video">Video</a><a href="#pros">Pros &amp; videos</a><a href="#server">Server</a><a href="#backup">Backups</a>
 </nav>
 <style>
 .setnav{position:sticky;top:0;z-index:5;display:flex;gap:4px;flex-wrap:wrap;padding:8px 0 10px;margin-bottom:6px;background:var(--bg)}
@@ -74,6 +74,24 @@ section.card[id]{scroll-margin-top:60px}
     <div class="field"><label>Model for automatic jobs</label>
       <select name="llm_auto">{% for c in auto_choices %}<option value="{{ c.value }}" {{ 'selected' if c.value == s.llm_auto }}>{{ c.label }}</option>{% endfor %}</select>
       <div class="hint">Nightly Premier reviews and the weekly focus, which run without anyone pressing a button.</div></div>
+  </div>
+</section>
+
+<section class="card" id="search">
+  <h2>Web search (optional)</h2>
+  <p class="hint" style="margin-top:-6px">The coach can look things up instead of guessing: agent abilities and patch changes when you ask the coach,
+    KovaaK's playlists and share codes on the Aim page. Answers show the pages they used.</p>
+  <div class="grid2">
+    <div class="field"><label>Search with</label>
+      <select name="search_provider">{% for k, v in search_providers.items() %}<option value="{{ k }}" {{ 'selected' if s.search_provider == k }}>{{ v }}</option>{% endfor %}</select>
+      <div class="hint">DuckDuckGo needs no setup, but it has no official search API and blocks a server for a while when it searches a lot. SearXNG is free and stays on your own server. Claude's search costs US$ 10 per 1,000 searches plus the tokens (counted in the Claude budget).</div>
+      <div class="row" style="gap:8px;margin-top:8px"><button type="button" class="btn sm ghost tbtn" data-test="search">Test</button><span class="tres small" data-for="search"></span><span class="small muted">save first</span></div></div>
+    <div class="field"><label>Backup search</label>
+      <select name="search_backup">{% for k, v in search_providers.items() %}<option value="{{ k }}" {{ 'selected' if s.search_backup == k }}>{{ 'None' if not k else v }}</option>{% endfor %}</select>
+      <div class="hint">Used when the main search fails or finds nothing, e.g. when DuckDuckGo blocks for a while.</div></div>
+    <div class="field"><label>SearXNG URL</label>
+      <input type="text" name="searxng_url" value="{{ s.searxng_url }}" placeholder="http://10.0.0.5:8080">
+      <div class="hint">SearXNG must allow JSON answers: in its <code>settings.yml</code> under <code>search:</code> set <code>formats: [html, json]</code>, then restart it.</div></div>
   </div>
 </section>
 

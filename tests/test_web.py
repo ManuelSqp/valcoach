@@ -44,6 +44,7 @@ def app(tmp_path, synthetic):
     store.set("minimap_roi", ", ".join(map(str, synth.MM_ROI)))
     store.set("killfeed_roi", ", ".join(map(str, synth.KF_ROI)))
     store.set("sample_fps", "2")
+    store.set("search_provider", "")          # no web search from tests (tests that need it fake it)
     app.recordings = str(tmp_path / "recordings")
     yield app
     app.extensions["valcoach"]["runner"].shutdown()
@@ -2007,7 +2008,8 @@ def test_home_today_nav_and_tabs(app):
     assert f'href="/profiles/{pids[2]}/training"' in page and "<b>P2</b>" in page
 
 
-def test_backups_and_discord_channels(app, tmp_path):
+def test_backups_and_discord_channels(app, tmp_path, monkeypatch):
+    monkeypatch.setenv("VALCOACH_BACKUP_ROOTS", str(tmp_path))         # a backup folder outside the data folder
     import tarfile
     from valcoach.discord import channel
     from valcoach.web import backup
@@ -2362,3 +2364,116 @@ def test_kovaaks_playlists_scores_and_scenarios(app):
                      content_type="multipart/form-data").status_code == 403
     c.post(f"/profiles/{pid}/aim", data={"action": "k_clear_stats"})
     assert "kovaaks" not in json.loads((store.data_dir / "profiles" / str(pid) / "stats" / "aim.json").read_text())
+
+
+def test_ask_the_coach_chat_with_web_search(app, monkeypatch):
+    from valcoach.coach import websearch as ws
+    from valcoach.coach.ollama import Ollama
+    c = setup_admin(app)
+    pid = add_profile(c)
+    page = c.get(f"/profiles/{pid}/ask").data.decode()
+    assert "Ask the coach" in page and "Set up web search" in page            # admin: link to Settings
+    assert c.post(f"/api/profiles/{pid}/ask", json={"question": "  "}).status_code == 400
+    # web search via SearXNG (faked): the model first writes queries, then answers with the sources it used
+    calls = []
+
+    def chat_json(self, system, user, schema, **k):
+        calls.append(user)
+        if "queries" in schema["properties"]:
+            return {"queries": ["Jett dash cost patch"]}
+        assert "[1] Jett changes" in user and "Question: What changed for Jett?" in user
+        return {"answer": "Her dash got **shorter**.\n\nPractise <entries> again.", "sources": [1, 7]}
+    monkeypatch.setattr(Ollama, "check", lambda self: None)
+    monkeypatch.setattr(Ollama, "chat_json", chat_json)
+    searched = []
+    monkeypatch.setattr(ws, "searcher", lambda store: (lambda q, n=6: searched.append(q) or
+                                                        [{"title": "Jett changes", "url": "https://example.org/jett", "snippet": "dash"}]))
+    monkeypatch.setattr(ws, "page_text", lambda url, limit=4000, session=None: "Patch 12: Jett's dash is shorter.")
+    monkeypatch.setattr(ws, "provider", lambda store: "searxng")
+    r = c.post(f"/api/profiles/{pid}/ask", json={"question": "What changed for Jett?"})
+    assert r.status_code == 200
+    for _ in range(300):
+        s = c.get(f"/api/profiles/{pid}/ask").get_json()
+        if not s["pending"]:
+            break
+        time.sleep(0.1)
+    assert not s["error"] and len(s["items"]) == 1, s
+    it = s["items"][0]
+    assert it["sources"] == [{"title": "Jett changes", "url": "https://example.org/jett"}]     # made-up [7] dropped
+    assert it["searched"] == ["Jett dash cost patch"] and searched == ["Jett dash cost patch"]
+    page = c.get(f"/profiles/{pid}/ask").data.decode()
+    assert "<b>shorter</b>" in page and "&lt;entries&gt;" in page and 'href="https://example.org/jett"' in page
+    # someone else's player: 404; a new conversation clears it
+    c2 = make_user(app, c, "burn")
+    assert c2.get(f"/profiles/{pid}/ask").status_code == 404
+    assert c2.post(f"/api/profiles/{pid}/ask", json={"question": "x"}).status_code == 404
+    c.post(f"/profiles/{pid}/ask/clear")
+    assert c.get(f"/api/profiles/{pid}/ask").get_json()["items"] == []
+
+
+def test_settings_web_search_width_and_backup_message(app, tmp_path):
+    import errno
+    from urllib.parse import urlparse
+    from valcoach.web import backup
+    c = setup_admin(app)
+    store = app.extensions["valcoach"]["store"]
+    c.post("/settings", data={"search_provider": "searxng", "searxng_url": ""})
+    assert store.get("search_provider") == ""                                  # no URL: stays off
+    c.post("/settings", data={"search_provider": "duckduckgo", "search_backup": "searxng", "searxng_url": ""})
+    assert store.get("search_provider") == "duckduckgo" and store.get("search_backup") == ""   # backup needs its URL
+    c.post("/settings", data={"search_provider": "searxng", "searxng_url": "http://10.0.0.5:8080/"})
+    assert store.get("search_provider") == "searxng" and store.get("searxng_url") == "http://10.0.0.5:8080"
+    c.post("/settings", data={"search_provider": "claude", "searxng_url": "http://10.0.0.5:8080"})
+    assert store.get("search_provider") == "searxng"                           # Claude needs a key
+    c.post("/settings", data={"search_provider": "duckduckgo", "search_backup": "searxng", "searxng_url": "http://10.0.0.5:8080"})
+    assert store.get("search_provider") == "duckduckgo" and store.get("search_backup") == "searxng"
+    assert 'id="search"' in c.get("/settings").data.decode()
+    # page width per user: a class on <body>
+    c.post("/account", data={"look": "1", "style": "terminal", "width": "narrow"})
+    assert "w-narrow" in c.get("/account").data.decode()
+    c.post("/account", data={"look": "1", "style": "classic", "width": "bogus"})
+    assert "w-narrow" in c.get("/account").data.decode()                        # unknown value keeps the old one
+    c.post("/account", data={"look": "1", "style": "classic", "width": "auto"})
+    assert ' w-' not in c.get("/account").data.decode().split("<body", 1)[1].split(">", 1)[0]
+    # a read-only backup folder (the systemd sandbox) is explained, not shown as a bare Errno
+    msg = backup.explain(OSError(errno.EROFS, "Read-only file system"), "/srv/backups")
+    assert "ReadWritePaths=/srv/backups" in msg and "Errno" not in msg
+    data = store.data_dir
+    (data / "bk").mkdir()
+    assert backup.check_folder(data / "bk", data) == "" and "not found" in backup.check_folder(data / "nope", data)
+    for bad in ("/etc", "/", "/mnt/../etc", "relative/path", "/usr/local/bk"):
+        assert backup.check_folder(bad, data), bad
+    assert backup.clean_folder("/mnt/nas/valcoach", data)[0] is not None
+    c.post("/settings", data={"backup_keep": "14", "backup_dir": "/etc"})
+    assert store.get("backup_dir") != "/etc"
+    # redirects after a form or a language switch stay on this site, whatever browsers make of the target
+    for evil in ("//evil.com", "/\\evil.com", "/\t/evil.com", "https://evil.com", "/%0a"):
+        r = c.get("/lang/en?next=" + evil.replace("\t", "%09"))
+        loc = r.headers["Location"]
+        assert loc.startswith("/") and not loc.startswith("//") and not urlparse(loc).netloc, (evil, loc)
+    assert c.get("/lang/en?next=/account").headers["Location"].endswith("/account")
+
+
+def test_kovaaks_community_playlists(app, monkeypatch):
+    from valcoach.coach import websearch as ws
+    c = setup_admin(app)
+    pid = add_profile(c)
+    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    assert "Playlists from the community" in page and "KovaaKsTeleportingJebaitedBuystation" in page
+    assert "Search the web" not in page                                           # no web search set up
+    c.post(f"/profiles/{pid}/aim", data={"action": "k_add_shared", "code": "KovaaKsAcingShamrockLowground"})
+    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    assert "Voltaic Iron" in page and "in your routines" in page
+    r = c.post(f"/profiles/{pid}/aim", data={"action": "k_add_shared", "code": "KovaaKsAcingShamrockLowground"}, follow_redirects=True)
+    assert "already in" in r.data.decode()
+    c.post(f"/profiles/{pid}/aim", data={"action": "k_add_shared", "code": "<script>"})
+    assert c.get(f"/api/profiles/{pid}/aim/find-playlists").status_code == 400
+    # found online: names come from the text in front of the code
+    monkeypatch.setattr(ws, "searcher", lambda store: (lambda q, n=6: [{"title": "Codes", "url": "https://example.org/c", "snippet": ""}]))
+    monkeypatch.setattr(ws, "page_text", lambda url, limit=4000, session=None:
+                        "Routines\nPeek drills - KovaaKsTestingNewPeekCode\nVoltaic Iron - KovaaKsAcingShamrockLowground")
+    j = c.get(f"/api/profiles/{pid}/aim/find-playlists").get_json()
+    assert [x["code"] for x in j["found"]] == ["KovaaKsTestingNewPeekCode"] and j["found"][0]["name"] == "Peek drills"
+    c.post(f"/profiles/{pid}/aim", data={"action": "k_add_shared", "code": "KovaaKsTestingNewPeekCode", "name": "Peek drills",
+                                         "url": "https://example.org/c"})
+    assert "Peek drills" in c.get(f"/profiles/{pid}/aim").data.decode()

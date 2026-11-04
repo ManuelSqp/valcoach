@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "valcoach"
-version = "4.1.2"
+version = "4.2.0"
 description = "Local Valorant coach: HenrikDev match data + VOD sync + minimap parsing + Ollama coaching, with a web app"
 requires-python = ">=3.11"
 dependencies = [

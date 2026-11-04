@@ -30,6 +30,12 @@ round. Answer it in {language}, in 2-6 sentences, like a coach talking to the pl
 - Don't repeat the whole feedback; answer the question."""
 SCHEMA = {"type": "object", "properties": {"answer": {"type": "string", "description": "the answer, 2-6 sentences"}},
           "required": ["answer"]}
+SCHEMA_SOURCES = {"type": "object", "properties": {
+    "answer": {"type": "string", "description": "the answer, 2-6 sentences"},
+    "sources": {"type": "array", "items": {"type": "integer"}, "description": "numbers of the web results used, [] if none"}},
+    "required": ["answer", "sources"]}
+ASK_WEB = """
+- For facts about the game itself (abilities, costs, patch changes, lineups) you may also use the web results."""
 MAX_Q = 400
 CLIP_MAX_MB = 9.5            # Discord webhooks take ~10 MB without a boosted server
 _ex = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ask")
@@ -48,7 +54,9 @@ def read_asks(report_json: Path) -> dict:
         return {"rounds": {}}
 
 
-def answer(llm, report: dict, rnd: int, question: str, history: list[dict], language: str) -> str:
+def answer(llm, report: dict, rnd: int, question: str, history: list[dict], language: str, search=None) -> dict:
+    """-> {answer, sources: [{title, url}]}. With search (Settings › Web search) the model may look things up first."""
+    from ..coach import websearch as ws
     import yaml
     r = next((x for x in report.get("rounds", []) if int(x.get("number", 0)) == rnd), None)
     if r is None:
@@ -61,8 +69,16 @@ def answer(llm, report: dict, rnd: int, question: str, history: list[dict], lang
            "earlier_questions_about_this_round": [{"q": h["q"], "a": h["a"]} for h in history[-4:]] or None}
     user = "Report data (YAML):\n" + yaml.safe_dump({k: v for k, v in doc.items() if v is not None}, sort_keys=False,
                                                     allow_unicode=True, width=120) + f"\nQuestion: {question}"
-    out = llm.chat_json(ASK_SYSTEM.format(language=language) + field_guide(SCHEMA), user, SCHEMA)
-    return str(out.get("answer") or "").strip()[:2000]
+    sources: list[dict] = []
+    if search is not None:
+        brief = f"Map {meta.get('map')}, agent {meta.get('agent')}, round {rnd}:\n{str(r.get('llm_input') or '')[:1500]}"
+        queries = ws.queries_for(llm, question, brief, n=2)
+        if queries:
+            sources, _ = ws.research(search, queries, read=2)
+    schema = SCHEMA_SOURCES if sources else SCHEMA
+    system = ASK_SYSTEM.format(language=language) + (ASK_WEB + ws.SOURCES_RULES if sources else "") + field_guide(schema)
+    out = llm.chat_json(system, user + ws.sources_block(sources), schema)
+    return {"answer": str(out.get("answer") or "").strip()[:2000], "sources": ws.cited(sources, out.get("sources"))}
 
 
 def ffmpeg() -> str | None:
@@ -128,13 +144,14 @@ def register(app, store, get_job, llm_for, discord_url_for):
             try:
                 llm = llm_for(profile, choice)
                 hist = read_asks(jp).get("rounds", {}).get(str(rnd), [])
-                a = answer(llm, report, rnd, q, hist, profile.language if profile else "English")
-                if not a:
+                from ..coach.websearch import searcher
+                res = answer(llm, report, rnd, q, hist, profile.language if profile else "English", search=searcher(store))
+                if not res["answer"]:
                     raise RuntimeError("the model gave no answer")
                 with _lock:
                     d = read_asks(jp)
                     d.setdefault("rounds", {}).setdefault(str(rnd), []).append(
-                        {"q": q, "a": a, "model": getattr(llm, "model", ""), "t": time.time()})
+                        {"q": q, "a": res["answer"], "sources": res["sources"], "model": getattr(llm, "model", ""), "t": time.time()})
                     tmp = ask_path(jp).with_suffix(".tmp")
                     tmp.write_text(json.dumps(d, ensure_ascii=False))
                     tmp.replace(ask_path(jp))

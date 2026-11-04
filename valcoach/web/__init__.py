@@ -17,7 +17,7 @@ import sqlite3
 import tempfile
 import time
 import uuid
-from urllib.parse import urlsplit
+from urllib.parse import urlparse, urlsplit
 from datetime import datetime
 from pathlib import Path
 
@@ -175,9 +175,13 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         session["uid"] = user.id
         session["sk"] = user.session_key
 
-    def safe_next(default: str = "/") -> str:
-        nxt = request.args.get("next", default)
-        return nxt if nxt.startswith("/") and not nxt.startswith("//") else default
+    def redirect_next(default: str = "/"):
+        """Redirect to ?next= when it's a page of this site, else to default (see urls.local_path)."""
+        from .urls import local_path
+        target = (request.args.get("next") or "").replace("\\", "")
+        if local_path(target) and not urlparse(target).netloc and not urlparse(target).scheme:
+            return redirect(target)
+        return redirect(default)
 
     def form_int(name: str, default: int, lo: int, hi: int) -> int | None:
         """Integer form field in [lo, hi]; None if it isn't one."""
@@ -411,10 +415,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         """The language switch on the login page (a cookie; logged-in users pick it under Account)."""
         if lang not in i18n.LANGS:
             abort(404)
-        nxt = request.args.get("next") or url_for("login")
-        if not nxt.startswith("/") or nxt.startswith("//") or "\\" in nxt:
-            nxt = url_for("login")
-        resp = redirect(nxt)
+        resp = redirect_next(url_for("login"))
         resp.set_cookie("vc-lang", lang, max_age=365 * 86400, samesite="Lax", secure=request.is_secure, httponly=True)
         if g.user is not None:
             try:
@@ -467,7 +468,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             if user:
                 login_fails.pop(key, None)
                 log_in(user)
-                return redirect(safe_next())
+                return redirect_next()
             recent.append(time.time())
             flash("Wrong username or password.", "error")
             return render_template("auth.html", mode="login", username=username), 401
@@ -523,8 +524,9 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             for k in ("home_seen", "home_prev", "notify", "lang"):
                 if old_prefs.get(k) and k not in prefs:
                     prefs[k] = old_prefs[k]
-            from .ui import NAVS
+            from .ui import NAVS, WIDTHS
             prefs["nav"] = f.get("nav") if f.get("nav") in NAVS else (old_prefs.get("nav") if old_prefs.get("nav") in NAVS else "side")
+            prefs["width"] = f.get("width") if f.get("width") in WIDTHS else (old_prefs.get("width") if old_prefs.get("width") in WIDTHS else "auto")
             store.update_user(g.user.id, prefs=json.dumps(prefs))
             flash(f"Style: {STYLES[prefs['style']][0]}.", "ok")
             return redirect(url_for("account") + "#look")
@@ -555,9 +557,9 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                     flash("Password changed. Other devices were logged out.", "ok")
             return redirect(url_for("account"))
         usage = store.usage_by_user().get(g.user.id, {"profiles": 0, "jobs": 0})
-        from .ui import ANIMATIONS, NAVS, STYLES
+        from .ui import ANIMATIONS, NAVS, STYLES, WIDTHS
         from .push import KINDS, available as push_ok, wants
-        return render_template("account.html", navs=NAVS, push_kinds=KINDS, push_ok=push_ok(),
+        return render_template("account.html", navs=NAVS, widths=WIDTHS, push_kinds=KINDS, push_ok=push_ok(),
                                push_on={k: wants(g.user, k) for k in KINDS}, push_devices=len(store.push_subs(g.user.id)), usage=usage, vod_root=vod_root(g.user), styles=STYLES, animations=ANIMATIONS)
 
     # -------------------------------------------------------------- quick search (Ctrl+K)
@@ -569,7 +571,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         for p in store.profiles(g.user.id):
             seen.add(p.id)
             add("player", p.riot_id, url_for("stats", pid=p.id), "stats & maps")
-            for ep, lbl in (("agents_roles", "agents & roles"), ("rounds_page", "rounds & economy"), ("teammates_page", "teammates"), ("habits", "habits"), ("aim", "aim & warm-up"), ("progress", "rank & progress"), ("training", "training"),
+            for ep, lbl in (("agents_roles", "agents & roles"), ("rounds_page", "rounds & economy"), ("teammates_page", "teammates"), ("habits", "habits"), ("aim", "aim & warm-up"), ("ask_coach", "ask the coach"), ("progress", "rank & progress"), ("training", "training"),
                             ("quiz", "quiz"), ("pros", "pros & videos"), ("profile", "matches & reports")):
                 add("player", f"{p.name} · {lbl}", url_for(ep, pid=p.id))
         for t in store.teams_for_user(g.user.id):
@@ -1280,10 +1282,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             if "backup_keep" in f:                      # Backups
                 store.set("backup_on", "1" if f.get("backup_on") else "0")
                 bd = f.get("backup_dir", "").strip()
-                if bd and not Path(bd).expanduser().is_absolute():
-                    errors.append("Backup folder: give the full path, e.g. /mnt/nas/valcoach-backups")
-                elif bd and not Path(bd).expanduser().is_dir():
-                    errors.append(f"Backup folder not found on this server: {bd}")
+                if bd and (why := _backups.check_folder(bd, store.data_dir)):
+                    errors.append(why)
                 else:
                     store.set("backup_dir", bd)
                 try:
@@ -1313,6 +1313,23 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 store.set("claude_fallback", "1" if f.get("claude_fallback") else "0")
                 if f["llm_auto"] in {c["value"] for c in model_choices(store, g.user)}:
                     store.set("llm_auto", f["llm_auto"])
+            if "search_provider" in f:                   # Web search
+                from ..coach.websearch import PROVIDERS
+                sp = f.get("search_provider", "")
+                su = f.get("searxng_url", "").strip().rstrip("/")
+                if su and not re.fullmatch(r"https?://[^\s/]+(/[^\s]*)?", su):
+                    errors.append("SearXNG URL: the full address, e.g. http://10.0.0.5:8080")
+                else:
+                    store.set("searxng_url", su)
+                for key, val, label in (("search_provider", sp, "Web search"), ("search_backup", f.get("search_backup", ""), "Backup search")):
+                    if val not in PROVIDERS:
+                        continue
+                    if val == "searxng" and not su:
+                        errors.append(f"{label}: enter your SearXNG URL first.")
+                    elif val == "claude" and not store.get("claude_api_key"):
+                        errors.append(f"{label} with Claude needs the Anthropic API key (Claude section).")
+                    else:
+                        store.set(key, val)
             if f.get("youtube_api_key", "").strip():
                 store.set("youtube_api_key", f["youtube_api_key"].strip())
             if f.get("clear_youtube_key"):
@@ -1339,7 +1356,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         models, ollama_error = ollama_models()
         s = store.settings()
         from ..stats.style import DEFAULT_PROS
-        return render_template("settings.html", s=s, key_set=bool(s["henrik_api_key"]),
+        from ..coach.websearch import PROVIDERS as search_providers
+        return render_template("settings.html", s=s, key_set=bool(s["henrik_api_key"]), search_providers=search_providers,
                                yt_hint=("…" + s["youtube_api_key"][-4:]) if s["youtube_api_key"] else "",
                                pros_text=s["pros_yaml"] or DEFAULT_PROS.read_text(), pros_custom=bool(s["pros_yaml"]),
                                key_hint=("…" + s["henrik_api_key"][-4:]) if s["henrik_api_key"] else "",
@@ -1392,6 +1410,23 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                     return jsonify(ok=not missing, msg="Works: the key was accepted." +
                                    (f" Not available to this key: {', '.join(missing)}." if missing else ""))
                 return jsonify(ok=False, msg="The key was refused." if r.status_code in (401, 403) else f"Anthropic answered HTTP {r.status_code}.")
+            if what == "search":
+                from ..coach import websearch as ws
+                if not ws.provider(store):
+                    return jsonify(ok=False, msg="Web search is off (or its URL / key is missing).")
+                msgs, ok = [], False
+                for which in (ws.provider(store), ws.backup(store)):     # each one on its own
+                    if not which:
+                        continue
+                    name = ws.PROVIDERS[which].split(" (")[0]
+                    try:
+                        hits = ws._one(store, which)("Valorant patch notes", 3)
+                        ok = ok or bool(hits)
+                        msgs.append(f"{name}: works, {len(hits)} results" if hits else f"{name}: answered, but found nothing")
+                    except ws.SearchError as e:
+                        app.logger.info("search test: %s", e)
+                        msgs.append(ws.describe(e))
+                return jsonify(ok=ok, msg=" · ".join(msgs)[:300])
             if what == "ollama":
                 from ..coach.ollama import Ollama
                 Ollama(store.get("ollama_url"), store.get("ollama_model")).check()

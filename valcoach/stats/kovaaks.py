@@ -256,6 +256,91 @@ def mastered(scores: list[float]) -> bool:
 
 
 # ------------------------------------------------------------------ the playlist the coach writes
+# Public KovaaK's playlists by their share code (pasted in KovaaK's › Sandbox › Online Playlists › Enter Share Code;
+# KovaaK's then downloads every scenario in it). Picked from the community list at
+# github.com/officialpure/Resources (Sharecodes.md): the Valorant / Counter-Strike routines, the ones for a single
+# problem (micro-flicks, peeking, reactivity, switching ...) and the Voltaic fundamentals by level.
+# name, author, share code, focus, level (1 easy, 2 medium, 3 hard), group
+SHARED: list[tuple[str, str, str, list[str], int, str]] = [
+    ("Voltaic Valorant Easy", "Voltaic", "KovaaKsTeleportingJebaitedBuystation", ["warmup", "flicks", "micro"], 1, "valorant"),
+    ("KovaaK's Valorant", "KovaaK", "KovaaKsClippingBrownBottomfrag", ["warmup", "flicks", "crosshair"], 1, "valorant"),
+    ("KovaaK's Counter-Strike", "KovaaK", "KovaaKsAscending360Ufo", ["flicks", "crosshair"], 1, "valorant"),
+    ("PureG warm-up", "PureG", "KovaaKsHeadshottingSepiaDeathball", ["warmup", "flicks"], 1, "valorant"),
+    ("Freakazoid", "Freakazoid", "KovaaKsBoomstickingJitteryDink", ["flicks", "micro", "crosshair"], 2, "valorant"),
+    ("PureG full", "PureG", "KovaaKsHipfiringShamrockAttrition", ["flicks", "micro", "tracking"], 2, "valorant"),
+    ("Krascsi tac FPS", "Krascsi", "KovaaKsDinkingMauveLoadout", ["flicks", "micro", "reaction"], 2, "valorant"),
+    ("n0ted", "n0ted", "KovaaKsBottingJumboBattlepass", ["micro", "flicks"], 2, "valorant"),
+    ("Pyth", "Pyth", "KovaaKsFeedingEggplantImpact", ["flicks", "micro"], 2, "valorant"),
+    ("Yamz practical", "Yamz", "KovaaKsSwitchingTealValue", ["flicks", "switching"], 2, "valorant"),
+    ("Robb ZR", "Robb", "KovaaKsDodgingPeachChoke", ["crosshair", "micro"], 2, "valorant"),
+    ("Robb horizontal corrections", "Robb", "KovaaKsScreamingMountedLowground", ["micro", "crosshair"], 2, "valorant"),
+    ("Robb ZR strafe", "Robb", "KovaaKsRaidingLavenderFinisher", ["peeking", "micro"], 2, "valorant"),
+    ("BardOZ advanced", "BardOZ", "KovaaKsTrackingJitteryLowground", ["flicks", "micro", "switching"], 3, "valorant"),
+    ("Gored micro", "Gored", "KovaaKsRaidingDinked1v1", ["micro"], 2, "problem"),
+    ("Lapu micro", "Lapu4", "KovaaKsPickingEasyHighground", ["micro", "crosshair"], 2, "problem"),
+    ("Peak peeking practice", "Trippez", "KovaaKsRaiding360Camp", ["peeking", "reaction"], 2, "problem"),
+    ("Ridd X or Y", "Ridd", "KovaaKsFlashingMountedCd", ["reaction"], 2, "problem"),
+    ("Torje reactivity conditioning", "Torje", "KovaaKsChallengingDesertsandHeaven", ["reaction", "tracking"], 3, "problem"),
+    ("Voltaic target acquisition easy", "Voltaic", "KovaaKsEntryfraggingEggplantPrism", ["flicks", "crosshair"], 1, "problem"),
+    ("Voltaic target acquisition advanced", "Voltaic", "KovaaKsDunkingEasyCrossfire", ["flicks", "crosshair"], 3, "problem"),
+    ("Herro wide flicks", "Herro", "KovaaKsFlashingBrightDps", ["flicks"], 2, "problem"),
+    ("Voltaic speed", "Voltaic", "KovaaKsExitfraggingEntryGamesense", ["flicks", "switching"], 2, "problem"),
+    ("Lapu4 switching 1", "Lapu4", "KovaaKsScreamingShinyCinematic", ["switching"], 1, "problem"),
+    ("Krascsi static switch small", "Krascsi", "KovaaKsCrouchingLongPlunder", ["switching", "micro"], 2, "problem"),
+    ("Voltaic reactivity", "Voltaic", "KovaaKsFeedingExtraCinematic", ["tracking", "reaction"], 2, "problem"),
+    ("Hauntr tracking easy", "Hauntr", "KovaaKsSneakingDesertsandMain", ["tracking"], 1, "problem"),
+    ("Voltaic smoothness & precision easy", "Voltaic", "KovaaKsCrossfiringDesertsandBuff", ["tracking", "micro"], 1, "problem"),
+    ("KovaaK's basic", "KovaaK", "KovaaKsAfking360Cashdrop", ["warmup"], 1, "general"),
+    ("KovaaK's intermediate", "KovaaK", "KovaaKsBindingAfkBunnyhop", ["warmup", "flicks", "tracking"], 2, "general"),
+    ("KovaaK's advanced", "KovaaK", "KovaaKsAcing901x1", ["flicks", "tracking", "switching"], 3, "general"),
+    ("Voltaic Iron", "Voltaic", "KovaaKsAcingShamrockLowground", ["flicks", "tracking", "switching"], 1, "voltaic"),
+    ("Voltaic Bronze", "Voltaic", "KovaaKsZoningSepiaTacmap", ["flicks", "tracking", "switching"], 1, "voltaic"),
+    ("Voltaic Silver", "Voltaic", "KovaaKsWipingSepiaBuystation", ["flicks", "tracking", "switching"], 2, "voltaic"),
+    ("Voltaic Gold", "Voltaic", "KovaaKsWinningSeagreenExitfrag", ["flicks", "tracking", "switching"], 2, "voltaic"),
+    ("Voltaic Platinum", "Voltaic", "KovaaKsVibratingScarletNano", ["flicks", "tracking", "switching"], 2, "voltaic"),
+    ("Voltaic Diamond", "Voltaic", "KovaaKsUltingScaredVehicle", ["flicks", "tracking", "switching"], 3, "voltaic"),
+    ("Voltaic Jade", "Voltaic", "KovaaKsTrollingScaredChaingun", ["flicks", "tracking", "switching"], 3, "voltaic"),
+    ("Voltaic Master", "Voltaic", "KovaaKsTrackingSaltyFlash", ["flicks", "tracking", "switching"], 3, "voltaic"),
+]
+SHARED_GROUPS = {"valorant": "For Valorant and Counter-Strike", "problem": "For one thing",
+                 "voltaic": "Voltaic fundamentals, by level", "general": "KovaaK's own (already installed)"}
+
+
+def shared() -> list[dict]:
+    return [{"name": n, "author": a, "code": c, "focus": f, "level": lv, "group": gr} for n, a, c, f, lv, gr in SHARED]
+
+
+def player_level(runs: list[dict] | None) -> int:
+    """1-3 from imported scores: how many scenarios you're steady near your best on (no scores: 1)."""
+    st = summary(runs or [])
+    good = sum(1 for x in st if x.get("mastered"))
+    return 3 if good >= 6 else 2 if good >= 2 or len(st) >= 8 else 1
+
+
+def suggest(needs: list[dict], runs: list[dict] | None = None, n: int = 4,
+            have: set[str] | frozenset = frozenset()) -> list[dict]:
+    """The community playlists that fit what your matches show, at about your level, each with the reason.
+    have: share codes you already added (left out)."""
+    level = player_level(runs)
+    out = []
+    for p in shared():
+        if p["code"].lower() in {h.lower() for h in have}:
+            continue
+        score, why = 0.0, ""
+        for x in needs:
+            hit = len(set(p["focus"]) & set(x["focus"]) - {"warmup"}) or (1 if "warmup" in x["focus"] and "warmup" in p["focus"] else 0)
+            if hit:
+                score += hit * x.get("weight", 1)
+                why = why or x.get("why", "")
+        if not score:
+            continue
+        score -= abs(p["level"] - level) * 1.5           # about your level
+        score += 0.5 if p["group"] == "valorant" else 0   # made for this kind of game
+        out.append((score, p["name"], dict(p, why=why)))
+    out.sort(key=lambda x: (-x[0], x[1]))
+    return [p for _, _, p in out[:n]]
+
+
 KINDS = {"warmup": ("warm-up", 10), "training": ("training", 25)}
 
 
