@@ -9,9 +9,11 @@ every report, and with `valcoach --version`. Update: `git pull`, `pip install -e
   form, agents, maps, habits, what their aim needs and their KovaaK's scores, and remembers the conversation (per user
   and player; *New conversation* starts over). Answers are written in the background, with the model picker like
   everywhere else.
-- **Web search for the coach** (*Settings › Web search*, optional): with your own **SearXNG** server (free; it must
-  allow JSON, see the README) or **Claude's web search** (Anthropic key, US$ 10 per 1,000 searches, in the Claude
-  budget). For each question the model decides whether to look something up (patch changes, abilities, pros,
+- **Web search for the coach** (*Settings › Web search*): **DuckDuckGo** by default (free, no setup; it has no
+  official search API, so valcoach reads its plain results page, and it blocks a server for a while after many
+  searches), your own **SearXNG** server (free; it must allow JSON, see the README) or **Claude's web search**
+  (Anthropic key, US$ 10 per 1,000 searches, in the Claude budget). A **backup search** takes over when the main
+  one fails or finds nothing, e.g. DuckDuckGo with SearXNG as backup. Set it to *Off* to turn web search off. For each question the model decides whether to look something up (patch changes, abilities, pros,
   KovaaK's playlists; at most three searches), reads the best pages and answers with the pages it used as links.
   Also in *Ask the coach about this round* in reports. Pages are only read from public addresses (never the server
   itself, your LAN or cloud metadata, also after redirects), at most 600 KB, text only. A *Test* button checks it.
@@ -26,6 +28,13 @@ every report, and with `valcoach --version`. Update: `git pull`, `pip install -e
 - **Backups to a read-only folder are explained**: instead of *[Errno 30] Read-only file system* the error says that
   the systemd service may only write to its data folder and which `ReadWritePaths=` line to add. Saving a backup folder
   in Settings now checks that valcoach can actually write there.
+- **Security (found by GitHub's CodeQL scan):**
+  - Redirects after logging in, switching the language and the Aim page's buttons only go to pages of valcoach.
+    Before, a crafted link such as `/login?next=/\evil.example` could send someone to another site after logging in
+    (browsers read `/\` and `/<tab>/` like `//`).
+  - Web search errors shown in the browser (Settings › Test, Ask the coach, the Aim page) are fixed texts now;
+    the details from the search server or the exception only go to the server log.
+  - The backup folder must be a full path without `..` and can't be the root or a system folder (`/etc`, `/usr` ...).
 - German for everything new.
 
 ## 4.1.2

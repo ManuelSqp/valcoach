@@ -17,7 +17,7 @@ import sqlite3
 import tempfile
 import time
 import uuid
-from urllib.parse import urlsplit
+from urllib.parse import urlparse, urlsplit
 from datetime import datetime
 from pathlib import Path
 
@@ -176,8 +176,9 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         session["sk"] = user.session_key
 
     def safe_next(default: str = "/") -> str:
-        nxt = request.args.get("next", default)
-        return nxt if nxt.startswith("/") and not nxt.startswith("//") else default
+        from .urls import local_path
+        nxt = local_path(request.args.get("next"))
+        return nxt if nxt and not urlparse(nxt).netloc and not urlparse(nxt).scheme else default
 
     def form_int(name: str, default: int, lo: int, hi: int) -> int | None:
         """Integer form field in [lo, hi]; None if it isn't one."""
@@ -411,10 +412,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         """The language switch on the login page (a cookie; logged-in users pick it under Account)."""
         if lang not in i18n.LANGS:
             abort(404)
-        nxt = request.args.get("next") or url_for("login")
-        if not nxt.startswith("/") or nxt.startswith("//") or "\\" in nxt:
-            nxt = url_for("login")
-        resp = redirect(nxt)
+        resp = redirect(safe_next(url_for("login")))
         resp.set_cookie("vc-lang", lang, max_age=365 * 86400, samesite="Lax", secure=request.is_secure, httponly=True)
         if g.user is not None:
             try:
@@ -1281,9 +1279,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             if "backup_keep" in f:                      # Backups
                 store.set("backup_on", "1" if f.get("backup_on") else "0")
                 bd = f.get("backup_dir", "").strip()
-                if bd and not Path(bd).expanduser().is_absolute():
-                    errors.append("Backup folder: give the full path, e.g. /mnt/nas/valcoach-backups")
-                elif bd and (why := _backups.check_folder(bd)):
+                if bd and (why := _backups.check_folder(bd)):
                     errors.append(why)
                 else:
                     store.set("backup_dir", bd)
@@ -1322,13 +1318,15 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                     errors.append("SearXNG URL: the full address, e.g. http://10.0.0.5:8080")
                 else:
                     store.set("searxng_url", su)
-                if sp in PROVIDERS:
-                    if sp == "searxng" and not su:
-                        errors.append("Web search: enter your SearXNG URL first.")
-                    elif sp == "claude" and not store.get("claude_api_key"):
-                        errors.append("Web search with Claude needs the Anthropic API key (Claude section).")
+                for key, val, label in (("search_provider", sp, "Web search"), ("search_backup", f.get("search_backup", ""), "Backup search")):
+                    if val not in PROVIDERS:
+                        continue
+                    if val == "searxng" and not su:
+                        errors.append(f"{label}: enter your SearXNG URL first.")
+                    elif val == "claude" and not store.get("claude_api_key"):
+                        errors.append(f"{label} with Claude needs the Anthropic API key (Claude section).")
                     else:
-                        store.set("search_provider", sp)
+                        store.set(key, val)
             if f.get("youtube_api_key", "").strip():
                 store.set("youtube_api_key", f["youtube_api_key"].strip())
             if f.get("clear_youtube_key"):
@@ -1410,16 +1408,22 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                                    (f" Not available to this key: {', '.join(missing)}." if missing else ""))
                 return jsonify(ok=False, msg="The key was refused." if r.status_code in (401, 403) else f"Anthropic answered HTTP {r.status_code}.")
             if what == "search":
-                from ..coach.websearch import SearchError, provider, searcher
-                fn = searcher(store)
-                if fn is None:
+                from ..coach import websearch as ws
+                if not ws.provider(store):
                     return jsonify(ok=False, msg="Web search is off (or its URL / key is missing).")
-                try:
-                    hits = fn("Valorant patch notes", 3)
-                except SearchError as e:
-                    return jsonify(ok=False, msg=str(e)[:200])
-                return jsonify(ok=bool(hits), msg=(f"Works: {len(hits)} results, e.g. {hits[0]['title'][:60]}" if hits
-                                                   else f"{provider(store)} answered, but found nothing."))
+                msgs, ok = [], False
+                for which in (ws.provider(store), ws.backup(store)):     # each one on its own
+                    if not which:
+                        continue
+                    name = ws.PROVIDERS[which].split(" (")[0]
+                    try:
+                        hits = ws._one(store, which)("Valorant patch notes", 3)
+                        ok = ok or bool(hits)
+                        msgs.append(f"{name}: works, {len(hits)} results" if hits else f"{name}: answered, but found nothing")
+                    except ws.SearchError as e:
+                        app.logger.info("search test: %s", e)
+                        msgs.append(ws.describe(e))
+                return jsonify(ok=ok, msg=" · ".join(msgs)[:300])
             if what == "ollama":
                 from ..coach.ollama import Ollama
                 Ollama(store.get("ollama_url"), store.get("ollama_model")).check()

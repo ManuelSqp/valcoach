@@ -27,7 +27,8 @@ PREFIX = "valcoach-backup-"
 
 def backup_dir(store) -> Path:
     d = (store.get("backup_dir") or "").strip()
-    return Path(d).expanduser() if d else store.data_dir / "backups"
+    folder = clean_folder(d)[0] if d else None
+    return folder or store.data_dir / "backups"
 
 
 def _keep(store) -> int:
@@ -48,9 +49,30 @@ def explain(e: BaseException, folder: Path | str) -> str:
     return str(e)[:300]
 
 
+SYSTEM_DIRS = ("/proc", "/sys", "/dev", "/etc", "/boot", "/bin", "/sbin", "/usr", "/lib", "/lib64", "/run", "/var/run")
+
+
+def clean_folder(raw: str) -> tuple[Path | None, str]:
+    """An admin's backup folder: a full path, no "..", never the root or a system folder. -> (path, why not)"""
+    raw = str(raw or "").strip()
+    if not raw or "\x00" in raw:
+        return None, "Backup folder: give the full path, e.g. /mnt/nas/valcoach-backups"
+    if ".." in Path(raw).parts:
+        return None, "Backup folder: a full path without “..”"
+    p = Path(os.path.normpath(os.path.expanduser(raw)))
+    if not p.is_absolute():
+        return None, "Backup folder: give the full path, e.g. /mnt/nas/valcoach-backups"
+    real = os.path.realpath(p)
+    if real == "/" or any(real == d or real.startswith(d + "/") for d in SYSTEM_DIRS):
+        return None, f"Backup folder: not a system folder ({real})"
+    return Path(real), ""
+
+
 def check_folder(folder: Path | str) -> str:
     """'' when valcoach can write backups to this folder, else why not (for Settings)."""
-    d = Path(folder).expanduser()
+    d, why = clean_folder(str(folder))
+    if d is None:
+        return why
     if not d.is_dir():
         return f"Backup folder not found on this server: {folder}"
     probe = d / f".valcoach-write-test-{os.getpid()}"

@@ -200,8 +200,9 @@ DEFAULTS: dict[str, str] = {
     "max_upload_gb": "20",         # per uploaded VOD
     "max_jobs_per_user": "3",      # queued + running at the same time
     "youtube_api_key": "",         # optional: inline videos on the Pro & videos page
-    # web search for the coach (Settings › Web search): "", "searxng" or "claude"
-    "search_provider": "searxng" if os.environ.get("SEARXNG_URL") else "",
+    # web search for the coach (Settings › Web search): "", "duckduckgo", "searxng" or "claude", plus a backup
+    "search_provider": "duckduckgo",
+    "search_backup": "searxng" if os.environ.get("SEARXNG_URL") else "",
     "searxng_url": os.environ.get("SEARXNG_URL", ""),
     "pros_yaml": "",               # optional: edited pro list (empty = built-in stats/pros.yaml)
     "secret_key": "",

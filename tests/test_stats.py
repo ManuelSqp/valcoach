@@ -877,7 +877,7 @@ def test_web_search_helpers_and_community_playlists():
         ws.searxng("http://sx:8080", "other query", session=Forbidden())
         raise AssertionError("expected SearchError")
     except ws.SearchError as e:
-        assert "formats" in str(e)
+        assert "formats" in ws.describe(e)
     # pages on the LAN, the server itself or cloud metadata are never read
     for u in ("http://127.0.0.1/", "http://10.0.0.1/x", "http://169.254.169.254/latest", "file:///etc/passwd",
               "http://user:pw@example.org/", "http://[::1]/"):
@@ -890,7 +890,7 @@ def test_web_search_helpers_and_community_playlists():
     assert "[1] a (https://x.org/a)" in ws.sources_block(src)
 
     def broken(q, n):
-        raise ws.SearchError("SearXNG isn't reachable")
+        raise ws.SearchError("searxng", "unreachable", "ConnectionError: secret internal detail")
     assert ws.research(broken, ["q"]) == ([], ["SearXNG isn't reachable"])
     # community playlists: what fits the needs, at about your level, without the ones you have
     need = [{"focus": ["peeking", "flicks", "reaction"], "weight": 3, "why": "first duels"}]
@@ -898,3 +898,44 @@ def test_web_search_helpers_and_community_playlists():
     assert picks and all(set(p["focus"]) & {"peeking", "flicks", "reaction"} for p in picks) and picks[0]["why"] == "first duels"
     assert picks[0]["code"] not in {p["code"] for p in kv.suggest(need, [], 4, {picks[0]["code"].upper()})}
     assert len({x["code"] for x in kv.shared()}) == len(kv.SHARED) and all(ws.SHARE_CODE_RE.fullmatch(x["code"]) for x in kv.shared())
+
+
+def test_duckduckgo_results_and_the_backup_search():
+    from valcoach.coach import websearch as ws
+    page = """<div class="result results_links web-result"><div class="links_main result__body">
+      <h2 class="result__title"><a rel="nofollow" class="result__a" href="https://playvalorant.com/patch-12">Patch <b>12</b> notes</a></h2>
+      <a class="result__snippet" href="https://playvalorant.com/patch-12">Jett&#x27;s dash is <b>shorter</b>.</a></div></div>
+      <div class="result result--ad"><div class="result__body"><h2><a class="result__a" href="https://duckduckgo.com/y.js?ad=1">Buy</a></h2></div></div>
+      <div class="result"><div class="result__body"><h2><a class="result__a"
+        href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.org%2Fkovaaks%3Fa%3D1&amp;rut=x">KovaaK's codes</a></h2></div></div>"""
+    assert ws.ddg_results(page) == [
+        {"title": "Patch 12 notes", "url": "https://playvalorant.com/patch-12", "snippet": "Jett's dash is shorter."},
+        {"title": "KovaaK's codes", "url": "https://example.org/kovaaks?a=1", "snippet": ""}]
+
+    class R:
+        def __init__(self, code, text=""):
+            self.status_code, self.text = code, text
+
+    class Blocked:
+        def post(self, *a, **k):
+            return R(202, "<div class='anomaly-modal'>")
+    try:
+        ws.duckduckgo("blocked query", session=Blocked())
+        raise AssertionError("expected SearchError")
+    except ws.SearchError as e:
+        assert "blocking" in ws.describe(e)
+
+    def down(q, n=6):
+        raise ws.SearchError("duckduckgo", "blocked")
+    spare = lambda q, n=6: [{"title": "from SearXNG", "url": "https://s.org", "snippet": ""}]   # noqa: E731
+    assert ws.with_backup(down, spare)("q")[0]["title"] == "from SearXNG"
+    assert ws.with_backup(lambda q, n=6: [], spare)("q")[0]["title"] == "from SearXNG"         # nothing found: backup too
+    assert ws.with_backup(lambda q, n=6: [{"title": "main"}], spare)("q") == [{"title": "main"}]
+    def down2(q, n=6):
+        raise ws.SearchError("searxng", "no_json", "<html>stack trace</html>")
+    try:
+        ws.with_backup(down, down2)("q")
+        raise AssertionError("expected SearchError")
+    except ws.SearchError as e:                       # the backup's error; only fixed texts reach the browser
+        assert ws.describe(e) == "SearXNG didn't answer JSON: add json to search › formats in its settings.yml"
+    assert ws.describe(ValueError("internal")) == "the search failed"

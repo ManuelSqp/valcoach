@@ -67,7 +67,7 @@
   <label class="sr-only" for="askq">Your question</label>
   <textarea id="askq" name="question" maxlength="600" placeholder="Ask the coach…" required></textarea>
   <div class="askrow">
-    <span class="l">{% include "_llm_pick.html" %}{% if search_on %}<span>Web search: <span translate="no">{{ search_name.split(' (')[0] }}</span></span>{% endif %}</span>
+    <span class="l">{% include "_llm_pick.html" %}{% if search_on %}<span>Web search: <span translate="no">{{ search_name }}</span></span>{% endif %}</span>
     <button class="btn primary sm" id="askbtn">Ask</button>
   </div>
 </form>

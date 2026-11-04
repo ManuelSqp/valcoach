@@ -44,6 +44,7 @@ def app(tmp_path, synthetic):
     store.set("minimap_roi", ", ".join(map(str, synth.MM_ROI)))
     store.set("killfeed_roi", ", ".join(map(str, synth.KF_ROI)))
     store.set("sample_fps", "2")
+    store.set("search_provider", "")          # no web search from tests (tests that need it fake it)
     app.recordings = str(tmp_path / "recordings")
     yield app
     app.extensions["valcoach"]["runner"].shutdown()
@@ -2416,10 +2417,14 @@ def test_settings_web_search_width_and_backup_message(app, tmp_path):
     store = app.extensions["valcoach"]["store"]
     c.post("/settings", data={"search_provider": "searxng", "searxng_url": ""})
     assert store.get("search_provider") == ""                                  # no URL: stays off
+    c.post("/settings", data={"search_provider": "duckduckgo", "search_backup": "searxng", "searxng_url": ""})
+    assert store.get("search_provider") == "duckduckgo" and store.get("search_backup") == ""   # backup needs its URL
     c.post("/settings", data={"search_provider": "searxng", "searxng_url": "http://10.0.0.5:8080/"})
     assert store.get("search_provider") == "searxng" and store.get("searxng_url") == "http://10.0.0.5:8080"
     c.post("/settings", data={"search_provider": "claude", "searxng_url": "http://10.0.0.5:8080"})
     assert store.get("search_provider") == "searxng"                           # Claude needs a key
+    c.post("/settings", data={"search_provider": "duckduckgo", "search_backup": "searxng", "searxng_url": "http://10.0.0.5:8080"})
+    assert store.get("search_provider") == "duckduckgo" and store.get("search_backup") == "searxng"
     assert 'id="search"' in c.get("/settings").data.decode()
     # page width per user: a class on <body>
     c.post("/account", data={"look": "1", "style": "terminal", "width": "narrow"})
@@ -2432,6 +2437,15 @@ def test_settings_web_search_width_and_backup_message(app, tmp_path):
     msg = backup.explain(OSError(errno.EROFS, "Read-only file system"), "/srv/backups")
     assert "ReadWritePaths=/srv/backups" in msg and "Errno" not in msg
     assert backup.check_folder(tmp_path) == "" and "not found" in backup.check_folder(tmp_path / "nope")
+    for bad in ("/etc", "/", "/mnt/../etc", "relative/path"):
+        assert backup.check_folder(bad), bad
+    c.post("/settings", data={"backup_keep": "14", "backup_dir": "/etc"})
+    assert store.get("backup_dir") != "/etc"
+    # redirects after a form or a language switch stay on this site, whatever browsers make of the target
+    for evil in ("//evil.com", "/\\evil.com", "/\t/evil.com", "https://evil.com", "/%0a"):
+        r = c.get("/lang/en?next=" + evil.replace("\t", "%09"))
+        assert "evil" not in r.headers["Location"], evil
+    assert c.get("/lang/en?next=/account").headers["Location"].endswith("/account")
 
 
 def test_kovaaks_community_playlists(app, monkeypatch):

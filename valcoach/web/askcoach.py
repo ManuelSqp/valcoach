@@ -53,7 +53,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         with _lock:
             st = dict(_state.get((g.user.id, pid)) or {})
         return render_template("ask_coach.html", p=p, active_pid=pid, items=items, pending=st if "step" in st else None,
-                               search_on=bool(ws.provider(store)), search_name=ws.PROVIDERS.get(ws.provider(store), ""),
+                               search_on=bool(ws.provider(store)), search_name=" → ".join(ws.PROVIDERS[x].split(" (")[0] for x in (ws.provider(store), ws.backup(store)) if x),
                                games=len(sr.games(pid).rows()))
 
     @app.post("/api/profiles/<int:pid>/ask")

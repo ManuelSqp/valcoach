@@ -72,11 +72,16 @@ server overview. The key can also come from `ANTHROPIC_API_KEY`.
 
 **Web search (optional).** Under *Settings → Web search* the coach can look things up instead of guessing (patch
 changes, abilities, pros, KovaaK's playlists and share codes) in *Ask the coach*, in the questions about a round of a
-report and on the Aim page; answers list the pages they used. Two ways:
+report and on the Aim page; answers list the pages they used. Pick a main search and a backup, which takes over
+when the main one fails or finds nothing:
+- **DuckDuckGo** (the default): free, nothing to set up. DuckDuckGo has no official search API, so valcoach reads its
+  plain HTML results page; it blocks a server for a while when it searches a lot, which is what the backup is for.
 - **SearXNG**, your own search server (free, nothing leaves your network except the searches). It has to answer
   JSON: in SearXNG's `settings.yml` set `search: formats: [html, json]` and restart it. Enter its URL (or set
-  `SEARXNG_URL`).
+  `SEARXNG_URL`, which also makes it the backup).
 - **Claude's web search** with the Anthropic key: US$ 10 per 1,000 searches plus tokens, counted in the Claude budget.
+
+*Test* checks the main search and the backup one by one. Set the main search to *Off* to turn web search off.
 
 The model decides per question whether to search (at most three searches) and reads the top pages. Pages are only
 fetched from public addresses, never from the server itself or your LAN.

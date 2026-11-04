@@ -13,11 +13,14 @@ import time
 from datetime import date
 from pathlib import Path
 
+from urllib.parse import urlparse
+
 from flask import abort, flash, g, jsonify, redirect, render_template, request, url_for
 
 from ..coach import websearch as ws
 from ..stats import aim as am
 from ..stats import kovaaks as kv
+from .urls import local_path
 
 MAX_ROUTINES = 60
 MAX_SCENARIOS = 300                  # people's own scenarios, per user and per team
@@ -154,8 +157,8 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                                shared_groups=kv.SHARED_GROUPS, n_shared=len(kv.SHARED), search_on=bool(ws.provider(store)))
 
     def back(pid: int):
-        nxt = request.form.get("next") or ""
-        if nxt.startswith("/") and not nxt.startswith("//") and "\\" not in nxt:
+        nxt = local_path(request.form.get("next"))
+        if nxt and not urlparse(nxt).netloc and not urlparse(nxt).scheme:
             return redirect(nxt)
         return redirect(url_for("aim", pid=pid))
 
