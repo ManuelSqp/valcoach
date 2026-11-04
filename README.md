@@ -1,6 +1,6 @@
 # valcoach
 
-**Version 4.2.1** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.2.2** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -78,8 +78,9 @@ server overview. The key can also come from `ANTHROPIC_API_KEY`.
 changes, abilities, pros, KovaaK's playlists and share codes) in *Ask the coach*, in the questions about a round of a
 report and on the Aim page; answers list the pages they used. Pick a main search and a backup, which takes over
 when the main one fails or finds nothing:
-- **DuckDuckGo** (the default): free, nothing to set up. DuckDuckGo has no official search API, so valcoach reads its
-  plain HTML results page; it blocks a server for a while when it searches a lot, which is what the backup is for.
+- **DuckDuckGo**: free, nothing to set up. DuckDuckGo has no official search API, so valcoach reads its plain HTML
+  results page, and DuckDuckGo often refuses searches that don't come from a browser (sometimes the very first one).
+  Fine as a backup; for the main search SearXNG is the reliable choice.
 - **SearXNG**, your own search server (free, nothing leaves your network except the searches). It has to answer
   JSON: in SearXNG's `settings.yml` set `search: formats: [html, json]` and restart it. Enter its URL (or set
   `SEARXNG_URL`, which also makes it the backup).

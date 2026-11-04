@@ -84,8 +84,8 @@ section.card[id]{scroll-margin-top:60px}
   <div class="grid2">
     <div class="field"><label>Search with</label>
       <select name="search_provider">{% for k, v in search_providers.items() %}<option value="{{ k }}" {{ 'selected' if s.search_provider == k }}>{{ v }}</option>{% endfor %}</select>
-      <div class="hint">DuckDuckGo needs no setup, but it has no official search API and blocks a server for a while when it searches a lot. SearXNG is free and stays on your own server. Claude's search costs US$ 10 per 1,000 searches plus the tokens (counted in the Claude budget).</div>
-      <div class="row" style="gap:8px;margin-top:8px"><button type="button" class="btn sm ghost tbtn" data-test="search">Test</button><span class="tres small" data-for="search"></span><span class="small muted">save first</span></div></div>
+      <div class="hint">SearXNG is the most reliable: free and on your own server. DuckDuckGo needs no setup, but it has no official search API and often refuses searches from programs, sometimes from the first one, so use it as the backup at most. Claude's search costs US$ 10 per 1,000 searches plus the tokens (counted in the Claude budget).</div>
+      <div class="row" style="gap:8px;margin-top:8px"><button type="button" class="btn sm ghost tbtn" data-test="search">Test</button><span class="small muted">save first</span></div><div class="tres small" data-for="search" style="margin-top:6px"></div></div>
     <div class="field"><label>Backup search</label>
       <select name="search_backup">{% for k, v in search_providers.items() %}<option value="{{ k }}" {{ 'selected' if s.search_backup == k }}>{{ 'None' if not k else v }}</option>{% endfor %}</select>
       <div class="hint">Used when the main search fails or finds nothing, e.g. when DuckDuckGo blocks for a while.</div></div>
@@ -164,7 +164,17 @@ document.querySelectorAll('.tbtn').forEach(b => b.onclick = async () => {
   try {
     const r = await fetch(`{{ url_for('settings') }}/test/${b.dataset.test}`, {method: 'POST'});
     const j = await r.json();
-    out.textContent = (j.ok ? '✓ ' : '✗ ') + j.msg; out.style.color = j.ok ? 'var(--win)' : 'var(--red)';
+    if (j.parts) {                       // several searches: a line each, with its own mark
+      out.replaceChildren(...j.parts.map(p => {
+        const d = document.createElement('div');
+        d.textContent = (p.ok ? '✓ ' : '✗ ') + (p.role === 'backup' ? (window.vcT ? vcT('Backup:') : 'Backup:') + ' ' : '') + p.msg;
+        d.style.color = p.ok ? 'var(--win)' : 'var(--red)';
+        return d;
+      }));
+      out.style.color = '';
+    } else {
+      out.textContent = (j.ok ? '✓ ' : '✗ ') + j.msg; out.style.color = j.ok ? 'var(--win)' : 'var(--red)';
+    }
   } catch (e) { out.textContent = '✗ ' + e.message; out.style.color = 'var(--red)'; }
   b.disabled = false;
 });

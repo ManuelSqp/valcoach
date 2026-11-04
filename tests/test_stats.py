@@ -923,7 +923,7 @@ def test_duckduckgo_results_and_the_backup_search():
         ws.duckduckgo("blocked query", session=Blocked())
         raise AssertionError("expected SearchError")
     except ws.SearchError as e:
-        assert "blocking" in ws.describe(e)
+        assert "refused" in ws.describe(e)
 
     def down(q, n=6):
         raise ws.SearchError("duckduckgo", "blocked")

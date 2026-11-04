@@ -1428,19 +1428,20 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 from ..coach import websearch as ws
                 if not ws.provider(store):
                     return jsonify(ok=False, msg="Web search is off (or its URL / key is missing).")
-                msgs, ok = [], False
-                for which in (ws.provider(store), ws.backup(store)):     # each one on its own
+                parts = []                                              # each search on its own line
+                for which, role in ((ws.provider(store), "main"), (ws.backup(store), "backup")):
                     if not which:
                         continue
                     name = ws.PROVIDERS[which].split(" (")[0]
                     try:
                         hits = ws._one(store, which)("Valorant patch notes", 3)
-                        ok = ok or bool(hits)
-                        msgs.append(f"{name}: works, {len(hits)} results" if hits else f"{name}: answered, but found nothing")
+                        parts.append({"ok": bool(hits), "role": role,
+                                      "msg": f"{name}: works, {len(hits)} results" if hits else f"{name}: answered, but found nothing"})
                     except ws.SearchError as e:
                         app.logger.info("search test: %s", e)
-                        msgs.append(ws.describe(e))
-                return jsonify(ok=ok, msg=" · ".join(msgs)[:300])
+                        parts.append({"ok": False, "role": role, "msg": ws.describe(e)})
+                ok = any(x["ok"] for x in parts)
+                return jsonify(ok=ok, parts=parts, msg=" · ".join(x["msg"] for x in parts)[:300])
             if what == "ollama":
                 from ..coach.ollama import Ollama
                 Ollama(store.get("ollama_url"), store.get("ollama_model")).check()
