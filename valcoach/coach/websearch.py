@@ -3,8 +3,8 @@
 Three ways to search, picked under Settings › Web search, plus a backup used when the main one fails or
 finds nothing:
 
-* DuckDuckGo (default): its plain HTML search page, free and without a key. DuckDuckGo has no search API and
-  blocks a server for a while when it searches a lot; then the backup takes over.
+* DuckDuckGo: its plain HTML search page, free and without a key. DuckDuckGo has no search API and often
+  refuses searches that don't come from a browser, sometimes from the very first one; then the backup takes over.
 * SearXNG: your own search server (free, no key). It must answer JSON: in SearXNG's settings.yml,
   `search: formats: [html, json]`. valcoach asks `<url>/search?q=...&format=json`.
 * Claude: Anthropic's web search tool, with the Claude API key from Settings › Claude. Costs US$ 10 per
@@ -52,7 +52,7 @@ NAMES = {"duckduckgo": "DuckDuckGo", "searxng": "SearXNG", "claude": "Claude's w
 # is shown in the browser, only logged)
 REASONS = {
     "unreachable": "{name} isn't reachable",
-    "blocked": "{name} is blocking searches from this server for now (too many in a short time)",
+    "blocked": "{name} refused the search: it often blocks searches from programs, even the first one",
     "http": "{name} answered with an error",
     "json_off": "{name} refused JSON: add json to search › formats in its settings.yml and restart it",
     "no_json": "{name} didn't answer JSON: add json to search › formats in its settings.yml",
@@ -215,7 +215,9 @@ def ddg_results(page: str) -> list[dict]:
 
 def duckduckgo(query: str, n: int = 6, session=None) -> list[dict]:
     """DuckDuckGo's plain HTML search page (it has no search API). Free and without a key, but DuckDuckGo
-    slows down or blocks a server that searches a lot: that's what the backup search is for."""
+    often refuses searches that don't come from a browser (it answers with a check page instead of results),
+    sometimes from the very first one: that's what the backup search is for. valcoach doesn't try to get around
+    that check."""
     hit = _cache.get(("duckduckgo", query))
     if hit and time.time() - hit[0] < CACHE_S:
         return hit[1][:n]

@@ -4,6 +4,13 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart valcoach` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.2.2
+- **Settings › Web search › Test shows each search on its own line** with its own ✓ or ✗ (before: one line with a
+  green ✓ as soon as either search worked, even when the main one had failed).
+- **DuckDuckGo's refusal is described correctly:** it often refuses searches that don't come from a browser, even the
+  very first one, so it isn't about searching too much. The hint now recommends SearXNG as the main search and
+  DuckDuckGo as the backup at most. valcoach doesn't try to get around DuckDuckGo's check.
+
 ## 4.2.1
 From code reviews of 4.2:
 - **Search the web for KovaaK's playlists runs in the background.** It reads up to six pages and used to keep one of

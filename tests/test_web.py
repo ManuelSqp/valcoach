@@ -2442,6 +2442,23 @@ def test_settings_web_search_width_and_backup_message(app, tmp_path):
     assert store.get("search_provider") == "searxng"                           # Claude needs a key
     c.post("/settings", data={"search_provider": "duckduckgo", "search_backup": "searxng", "searxng_url": "http://10.0.0.5:8080"})
     assert store.get("search_provider") == "duckduckgo" and store.get("search_backup") == "searxng"
+    # Test: a line per search, each with its own result
+    from valcoach.coach import websearch as ws
+
+    def fake_one(st, which):
+        if which == "duckduckgo":
+            def blocked(q, n=6):
+                raise ws.SearchError("duckduckgo", "blocked", "HTTP 202")
+            return blocked
+        return lambda q, n=6: [{"title": "x", "url": "https://x.org", "snippet": ""}]
+    orig = ws._one
+    ws._one = fake_one
+    try:
+        j = c.post("/settings/test/search").get_json()
+    finally:
+        ws._one = orig
+    assert j["ok"] and [(x["role"], x["ok"]) for x in j["parts"]] == [("main", False), ("backup", True)]
+    assert "refused" in j["parts"][0]["msg"] and "SearXNG: works" in j["parts"][1]["msg"]
     assert 'id="search"' in c.get("/settings").data.decode()
     # page width per user: a class on <body>
     c.post("/account", data={"look": "1", "style": "terminal", "width": "narrow"})
