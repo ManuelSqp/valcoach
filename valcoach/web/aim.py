@@ -56,8 +56,8 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
 
     def coach_files(pid: int) -> list[dict]:
         """The two KovaaK's playlists the coach writes, as routines (downloaded from the Aim page)."""
-        how = ("Download it, save it in FPSAimTrainer › Saved › SaveGames › Playlists (replace last week's file), "
-               "then open KovaaK's › Playlists › Local Playlists.")
+        how = ("Download it, save it in FPSAimTrainer › Saved › SaveGames › Playlists (the date is in its name, "
+               "older ones can stay), then open KovaaK's › Playlists › Local Playlists.")
         return [{"id": "k-warmup", "name": "KovaaK's warm-up from the coach", "kind": "kovaaksfile", "minutes": 10,
                  "focus": ["warmup", "flicks", "micro"], "steps": how, "code": "",
                  "url": f"/profiles/{int(pid)}/aim/kovaaks/warmup.json"},
@@ -98,8 +98,12 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
     def plan(pid: int, uid: int, kind: str, rows=None) -> dict:
         if rows is None:
             rows = filter_rows(sr.games(pid).rows(), "everything")
-        return kv.build(kind, am.needs(rows), scenarios(pid, uid), _read(player_path(pid), {}).get("kovaaks", []),
-                        week=kv.week_id())
+        need, cat = am.needs(rows), scenarios(pid, uid)
+        runs, week = _read(player_path(pid), {}).get("kovaaks", []), kv.week_id()
+        skip: set[str] = set()
+        if kind == "training":                  # training plays different scenarios from the warm-up
+            skip = {x["name"] for x in kv.build("warmup", need, cat, runs, week=week)["items"]}
+        return kv.build(kind, need, cat, runs, week=week, exclude=skip)
 
     def done_today(pid: int, rid: str) -> bool:
         today = date.today().isoformat()
@@ -368,13 +372,13 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
 
     @app.get("/profiles/<int:pid>/aim/kovaaks/<kind>.json")
     def aim_kovaaks(pid: int, kind: str):
-        """The playlist file for KovaaK's (always the same file name, so a new one replaces last week's)."""
+        """The playlist file for KovaaK's, dated (DD-MM-YYYY) in its name and file name, so older ones can stay."""
         p, _ = view_profile(pid)
         if kind not in kv.KINDS:
             abort(404)
         data = kv.playlist_file(plan(pid, g.user.id, kind), p.name)
         resp = app.response_class(json.dumps(data, indent=2, ensure_ascii=False), mimetype="application/json")
-        resp.headers["Content-Disposition"] = f'attachment; filename="valcoach_{kind}.json"'
+        resp.headers["Content-Disposition"] = f'attachment; filename="{kv.file_name(kind)}"'
         resp.headers["Cache-Control"] = "no-store"
         return resp
 

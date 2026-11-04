@@ -832,11 +832,20 @@ def test_kovaaks_files_scores_and_playlists():
     names = {c["name"] for c in cat}
     assert all(x["name"] in names for x in w["items"]) and 7 <= sum(x["runs"] for x in w["items"]) <= 9
     assert w["items"][0]["focus"] == "warmup" and kv.build("warmup", need, cat, [], week="2026-W45") == w
-    t = kv.build("training", need, cat, [], week="2026-W45")
+    wn = {x["name"] for x in w["items"]}
+    t = kv.build("training", need, cat, [], week="2026-W45", exclude=wn)
     assert sum(x["runs"] for x in t["items"]) == round(25 * 60 / kv.SECONDS_PER_RUN)
+    # training: other scenarios than the warm-up, many different ones, not the same few over and over
+    assert not wn & {x["name"] for x in t["items"]}
+    assert max(x["runs"] for x in t["items"]) <= 2 and len(t["items"]) >= 10
+    assert any(x["why"] == "something different" for x in t["items"])
+    tiny = [{"name": f"s{i}", "focus": ["flicks"], "level": 2} for i in range(3)]   # nothing new left: repeats
+    assert sum(x["runs"] for x in kv.build("training", need, tiny, [], week="w")["items"]) == round(25 * 60 / kv.SECONDS_PER_RUN)
     flicks_mastered = kv.build("training", [{"focus": ["flicks"], "weight": 3, "why": ""}], cat, allr, week="2026-W45")
     assert any(x["level"] == 3 for x in flicks_mastered["items"] if x["focus"] == "flicks")
-    f = kv.playlist_file(w, "Player")
+    from datetime import date as _date
+    f = kv.playlist_file(w, "Player", _date(2026, 11, 3))
+    assert f["playlistName"] == "valcoach warm-up 03-11-2026 (Player)" and kv.file_name("training", _date(2026, 11, 3)) == "valcoach_training_03-11-2026.json"
     assert f["scenarioList"][0] == {"scenario_name": w["items"][0]["name"], "play_Count": 1} and f["version"] == 31
     assert kv.guess("VoxTargetSwitch xsmall 200%") == (["switching", "micro"], 3)
     assert kv.guess("Smooth Strafe Track Easy")[0][0] == "tracking"
