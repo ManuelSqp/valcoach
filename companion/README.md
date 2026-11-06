@@ -24,6 +24,24 @@ Each of the three can be switched off.
 
 Closing the window keeps it running in the tray; *Quit* in the tray menu ends it.
 
+## Updates
+
+The app looks for a newer release once a day (and on *Check for updates*). When there is one, a bar at the top
+says so, and *Update now* downloads it, checks it against the SHA-256 GitHub lists for the file, swaps it in and
+restarts the app: nothing else to do. Running it from Python source instead, *Open download* opens the release page.
+
+**Publishing a new version:** raise `__version__` in `companion/valcoach_companion/__init__.py` (and in
+`companion/pyproject.toml`), merge, then push a tag with the same version:
+
+```
+git switch main && git pull
+git tag companion-v1.1.0
+git push origin companion-v1.1.0
+```
+
+The workflow refuses a tag that doesn't match the app's version, builds the .exe on Windows and creates the release.
+Every installed app offers the update within a day.
+
 ## How the matches are found in a Medal recording
 
 Medal names a session recording after the moment it started, to the millisecond:
@@ -47,7 +65,8 @@ valcoach's kill-feed sync lines it up exactly afterwards.
 ```bash
 pip install "./companion[build]"
 cd companion
-pyinstaller --noconfirm --onefile --windowed --name valcoach-companion \
+python -c "from valcoach_companion.app import logo; logo(256).save('icon.ico', sizes=[(16, 16), (32, 32), (48, 48), (256, 256)])"
+pyinstaller --noconfirm --onefile --windowed --name valcoach-companion --icon icon.ico --collect-data customtkinter \
   --collect-binaries imageio_ffmpeg --collect-submodules keyring --hidden-import pystray._win32 run_companion.py
 ```
 

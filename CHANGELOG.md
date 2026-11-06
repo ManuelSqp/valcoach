@@ -4,6 +4,18 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart valcoach` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.3.1
+- **Companion app 1.1.0:**
+  - **Updates itself.** Once a day (and on *Check for updates*) it looks for a newer release on GitHub; *Update now*
+    downloads it, checks it against the SHA-256 GitHub lists for the file, swaps it in and restarts. To publish a
+    version: raise it in `companion/valcoach_companion/__init__.py`, merge, push the tag `companion-vX.Y.Z` (the
+    workflow refuses a tag that doesn't match).
+  - **New look:** dark, in valcoach's colours, with cards for account, KovaaK's, Medal, activity and the app,
+    switches instead of checkboxes, a status in the header (up to date / working / logged out) and *Sync now* at
+    the bottom. The .exe and the window have valcoach's diamond as icon.
+  - The window and the background sync could save the settings at the same moment and lose a write; they take
+    turns now.
+
 ## 4.3.0
 - **Companion app for Windows** (new, in `companion/`): a small tray app for each player that every few minutes
   - puts the coach's KovaaK's warm-up and training playlists into KovaaK's Playlists folder (dated, once a day;

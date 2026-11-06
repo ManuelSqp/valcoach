@@ -82,3 +82,51 @@ def test_one_sync_cuts_the_match_out_and_uploads_it(tmp_path, monkeypatch):
     sync.recordings(s, FakeApi(), FFMPEG, log.append, now=s0 + 30_000)                       # nothing twice
     assert len(uploaded) == 1 and s.recordings[src.name]["state"] == "done"
     json.dumps(s.recordings)
+
+
+def test_updates_pick_the_newest_release_and_check_the_download(tmp_path):
+    import hashlib
+    from valcoach_companion import updater
+
+    class R:
+        def __init__(self, data=None, body=b"", code=200):
+            self.status_code, self._d, self._b = code, data, body
+
+        def json(self):
+            return self._d
+
+        def iter_content(self, n):
+            yield self._b
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+    exe = b"MZ new app"
+    good = "sha256:" + hashlib.sha256(exe).hexdigest()
+
+    def rel(tag, digest=good, draft=False):
+        return {"tag_name": tag, "draft": draft, "prerelease": False, "html_url": f"https://github.com/r/{tag}",
+                "assets": [{"name": "valcoach-companion.exe", "size": len(exe), "digest": digest,
+                            "browser_download_url": f"https://github.com/r/releases/download/{tag}/valcoach-companion.exe"}]}
+
+    class S:
+        def __init__(self, releases):
+            self.releases = releases
+
+        def get(self, url, **k):
+            return R(self.releases) if "api.github.com" in url else R(body=exe)
+    s = S([rel("v4.3.0"), rel("companion-v1.0.0"), rel("companion-v1.2.0"), rel("companion-v1.10.0", draft=True),
+           rel("companion-v1.1.5")])
+    info = updater.latest("1.1.0", session=s)
+    assert info["version"] == "1.2.0" and info["sha256"] == good[7:]                 # 1.10 is a draft
+    assert updater.latest("1.2.0", session=s) is None
+    path = updater.download(info, tmp_path, session=s)
+    assert path.read_bytes() == exe
+    bad = dict(info, sha256="0" * 64)
+    with pytest.raises(updater.UpdateError):
+        updater.download(bad, tmp_path, session=s)
+    assert not (tmp_path / "valcoach-companion.exe.download").exists()              # nothing half-written stays
+    with pytest.raises(updater.UpdateError):
+        updater.download(dict(info, url="https://evil.example/app.exe"), tmp_path, session=s)
