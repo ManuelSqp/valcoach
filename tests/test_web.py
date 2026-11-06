@@ -2617,3 +2617,83 @@ def test_old_database_name_and_backups_are_taken_over(tmp_path, monkeypatch):
     monkeypatch.delenv("NEXUS_BACKUP_ROOTS", raising=False)
     monkeypatch.setenv("VALCOACH_BACKUP_ROOTS", "/srv/old-name")
     assert "/srv/old-name" in backup.allowed_roots(data)
+
+
+def test_aim_trainer_and_mouse_check(app):
+    import json as _json
+    from nexus.stats import trainer as tr
+    c = setup_admin(app)
+    pid = add_profile(c)
+    H = {"Origin": "http://localhost"}
+    page = c.get(f"/profiles/{pid}/trainer").data.decode()
+    assert "Grid flicks" in page and "trainer.js" in page and "Start warm-up" in page and "/trainer/runs" in page
+    gear = c.get(f"/profiles/{pid}/gear").data.decode()
+    assert "Polling rate" in gear and "gearcheck.js" in gear
+    assert f"/profiles/{pid}/trainer" in c.get("/").data.decode()             # in the menu (Practice)
+    # a run: checked and stored; nonsense is refused
+    r = c.post(f"/profiles/{pid}/trainer/runs", json={"scenario": "grid", "score": 812, "seconds": 60, "hits": 40,
+                                                       "shots": 48, "ms": 512}, headers=H)
+    assert r.status_code == 200 and r.get_json()["is_best"] and r.get_json()["best_before"] is None
+    for bad in ({"scenario": "nope", "score": 1, "seconds": 30}, {"scenario": "grid", "score": 5, "seconds": 30, "hits": 9, "shots": 3},
+                {"scenario": "track", "score": 5, "seconds": 30, "on_target": 1.5}, {"scenario": "grid", "score": float("1e9"), "seconds": 30}):
+        assert c.post(f"/profiles/{pid}/trainer/runs", json=bad, headers=H).status_code == 400
+    assert c.post(f"/profiles/{pid}/trainer/runs", json={"scenario": "grid", "score": 1}, headers={"Origin": "https://evil.example"}).status_code == 403
+    # the last round of a warm-up ticks it off on the Aim page
+    r = c.post(f"/profiles/{pid}/trainer/runs", json={"scenario": "micro", "score": 300, "seconds": 30, "hits": 12, "shots": 14,
+                                                       "plan_done": "warmup", "plan_score": 1500}, headers=H)
+    assert r.status_code == 200
+    sr = app.extensions["nexus"]["stats"]
+    aim = _json.loads((sr.games(pid).path.parent / "aim.json").read_text())
+    assert aim["log"][-1]["routine"] == "t-warmup" and aim["log"][-1]["score"] == 1500
+    aimpage = c.get(f"/profiles/{pid}/aim").data.decode()
+    assert "Nexus trainer warm-up" in aimpage and "Open the trainer" in aimpage
+    # settings and what the check measured
+    r = c.post(f"/profiles/{pid}/trainer/setup", json={"sens": 0.35, "dpi": 800, "measured_dpi": 776, "polling_hz": 1000,
+                                                        "refresh_hz": 240, "evil": "x", "raw": True}, headers=H)
+    d = r.get_json()
+    assert d["numbers"]["edpi"] == 280 and d["numbers"]["cm360"] == 46.7 and d["numbers"]["dpi_off"] == -0.03
+    assert "evil" not in d["setup"] and d["setup"]["raw"] is True
+    assert c.post(f"/profiles/{pid}/trainer/setup", json={"sens": -1}, headers=H).status_code == 400
+    data = _json.loads((sr.games(pid).path.parent / "trainer.json").read_text())
+    from nexus.coach import askcoach as ac
+    f = ac.facts("x", [], [], data)
+    assert f["nexus_trainer_scores"][0]["scenario"] == "Grid flicks" and f["mouse"]["dpi_measured"] == 776
+    assert c.get("/profiles/999/trainer").status_code == 404                     # a player that isn't yours
+    assert tr.plan("training", [{"focus": ["tracking"], "weight": 3, "why": "x"}], [])["items"][0]["id"] == "track"
+
+
+def test_sens_finder_finds_the_best_sens(app):
+    import math
+    from nexus.stats import trainer as tr
+    c = setup_admin(app)
+    pid = add_profile(c)
+    H = {"Origin": "http://localhost"}
+
+    def session(true, base=0.4):         # a player who aims best at `true`
+        def q(s):
+            return max(0.0, 1 - 2 * math.log(s / true) ** 2)
+        tests = [{"sens": base * f, "click": 2000 * q(base * f), "track": 0.6 * q(base * f),
+                  "over": max(0, math.log(base * f / true)), "under": max(0, -math.log(base * f / true))}
+                 for f in (0.7, 0.85, 1, 1.15, 1.3)]
+        tests += [{"sens": s, "click": 2000 * q(s), "track": 0.6 * q(s)} for s in tr.round2(tests)]
+        return {"base": base, "tests": tests}
+
+    assert "Find my sens" in c.get(f"/profiles/{pid}/trainer").data.decode()
+    r = c.post(f"/profiles/{pid}/trainer/sens", json=session(0.32), headers=H)
+    d = r.get_json()
+    assert r.status_code == 200 and abs(d["sens"] - 0.32) < 0.01 and d["sessions"] == 1 and d["sure"] == "low"
+    for _ in range(2):
+        d = c.post(f"/profiles/{pid}/trainer/sens", json=session(0.32), headers=H).get_json()
+    assert d["sessions"] == 3 and d["sure"] == "high" and d["low"] < 0.32 < d["high"]
+    c.post(f"/profiles/{pid}/trainer/setup", json={"sens": 0.4, "dpi": 800}, headers=H)
+    page = c.get(f"/profiles/{pid}/trainer").data.decode()
+    assert "Test again" in page and "tr-chart" in page and "Change it in steps" in page
+    # the best at the end of what was tested: said so, and the next test starts there
+    rec = tr.recommend([tr.clean_sens_session(session(0.2))])
+    assert rec["edge"] == "lower"
+    # nonsense is refused
+    for bad in ({"base": 0.4, "tests": []}, {"base": 0.4, "tests": [{"sens": 0.4, "click": -1, "track": 0.5}] * 5},
+                {"base": "x", "tests": session(0.3)["tests"]}):
+        assert c.post(f"/profiles/{pid}/trainer/sens", json=bad, headers=H).status_code == 400
+    assert tr.sens_step(0.4, 0.42) == {"change": 0.05, "steps": [0.42]}
+    assert tr.sens_step(0.4, 0.3)["steps"][-1] == 0.3 and len(tr.sens_step(0.4, 0.3)["steps"]) == 4

@@ -6,6 +6,8 @@
   <a class="btn sm {{ 'primary' if r.kind == 'aimlabs' }}" href="{{ r.url }}" target="_blank" rel="noopener noreferrer nofollow">{{ 'Open in Aimlabs' if r.kind == 'aimlabs' or is_aimlabs(r.url) else 'Open link' }}</a>
   {%- elif r.kind == 'kovaaksfile' -%}
   <a class="btn sm primary" href="{{ r.url }}" download>Download for KovaaK's</a>
+  {%- elif r.kind == 'trainer' -%}
+  <a class="btn sm primary" href="{{ r.url }}">Open the trainer</a>
   {%- elif r.kind == 'kovaaks' -%}
   <span class="code"><code>{{ r.code }}</code><button type="button" class="btn sm ghost" data-copy="{{ r.code }}">Copy code</button></span>
   {%- endif -%}

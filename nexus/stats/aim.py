@@ -18,7 +18,7 @@ FOCUS = {"warmup": "Warm-up", "crosshair": "Crosshair placement", "flicks": "Fli
          "tracking": "Tracking", "spray": "Spray control", "peeking": "Peeking & first shots",
          "switching": "Target switching", "reaction": "Reaction"}
 KINDS = {"aimlabs": "Aimlabs playlist", "kovaaks": "KovaaK's playlist", "link": "Link", "steps": "In game",
-         "kovaaksfile": "KovaaK's playlist from the coach"}
+         "kovaaksfile": "KovaaK's playlist from the coach", "trainer": "Nexus aim trainer"}
 ADDABLE = ("aimlabs", "kovaaks", "link", "steps")      # kinds people can add (the coach's files are made for them)
 CODE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{3,63}")
 MAX_STEPS = 600

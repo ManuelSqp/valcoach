@@ -9,6 +9,7 @@ import yaml
 
 from ..stats import aim as am
 from ..stats import kovaaks as kv
+from ..stats import trainer as tr
 from ..stats.aggregate import by_agent, by_map
 from ..stats.habits import track
 from ..stats.weekly import player_facts
@@ -32,7 +33,7 @@ MAX_Q = 600
 HISTORY = 6
 
 
-def facts(name: str, rows: list[dict], kovaaks_runs: list[dict] | None = None) -> dict:
+def facts(name: str, rows: list[dict], kovaaks_runs: list[dict] | None = None, trainer: dict | None = None) -> dict:
     pct = lambda v: None if v is None else f"{v:.0%}"       # noqa: E731
     f = player_facts(name, rows, [], {}, [], [])
     for k in ("team_roles", "role_fit", "team_patterns", "team_notes_about_them"):
@@ -48,6 +49,17 @@ def facts(name: str, rows: list[dict], kovaaks_runs: list[dict] | None = None) -
     if ks:
         f["kovaaks_scores"] = [{"scenario": x["name"], "runs": x["runs"], "best": x["best"],
                                 "steady_at_best": x["mastered"]} for x in ks]
+    t = trainer or {}
+    ts = [x for x in tr.summary(t.get("runs", [])) if x["runs"]]
+    if ts:
+        f["nexus_trainer_scores"] = [{"scenario": x["name"], "trains": ", ".join(x["focus"]), "runs": x["runs"],
+                                      "best": x["best"], "last": x["last"],
+                                      "accuracy": None if x["acc"] is None else f"{x['acc']:.0%}"} for x in ts]
+    setup = t.get("setup", {})
+    if setup.get("sens") or setup.get("measured_dpi"):
+        f["mouse"] = {k: v for k, v in {"valorant_sens": setup.get("sens"), "dpi_set": setup.get("dpi"),
+                                        "dpi_measured": setup.get("measured_dpi"), "polling_hz": setup.get("polling_hz"),
+                                        "monitor_hz": setup.get("refresh_hz"), **tr.numbers(setup)}.items() if v is not None}
     return {k: v for k, v in f.items() if v not in (None, [], {})}
 
 

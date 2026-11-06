@@ -80,8 +80,21 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                  "focus": ["flicks", "micro", "reaction", "switching"], "steps": how, "code": "",
                  "url": f"/profiles/{int(pid)}/aim/kovaaks/training.json"}]
 
+    def trainer_plans(pid: int) -> list[dict]:
+        """Today's warm-up and training in Nexus's own aim trainer (Practice › Aim trainer), as routines."""
+        return [{"id": "t-warmup", "name": "Nexus trainer warm-up", "kind": "trainer", "minutes": 2,
+                 "focus": ["warmup", "flicks", "crosshair", "micro"], "code": "",
+                 "steps": "Three short scenarios in the browser: grid flicks, head-line flicks, micro taps. "
+                          "Ticked off by itself when you finish it.",
+                 "url": f"/profiles/{int(pid)}/trainer?plan=warmup"},
+                {"id": "t-training", "name": "Nexus trainer training", "kind": "trainer", "minutes": 6,
+                 "focus": ["flicks", "micro", "tracking", "peeking", "reaction", "crosshair", "switching"], "code": "",
+                 "steps": "The trainer's scenarios that fit what your matches show, two rounds each. "
+                          "Ticked off by itself when you finish it.",
+                 "url": f"/profiles/{int(pid)}/trainer?plan=training"}]
+
     def library(pid: int, uid: int) -> list[dict]:
-        out = [dict(r, source="builtin", source_name="Nexus") for r in am.BUILTIN + coach_files(pid)]
+        out = [dict(r, source="builtin", source_name="Nexus") for r in am.BUILTIN + coach_files(pid) + trainer_plans(pid)]
         for t in teams_of(pid, uid):
             out += [dict(r, source="team", tid=t.id, source_name=t.name) for r in _read(team_path(t.id), {}).get("routines", [])]
         out += [dict(r, source="mine", source_name="your routines") for r in _read(user_path(uid), {}).get("routines", [])]
@@ -98,7 +111,11 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         pdata = _read(player_path(pid), {})
         tw = next((team_warmup(t) for t in teams_of(pid, uid) if team_warmup(t)), None)
         # someone who plays KovaaK's (scores imported) gets the coach's KovaaK's warm-up by default
-        return am.warmup_for(lib, pdata.get("warmup"), tw or ("k-warmup" if pdata.get("kovaaks") else None))
+        played = "k-warmup" if pdata.get("kovaaks") else ("t-warmup" if trainer_played(pid) else None)
+        return am.warmup_for(lib, pdata.get("warmup"), tw or played)
+
+    def trainer_played(pid: int) -> bool:
+        return bool(_read(player_path(pid).with_name("trainer.json"), {}).get("runs"))
 
     def scenarios(pid: int, uid: int) -> list[dict]:
         """Every scenario the coach may use for this player: built in, the teams', this user's own."""

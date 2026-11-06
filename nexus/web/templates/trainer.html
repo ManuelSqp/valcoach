@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% import "_ui.html" as vc %}
+{% block title %}Aim trainer · {{ p.riot_id }} · Nexus{% endblock %}
+{% macro spark(vals) -%}
+{%- if vals|length > 1 -%}{%- set lo = vals|min -%}{%- set hi = vals|max -%}{%- set span = (hi - lo) or 1 -%}
+<svg class="tr-spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><polyline points="{% for v in vals %}{{ (loop.index0 * 100 / (vals|length - 1))|round(1) }},{{ (22 - (v - lo) * 20 / span)|round(1) }} {% endfor %}"/></svg>
+{%- endif -%}
+{%- endmacro %}
+{% block head %}<style>
+.tr-setup{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;margin-bottom:18px}
+.tr-setup label{display:grid;gap:4px;font-size:12.5px;color:var(--muted)}
+.tr-setup input{width:110px}
+.tr-setup .tr-num{font-size:13px;color:var(--muted);padding-bottom:9px}
+.tr-setup .tr-num b{color:var(--text);font-family:var(--font-num)}
+.tr-plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:22px}
+.tr-plan{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.tr-plan h2{margin:0;font-size:17px}
+.tr-plan ol{margin:0;padding-left:20px;font-size:13.5px}.tr-plan li{margin:3px 0}
+.tr-plan li span{color:var(--muted)}
+.tr-plan .btn{align-self:flex-start;margin-top:auto}
+.tr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.tr-card{background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.tr-card h3{margin:0;font-size:15px}
+.tr-card p{margin:0;font-size:13px;color:var(--muted)}
+.tr-card .tr-stats{display:flex;gap:14px;font-size:12.5px;color:var(--muted);align-items:center}
+.tr-card .tr-stats b{display:block;color:var(--text);font-size:17px;font-family:var(--font-num)}
+.tr-card .btn{align-self:flex-start;margin-top:4px}
+.tr-spark{width:90px;height:24px;margin-left:auto}.tr-spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;vector-effect:non-scaling-stroke}
+.tr-raw{font-size:12.5px;padding:3px 10px;border-radius:99px;background:var(--panel3);color:var(--muted)}
+.tr-raw.ok{background:var(--win-soft);color:var(--win)}.tr-raw.warn{background:var(--accent-soft);color:var(--amber)}
+
+/* the stage: full window while playing */
+#tr-stage{position:fixed;inset:0;z-index:1000;background:#0b0f15;display:none;cursor:default}
+#tr-stage.on{display:block}
+#tr-stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tr-hud{position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:26px;color:#e7ecf3;font:600 15px var(--font);text-shadow:0 1px 2px #000;pointer-events:none}
+.tr-hud span{color:#9aa6b8;font-weight:500;margin-right:6px}
+.tr-cross{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none}
+.tr-cross i{position:absolute;background:#2ef0c4;box-shadow:0 0 0 1px rgba(0,0,0,.65)}
+.tr-cross i:nth-child(1){left:-1px;top:-1px;width:2px;height:2px}
+.tr-cross i:nth-child(2){left:4px;top:-1px;width:6px;height:2px}.tr-cross i:nth-child(3){left:-10px;top:-1px;width:6px;height:2px}
+.tr-cross i:nth-child(4){left:-1px;top:4px;width:2px;height:6px}.tr-cross i:nth-child(5){left:-1px;top:-10px;width:2px;height:6px}
+.tr-panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,calc(100vw - 32px));background:rgba(20,27,38,.94);border:1px solid #36445a;border-radius:14px;padding:22px 24px;color:#e7ecf3;text-align:center}
+.tr-panel h2{margin:0 0 6px;font-size:22px}
+.tr-panel p{margin:0 0 14px;color:#9aa6b8;font-size:14px}
+.tr-panel .tr-step{font-size:12.5px;color:#9aa6b8;margin-bottom:6px}
+.tr-panel .tr-big{font:800 54px/1 var(--font-num);font-stretch:75%;margin:6px 0 2px}
+.tr-panel .tr-best{color:#36c7a6;font-weight:650;min-height:20px;margin-bottom:10px}
+.tr-panel dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 16px}
+.tr-panel dl div{background:#18202c;border-radius:8px;padding:8px 4px}
+.tr-panel dt{font-size:12px;color:#9aa6b8}.tr-panel dd{margin:2px 0 0;font:700 17px var(--font-num)}
+.tr-panel .tr-btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.tr-count{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font:800 88px var(--font-num);color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.6);pointer-events:none}
+.tr-warn{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);font-size:13px;color:#f4b740;text-shadow:0 1px 2px #000;pointer-events:none;text-align:center;width:min(640px,calc(100vw - 32px))}
+.tr-sens{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:24px;display:grid;grid-template-columns:minmax(260px,1fr) minmax(300px,1.3fr);gap:18px 28px}
+@media (max-width:820px){.tr-sens{grid-template-columns:1fr}}
+.tr-sens h2{margin:0 0 6px;font-size:17px}
+.tr-sens p{margin:0 0 10px;font-size:13.5px;color:var(--muted);max-width:62ch}
+.tr-rec{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:4px 0 6px}
+.tr-rec b{font:800 44px/1 var(--font-num);font-stretch:78%}
+.tr-rec span{color:var(--muted);font-size:13.5px}
+.tr-sure{display:inline-block;font-size:12px;padding:2px 9px;border-radius:99px;background:var(--panel3);color:var(--muted)}
+.tr-sure.high{background:var(--win-soft);color:var(--win)}.tr-sure.medium{background:var(--accent-soft);color:var(--amber)}
+.tr-chart{width:100%;height:auto;display:block}
+.tr-chart rect.tr-band{fill:var(--accent-soft);stroke:none}.tr-chart .curve{fill:none;stroke:var(--accent);stroke-width:2}
+.tr-chart .dot{fill:var(--text);opacity:.55}.tr-chart .rec{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:4 3}
+.tr-chart .axis{stroke:var(--line2)}.tr-chart text{fill:var(--muted);stroke:none;font-size:11px;font-family:var(--font-num)}
+.tr-steps{font-size:13px;margin:6px 0 0;padding-left:18px}
+</style>{% endblock %}
+{% block content %}
+{% call vc.pagehead('Aim trainer', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+                    ctx='Plays like Valorant: your sensitivity, Valorant\'s field of view, raw mouse input') %}
+  <a class="btn ghost" href="{{ url_for('gear_check', pid=p.id) }}">Check mouse & monitor</a>
+{% endcall %}
+
+<div class="tr-setup">
+  <label>Valorant sensitivity<input type="number" id="tr-sens" step="0.001" min="0.01" max="20" value="{{ setup.sens or 0.4 }}" {{ 'disabled' if not can_save }}></label>
+  <label>Mouse DPI<input type="number" id="tr-dpi" step="1" min="50" max="64000" value="{{ setup.dpi or 800 }}" {{ 'disabled' if not can_save }}></label>
+  <div class="tr-num" id="tr-numbers">{% if numbers.edpi %}eDPI <b>{{ numbers.edpi }}</b> · <b>{{ numbers.cm360 }}</b> cm per 360°{% endif %}</div>
+  <span class="tr-raw" id="tr-raw">Raw mouse input: checked when you start</span>
+</div>
+
+<div class="tr-plans">
+  {% for k, pl in plans.items() %}
+  <section class="tr-plan">
+    <h2>Today's {{ 'warm-up' if k == 'warmup' else 'training' }}</h2>
+    <div class="small muted">about {{ pl.minutes }} min · {{ pl['items']|length }} rounds{% if k == 'training' %} · picked from your matches{% endif %}</div>
+    <ol>{% for it in pl['items'] %}<li>{{ it.name }} <span>{{ it.seconds }} s</span></li>{% endfor %}</ol>
+    {% if k == 'training' %}<div class="small muted"><span>Why:</span> <span>{{ pl['items'][0].why }}</span></div>{% endif %}
+    <button type="button" class="btn {{ 'primary' if k == 'warmup' }}" data-plan="{{ k }}">Start {{ 'warm-up' if k == 'warmup' else 'training' }}</button>
+  </section>
+  {% endfor %}
+</div>
+
+<section class="tr-sens" id="sens">
+  <div>
+    <h2>Sens finder</h2>
+    <p>About 5 minutes. A short mixed test (flicks, micro corrections, tracking) at ten different sensitivities, blind and in
+      random order: first from 70% to 130% of yours, then close around the best one. It measures how you hit, not only whether:
+      flying past the target means too fast, stopping short means too slow.</p>
+    {% if rec %}
+    <div class="small muted">Your sens by {{ rec.sessions }} test{{ 's' if rec.sessions != 1 }} (last 90 days)</div>
+    <div class="tr-rec"><b>{{ '%.3f'|format(rec.sens) }}</b>
+      <span>{{ '%.3f'|format(rec.low) }}–{{ '%.3f'|format(rec.high) }} works about as well{% if setup.dpi %} · {{ (360 / (0.07 * rec.sens) / setup.dpi * 2.54)|round(1) }} cm per 360°{% endif %}</span></div>
+    <span class="tr-sure {{ rec.sure }}">{{ {'low': 'One test: a first hint', 'medium': 'Getting there: test again on another day', 'high': 'Steady over several days'}[rec.sure] }}</span>
+    {% if rec.edge %}<p style="margin-top:10px">The best was at the {{ 'top' if rec.edge == 'higher' else 'bottom' }} of what was tested: the next test starts from {{ '%.3f'|format(rec.sens) }} and goes {{ rec.edge }}.</p>{% endif %}
+    {% if rec.over_trend == 'up' %}<p style="margin-top:10px">The faster the sens, the more you flew past targets.</p>{% endif %}
+    {% if step and step.change is defined and step.steps|length > 1 %}
+    <p style="margin:10px 0 0">That's {{ '%+d'|format((step.change * 100)|round|int) }}% from your {{ setup.sens }}. Change it in steps, one a week:</p>
+    <ol class="tr-steps">{% for s in step.steps %}<li>{{ '%.3f'|format(s) }}</li>{% endfor %}</ol>
+    {% endif %}
+    {% endif %}
+    <div class="row" style="margin-top:12px"><button type="button" class="btn primary" id="tr-sens-go">{{ 'Test again' if rec else 'Find my sens' }}</button>
+      <span class="small muted">starts from {{ setup.sens or 0.4 }} (your Valorant sens above)</span></div>
+  </div>
+  {% if chart %}
+  <div>
+  <svg class="tr-chart" viewBox="0 0 {{ chart.w }} {{ chart.h }}" role="img" aria-label="How well you aimed at each sensitivity">
+    <rect class="tr-band" x="{{ chart.band[0] }}" y="10" width="{{ [chart.band[1] - chart.band[0], 2]|max }}" height="{{ chart.base - 10 }}"/>
+    <line class="axis" x1="20" x2="{{ chart.w - 20 }}" y1="{{ chart.base }}" y2="{{ chart.base }}"/>
+    {% for x, v in chart.ticks %}<text x="{{ x }}" y="{{ chart.base + 16 }}" text-anchor="middle">{{ '%.2f'|format(v) }}</text>{% endfor %}
+    {% if chart.curve %}<polyline class="curve" points="{{ chart.curve }}"/>{% endif %}
+    {% for x, y in chart.dots %}<circle class="dot" cx="{{ x }}" cy="{{ y }}" r="3.5"/>{% endfor %}
+    <line class="rec" x1="{{ chart.rec }}" x2="{{ chart.rec }}" y1="10" y2="{{ chart.base }}"/>
+  </svg>
+  <div class="small muted" style="margin-top:4px">Each dot is one round (higher is better), the line follows them, the band is what works about as well.</div>
+  </div>
+  {% else %}
+  <div class="small muted" style="align-self:center">The chart of how you aim at each sensitivity appears here after the first test.</div>
+  {% endif %}
+</section>
+
+<h2>Scenarios</h2>
+<p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Click a scenario, then click once more to lock the mouse. Esc pauses.
+  {% if not can_save %}You can play, but scores aren't saved for this player (only the player or their owner can).{% endif %}</p>
+<div class="tr-grid">
+  {% for s in summary %}{% set sc = scenarios|selectattr('id', 'equalto', s.id)|first %}
+  <section class="tr-card">
+    <h3>{{ s.name }}</h3>
+    <p>{{ sc.about }}</p>
+    <div class="tr-stats">
+      <div>Best<b>{{ s.best|int if s.best is not none else '–' }}</b></div>
+      <div>Last<b>{{ s.last|int if s.last is not none else '–' }}</b></div>
+      <div>Runs<b>{{ s.runs }}</b></div>
+      {{ spark(s.spark) }}
+    </div>
+    <button type="button" class="btn sm" data-play="{{ s.id }}">Play · {{ sc.seconds }} s</button>
+  </section>
+  {% endfor %}
+</div>
+
+<div id="tr-stage" aria-live="polite">
+  <canvas id="tr-canvas"></canvas>
+  <div class="tr-hud" id="tr-hud" hidden><div><span>Time</span><b id="tr-time">0</b></div><div><span>Score</span><b id="tr-score">0</b></div><div><span id="tr-l3">Accuracy</span><b id="tr-acc">–</b></div></div>
+  <div class="tr-cross" id="tr-cross"><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="tr-count" id="tr-count" hidden></div>
+  <div class="tr-panel" id="tr-panel"></div>
+  <div class="tr-warn" id="tr-warn" hidden></div>
+</div>
+
+<script>
+window.NEXUS_TRAINER = {{ {
+  'scenarios': scenarios, 'plans': plans, 'start': start, 'can_save': can_save, 'scale': setup.scale or 1,
+  'summary': summary,
+  'sens_base': setup.sens or 0.4, 'sens_rec': rec.sens if rec and rec.edge else None,
+  'urls': {'sens': url_for('trainer_sens', pid=p.id), 'run': url_for('trainer_run', pid=p.id), 'setup': url_for('trainer_setup', pid=p.id), 'aim': url_for('aim', pid=p.id)}
+}|tojson }};
+</script>
+<script src="{{ url_for('static', filename='trainer.js') }}?v={{ app_version }}"></script>
+{% endblock %}
