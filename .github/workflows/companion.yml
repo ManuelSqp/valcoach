@@ -1,23 +1,40 @@
-# Builds the companion app (companion/) and its Windows installer.
-# A release tag vX.Y.Z (valcoach's version: the app has the same one) builds valcoach-companion-setup.exe and
-# attaches it to that GitHub release (created if it doesn't exist yet). "Run workflow" builds it for testing:
-# the installer is then under the run's Artifacts.
+# Builds the companion app (companion/) and its Windows installer, and attaches valcoach-companion-setup.exe to
+# the GitHub release of the same version (the app has valcoach's version). It starts when
+# - a tag vX.Y.Z is pushed (git push origin v4.4.1): the release is created if it isn't there yet,
+# - a release is published on GitHub's page (that creates the tag, but doesn't count as a push),
+# - "Run workflow" is pressed: with "release" set to a tag (e.g. v4.4.0) it attaches the installer to that
+#   existing release; left empty it only builds (the installer is then under the run's Artifacts).
 name: companion
 
 on:
   push:
     tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Attach to this release (tag, e.g. v4.4.0); empty = only build"
+        required: false
+        default: ""
 
 permissions:
   contents: write
+
+concurrency:
+  group: companion-${{ inputs.release || github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      TAG: ${{ inputs.release || github.event.release.tag_name || (startsWith(github.ref, 'refs/tags/v') && github.ref_name) || '' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release || github.ref }}
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -31,8 +48,8 @@ jobs:
         run: |
           v=$(python -c "import valcoach; print(valcoach.__version__)")
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            test "v$v" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME, but valcoach says $v"; exit 1; }
+          if [ -n "$TAG" ]; then
+            test "v$v" = "$TAG" || { echo "Release $TAG, but valcoach says $v"; exit 1; }
           fi
       - name: Build the app
         working-directory: companion
@@ -52,15 +69,15 @@ jobs:
           name: valcoach-companion-setup
           path: companion/dist/valcoach-companion-setup.exe
       - name: Attach to the release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.TAG != ''
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" companion/dist/valcoach-companion-setup.exe --clobber
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" companion/dist/valcoach-companion-setup.exe --clobber
           else
-            gh release create "$GITHUB_REF_NAME" companion/dist/valcoach-companion-setup.exe \
-              --title "valcoach ${GITHUB_REF_NAME#v}" \
+            gh release create "$TAG" companion/dist/valcoach-companion-setup.exe \
+              --title "valcoach ${TAG#v}" \
               --notes "What changed: see CHANGELOG.md. The companion app for Windows: valcoach-companion-setup.exe below."
           fi
