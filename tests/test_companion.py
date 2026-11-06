@@ -122,7 +122,7 @@ def test_updates_pick_the_newest_release_and_check_the_download(tmp_path):
             self.releases = releases
 
         def get(self, url, **k):
-            return R(self.releases) if "api.github.com" in url else R(body=setup)
+            return R(self.releases) if url.startswith("https://api.github.com/") else R(body=setup)
     s = S([rel("v4.3.0", asset="something-else.zip"), rel("companion-v9.0.0"), rel("v4.4.0"), rel("v4.10.0", draft=True),
            rel("v4.3.5")])
     info = updater.latest("4.3.1", session=s)

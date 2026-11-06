@@ -38,12 +38,14 @@ starts the app again. Running from Python source instead, *Open download* opens 
 
 ```
 git switch main && git pull
-git tag v4.4.0
-git push origin v4.4.0
+git tag v4.4.1
+git push origin v4.4.1
 ```
 
 `.github/workflows/companion.yml` checks that the tag matches valcoach's version, builds the app and the installer
-on Windows and attaches `valcoach-companion-setup.exe` to the release `v4.4.0` (creating it if it isn't there yet).
+on Windows and attaches `valcoach-companion-setup.exe` to that release (creating it if it isn't there yet).
+Publishing the release on GitHub's page instead works too. If a release ever has no installer: *Actions ›
+companion › Run workflow*, *release* = its tag (e.g. `v4.4.1`).
 Every installed app offers the update within a day.
 
 ## How the matches are found in a Medal recording

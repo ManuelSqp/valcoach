@@ -4,6 +4,14 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart valcoach` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.4.1
+- **The installer is built however a release is made:** pushing a tag `vX.Y.Z`, publishing a release on GitHub's
+  page (that didn't start the build before, so v4.4.0 had no installer at first), or *Actions › companion › Run
+  workflow* with *release* set to a tag, which attaches the installer to that existing release afterwards.
+- A test's fake GitHub check looked for `api.github.com` anywhere in the address (CodeQL warned); it checks the start
+  of the address now. The app itself always checked the start.
+- The test workflow only gets read access to the repository (CodeQL's advice for workflows).
+
 ## 4.4.0
 - **Companion app: an installer instead of a loose .exe.** `valcoach-companion-setup.exe` installs it for your
   Windows user (no admin rights) into `%LOCALAPPDATA%\Programs\valcoach companion`, with a Start menu entry and an
