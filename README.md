@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.5.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.6.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -153,6 +153,19 @@ folder as a zip) and it moves you to harder scenarios once you're steady at your
 playlist file, add one by hand, or let them come in with your scores. *Playlists from the community* suggests public
 KovaaK's playlists by share code (paste it under *Sandbox › Online Playlists › Enter Share Code*), and with web search
 the coach finds more online.
+
+**Aim trainer:** *Practice › Aim trainer* is an aim trainer in the browser (and in the Nexus app) that plays like
+Valorant: your Valorant sensitivity (0.07° per mouse count × sens), Valorant's field of view and raw mouse input
+(Chrome, Edge, the Nexus app; other browsers get a warning). Five scenarios (grid flicks, head-line flicks, micro taps,
+peek reaction, strafe tracking), a short daily warm-up and a training picked from what your matches show. Scores are
+kept per player, finishing a warm-up or training ticks it off on the Aim page, and the coach knows the scores.
+The *Sens finder* (about 5 minutes) plays a short mixed test at ten sensitivities, blind and in random order (70–130%
+of yours, then close around the best), measures how you hit (overshooting, stopping short, time, tracking), fits a
+curve and recommends a sens with a range that works about as well. Tests of the last 90 days are combined; a big
+change is split into weekly steps.
+*Practice › Mouse & monitor* measures the real DPI of your mouse (move it a known distance along a ruler), its polling
+rate, your screen's refresh rate and worn buttons that double-click, and works out eDPI and cm per 360°. A browser
+can't fully measure 2000–8000 Hz mice, and the page says so.
 
 **Ask the coach:** *Practice › Ask the coach* is a chat with the coach about one player. It knows the player's stats,
 habits, aim and KovaaK's scores and remembers the conversation (per user and player).

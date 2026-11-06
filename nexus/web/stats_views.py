@@ -581,6 +581,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     register_evening(app, store, sr, get_team)
     from .aim import register as register_aim
     register_aim(app, store, sr, view_profile, filter_rows)
+    from .trainer import register as register_trainer
+    register_trainer(app, store, sr, view_profile, filter_rows)
     from .askcoach import register as register_ask
     register_ask(app, store, sr, view_profile, filter_rows)
     from .drafts import register as register_drafts

@@ -4,6 +4,29 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.6.0
+- **Aim trainer** (*Practice › Aim trainer*): Nexus's own aim trainer in the browser and in the Nexus app. It plays
+  like Valorant: your Valorant sensitivity, Valorant's field of view (103° at 16:9) and raw mouse input through
+  pointer lock (Chrome, Edge and the Nexus app; other browsers say that Windows' acceleration applies). Five
+  scenarios: grid flicks, head-line flicks, micro taps, peek reaction (enemies peek from behind cover) and strafe
+  tracking. *Today's warm-up* is three short rounds; *today's training* picks the scenarios that fit what your matches
+  show, the one furthest below your best first. Scores, best and trend per scenario, kept per player. Finishing a
+  warm-up or training ticks it off on the Aim page, where both are new routines (*Open the trainer*).
+- **Sens finder** (in the aim trainer): about 5 minutes, eleven 20-second rounds of a mixed test (flicks, micro
+  corrections, tracking). One warm-up at your sens, then five sensitivities from 70% to 130% of it and five close
+  around the best of those, blind and in random order. It measures how you hit: overshooting the target (too fast),
+  stopping short (too slow), time to hit, accuracy and time on the moving target. A curve through the results gives the
+  recommended sens and the range that works about as well, with cm per 360° and a chart. Tests of the last 90 days are
+  combined (each scaled to its own day), and it says how sure it is (one test, several days that agree). If the best
+  was at the end of what was tested, the next test starts there. A change of more than about 10% comes as weekly steps.
+- **Mouse & monitor** (*Practice › Mouse & monitor*): the real DPI of your mouse (move it a known distance along a
+  ruler, several tries averaged, compared with the DPI you set, with a hint when the browser's display scaling is the
+  difference), the polling rate, the refresh rate your screen really shows (with a moving test square), and a button
+  test that catches worn switches that double-click. Plus eDPI and cm per 360° with the DPI you set and the one
+  measured. *Save* keeps the values for the trainer and the coach.
+- *Ask the coach* knows the trainer scores and your mouse (sensitivity, measured DPI, cm per 360°, polling and screen
+  rate).
+
 ## 4.5.0
 - **valcoach is now Nexus.** The name in the app, the Python package (`nexus/`), the command (`nexus web`,
   `nexus --version`), the service (`deploy/nexus.service`), the Docker image and the environment variables

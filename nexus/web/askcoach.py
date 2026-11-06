@@ -36,6 +36,7 @@ def _read(path: Path) -> dict:
 
 def register(app, store, sr, view_profile, filter_rows) -> None:
     from .aim import player_runs
+    from .trainer import trainer_data
 
     @app.template_filter("askfmt")
     def askfmt(text) -> Markup:
@@ -86,7 +87,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
             try:
                 llm, _cfg = sr._llm(p, choice)
                 rows = filter_rows(sr.games(pid).rows(), "everything")
-                data = ac.facts(p.riot_id, rows, player_runs(sr, pid))
+                data = ac.facts(p.riot_id, rows, player_runs(sr, pid), trainer_data(sr, pid))
                 f = path(pid, uid)
                 hist = _read(f).get("items", [])
                 out = ac.answer(llm, p.name, p.language or "English", q, hist, data, search=search, step=step)
