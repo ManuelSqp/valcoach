@@ -2678,16 +2678,20 @@ def test_sens_finder_finds_the_best_sens(app):
         tests += [{"sens": s, "click": 2000 * q(s), "track": 0.6 * q(s)} for s in tr.round2(tests)]
         return {"base": base, "tests": tests}
 
-    assert "Find my sens" in c.get(f"/profiles/{pid}/trainer").data.decode()
+    assert 'data-finder="thorough"' in c.get(f"/profiles/{pid}/trainer").data.decode()
     r = c.post(f"/profiles/{pid}/trainer/sens", json=session(0.32), headers=H)
     d = r.get_json()
     assert r.status_code == 200 and abs(d["sens"] - 0.32) < 0.01 and d["sessions"] == 1 and d["sure"] == "low"
     for _ in range(2):
         d = c.post(f"/profiles/{pid}/trainer/sens", json=session(0.32), headers=H).get_json()
-    assert d["sessions"] == 3 and d["sure"] == "high" and d["low"] < 0.32 < d["high"]
+    assert d["sessions"] == 3 and d["sure"] == "medium" and d["low"] < 0.32 < d["high"]   # all on one day
+    days = [tr.clean_sens_session(session(0.32)) for _ in range(3)]
+    for k, s in enumerate(days):
+        s["d"] = f"2026-11-0{k + 1}"
+    assert tr.recommend(days)["sure"] == "high"                                          # three days that agree
     c.post(f"/profiles/{pid}/trainer/setup", json={"sens": 0.4, "dpi": 800}, headers=H)
     page = c.get(f"/profiles/{pid}/trainer").data.decode()
-    assert "Test again" in page and "tr-chart" in page and "Change it in steps" in page
+    assert "Thorough · about 11 min" in page and "tr-chart" in page and "Change it in steps" in page
     # the best at the end of what was tested: said so, and the next test starts there
     rec = tr.recommend([tr.clean_sens_session(session(0.2))])
     assert rec["edge"] == "lower"
@@ -2696,4 +2700,37 @@ def test_sens_finder_finds_the_best_sens(app):
                 {"base": "x", "tests": session(0.3)["tests"]}):
         assert c.post(f"/profiles/{pid}/trainer/sens", json=bad, headers=H).status_code == 400
     assert tr.sens_step(0.4, 0.42) == {"change": 0.05, "steps": [0.42]}
+
+    # thorough: your sens at the start and the end shows how much you tired; the rounds in between are corrected
+    def thorough(true, base=0.4, tire=0.012):
+        def q(s):
+            return max(0.0, 1 - 2 * math.log(s / true) ** 2)
+        order = [base] + [base * f for f in (0.65, 0.75, 0.87, 1, 1.15, 1.3, 1.5)]
+        order += [true * f for f in (0.88, 0.93, 0.97, 1.03, 1.07, 1.12)] * 2 + [base]
+        return {"base": base, "mode": "thorough",
+                "tests": [{"sens": round(s, 4), "i": i, "click": 2000 * q(s) * (1 - tire * i), "track": 0.6 * q(s) * (1 - tire * i)}
+                          for i, s in enumerate(order)]}
+    s = tr.clean_sens_session(thorough(0.3))
+    assert s["mode"] == "thorough" and len(s["tests"]) == 21 and abs(tr._tiring(s) - 0.012) < 0.001
+    rec = tr.recommend([s])
+    assert abs(rec["sens"] - 0.3) < 0.01 and rec["sure"] == "medium" and rec["thorough"] == 1     # one thorough = two quick
+    quick_only = tr.recommend([tr.clean_sens_session(session(0.32))])
+    assert quick_only["sure"] == "low" and tr._tiring(tr.clean_sens_session(session(0.32))) == 0
     assert tr.sens_step(0.4, 0.3)["steps"][-1] == 0.3 and len(tr.sens_step(0.4, 0.3)["steps"]) == 4
+
+
+def test_trainer_crosshair_is_kept_and_checked(app):
+    from nexus.stats import trainer as tr
+    c = setup_admin(app)
+    pid = add_profile(c)
+    H = {"Origin": "http://localhost"}
+    x = {"color": "#00FF00", "outline": False, "ot": 1, "oo": 0.5, "dot": True, "dt": 2, "da": 1, "inner": True, "it": 2,
+         "il": 3, "iv": 3, "ig": False, "io": 2, "ia": 1, "outer": False, "ot2": 2, "ol": 2, "ov": 2, "og": False, "oo2": 10, "oa": 0.35}
+    r = c.post(f"/profiles/{pid}/trainer/setup", json={"crosshair": x}, headers=H)
+    assert r.status_code == 200 and r.get_json()["setup"]["crosshair"]["color"] == "#00ff00"
+    page = c.get(f"/profiles/{pid}/trainer").data.decode()
+    assert 'id="crosshair"' in page and '"dot": true' in page and "tr-xhair" in page
+    assert tr.clean_crosshair(dict(x, color="red")) is None                       # not a colour
+    assert tr.clean_crosshair(dict(x, il=500)) is None                            # out of range
+    assert tr.clean_crosshair(dict(x, dot="yes"))["dot"] is False                 # switches are true or false
+    assert c.post(f"/profiles/{pid}/trainer/setup", json={"crosshair": {"color": "#fff"}}, headers=H).status_code == 400

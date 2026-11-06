@@ -35,11 +35,20 @@
 #tr-stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .tr-hud{position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:26px;color:#e7ecf3;font:600 15px var(--font);text-shadow:0 1px 2px #000;pointer-events:none}
 .tr-hud span{color:#9aa6b8;font-weight:500;margin-right:6px}
-.tr-cross{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none}
-.tr-cross i{position:absolute;background:#2ef0c4;box-shadow:0 0 0 1px rgba(0,0,0,.65)}
-.tr-cross i:nth-child(1){left:-1px;top:-1px;width:2px;height:2px}
-.tr-cross i:nth-child(2){left:4px;top:-1px;width:6px;height:2px}.tr-cross i:nth-child(3){left:-10px;top:-1px;width:6px;height:2px}
-.tr-cross i:nth-child(4){left:-1px;top:4px;width:2px;height:6px}.tr-cross i:nth-child(5){left:-1px;top:-10px;width:2px;height:6px}
+.tr-xhair{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.tr-cue{position:absolute;left:50%;top:30%;transform:translateX(-50%);font:700 22px var(--font);color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.7);pointer-events:none}
+.tr-xh{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px;margin-bottom:24px}
+.tr-xh summary{cursor:pointer;font-weight:650;font-size:16px}
+.tr-xh-body{display:grid;grid-template-columns:auto 1fr;gap:16px 24px;margin-top:14px;align-items:start}
+@media (max-width:720px){.tr-xh-body{grid-template-columns:1fr}}
+#tr-xprev{width:200px;height:200px;border-radius:var(--radius-sm);image-rendering:pixelated;display:block}
+.tr-xgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 14px}
+.tr-xgrid label{display:grid;gap:3px;font-size:12.5px;color:var(--muted)}
+.tr-xgrid label.chk{display:flex;align-items:center;gap:8px;color:var(--text);font-size:13px}
+.tr-xgrid input[type=number]{width:100%}
+.tr-xgrid fieldset{border:0;padding:0;margin:0;display:contents}
+.tr-xcode{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.tr-xcode input{flex:1;min-width:220px;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
 .tr-panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,calc(100vw - 32px));background:rgba(20,27,38,.94);border:1px solid #36445a;border-radius:14px;padding:22px 24px;color:#e7ecf3;text-align:center}
 .tr-panel h2{margin:0 0 6px;font-size:22px}
 .tr-panel p{margin:0 0 14px;color:#9aa6b8;font-size:14px}
@@ -66,6 +75,12 @@
 .tr-chart .dot{fill:var(--text);opacity:.55}.tr-chart .rec{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:4 3}
 .tr-chart .axis{stroke:var(--line2)}.tr-chart text{fill:var(--muted);stroke:none;font-size:11px;font-family:var(--font-num)}
 .tr-steps{font-size:13px;margin:6px 0 0;padding-left:18px}
+.tr-modes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+@media (max-width:560px){.tr-modes{grid-template-columns:1fr}}
+.tr-mode{text-align:left;font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line2);border-radius:var(--radius-sm);padding:10px 12px;cursor:pointer;display:grid;gap:4px;align-content:start}
+.tr-mode:hover{border-color:var(--accent)}.tr-mode:focus-visible{outline:none;box-shadow:var(--focus)}
+.tr-mode b{font-size:14px}.tr-mode span{font-size:12.5px;color:var(--muted)}
+.tr-mode:first-child{border-color:var(--accent)}
 </style>{% endblock %}
 {% block content %}
 {% call vc.pagehead('Aim trainer', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
@@ -95,23 +110,31 @@
 <section class="tr-sens" id="sens">
   <div>
     <h2>Sens finder</h2>
-    <p>About 5 minutes. A short mixed test (flicks, micro corrections, tracking) at ten different sensitivities, blind and in
-      random order: first from 70% to 130% of yours, then close around the best one. It measures how you hit, not only whether:
-      flying past the target means too fast, stopping short means too slow.</p>
+    <p>A short mixed test (flicks, micro corrections, tracking) at different sensitivities, blind and in random order: first
+      a wide spread around yours, then close around the best one. It measures how you hit, not only whether: flying past the
+      target means too fast, stopping short means too slow.</p>
     {% if rec %}
     <div class="small muted">Your sens by {{ rec.sessions }} test{{ 's' if rec.sessions != 1 }} (last 90 days)</div>
     <div class="tr-rec"><b>{{ '%.3f'|format(rec.sens) }}</b>
       <span>{{ '%.3f'|format(rec.low) }}–{{ '%.3f'|format(rec.high) }} works about as well{% if setup.dpi %} · {{ (360 / (0.07 * rec.sens) / setup.dpi * 2.54)|round(1) }} cm per 360°{% endif %}</span></div>
+    {% if rec.thorough %}<div class="small muted" style="margin-bottom:6px">{{ rec.thorough }} of them thorough (they count twice)</div>{% endif %}
     <span class="tr-sure {{ rec.sure }}">{{ {'low': 'One test: a first hint', 'medium': 'Getting there: test again on another day', 'high': 'Steady over several days'}[rec.sure] }}</span>
     {% if rec.edge %}<p style="margin-top:10px">The best was at the {{ 'top' if rec.edge == 'higher' else 'bottom' }} of what was tested: the next test starts from {{ '%.3f'|format(rec.sens) }} and goes {{ rec.edge }}.</p>{% endif %}
+    {% if rec.tiring >= 0.004 %}<p style="margin-top:10px">In your last thorough test you got about {{ (rec.tiring * 100)|round(1) }}% worse each round towards the end: the result is corrected for that.</p>{% endif %}
     {% if rec.over_trend == 'up' %}<p style="margin-top:10px">The faster the sens, the more you flew past targets.</p>{% endif %}
     {% if step and step.change is defined and step.steps|length > 1 %}
     <p style="margin:10px 0 0">That's {{ '%+d'|format((step.change * 100)|round|int) }}% from your {{ setup.sens }}. Change it in steps, one a week:</p>
     <ol class="tr-steps">{% for s in step.steps %}<li>{{ '%.3f'|format(s) }}</li>{% endfor %}</ol>
     {% endif %}
     {% endif %}
-    <div class="row" style="margin-top:12px"><button type="button" class="btn primary" id="tr-sens-go">{{ 'Test again' if rec else 'Find my sens' }}</button>
-      <span class="small muted">starts from {{ setup.sens or 0.4 }} (your Valorant sens above)</span></div>
+    <div class="tr-modes">
+      <button type="button" class="tr-mode" data-finder="quick"><b>Quick · about 5 min</b>
+        <span>1 warm-up, then 10 rounds of 20 s: five from 70% to 130% of your sens, five close around the best.</span></button>
+      <button type="button" class="tr-mode" data-finder="thorough"><b>Thorough · about 11 min</b>
+        <span>2 warm-ups, then 21 rounds of 25 s: seven from 65% to 150%, six close values played twice each, and your sens at the
+          start and the end to correct for tiring. Counts twice.</span></button>
+    </div>
+    <div class="small muted" style="margin-top:8px">Starts from {{ '%.3f'|format(rec.sens) if rec and rec.edge else (setup.sens or 0.4) }}{{ ' (where the last test ended)' if rec and rec.edge else ' (your Valorant sens above)' }}.</div>
   </div>
   {% if chart %}
   <div>
@@ -129,6 +152,44 @@
   <div class="small muted" style="align-self:center">The chart of how you aim at each sensitivity appears here after the first test.</div>
   {% endif %}
 </section>
+
+<details class="tr-xh" id="crosshair">
+  <summary>Crosshair</summary>
+  <div class="tr-xh-body" id="tr-xform">
+    <canvas id="tr-xprev" width="200" height="200" aria-label="Crosshair preview, 4× enlarged"></canvas>
+    <div>
+      <div class="tr-xcode">
+        <input type="text" id="tr-xcode" placeholder="Paste your Valorant crosshair code (Settings › Crosshair › Import)" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn sm" id="tr-xcode-use">Use code</button>
+        <button type="button" class="btn sm ghost" id="tr-xreset">Reset</button>
+      </div>
+      <div class="small muted" id="tr-xcode-msg" style="min-height:18px;margin:-6px 0 8px"></div>
+      <div class="tr-xgrid">
+        <label>Colour<input type="color" data-x="color"></label>
+        <label class="chk"><input type="checkbox" data-x="outline"> Outlines</label>
+        <label>Outline thickness<input type="number" data-x="ot" min="1" max="6" step="1"></label>
+        <label>Outline opacity<input type="number" data-x="oo" min="0" max="1" step="0.05"></label>
+        <label class="chk"><input type="checkbox" data-x="dot"> Centre dot</label>
+        <label>Dot thickness<input type="number" data-x="dt" min="1" max="6" step="1"></label>
+        <label class="chk"><input type="checkbox" data-x="inner"> Inner lines</label>
+        <label>Inner length<input type="number" data-x="il" min="0" max="20" step="1"></label>
+        <label>Inner thickness<input type="number" data-x="it" min="0" max="10" step="1"></label>
+        <label>Inner gap<input type="number" data-x="io" min="0" max="20" step="1"></label>
+        <label>Inner opacity<input type="number" data-x="ia" min="0" max="1" step="0.05"></label>
+        <label class="chk"><input type="checkbox" data-x="outer"> Outer lines</label>
+        <label>Outer length<input type="number" data-x="ol" min="0" max="20" step="1"></label>
+        <label>Outer thickness<input type="number" data-x="ot2" min="0" max="10" step="1"></label>
+        <label>Outer gap<input type="number" data-x="oo2" min="0" max="40" step="1"></label>
+        <label>Outer opacity<input type="number" data-x="oa" min="0" max="1" step="0.05"></label>
+      </div>
+      <div class="tr-xcode" style="margin:12px 0 0">
+        <input type="text" id="tr-xcode-out" readonly aria-label="This crosshair as a Valorant code">
+        <button type="button" class="btn sm ghost" id="tr-xcode-copy">Copy code</button>
+      </div>
+      <p class="small muted" style="margin:6px 0 0">Sizes are screen pixels like in Valorant. The preview is 4× enlarged.</p>
+    </div>
+  </div>
+</details>
 
 <h2>Scenarios</h2>
 <p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Click a scenario, then click once more to lock the mouse. Esc pauses.
@@ -152,7 +213,8 @@
 <div id="tr-stage" aria-live="polite">
   <canvas id="tr-canvas"></canvas>
   <div class="tr-hud" id="tr-hud" hidden><div><span>Time</span><b id="tr-time">0</b></div><div><span>Score</span><b id="tr-score">0</b></div><div><span id="tr-l3">Accuracy</span><b id="tr-acc">–</b></div></div>
-  <div class="tr-cross" id="tr-cross"><i></i><i></i><i></i><i></i><i></i></div>
+  <canvas class="tr-xhair" id="tr-xhair" aria-hidden="true"></canvas>
+  <div class="tr-cue" id="tr-cue" hidden></div>
   <div class="tr-count" id="tr-count" hidden></div>
   <div class="tr-panel" id="tr-panel"></div>
   <div class="tr-warn" id="tr-warn" hidden></div>
@@ -162,7 +224,7 @@
 window.NEXUS_TRAINER = {{ {
   'scenarios': scenarios, 'plans': plans, 'start': start, 'can_save': can_save, 'scale': setup.scale or 1,
   'summary': summary,
-  'sens_base': setup.sens or 0.4, 'sens_rec': rec.sens if rec and rec.edge else None,
+  'sens_base': setup.sens or 0.4, 'crosshair': setup.get('crosshair'), 'sens_rec': rec.sens if rec and rec.edge else None,
   'urls': {'sens': url_for('trainer_sens', pid=p.id), 'run': url_for('trainer_run', pid=p.id), 'setup': url_for('trainer_setup', pid=p.id), 'aim': url_for('aim', pid=p.id)}
 }|tojson }};
 </script>

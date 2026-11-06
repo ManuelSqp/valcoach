@@ -8,6 +8,7 @@ Stored per player in data/profiles/<pid>/stats/trainer.json:
 from __future__ import annotations
 
 import math
+import re
 import time
 from datetime import date
 
@@ -140,6 +141,29 @@ def clean_setup(d: dict) -> dict:
                 out[k] = int(v) if digits == 0 else v
     if "raw" in d and isinstance(d["raw"], bool):
         out["raw"] = d["raw"]
+    x = clean_crosshair(d.get("crosshair"))
+    if x:
+        out["crosshair"] = x
+    return out
+
+
+# the trainer's crosshair (like Valorant's primary crosshair; see trainer.js): number keys with their range, switches
+CROSSHAIR_NUM = {"ot": (1, 6), "oo": (0, 1), "dt": (1, 6), "da": (0, 1), "it": (0, 10), "il": (0, 20), "iv": (0, 20),
+                 "io": (0, 20), "ia": (0, 1), "ot2": (0, 10), "ol": (0, 20), "ov": (0, 20), "oo2": (0, 40), "oa": (0, 1)}
+CROSSHAIR_BOOL = ("outline", "dot", "inner", "ig", "outer", "og")
+
+
+def clean_crosshair(x) -> dict | None:
+    if not isinstance(x, dict) or not isinstance(x.get("color"), str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", x["color"]):
+        return None
+    out: dict = {"color": x["color"].lower()}
+    for k, (lo, hi) in CROSSHAIR_NUM.items():
+        v = _num(x.get(k), lo, hi, 3)
+        if v is None:
+            return None
+        out[k] = v
+    for k in CROSSHAIR_BOOL:
+        out[k] = x.get(k) is True
     return out
 
 
@@ -163,6 +187,11 @@ def numbers(setup: dict) -> dict:
 # its click score (points × accuracy), time on the moving target, and how the flicks went (overshoot: past the
 # target; undershoot: stopped short and needed another correction). Sessions are kept; the recommendation uses all
 # of the last 90 days, each session scaled to its own best so a good or bad day doesn't count more.
+# Two modes: quick (1 warm-up, 5 + 5 rounds of 20 s, about 5 minutes) and thorough (2 warm-ups, your sens counted at
+# the start and the end, 7 wide + 6 close played twice, 25 s each, about 11 minutes). The thorough one measures how
+# much you tired between its first and last round at your own sens and corrects the rounds in between for it, and it
+# counts twice in the recommendation.
+MODE_WEIGHT = {"quick": 1, "thorough": 2}
 SENS_KEEP_DAYS = 90
 MAX_SESSIONS = 60
 
@@ -172,7 +201,8 @@ def clean_sens_session(d: dict) -> dict | None:
         return None
     base = _num(d.get("base"), 0.01, 20, 4)
     tests = d.get("tests")
-    if base is None or not isinstance(tests, list) or not 4 <= len(tests) <= 20:
+    mode = d.get("mode") if d.get("mode") in MODE_WEIGHT else "quick"
+    if base is None or not isinstance(tests, list) or not 4 <= len(tests) <= 30:
         return None
     out = []
     for x in tests:
@@ -184,29 +214,50 @@ def clean_sens_session(d: dict) -> dict | None:
         if s is None or click is None or track is None:
             return None
         t = {"sens": s, "click": click, "track": track}
+        order = x.get("i")
+        if isinstance(order, int) and not isinstance(order, bool) and 0 <= order < 100:
+            t["i"] = order
         for k, hi in (("over", 5), ("under", 5), ("acc", 1), ("ms", 5000)):
             v = _num(x.get(k), 0, hi, 3)
             if v is not None:
                 t[k] = v
         out.append(t)
-    return {"base": base, "tests": out, "t": time.time(), "d": date.today().isoformat()}
+    return {"base": base, "mode": mode, "tests": out, "t": time.time(), "d": date.today().isoformat()}
+
+
+def _tiring(session: dict) -> float:
+    """How much worse the last round at your own sens was than the first (thorough mode), as a share per round
+    (0.01 = 1% worse each round). 0 when there's nothing to compare or it got better."""
+    ts = [t for t in session["tests"] if "i" in t]
+    own = sorted((t for t in ts if abs(t["sens"] - session["base"]) < 1e-3), key=lambda t: t["i"])
+    if session.get("mode") != "thorough" or len(own) < 2 or own[-1]["i"] == own[0]["i"]:
+        return 0.0
+    a, b = own[0], own[-1]
+    qa = (a["click"] / max(a["click"], b["click"], 1e-9) + a["track"] / max(a["track"], b["track"], 1e-9)) / 2
+    qb = (b["click"] / max(a["click"], b["click"], 1e-9) + b["track"] / max(a["track"], b["track"], 1e-9)) / 2
+    per = (qa - qb) / qa / (b["i"] - a["i"]) if qa else 0.0
+    return min(max(per, 0.0), 0.02)                      # at most 2% a round: more is a bad round, not tiring
 
 
 def _points(session: dict) -> list[tuple[float, float, dict]]:
     """(sens, 0..1 how well it went, the test) for one session: click score and tracking each scaled to the
     session's best, then averaged."""
     ts = session["tests"]
-    cmax = max((t["click"] for t in ts), default=0) or 1
-    tmax = max((t["track"] for t in ts), default=0) or 1
-    return [(t["sens"], (t["click"] / cmax + t["track"] / tmax) / 2, t) for t in ts]
+    per = _tiring(session)
+    fix = [1 + per * t.get("i", 0) for t in ts]           # a later round gets back what tiring took
+    cmax = max((t["click"] * k for t, k in zip(ts, fix)), default=0) or 1
+    tmax = max((t["track"] * k for t, k in zip(ts, fix)), default=0) or 1
+    return [(t["sens"], (t["click"] * k / cmax + t["track"] * k / tmax) / 2, t) for t, k in zip(ts, fix)]
 
 
-def _fit(points: list[tuple[float, float]]) -> tuple[float, float, float] | None:
-    """Least squares y = a·x² + b·x + c over x = ln(sens). None if it can't be solved."""
-    if len({round(x, 4) for x, _ in points}) < 3:
+def _fit(points: list[tuple]) -> tuple[float, float, float] | None:
+    """Least squares y = a·x² + b·x + c over x = ln(sens); points (x, y) or (x, y, weight). None if it can't be
+    solved."""
+    pts = [(p[0], p[1], p[2] if len(p) > 2 else 1.0) for p in points]
+    if len({round(x, 4) for x, _, _ in pts}) < 3:
         return None
-    s = [sum(x ** k for x, _ in points) for k in range(5)]
-    t = [sum(y * x ** k for x, y in points) for k in range(3)]
+    s = [sum(w * x ** k for x, _, w in pts) for k in range(5)]
+    t = [sum(w * y * x ** k for x, y, w in pts) for k in range(3)]
     m = [[s[4], s[3], s[2], t[2]], [s[3], s[2], s[1], t[1]], [s[2], s[1], s[0], t[0]]]
     for i in range(3):                                   # Gauss elimination with pivoting
         p = max(range(i, 3), key=lambda r: abs(m[r][i]))
@@ -228,9 +279,10 @@ def recommend(sessions: list[dict], now: float | None = None) -> dict | None:
     if not recent:
         return None
     pts = [p for s in recent for p in _points(s)]
+    wts = [MODE_WEIGHT.get(s.get("mode"), 1) for s in recent for _ in s["tests"]]
     xs = [math.log(s) for s, _, _ in pts]
     lo, hi = min(xs), max(xs)
-    fit = _fit([(math.log(s), y) for s, y, _ in pts])
+    fit = _fit([(math.log(s), y, w) for (s, y, _), w in zip(pts, wts)])
     best_measured = max(pts, key=lambda p: p[1])[0]
     if fit and fit[0] < 0:
         x = min(max(-fit[1] / (2 * fit[0]), lo), hi)
@@ -253,7 +305,10 @@ def recommend(sessions: list[dict], now: float | None = None) -> dict | None:
         else:
             per.append(max(_points(s), key=lambda p: p[1])[0])
     spread = (max(per) - min(per)) / sens if len(per) > 1 else None
-    sure = "low" if len(recent) == 1 else "high" if len(recent) >= 3 and spread is not None and spread < 0.15 else "medium"
+    weight = sum(MODE_WEIGHT.get(s.get("mode"), 1) for s in recent)        # a thorough test counts as two quick ones
+    sure = ("low" if weight == 1 else
+            "high" if weight >= 3 and len({s.get("d") for s in recent}) >= 2 and spread is not None and spread < 0.15
+            else "medium")
     over = [(math.log(s), t["over"]) for s, _, t in pts if "over" in t]
     trend = None
     if len(over) >= 4:                                   # does overshooting grow with the sens?
@@ -267,7 +322,8 @@ def recommend(sessions: list[dict], now: float | None = None) -> dict | None:
             cx = lo + (hi - lo) * i / 24
             curve.append((round(math.exp(cx), 4), round(fit[0] * cx * cx + fit[1] * cx + fit[2], 4)))
     return {"sens": round(sens, 3), "low": round(low, 3), "high": round(high, 3), "edge": edge,
-            "sessions": len(recent), "sure": sure, "curve": curve, "over_trend": trend,
+            "sessions": len(recent), "thorough": sum(1 for s in recent if s.get("mode") == "thorough"),
+            "tiring": round(_tiring(recent[-1]), 4), "sure": sure, "curve": curve, "over_trend": trend,
             "per_session": [round(p, 3) for p in per],
             "points": [{"sens": s, "y": round(y, 3), "over": t.get("over"), "under": t.get("under")} for s, y, t in pts]}
 

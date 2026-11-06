@@ -159,8 +159,9 @@ Valorant: your Valorant sensitivity (0.07° per mouse count × sens), Valorant's
 (Chrome, Edge, the Nexus app; other browsers get a warning). Five scenarios (grid flicks, head-line flicks, micro taps,
 peek reaction, strafe tracking), a short daily warm-up and a training picked from what your matches show. Scores are
 kept per player, finishing a warm-up or training ticks it off on the Aim page, and the coach knows the scores.
-The *Sens finder* (about 5 minutes) plays a short mixed test at ten sensitivities, blind and in random order (70–130%
-of yours, then close around the best), measures how you hit (overshooting, stopping short, time, tracking), fits a
+The *Sens finder* plays a short mixed test at different sensitivities, blind and in random order (a wide spread around
+yours, then close around the best): *quick* in about 5 minutes, or *thorough* in about 11 (more sensitivities, longer
+rounds, the close ones twice, and corrected for tiring), measures how you hit (overshooting, stopping short, time, tracking), fits a
 curve and recommends a sens with a range that works about as well. Tests of the last 90 days are combined; a big
 change is split into weekly steps.
 *Practice › Mouse & monitor* measures the real DPI of your mouse (move it a known distance along a ruler), its polling
