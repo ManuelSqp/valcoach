@@ -1,4 +1,5 @@
 """The window and the tray icon. The work itself is in sync.py; this file only shows settings and what happened.
+Logged out: one login card. Logged in: a sidebar (Overview, KovaaK's, Medal, Settings) and one page at a time.
 
 Closing the window keeps the app in the tray (bottom right): it goes on syncing every few minutes. "Quit" in the
 tray menu ends it."""
@@ -129,9 +130,10 @@ class App:
         ctk.set_appearance_mode("dark")
         self.root = ctk.CTk(fg_color=BG)
         self.root.title(TITLE)
-        self.root.geometry("640x780")
-        self.root.minsize(560, 560)
-        self._icon = ctk.CTkImage(logo(64), size=(26, 26))
+        self.root.geometry("900x600")
+        self.root.minsize(780, 520)
+        self._icon = ctk.CTkImage(logo(64), size=(30, 30))
+        self._icon_big = ctk.CTkImage(logo(128), size=(56, 56))
         try:
             from PIL import ImageTk
             self._win_icon = ImageTk.PhotoImage(logo(64))
@@ -152,24 +154,84 @@ class App:
     # ------------------------------------------------------------------ window
     def _build(self) -> None:
         r = self.root
-        r.grid_columnconfigure(0, weight=1)
-        r.grid_rowconfigure(2, weight=1)
+        r.grid_columnconfigure(1, weight=1)
+        r.grid_rowconfigure(0, weight=1)
+        self.v_server = ctk.StringVar(value=self.s.server or "https://")
+        self.v_user = ctk.StringVar(value=self.s.user)
+        self.v_pw = ctk.StringVar()
+        self.v_player = ctk.StringVar()
+        self.v_put = ctk.BooleanVar(value=self.s.put_playlists)
+        self.v_scores = ctk.BooleanVar(value=self.s.send_scores)
+        self.v_upload = ctk.BooleanVar(value=self.s.upload_matches)
+        self.v_auto = ctk.BooleanVar(value=self.s.autostart)
+        self.v_updates = ctk.BooleanVar(value=self.s.check_updates)
+        self.v_kov = ctk.StringVar(value=self.s.kovaaks_dir)
+        self.v_medal = ctk.StringVar(value=self.s.medal_dir)
 
-        # header: logo, name, status
-        head = ctk.CTkFrame(r, fg_color="transparent")
-        head.grid(row=0, column=0, sticky="ew", padx=22, pady=(18, 8))
-        head.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(head, text="", image=self._icon).grid(row=0, column=0, rowspan=2, padx=(0, 12))
-        ctk.CTkLabel(head, text="valcoach companion", font=ctk.CTkFont(size=20, weight="bold"),
-                     text_color=TEXT).grid(row=0, column=1, sticky="w")
-        self.sub = ctk.CTkLabel(head, text="", font=ctk.CTkFont(size=12), text_color=MUTED)
-        self.sub.grid(row=1, column=1, sticky="w")
-        self.pill = ctk.CTkLabel(head, text="", font=ctk.CTkFont(size=12, weight="bold"), corner_radius=999,
-                                 fg_color=LINE, text_color=MUTED, padx=12, height=26)
-        self.pill.grid(row=0, column=2, rowspan=2, sticky="e")
+        # ---- logged out: one centred card
+        self.login_page = ctk.CTkFrame(r, fg_color="transparent")
+        self.login_page.grid_columnconfigure(0, weight=1)
+        self.login_page.grid_rowconfigure((0, 2), weight=1)
+        card = Card(self.login_page, "Log in", "With your valcoach account. The app gets its own key for this PC; "
+                                               "your password isn't stored.")
+        card.grid(row=1, column=0, padx=40)
+        card.configure(width=420)
+        top = ctk.CTkFrame(self.login_page, fg_color="transparent")
+        top.grid(row=0, column=0, sticky="s", pady=(0, 18))
+        ctk.CTkLabel(top, text="", image=self._icon_big).pack()
+        ctk.CTkLabel(top, text="valcoach companion", font=ctk.CTkFont(size=22, weight="bold"), text_color=TEXT).pack(pady=(8, 0))
+        b = card.body
+        for i, (label, var, kw) in enumerate((("valcoach address", self.v_server, {}),
+                                               ("Username", self.v_user, {}),
+                                               ("Password", self.v_pw, {"show": "•"}))):
+            ctk.CTkLabel(b, text=label, text_color=MUTED, font=ctk.CTkFont(size=12)).grid(
+                row=i * 2, column=0, sticky="w", pady=(8 if i else 0, 2))
+            e = entry(b, var, width=360, **kw)
+            e.grid(row=i * 2 + 1, column=0, sticky="ew")
+            if label == "Password":
+                e.bind("<Return>", lambda _e: self.login())
+        ctk.CTkButton(b, text="Log in", command=self.login, height=40, corner_radius=8, fg_color=ACCENT,
+                      hover_color=ACCENT_HOVER, text_color=ACCENT_TEXT, font=ctk.CTkFont(size=14, weight="bold")).grid(
+            row=6, column=0, sticky="ew", pady=(16, 0))
 
+        # ---- logged in: sidebar + one page at a time
+        self.side = ctk.CTkFrame(r, fg_color=CARD, corner_radius=0, width=210)
+        self.side.grid_propagate(False)
+        self.side.grid_columnconfigure(0, weight=1)
+        self.side.grid_rowconfigure(6, weight=1)
+        brand = ctk.CTkFrame(self.side, fg_color="transparent")
+        brand.grid(row=0, column=0, sticky="ew", padx=16, pady=(18, 18))
+        ctk.CTkLabel(brand, text="", image=self._icon).pack(side="left")
+        names = ctk.CTkFrame(brand, fg_color="transparent")
+        names.pack(side="left", padx=(10, 0))
+        ctk.CTkLabel(names, text="valcoach", font=ctk.CTkFont(size=16, weight="bold"), text_color=TEXT,
+                     height=18).pack(anchor="w")
+        ctk.CTkLabel(names, text="companion", font=ctk.CTkFont(size=12), text_color=MUTED, height=14).pack(anchor="w")
+        self.nav: dict[str, ctk.CTkButton] = {}
+        for i, (key, label) in enumerate((("overview", "Overview"), ("kovaaks", "KovaaK's"), ("medal", "Medal"),
+                                          ("settings", "Settings")), start=1):
+            btn = ctk.CTkButton(self.side, text=label, anchor="w", height=38, corner_radius=8, fg_color="transparent",
+                                hover_color=LINE, text_color=MUTED, font=ctk.CTkFont(size=14),
+                                command=lambda k=key: self.page(k))
+            btn.grid(row=i, column=0, sticky="ew", padx=10, pady=2)
+            self.nav[key] = btn
+        bottom = ctk.CTkFrame(self.side, fg_color="transparent")
+        bottom.grid(row=7, column=0, sticky="ew", padx=14, pady=16)
+        bottom.grid_columnconfigure(0, weight=1)
+        self.pill = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(size=12, weight="bold"), anchor="w")
+        self.pill.grid(row=0, column=0, sticky="ew")
+        self.state = ctk.CTkLabel(bottom, text="", text_color=MUTED, font=ctk.CTkFont(size=11), anchor="w",
+                                  justify="left", wraplength=180)
+        self.state.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        ctk.CTkButton(bottom, text="Sync now", command=self.sync_now, height=36, corner_radius=8, fg_color=ACCENT,
+                      hover_color=ACCENT_HOVER, text_color=ACCENT_TEXT, font=ctk.CTkFont(size=13, weight="bold")).grid(
+            row=2, column=0, sticky="ew")
+
+        self.main = ctk.CTkFrame(r, fg_color="transparent")
+        self.main.grid_columnconfigure(0, weight=1)
+        self.main.grid_rowconfigure(1, weight=1)
         # update banner (only when there is one)
-        self.banner = ctk.CTkFrame(r, fg_color="#0f2e2a", corner_radius=12, border_width=1, border_color="#1f5c53")
+        self.banner = ctk.CTkFrame(self.main, fg_color="#0f2e2a", corner_radius=12, border_width=1, border_color="#1f5c53")
         self.banner.grid_columnconfigure(0, weight=1)
         self.banner_text = ctk.CTkLabel(self.banner, text="", text_color=TEXT, font=ctk.CTkFont(size=13), anchor="w")
         self.banner_text.grid(row=0, column=0, sticky="ew", padx=14, pady=10)
@@ -179,102 +241,138 @@ class App:
         self.banner_btn.grid(row=0, column=1, padx=(0, 10), pady=8)
         self.banner_bar = ctk.CTkProgressBar(self.banner, progress_color=ACCENT, fg_color=LINE, height=6)
 
-        body = ctk.CTkScrollableFrame(r, fg_color="transparent", scrollbar_button_color=LINE)
-        body.grid(row=2, column=0, sticky="nsew", padx=10, pady=(0, 6))
-        body.grid_columnconfigure(0, weight=1)
+        self.pages: dict[str, ctk.CTkFrame] = {}
+        for key in self.nav:
+            f = ctk.CTkFrame(self.main, fg_color="transparent")
+            f.grid_columnconfigure(0, weight=1)
+            self.pages[key] = f
 
-        # account
-        acc = Card(body, "Account")
-        acc.grid(row=0, column=0, sticky="ew", padx=10, pady=8)
-        b = acc.body
-        self.v_server = ctk.StringVar(value=self.s.server or "https://")
-        self.v_user = ctk.StringVar(value=self.s.user)
-        self.v_pw = ctk.StringVar()
-        self.login_box = ctk.CTkFrame(b, fg_color="transparent")
-        self.login_box.grid_columnconfigure(0, weight=1)
-        for i, (label, var, kw) in enumerate((("valcoach address", self.v_server, {}),
-                                               ("Username", self.v_user, {}),
-                                               ("Password", self.v_pw, {"show": "•"}))):
-            ctk.CTkLabel(self.login_box, text=label, text_color=MUTED, font=ctk.CTkFont(size=12)).grid(
-                row=i * 2, column=0, sticky="w", pady=(6 if i else 0, 2))
-            e = entry(self.login_box, var, **kw)
-            e.grid(row=i * 2 + 1, column=0, sticky="ew")
-            if label == "Password":
-                e.bind("<Return>", lambda _e: self.login())
-        ctk.CTkButton(self.login_box, text="Log in", command=self.login, height=38, corner_radius=8, fg_color=ACCENT,
-                      hover_color=ACCENT_HOVER, text_color=ACCENT_TEXT, font=ctk.CTkFont(size=14, weight="bold")).grid(
-            row=6, column=0, sticky="ew", pady=(12, 0))
-
-        self.who_box = ctk.CTkFrame(b, fg_color="transparent")
-        self.who_box.grid_columnconfigure(0, weight=1)
-        self.who = ctk.CTkLabel(self.who_box, text="", text_color=TEXT, font=ctk.CTkFont(size=13), anchor="w")
-        self.who.grid(row=0, column=0, sticky="ew")
-        ghost_button(self.who_box, "Log out", self.logout).grid(row=0, column=1)
-        ctk.CTkLabel(self.who_box, text="Player", text_color=MUTED, font=ctk.CTkFont(size=12)).grid(
-            row=1, column=0, sticky="w", pady=(10, 2))
-        self.v_player = ctk.StringVar()
-        self.player_menu = ctk.CTkOptionMenu(self.who_box, variable=self.v_player, values=["…"], height=36,
-                                             corner_radius=8, fg_color=FIELD, button_color=LINE,
-                                             button_hover_color="#2c3d52", dropdown_fg_color=CARD, text_color=TEXT,
+        # overview: player, what's on, activity
+        p = self.pages["overview"]
+        p.grid_rowconfigure(3, weight=1)
+        self._title(p, "Overview")
+        row = ctk.CTkFrame(p, fg_color="transparent")
+        row.grid(row=1, column=0, sticky="ew", pady=(0, 12))
+        row.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(row, text="Player", text_color=MUTED, font=ctk.CTkFont(size=13)).grid(row=0, column=0, padx=(0, 10))
+        self.player_menu = ctk.CTkOptionMenu(row, variable=self.v_player, values=["…"], height=34, corner_radius=8,
+                                             fg_color=FIELD, button_color=LINE, button_hover_color="#2c3d52",
+                                             dropdown_fg_color=CARD, text_color=TEXT,
                                              command=lambda _v: (self.save(), self.sync_now()))
-        self.player_menu.grid(row=2, column=0, columnspan=2, sticky="ew")
+        self.player_menu.grid(row=0, column=1, sticky="w")
+        tiles = ctk.CTkFrame(p, fg_color="transparent")
+        tiles.grid(row=2, column=0, sticky="ew", pady=(0, 12))
+        tiles.grid_columnconfigure((0, 1, 2), weight=1, uniform="t")
+        self.tiles = {}
+        for i, (key, title, page) in enumerate((("playlists", "Playlists", "kovaaks"), ("scores", "Scores", "kovaaks"),
+                                                ("medal", "Medal", "medal"))):
+            t = ctk.CTkFrame(tiles, fg_color=CARD, corner_radius=12, border_width=1, border_color=LINE, cursor="hand2")
+            t.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 6, 0 if i == 2 else 6))
+            head = ctk.CTkLabel(t, text=title, text_color=MUTED, font=ctk.CTkFont(size=12), anchor="w")
+            head.pack(fill="x", padx=14, pady=(12, 0))
+            val = ctk.CTkLabel(t, text="", text_color=TEXT, font=ctk.CTkFont(size=15, weight="bold"), anchor="w")
+            val.pack(fill="x", padx=14)
+            sub = ctk.CTkLabel(t, text="", text_color=MUTED, font=ctk.CTkFont(size=11), anchor="w", justify="left",
+                               wraplength=170)
+            sub.pack(fill="x", padx=14, pady=(0, 12))
+            for w in (t, head, val, sub):
+                w.bind("<Button-1>", lambda _e, k=page: self.page(k))
+            self.tiles[key] = (val, sub)
+        act = ctk.CTkFrame(p, fg_color=CARD, corner_radius=12, border_width=1, border_color=LINE)
+        act.grid(row=3, column=0, sticky="nsew")
+        act.grid_columnconfigure(0, weight=1)
+        act.grid_rowconfigure(1, weight=1)
+        ctk.CTkLabel(act, text="Activity", text_color=TEXT, font=ctk.CTkFont(size=14, weight="bold"), anchor="w").grid(
+            row=0, column=0, sticky="ew", padx=14, pady=(10, 4))
+        self.log = ctk.CTkTextbox(act, corner_radius=8, fg_color=FIELD, border_width=0, text_color=TEXT,
+                                  font=ctk.CTkFont(family="Consolas", size=12), wrap="word", state="disabled")
+        self.log.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
         # KovaaK's
-        self.v_put = ctk.BooleanVar(value=self.s.put_playlists)
-        self.v_scores = ctk.BooleanVar(value=self.s.send_scores)
-        self.v_upload = ctk.BooleanVar(value=self.s.upload_matches)
-        self.v_auto = ctk.BooleanVar(value=self.s.autostart)
-        self.v_updates = ctk.BooleanVar(value=self.s.check_updates)
-        self.v_kov = ctk.StringVar(value=self.s.kovaaks_dir)
-        self.v_medal = ctk.StringVar(value=self.s.medal_dir)
-        kov = Card(body, "KovaaK's", "The coach's playlists land in KovaaK's › Playlists › Local Playlists, dated.")
-        kov.grid(row=1, column=0, sticky="ew", padx=10, pady=8)
-        self._folder_row(kov.body, "Game folder (with Saved and stats in it)", self.v_kov, 0)
-        switch(kov.body, "Put the warm-up and training playlists into KovaaK's", self.v_put, self.save).grid(
-            row=2, column=0, sticky="w", pady=(12, 4))
-        switch(kov.body, "Send new scores to valcoach", self.v_scores, self.save).grid(row=3, column=0, sticky="w", pady=4)
+        p = self.pages["kovaaks"]
+        self._title(p, "KovaaK's", "The coach's warm-up and training playlists land in KovaaK's › Playlists › Local "
+                                   "Playlists, dated. Your scores go to the Aim page.")
+        c = Card(p, "Game folder", "The one with Saved and stats in it (found in your Steam libraries).")
+        c.grid(row=2, column=0, sticky="ew")
+        self._folder_row(c.body, self.v_kov, 0)
+        switch(c.body, "Put the playlists into KovaaK's (once a day)", self.v_put, self.save).grid(
+            row=2, column=0, sticky="w", pady=(14, 4))
+        switch(c.body, "Send new scores to valcoach", self.v_scores, self.save).grid(row=3, column=0, sticky="w", pady=4)
 
         # Medal
-        med = Card(body, "Medal", "Each match is cut out of your session recordings and uploaded: it's then ready on the "
-                                  "match's coach page in valcoach.")
-        med.grid(row=2, column=0, sticky="ew", padx=10, pady=8)
-        self._folder_row(med.body, "Recordings folder", self.v_medal, 0)
-        switch(med.body, "Cut my matches out and upload them", self.v_upload, self.save).grid(
-            row=2, column=0, sticky="w", pady=(12, 4))
+        p = self.pages["medal"]
+        self._title(p, "Medal", "Each match is cut out of your session recordings (by the start time in the file name "
+                                "and Riot's match start) and uploaded. It's then ready on the match's coach page.")
+        c = Card(p, "Recordings folder", "Where Medal saves full-session recordings (MedalTVValorant….mp4).")
+        c.grid(row=2, column=0, sticky="ew")
+        self._folder_row(c.body, self.v_medal, 0)
+        switch(c.body, "Cut my matches out and upload them", self.v_upload, self.save).grid(
+            row=2, column=0, sticky="w", pady=(14, 4))
 
-        # activity
-        act = Card(body, "Activity")
-        act.grid(row=3, column=0, sticky="ew", padx=10, pady=8)
-        self.log = ctk.CTkTextbox(act.body, height=150, corner_radius=8, fg_color=FIELD, border_width=1,
-                                  border_color=LINE, text_color=TEXT, font=ctk.CTkFont(family="Consolas", size=12),
-                                  wrap="word", state="disabled")
-        self.log.grid(row=0, column=0, sticky="ew")
+        # settings: account and app
+        p = self.pages["settings"]
+        self._title(p, "Settings")
+        c = Card(p, "Account")
+        c.grid(row=2, column=0, sticky="ew", pady=(0, 12))
+        c.body.grid_columnconfigure(0, weight=1)
+        self.who = ctk.CTkLabel(c.body, text="", text_color=TEXT, font=ctk.CTkFont(size=13), anchor="w")
+        self.who.grid(row=0, column=0, sticky="ew")
+        ghost_button(c.body, "Log out", self.logout).grid(row=0, column=1)
+        c = Card(p, "App")
+        c.grid(row=3, column=0, sticky="ew")
+        switch(c.body, "Start with Windows (in the tray)", self.v_auto, self.save).grid(row=0, column=0, sticky="w", pady=4)
+        switch(c.body, "Look for updates once a day", self.v_updates, self.save).grid(row=1, column=0, sticky="w", pady=4)
+        line = ctk.CTkFrame(c.body, fg_color="transparent")
+        line.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        ctk.CTkLabel(line, text=f"Version {__version__}", text_color=MUTED, font=ctk.CTkFont(size=12)).pack(side="left")
+        ghost_button(line, "Check for updates", lambda: self.check_updates(quiet=False), width=150).pack(side="right")
+        self.current = "overview"
 
-        # app
-        appc = Card(body, "App")
-        appc.grid(row=4, column=0, sticky="ew", padx=10, pady=(8, 12))
-        switch(appc.body, "Start with Windows (in the tray)", self.v_auto, self.save).grid(row=0, column=0, sticky="w", pady=4)
-        switch(appc.body, "Look for updates once a day", self.v_updates, self.save).grid(row=1, column=0, sticky="w", pady=4)
-        row = ctk.CTkFrame(appc.body, fg_color="transparent")
-        row.grid(row=2, column=0, sticky="ew", pady=(10, 0))
-        ctk.CTkLabel(row, text=f"Version {__version__}", text_color=MUTED, font=ctk.CTkFont(size=12)).pack(side="left")
-        ghost_button(row, "Check for updates", lambda: self.check_updates(quiet=False), width=150).pack(side="right")
+    def _title(self, master, text: str, sub: str = "") -> None:
+        box = ctk.CTkFrame(master, fg_color="transparent")
+        box.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+        ctk.CTkLabel(box, text=text, font=ctk.CTkFont(size=22, weight="bold"), text_color=TEXT, anchor="w").pack(fill="x")
+        if sub:
+            ctk.CTkLabel(box, text=sub, font=ctk.CTkFont(size=12), text_color=MUTED, anchor="w", justify="left",
+                         wraplength=560).pack(fill="x", pady=(2, 0))
 
-        # footer
-        foot = ctk.CTkFrame(r, fg_color=CARD, corner_radius=0, border_width=0)
-        foot.grid(row=3, column=0, sticky="ew")
-        foot.grid_columnconfigure(0, weight=1)
-        self.state = ctk.CTkLabel(foot, text="", text_color=MUTED, font=ctk.CTkFont(size=12), anchor="w")
-        self.state.grid(row=0, column=0, sticky="ew", padx=22, pady=12)
-        ctk.CTkButton(foot, text="Sync now", command=self.sync_now, width=120, height=36, corner_radius=8, fg_color=ACCENT,
-                      hover_color=ACCENT_HOVER, text_color=ACCENT_TEXT, font=ctk.CTkFont(size=13, weight="bold")).grid(
-            row=0, column=1, padx=22, pady=10)
+    def page(self, key: str) -> None:
+        """Show one page; the sidebar marks it."""
+        self.current = key
+        for k, f in self.pages.items():
+            if k == key:
+                f.grid(row=1, column=0, sticky="nsew", padx=24, pady=(20, 20))
+            else:
+                f.grid_remove()
+        for k, b in self.nav.items():
+            b.configure(fg_color=LINE if k == key else "transparent", text_color=TEXT if k == key else MUTED)
 
-    def _folder_row(self, master, label: str, var, row: int) -> None:
-        ctk.CTkLabel(master, text=label, text_color=MUTED, font=ctk.CTkFont(size=12)).grid(row=row, column=0, sticky="w",
-                                                                                              pady=(0, 2))
+    @staticmethod
+    def _count(n: int, one: str, many: str) -> str:
+        return f"{n} {one if n == 1 else many}"
+
+    def show_tiles(self) -> None:
+        def folder_ok(path: str, *parts: str) -> bool:
+            return bool(path) and Path(path, *parts).is_dir()
+        kov_ok = folder_ok(self.s.kovaaks_dir, "Saved")
+        rows = {
+            "playlists": (self.s.put_playlists, kov_ok, "Folder not found" if not kov_ok else
+                          (f"Last written {self.s.last_playlists}" if self.s.last_playlists else "Not written yet")),
+            "scores": (self.s.send_scores, kov_ok, "Folder not found" if not kov_ok else
+                       f"{len(self.s.stats_sent)} file{'s' if len(self.s.stats_sent) != 1 else ''} sent"),
+            "medal": (self.s.upload_matches, folder_ok(self.s.medal_dir), "Folder not found"
+                      if not folder_ok(self.s.medal_dir) else
+                      self._count(sum(len(x.get('matches', [])) for x in self.s.recordings.values()), "match", "matches") + " uploaded"),
+        }
+        for key, (on, ok, sub) in rows.items():
+            val, lab = self.tiles[key]
+            val.configure(text="On" if on and ok else ("Check folder" if on else "Off"),
+                          text_color=OK if on and ok else (WARN if on else MUTED))
+            lab.configure(text=sub if on else "Switched off")
+
+    def _folder_row(self, master, var, row: int) -> None:
         line = ctk.CTkFrame(master, fg_color="transparent")
-        line.grid(row=row + 1, column=0, sticky="ew")
+        line.grid(row=row, column=0, sticky="ew")
         line.grid_columnconfigure(0, weight=1)
         e = entry(line, var)
         e.grid(row=0, column=0, sticky="ew")
@@ -292,16 +390,17 @@ class App:
 
     def refresh(self) -> None:
         if self.logged_in():
-            self.login_box.grid_remove()
-            self.who_box.grid(row=0, column=0, sticky="ew")
+            self.login_page.grid_remove()
+            self.side.grid(row=0, column=0, sticky="nsw")
+            self.main.grid(row=0, column=1, sticky="nsew")
+            self.page(self.current)
             host = self.s.server.split("://", 1)[-1]
             self.who.configure(text=f"{self.s.user}  ·  {host}")
-            self.sub.configure(text=f"Logged in as {self.s.user}")
             threading.Thread(target=self.load_players, daemon=True).start()
         else:
-            self.who_box.grid_remove()
-            self.login_box.grid(row=0, column=0, sticky="ew")
-            self.sub.configure(text="Log in with your valcoach account")
+            self.side.grid_remove()
+            self.main.grid_remove()
+            self.login_page.grid(row=0, column=0, columnspan=2, sticky="nsew")
         self.show_state()
 
     def load_players(self) -> None:
@@ -376,15 +475,16 @@ class App:
 
     def show_state(self) -> None:
         if not self.logged_in():
-            pill, color, state = "Logged out", MUTED, "Log in to start."
-        elif self.busy.locked():
+            return
+        if self.busy.locked():
             pill, color, state = "Working", WARN, "Working…"
         elif self.last_sync:
-            pill, color, state = "Up to date", OK, f"Last check {self.last_sync} · every {self.s.every_min} min"
+            pill, color, state = "Up to date", OK, f"Last check {self.last_sync}, every {self.s.every_min} min"
         else:
             pill, color, state = "Starting", MUTED, "Starting…"
         self.pill.configure(text=f"● {pill}", text_color=color)
         self.state.configure(text=state)
+        self.show_tiles()
 
     def pump(self) -> None:
         while not self.msgs.empty():
@@ -428,7 +528,7 @@ class App:
             return
         self.banner_text.configure(text=f"Version {info['version']} is available (you have {__version__}).")
         self.banner_btn.configure(state="normal", text="Update now" if updater.can_install() else "Open download")
-        self.banner.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 8))
+        self.banner.grid(row=0, column=0, sticky="ew", padx=24, pady=(16, 0))
         if not quiet:
             self.show()
         elif getattr(self, "tray", None):

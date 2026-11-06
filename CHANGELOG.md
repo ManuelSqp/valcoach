@@ -4,6 +4,12 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart valcoach` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.4.2
+- **Companion app without the long scroll:** a sidebar with *Overview*, *KovaaK's*, *Medal* and *Settings*, one page
+  at a time, in a wider window. *Overview* has the player, a tile each for playlists, scores and Medal (on, off or
+  "check folder", with the last result; a click opens its page) and the activity. Status and *Sync now* stay at the
+  bottom of the sidebar. Logged out, the app only shows a login card.
+
 ## 4.4.1
 - **The installer is built however a release is made:** pushing a tag `vX.Y.Z`, publishing a release on GitHub's
   page (that didn't start the build before, so v4.4.0 had no installer at first), or *Actions › companion › Run
