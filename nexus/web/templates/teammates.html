@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Teammates · {{ p.riot_id }} · Nexus{% endblock %}
+{% macro wr(v) %}{% if v is none %}<span class="muted">–</span>{% else %}<span class="{{ 'up' if v >= 0.55 else ('down' if v < 0.45 else '') }}">{{ (v * 100)|round|int }}%</span>{% endif %}{% endmacro %}
+{% block head %}
+<style>
+.duo{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:18px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+@media(max-width:900px){.duo{grid-template-columns:1fr 1fr}}
+.duo>div{padding:16px 18px;border-left:1px solid var(--line)}.duo>div:first-child{border-left:0}
+.duo .t{font-size:13px;color:var(--muted);font-weight:600}.duo b{display:block;font-size:28px;font-weight:800;font-stretch:66%;line-height:1.1;margin:4px 0;font-family:var(--font-head)}
+.duo .s{font-size:12.5px;color:var(--muted)}
+td.n,th.n{text-align:right}.pm{font-size:12px;padding:1px 8px;border-radius:99px;background:var(--panel3);color:var(--muted)}
+.dpos{color:var(--win);font-weight:650}.dneg{color:var(--red);font-weight:650}
+</style>
+{% endblock %}
+{% block content %}
+{% import "_ui.html" as vc %}
+{{ vc.pagehead('Teammates', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+   'Who you win with, from ' ~ d.games ~ ' games with round data' if d.games else 'No games with teammates yet') }}
+<nav class="subtabs" aria-label="Queue">{% for val, label in queues %}<a class="{{ 'on' if queue == val }}" href="{{ url_for('teammates_page', pid=p.id, queue=val) }}">{{ label }}</a>{% endfor %}</nav>
+{% include "_oldrows.html" %}
+{% if not d.games %}
+<section class="card"><p class="muted" style="margin:0">Teammates come from games with round data loaded with Nexus 3.6 or newer.</p></section>
+{% else %}
+<div class="duo">
+  <div><span class="t">Solo (no party)</span><b>{{ wr(d.solo.solo.wr) }}</b><span class="s">{{ d.solo.solo.games }} games{% if d.solo.solo.acs %}, ACS {{ d.solo.solo.acs|round|int }}{% endif %}</span></div>
+  <div><span class="t">With a party</span><b>{{ wr(d.solo.party.wr) }}</b><span class="s">{{ d.solo.party.games }} games{% if d.solo.party.acs %}, ACS {{ d.solo.party.acs|round|int }}{% endif %}</span></div>
+  <div><span class="t">Best duo</span><b>{{ d.best.name.split('#')[0] if d.best else '–' }}</b><span class="s">{% if d.best %}{{ wr(d.best.wr) }} in {{ d.best.games }} games{% else %}needs 5 games together{% endif %}</span></div>
+  <div><span class="t">Weakest duo</span><b>{{ d.worst.name.split('#')[0] if d.worst else '–' }}</b><span class="s">{% if d.worst %}{{ wr(d.worst.wr) }} in {{ d.worst.games }} games{% else %}needs 5 games together{% endif %}</span></div>
+</div>
+<section class="card">
+  <div class="sec" style="margin-bottom:6px"><div><h2>Everyone you played with 3+ times</h2><p>Your average: {{ (d.base.wr * 100)|round|int }}% won, ACS {{ d.base.acs|round|int }}.</p></div></div>
+  <div class="tablewrap"><table>
+    <tr><th>Teammate</th><th class="n">Games</th><th class="n">Won</th><th class="n hide-sm">Your ACS with them</th><th class="hide-sm">Party</th><th class="hide-sm">Maps</th></tr>
+    {% for m in d.mates %}<tr><td><b>{{ m.name.split('#')[0] }}</b><span class="muted small">#{{ m.name.split('#')[1] if '#' in m.name else '' }}</span></td>
+      <td class="n">{{ m.games }}</td><td class="n">{{ wr(m.wr) }}</td>
+      <td class="n hide-sm">{{ m.acs|round|int }} <span class="{{ 'dpos' if m.acs_diff > 5 else ('dneg' if m.acs_diff < -5 else 'muted') }} small">{{ '+' if m.acs_diff > 0 }}{{ m.acs_diff|round|int }}</span></td>
+      <td class="hide-sm">{% if m.premade >= 0.5 %}<span class="pm">premade</span>{% elif m.premade > 0 %}<span class="pm">sometimes</span>{% else %}<span class="muted small">random</span>{% endif %}</td>
+      <td class="hide-sm small muted">{{ m.maps|join(', ') }}</td></tr>
+    {% else %}<tr><td colspan="6" class="muted">Nobody yet with 3 games together.</td></tr>{% endfor %}
+  </table></div>
+</section>
+<p class="small muted">Win rates over few games swing a lot: 5 games together is the least for "best" and "weakest".</p>
+{% endif %}
+{% endblock %}

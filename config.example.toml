@@ -1,4 +1,4 @@
-# Used by the CLI. The web app keeps its settings in data/valcoach.db and only reads
+# Used by the CLI. The web app keeps its settings in data/nexus.db and only reads
 # this file once on first start (to pre-fill Settings and create your profile).
 # Copy to config.toml and fill in. config.toml is git-ignored.
 
@@ -34,7 +34,7 @@ notes_dir = "notes"              # your own round notes, used as few-shot exampl
 # Minimap region as fractions of the game picture (x, y, w, h); black bars of an
 # ultrawide recording are left out automatically. Default fits a 16:9 picture
 # with the minimap top-left at default HUD size.
-# Run `valcoach calibrate-minimap <vod>` to check / adjust it.
+# Run `nexus calibrate-minimap <vod>` to check / adjust it.
 minimap_roi = [0.012, 0.025, 0.215, 0.382]
 # Kill feed region (top-right) as fractions of the game picture.
 killfeed_roi = [0.70, 0.08, 0.29, 0.25]

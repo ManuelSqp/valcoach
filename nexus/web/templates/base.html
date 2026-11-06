@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="{{ lang or 'en' }}" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Nexus{% endblock %}</title>
+<link rel="preload" href="{{ url_for('static', filename='fonts/archivo-latin.woff2') }}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v={{ app_version }}">
+<link rel="manifest" href="{{ url_for('manifest') }}">
+<meta name="theme-color" content="#0e131b">
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/favicon-32.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Nexus">
+<script>try{const t=localStorage.getItem('vc-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+{% if lang and lang != 'en' %}<script src="{{ url_for('static', filename='i18n.js') }}?v={{ app_version }}" data-catalog="{{ url_for('i18n_catalog', lang=lang) }}?v={{ app_version }}" defer></script>{% endif %}
+{% block head %}{% endblock %}
+{% if ui and ui.style != 'classic' %}<link rel="stylesheet" href="{{ url_for('static', filename='styles/' ~ ui.style ~ '.css') }}?v={{ app_version }}">{% endif %}
+{% if ui and ui.anim.tabs %}<style>@view-transition{navigation:auto}</style>{% endif %}
+</head>
+{# an error page shows no page of the menu as the current one #}
+{% set ep = '' if error_page is defined and error_page else (request.endpoint or '') %}
+{% set embed = request.args.get('embed') == '1' %}
+{% set cur_tid = t.id if (t is defined and t and t.id is defined) else None %}
+<body class="skin-{{ ui.style if ui else 'classic' }}{{ ' nav-top' if user and ui and ui.nav == 'top' }}{{ ' w-' ~ ui.width if user and ui and ui.width != 'auto' }}{% if ui %}{% for k, v in ui.anim.items() if v %} a-{{ k }}{% endfor %}{% endif %}{{ ' no-side' if not user }}{{ ' no-side embed' if embed }}" {% if user %}data-search="{{ url_for('search_index') }}"{% endif %}>
+{% if user and not embed %}
+<aside class="vc-side" id="side" aria-label="Main">
+  <div class="side-top">
+    <a class="logo" href="{{ url_for('index') }}" aria-label="Nexus home"><span class="logo-mark" aria-hidden="true"></span>nexus</a>
+    <a class="ver" href="{{ url_for('changelog') }}" title="What's new">{{ app_version }}{% if new_version %}<span class="newdot" aria-label="new"></span>{% endif %}</a>
+  </div>
+  <button type="button" class="side-search" data-cmdk title="Search (Ctrl+K or /)"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Search</span><kbd>Ctrl K</kbd></button>
+  {% macro nav_ico(n) %}<svg viewBox="0 0 24 24" aria-hidden="true">{% if n == 'home' %}<path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4z"/>{% elif n == 'team' %}<circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5c0-3.3 2.7-5.6 6-5.6s6 2.3 6 5.6"/><circle cx="17" cy="9" r="2.5"/><path d="M15.8 14c2.8.2 5.2 2.3 5.2 5.5"/>{% elif n == 'user' %}<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c0-3.6 3.1-6.2 7-6.2s7 2.6 7 6.2"/>{% elif n == 'plus' %}<path d="M12 5v14M5 12h14"/>{% elif n == 'grid' %}<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>{% elif n == 'server' %}<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/>{% elif n == 'gear' %}<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/>{% elif n == 'match' %}<path d="M5 3v18M5 4h11l-2 4 2 4H5"/>{% elif n == 'strat' %}<path d="M4 6h16v12H4z"/><path d="M8 14l3-3 2 2 3-4"/><circle cx="8" cy="14" r=".5"/>{% elif n == 'perf' %}<path d="M4 19V5M4 19h16"/><path d="M8 15l3-4 3 2 5-6"/>{% elif n == 'practice' %}<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>{% elif n == 'org' %}<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r=".6"/><circle cx="4" cy="12" r=".6"/><circle cx="4" cy="18" r=".6"/>{% elif n == 'pc' %}<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>{% elif n == 'spark' %}<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16v4M17 18h4"/>{% endif %}</svg>{% endmacro %}
+  {% set navT = nav_team %}{% set navP = nav_player %}
+  {# what you're looking at: one team and one player; every menu entry below works on these two #}
+  <div class="ctxs">
+    <details class="ctxpick">
+      <summary><span class="avatar sq" aria-hidden="true">{{ navT.name[:1]|upper if navT else '+' }}</span><span class="ctx-t"><small>Team</small><b>{{ navT.name if navT else 'No team yet' }}</b></span></summary>
+      <div class="ctx-menu">{% for nt in nav_teams %}<a href="{{ url_for('team_premier' if nt.premier_info.tag else 'team', tid=nt.id) }}" class="{{ 'on' if navT and nt.id == navT.id }}">{{ nt.name }}</a>{% endfor %}
+        <a class="add" href="{{ url_for('teams') }}">{{ 'All teams' if nav_teams else 'Create a team' }}</a></div>
+    </details>
+    <details class="ctxpick">
+      <summary><span class="avatar" aria-hidden="true">{{ navP.name[:1]|upper if navP else '+' }}</span><span class="ctx-t"><small>Player{% if navP and nav_me and navP.id == nav_me.id %} · you{% endif %}</small><b>{{ navP.name if navP else 'No player yet' }}</b></span></summary>
+      <div class="ctx-menu">{% for np in nav_profiles %}<a href="{{ url_for(ep if ep in ('stats', 'agents_roles', 'rounds_page', 'teammates_page', 'habits', 'aim', 'ask_coach', 'progress', 'training', 'quiz', 'pros', 'profile') else 'stats', pid=np.id) }}" class="{{ 'on' if navP and np.id == navP.id }}" data-pid="{{ np.id }}">{{ np.name }}<span class="tagname">#{{ np.tag }}</span>{% if nav_me and np.id == nav_me.id %}<span class="you">you</span>{% endif %}</a>{% endfor %}
+        <a class="add" href="{{ url_for('profile_new') }}" data-nav="new">Add a player</a></div>
+    </details>
+  </div>
+  {% set nav_groups = [
+    ('match', 'Match day', 'match', [
+      ('team_premier', 'This week', ('team_premier', 'team_review_page'), 't', nav_week.get(navT.id, '') if navT else ''),
+      ('team_match', 'Match screen', ('team_match',), 't', 'Live' if navT and nav_live.get(navT.id) else ''),
+      ('team_availability', 'Availability', ('team_availability',), 't', ''),
+      ('team_brief', 'Match-day brief', ('team_brief',), 't', ''),
+      ('team_division', 'Opponents', ('team_division', 'team_scouted'), 't', '')]),
+    ('strat', 'Strategy', 'strat', [
+      ('team', 'Comps', ('team',), 't', ''),
+      ('team_drafts', 'Drafts', ('team_drafts',), 't', ''),
+      ('team_plans', 'Game plans', ('team_plans',), 't', ''),
+      ('team_strats', 'Strat book', ('team_strats', 'strat_edit'), 't', ''),
+      ('team_lineups', 'Lineups', ('team_lineups',), 't', '')]),
+    ('perf', 'Performance', 'perf', [
+      ('profile', 'Matches & reports', ('profile', 'coach', 'notes', 'job'), 'p', ''),
+      ('stats', 'Stats & maps', ('stats',), 'p', ''),
+      ('agents_roles', 'Agents & roles', ('agents_roles',), 'p', ''),
+      ('rounds_page', 'Rounds & economy', ('rounds_page',), 'p', ''),
+      ('teammates_page', 'Teammates', ('teammates_page',), 'p', ''),
+      ('progress', 'Rank & progress', ('progress',), 'p', '')]),
+    ('practice', 'Practice', 'practice', [
+      ('training', 'Training', ('training',), 'p', ''),
+      ('habits', 'Habits', ('habits',), 'p', ''),
+      ('aim', 'Aim', ('aim',), 'p', ''),
+      ('ask_coach', 'Ask the coach', ('ask_coach',), 'p', ''),
+      ('team_practice', 'Practice plan', ('team_practice',), 't', ''),
+      ('team_evening', 'Review evening', ('team_evening', 'team_evening_session'), 't', ''),
+      ('team_focus', 'Weekly focus', ('team_focus',), 't', ''),
+      ('quiz', 'Quiz', ('quiz',), 'p', nav_quiz if navP and nav_me and navP.id == nav_me.id and nav_quiz else ''),
+      ('pros', 'Pros & videos', ('pros',), 'p', '')]),
+    ('org', 'Roster & setup', 'org', [
+      ('team_roles_page', 'Roles', ('team_roles_page',), 't', ''),
+      ('team_notes', 'Team notes', ('team_notes',), 't', ''),
+      ('profile_edit', 'Player & playbook', ('profile_edit',), 'p', ''),
+      ('team_settings', 'Team settings', ('team_settings',), 'o', '')]),
+  ] %}
+  <nav class="side-nav">
+    <a class="si home {{ 'on' if ep == 'index' }}" href="{{ url_for('index') }}">{{ nav_ico('home') }}Home</a>
+    {% for gid, glabel, gico, items in nav_groups %}
+    {% set usable = [] %}{% for e, lbl, eps, need, badge in items %}{% if (need == 't' and navT) or (need == 'o' and navT and navT.owner_id == user.id) or (need == 'p' and navP) %}{% set _ = usable.append((e, lbl, eps, need, badge)) %}{% endif %}{% endfor %}
+    {% set has_on = [] %}{% for x in usable if ep in x[2] %}{% set _ = has_on.append(1) %}{% endfor %}
+    <details class="ngroup" data-g="{{ gid }}" {{ 'open' if (has_on or gid in ('match', 'perf')) and ui.nav != 'top' }} {{ 'data-here' if has_on }}>
+      <summary class="si sg-head" title="{{ glabel }}">{{ nav_ico(gico) }}<span class="sg-name">{{ glabel }}</span></summary>
+      <div class="sg-items">
+        {% for e, lbl, eps, need, badge in usable %}{% set on = ep in eps %}
+        <a class="sn {{ 'on' if on }}" href="{{ url_for(e, tid=navT.id) if need in ('t', 'o') else url_for(e, pid=navP.id) }}" {% if on %}aria-current="page"{% endif %}><span>{{ lbl }}</span>{% if badge %}<span class="badge {{ 'hot' if e == 'quiz' }}{{ ' live' if e == 'team_match' }}">{{ badge }}</span>{% endif %}</a>
+        {% endfor %}
+        {% if not usable %}<a class="sn add" href="{{ url_for('teams') if gid in ('match', 'strat') else url_for('profile_new') }}"><span>{{ 'Create a team first' if gid in ('match', 'strat') else 'Add a player first' }}</span></a>{% endif %}
+      </div>
+    </details>
+    {% endfor %}
+  </nav>
+  <div class="side-bottom">
+    <a class="si {{ 'on' if ep == 'this_pc' }}" href="{{ url_for('this_pc') }}" title="This PC" data-app-only hidden>{{ nav_ico('pc') }}This PC</a>
+    <a class="si {{ 'on' if ep == 'changelog' }}" href="{{ url_for('changelog') }}" title="What's new">{{ nav_ico('spark') }}What's new{% if new_version %}<span class="badge hot">new</span>{% endif %}</a>
+    {% if user.is_admin or user.can('overview') %}<div class="admin">
+      {% if user.can('overview') %}<a class="si {{ 'on' if ep == 'overview' }}" href="{{ url_for('overview') }}" title="Server">{{ nav_ico('server') }}Server</a>{% endif %}
+      {% if user.is_admin %}<a class="si {{ 'on' if ep in ('users', 'user_edit') }}" href="{{ url_for('users') }}" title="Users">{{ nav_ico('user') }}Users</a>
+      <a class="si {{ 'on' if ep == 'settings' }}" href="{{ url_for('settings') }}" title="Settings">{{ nav_ico('gear') }}Settings</a>{% endif %}
+    </div>{% endif %}
+    <div class="me">
+      <a class="me-link {{ 'on' if ep == 'account' }}" href="{{ url_for('account') }}" title="Account and look"><span class="avatar" aria-hidden="true">{{ (user.display_name or user.username)[:1]|upper }}</span><span class="me-text"><b>{{ user.username }}</b>
+        {% if user.can('overview') %}<span class="uptime" id="uptime" data-start="{{ app_started }}" data-now="{{ server_now }}" {% if host_boot %}data-host="{{ host_boot|int }}"{% endif %}><span class="dot"></span><span class="t">up</span></span>{% endif %}</span></a>
+      <button type="button" class="iconbtn" id="themebtn" title="Light or dark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><span class="sr-only">Switch between light and dark</span></button>
+      <form method="post" action="{{ url_for('logout') }}"><button class="iconbtn" title="Log out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg><span class="sr-only">Log out</span></button></form>
+    </div>
+  </div>
+</aside>
+<header class="mobilebar"><button type="button" class="iconbtn" id="sidebtn" aria-controls="side" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span class="sr-only">Menu</span></button>
+  <a class="logo" href="{{ url_for('index') }}"><span class="logo-mark" aria-hidden="true"></span>nexus</a>
+  <button type="button" class="iconbtn" data-cmdk><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="sr-only">Search</span></button></header>
+<div class="scrim" id="scrim" hidden></div>
+{% endif %}
+<main class="page">
+  {% if user and not has_api_key and ep != 'settings' and not embed %}
+  <div class="banner">No HenrikDev API key yet. {% if user.is_admin %}<a href="{{ url_for('settings') }}" title="Settings">Add it in Settings</a> so matches can be loaded.{% else %}Ask the admin to add one so matches can be loaded.{% endif %}</div>
+  {% endif %}
+  {% if new_version and ep != 'changelog' and not embed %}
+  <div class="flash ok">Nexus was updated to <b>{{ app_version }}</b>. <a href="{{ url_for('changelog') }}" title="What's new">See what's new</a></div>
+  {% endif %}
+  {% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}{% endwith %}
+  {% block content %}{% endblock %}
+</main>
+<script>
+(function () {
+  const u = document.getElementById('uptime');
+  if (u) {
+    const skew = Date.now() - +u.dataset.now * 1000;
+    const start = +u.dataset.start * 1000 + skew, host = u.dataset.host ? +u.dataset.host * 1000 + skew : null;
+    const pad = n => String(n).padStart(2, '0');
+    const fmt = ms => { let s = Math.max(0, Math.floor(ms / 1000)); const d = Math.floor(s / 86400); s %= 86400;
+      return (d ? d + 'd ' : '') + pad(Math.floor(s / 3600)) + ':' + pad(Math.floor(s % 3600 / 60)) + ':' + pad(s % 60); };
+    const when = t => new Date(t).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'});
+    const tick = () => { const now = Date.now(); u.querySelector('.t').textContent = 'up ' + fmt(now - start);
+      u.title = `Nexus running since ${when(start)}` + (host ? `\nserver up ${fmt(now - host)} (since ${when(host)})` : ''); };
+    tick(); setInterval(tick, 1000);
+  }
+  const side = document.getElementById('side'), btn = document.getElementById('sidebtn'), scrim = document.getElementById('scrim');
+  const setOpen = o => { if (!side) return; side.classList.toggle('open', o); scrim.hidden = !o; btn && btn.setAttribute('aria-expanded', o); };
+  btn && btn.addEventListener('click', () => setOpen(!side.classList.contains('open')));
+  scrim && scrim.addEventListener('click', () => setOpen(false));
+  const topNav = () => document.body.classList.contains('nav-top') && matchMedia('(min-width: 901px)').matches;
+  if (topNav()) document.querySelectorAll('details.ngroup').forEach(d => { d.open = false; });
+  document.querySelectorAll('details.ngroup').forEach(d => d.addEventListener('toggle', () => {
+    if (topNav() && d.open) document.querySelectorAll('details.ngroup[open], details.ctxpick[open]').forEach(o => { if (o !== d) o.open = false; }); }));
+  document.addEventListener('click', e => { if (topNav() && !e.target.closest('details.ngroup')) document.querySelectorAll('details.ngroup[open]').forEach(d => { d.open = false; }); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && topNav()) document.querySelectorAll('details.ngroup[open]').forEach(d => { d.open = false; }); });
+  document.querySelectorAll('details.ngroup').forEach(d => {
+    if (topNav()) return;                    // the top bar doesn't remember open dropdowns
+    const k = 'vc-nav-' + d.dataset.g;
+    try { const v = localStorage.getItem(k); if (v !== null && !d.hasAttribute('data-here')) d.open = v === '1'; } catch (e) {}
+    d.addEventListener('toggle', () => { try { localStorage.setItem(k, d.open ? '1' : '0'); } catch (e) {} });
+  });
+  document.querySelectorAll('details.ctxpick').forEach(d => d.addEventListener('toggle', () => {
+    if (d.open) document.querySelectorAll('details.ctxpick').forEach(o => { if (o !== d) o.open = false; }); }));
+  // the team / player picker closes on a click elsewhere or Escape
+  const closePicks = () => document.querySelectorAll('details.ctxpick[open]').forEach(d => { d.open = false; });
+  document.addEventListener('click', e => { if (!e.target.closest('details.ctxpick')) closePicks(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePicks(); });
+  const tb = document.getElementById('themebtn');
+  tb && tb.addEventListener('click', () => { const r = document.documentElement, n = r.dataset.theme === 'light' ? 'dark' : 'light';
+    r.dataset.theme = n; try { localStorage.setItem('vc-theme', n); } catch (e) {} });
+})();
+</script>
+<div id="toasts" aria-live="polite"></div>
+{% if user %}<script>
+// Inside the Nexus app for Windows (window.pywebview): show "This PC" and give the app a device key for this account
+(function () {
+  let done = false;
+  async function inApp() {
+    if (done || !(window.pywebview && window.pywebview.api && window.pywebview.api.status)) return;
+    done = true;
+    document.documentElement.classList.add('in-app');
+    document.querySelectorAll('[data-app-only]').forEach(e => { e.hidden = false; });
+    try {
+      const s = await window.pywebview.api.status();
+      if (!s || s.paired_user === {{ user.username|tojson }}) return;
+      const r = await fetch({{ url_for('device_pair')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({device: s.device || 'Nexus app'})});
+      if (!r.ok) return;
+      const d = await r.json();
+      await window.pywebview.api.paired(d.token, d.user);
+      document.dispatchEvent(new Event('nexus-paired'));
+    } catch (e) {}
+  }
+  window.addEventListener('pywebviewready', inApp);
+  inApp();
+})();
+</script>{% endif %}
+<script>if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.vcInstall = e; document.dispatchEvent(new Event('vc-installable')); });</script>
+<script src="{{ url_for('static', filename='ui.js') }}?v={{ app_version }}" defer></script>
+</body>
+</html>

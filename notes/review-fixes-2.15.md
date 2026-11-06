@@ -2,7 +2,7 @@
 
 Details of the fixes listed under 2.17.0 in the [CHANGELOG](../CHANGELOG.md). They are all part of the code since
 then; this file is kept as background on why they were needed. (Before the project moved to git, they were carried
-as `valcoach-fixes.patch`, which was removed in 4.1.2.)
+as `Nexus-fixes.patch`, which was removed in 4.1.2.)
 
 ## Coaching quality
 

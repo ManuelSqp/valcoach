@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}What's new · Nexus{% endblock %}
+{% block head %}
+<style>
+.ver-block{border-left:3px solid var(--line);padding:2px 0 2px 16px;margin-bottom:22px}
+.ver-block.current{border-color:var(--accent)}
+.ver-block h3{margin:0 0 6px;font-size:17px}.ver-block h3 .tag{font-size:11px;font-weight:700;background:var(--red-soft);color:var(--red);border-radius:99px;padding:2px 8px;margin-left:8px;vertical-align:2px}
+.ver-block ul{margin:0;padding-left:18px}.ver-block ul ul{margin:4px 0 6px;list-style:circle}.ver-block li{margin:4px 0}
+code{background:var(--ink);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:12.5px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>What's new</h1></div></div>
+{% if lang != 'en' %}<p class="small muted">The change notes are only in English.</p>{% endif %}
+<p class="sub">You're on <b>{{ app_version }}</b>. Updating: unzip the new version over your install (keep <code>data/</code>),
+  <code>pip install -e .</code>, <code>sudo systemctl restart nexus</code>.</p>
+<section class="card" translate="no" lang="en">
+  {% for v in versions %}
+  <div class="ver-block {{ 'current' if v.version == app_version }}">
+    <h3>{{ v.version }}{% if v.version == app_version %}<span class="tag">running</span>{% endif %}</h3>
+    <ul>{% for i in v['items'] %}<li>{{ i.text|safe }}{% if i.sub %}<ul>{% for x in i.sub %}<li>{{ x|safe }}</li>{% endfor %}</ul>{% endif %}</li>{% endfor %}</ul>
+  </div>
+  {% else %}<p class="muted">No changelog found next to the app (CHANGELOG.md).</p>{% endfor %}
+</section>
+{% endblock %}

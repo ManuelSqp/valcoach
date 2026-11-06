@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Premier · {{ t.name }} · Nexus{% endblock %}
+{% block head %}
+<style>
+.pgrid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px;align-items:start}
+@media(max-width:1000px){.pgrid{grid-template-columns:1fr}}
+.wkhead{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.wkhead .lab{font-size:13.5px;color:var(--muted);font-weight:600}
+.wkhead .big{font-size:64px;line-height:.9;font-weight:850;font-stretch:62%;margin:6px 0 4px}
+.wkhead .src{font-size:12.5px;color:var(--faint)}
+.wkset{display:flex;gap:6px;align-items:center}.wkset select{width:auto;min-width:120px}
+.blk{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.blk h3{font-size:14px;font-weight:700;margin:0 0 8px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.blk h3 a,.blk h3 span{font-size:12.5px;font-weight:500;color:var(--muted)}
+.facts{display:flex;flex-direction:column;gap:6px;font-size:14px;margin-top:12px}.facts .muted a{color:var(--muted)}
+.acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.days{display:flex;gap:6px;flex-wrap:wrap}
+.days label{display:inline-flex;align-items:center;margin:0;cursor:pointer}
+.days input{position:absolute;opacity:0;pointer-events:none}
+.days span{display:inline-block;min-width:46px;text-align:center;font-size:13px;font-weight:650;padding:6px 10px;border-radius:8px;border:1px solid var(--line2);color:var(--muted)}
+.days input:checked+span{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.days input:focus-visible+span{box-shadow:var(--focus)}
+/* season timeline */
+.sched{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.wkc .d b{color:var(--text);font-weight:650;margin-right:4px}.wkc.past .d b{color:var(--faint)}
+.wkc{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px 11px;font-size:12.5px;min-height:96px}
+.wkc .d{color:var(--muted);font-size:12px}
+.wkc .m{font-size:20px;font-weight:800;font-stretch:72%;margin:2px 0 6px;line-height:1.1}
+.wkc.now{border-color:var(--accent);background:var(--accent-soft)}
+.wkc.now .tag{display:inline-block;font-size:11.5px;font-weight:700;color:var(--accent-ink);background:var(--accent);border-radius:5px;padding:0 6px}
+.wkc.past .m,.wkc.past .d{color:var(--faint)}
+.wkc .res{display:flex;gap:4px;flex-wrap:wrap}
+.rv{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 0;border-top:1px solid var(--line);text-decoration:none;color:inherit}
+.rv:hover .op{text-decoration:underline;text-decoration-color:var(--accent)}
+.rv .wl{text-align:center}
+.rv .sc{font-weight:800;font-stretch:80%;font-size:18px}
+.rv .op{font-weight:600}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_premier_nav.html" %}
+{% if pi.tag %}
+{% if rstatus and rstatus.status in ('queued', 'running', 'error') %}
+<div class="card statusbox" data-key="review:{{ t.id }}" data-state="{{ rstatus.status }}"><span class="pill {{ 'running' if rstatus.status != 'error' else 'error' }}">{{ 'reviewing matches' if rstatus.status != 'error' else 'review failed' }}</span>
+  <pre class="log" style="margin-top:8px">{{ rstatus.log|join('\n') }}</pre></div>
+{% endif %}
+<div class="pgrid">
+  <section class="card">
+    <div class="wkhead">
+      <div>
+        <div class="lab">{% if cur and cur.week %}Week {{ cur.week.week }}{{ ', coming up' if cur.upcoming }}{% else %}This week{% endif %}</div>
+        {% if week_map %}<div class="big">{{ week_map }}</div><div class="src">Map {{ week_src }}</div>
+        {% elif cur and cur.next %}<div class="big" style="font-size:34px;color:var(--muted)">No Premier week</div><div class="src">Next: <b>{{ cur.next.map }}</b> from {{ cur.next.starts[8:10] }}.{{ cur.next.starts[5:7] }}.</div>
+        {% else %}<div class="big" style="font-size:34px;color:var(--muted)">Map not known yet</div>{% endif %}
+      </div>
+      {% if g.team_owner %}
+      <form method="post" action="{{ url_for('team_premier_settings', tid=t.id) }}" class="wkset">
+        <label for="wm" class="sr-only">Map this week</label>
+        <select id="wm" name="week_map" title="Map this week"><option value="">Map: automatic</option>{% for m in pool %}<option value="{{ m }}" {{ 'selected' if m == week_map and week_src == 'set by hand' }}>{{ m }}</option>{% endfor %}</select>
+        <button class="btn sm ghost">Set</button></form>{% endif %}
+    </div>
+    {% set a = b.avail %}
+    {% if a %}<div class="blk"><h3>Who can play {{ 'today' if a.today else a.label }} <a href="{{ url_for('team_availability', tid=t.id) }}">Availability</a></h3>
+      <span class="lvl {{ a.level }}">{{ a.yes|length }} of 5 confirmed{% if a.maybe %} · {{ a.maybe|length }} maybe{% endif %}{% if a.unknown %} · {{ a.unknown|length }} no answer{% endif %}</span>
+      <div class="roster">{% for m in a.yes + a.maybe + a.unknown + a.no %}{% set st = a.state[m.pid] or 'unknown' %}<span class="rc {{ st }}"><i>{{ {'yes': '✓', 'maybe': '?', 'no': '✕', 'unknown': '·'}[st] }}</i>{{ m.name }}</span>{% endfor %}</div>
+      {% for slot in a.missing %}<div class="small muted">{{ slot.name }} can't play{% if slot.subs %}: <b style="color:var(--text)">{{ slot.subs[0].name }}</b> could take {{ slot.agent or 'the spot' }} ({{ slot.subs[0].why }}){% endif %}</div>{% endfor %}
+    </div>{% endif %}
+    {% if b.map %}
+      {% if b.comp %}<div class="blk"><h3>Comp on {{ b.map }} <span>{{ b.comp.source }}</span></h3>
+        <div class="picks">{% for p in b.comp.picks %}<div class="pick"><img src="{{ url_for('agent_icon', name=p.agent) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span class="ag">{{ p.agent }}</span><span class="pl">{{ p.player }}</span>{% if p.alt %}<span class="alt">or {{ p.alt }}</span>{% endif %}</div>{% endfor %}</div></div>{% endif %}
+      <div class="facts">
+      {% if b.ours.games %}<div>Your record on {{ b.map }}: <b>{{ b.ours.wins }}–{{ b.ours.games - b.ours.wins }}</b>{% if b.ours.attack is not none %}<span class="muted">, rounds won on attack {{ b.ours.attack|pct }}, on defense {{ b.ours.defense|pct }}</span>{% endif %}</div>{% endif %}
+      {% if b.threats %}<div>Strongest in your division on {{ b.map }}: {% for x in b.threats[:3] %}<a href="{{ url_for('team_scouted', tid=t.id, team_id=x.id) }}">{{ x.name }}</a> {{ x.wins }}–{{ x.games - x.wins }}{{ ', ' if not loop.last }}{% endfor %}</div>
+      {% elif not b.scouted %}<div class="muted">Scout your division to see who's strong on {{ b.map }}.</div>{% endif %}
+      </div>
+      <div class="acts">
+        <a class="btn primary" href="{{ url_for('team_brief', tid=t.id) }}">Open match-day brief</a>
+        {% if g.team_owner and (discord.prep_url or discord.focus_url) %}<form method="post" action="{{ url_for('team_brief_post', tid=t.id) }}"><button class="btn ghost">Post brief to Discord</button></form>{% endif %}
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Brief before each match</h2>
+    {% if g.team_owner %}
+    <form method="post" action="{{ url_for('team_premier_settings', tid=t.id) }}">
+      <label class="choice"><input type="checkbox" name="on" value="1" {{ 'checked' if cfg.on }}>
+        <span><b>Post the brief to Discord before our matches</b><span class="muted small">Comp, game plans, everyone's focus and who's strong on the map. Server time ({{ server_tz }}).</span></span></label>
+      <div class="field"><label>Match days</label>
+        <div class="days">{% for d in days %}<label><input type="checkbox" name="days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in cfg.days }}><span>{{ d }}</span></label>{% endfor %}</div></div>
+      <div class="row">
+        <div class="field" style="margin:0"><label for="bt">Match time</label><input id="bt" type="time" name="time" value="{{ cfg.time }}" style="width:auto"></div>
+        <div class="field" style="margin:0"><label for="bb">Minutes before</label><input id="bb" type="number" name="before" min="10" max="240" value="{{ cfg.before }}" style="width:90px"></div>
+      </div>
+      <button class="btn sm" style="margin-top:10px">Save</button>
+      {% if not (discord.prep_url or discord.focus_url) %}<p class="small" style="color:var(--amber)">Add a Discord webhook under <a href="{{ url_for('team_settings', tid=t.id) }}">Team settings</a> first.</p>{% endif %}
+    </form>
+    {% else %}<p class="muted small">{% if cfg.on %}Posted to Discord {{ cfg.before }} min before {{ cfg.time }} on {% for d in cfg.days %}{{ days[d] }}{{ ', ' if not loop.last }}{% endfor %}.{% else %}Not set up by the team owner.{% endif %}</p>{% endif %}
+  </section>
+</div>
+
+{% if sched %}
+<section class="card" id="schedule" style="margin-top:14px">
+  <div class="row between"><h2 style="margin:0">Season schedule {% if sched.id %}<span class="muted" style="font-weight:500">{{ sched.id }}</span>{% endif %}</h2>
+    {% if g.team_owner %}<form method="post" action="{{ url_for('team_premier_settings', tid=t.id) }}" class="row" style="gap:6px">
+      <input type="hidden" name="follow_pool" value="{{ '0' if pi.follow_pool is not defined or pi.follow_pool else '1' }}">
+      <span class="small muted">{{ 'Team maps follow this map pool' if pi.follow_pool is not defined or pi.follow_pool else 'Team maps: your own list' }}</span>
+      <button class="btn sm ghost">{{ 'Use my own list' if pi.follow_pool is not defined or pi.follow_pool else 'Follow the pool' }}</button></form>{% endif %}</div>
+  <p class="small muted" style="margin:6px 0 12px">From {{ sched.source }}. Your queue windows inside each week differ by zone (see the Premier tab in the game).
+    {% if sched.note %}<br>{{ sched.note }}{% endif %}
+    {% if g.team_owner %}<a href="{{ url_for('team_seasons_raw', tid=t.id) }}" target="_blank" rel="noopener">Raw season data</a>{% endif %}</p>
+  <div class="sched">
+    {% for w in sched.weeks %}{% set res = results.get(w.week|string, []) %}
+    <div class="wkc {{ 'now' if cur.week and cur.week.week == w.week else ('past' if w.ends < today else '') }}">
+      <div class="d"><b>Week {{ w.week }}</b> {{ w.starts[8:10] }}.{{ w.starts[5:7] }}.–{{ w.ends[8:10] }}.{{ w.ends[5:7] }}.</div>
+      <div class="m">{{ w.map }}</div>
+      {% if cur.week and cur.week.week == w.week %}<span class="tag">{{ 'Coming up' if cur.upcoming else 'This week' }}</span>{% endif %}
+      {% if res %}<div class="res">{% for r in res %}<a class="wl {{ 'w' if r.won else 'l' }}" href="{{ url_for('team_review_page', tid=t.id, match_id=r.match_id) }}" title="{{ r.score }} vs {{ r.opponent }}">{{ r.score }}</a>{% endfor %}</div>{% endif %}
+    </div>
+    {% endfor %}
+    {% if sched.playoffs and sched.playoffs.starts %}<div class="wkc {{ 'now' if cur.in_playoffs }}"><div class="d">{{ sched.playoffs.starts[8:10] }}.{{ sched.playoffs.starts[5:7] }}</div><div class="m">Playoffs</div>
+      <div class="small muted">Map pick and ban: see <a href="{{ url_for('team_division', tid=t.id) }}">Division</a></div></div>{% endif %}
+  </div>
+</section>
+{% endif %}
+
+<section class="card" style="margin-top:14px">
+  <div class="row between"><h2 style="margin:0">Premier matches</h2>
+    {% if g.team_owner %}<form method="post" action="{{ url_for('team_reviews_run', tid=t.id) }}" class="row" style="gap:6px">
+      <label class="small" style="display:flex;gap:4px;align-items:center;margin:0"><input type="checkbox" name="post" value="1" checked> Post to Discord</label>
+{% include "_llm_pick.html" %}
+      <button class="btn sm" {{ 'disabled' if rstatus and rstatus.status in ('queued', 'running') }}>Review new matches</button></form>{% endif %}</div>
+  <p class="small muted" style="margin:6px 0 4px">New Premier matches are reviewed every night with the sync (and posted to #match-prep): MVP, the rounds that decided it, one thing per player.</p>
+  {% for r in reviews %}
+  <a class="rv" href="{{ url_for('team_review_page', tid=t.id, match_id=r.match_id) }}">
+    <span class="wl {{ 'w' if r.won else 'l' }}">{{ 'Won' if r.won else 'Lost' }}</span>
+    <span><span class="op">{{ r.opponent }}</span><span class="li-s">{{ r.map }}, {{ (r.started_at or '')[:10] }}{% if r.tournament %}, playoffs{% endif %}</span></span>
+    <span class="sc">{{ r.score }}</span>
+  </a>
+  {% else %}<p class="muted" style="margin:8px 0 0">No reviews yet. {% if g.team_owner %}Press <b>Review new matches</b>, or wait for tonight's sync.{% endif %}</p>{% endfor %}
+</section>
+{% endif %}
+<script>
+(function () {
+  const el = document.querySelector('[data-key]');
+  if (!el || !['queued', 'running'].includes(el.dataset.state)) return;
+  const tick = async () => {
+    try {
+      const s = await (await fetch('{{ url_for("stats_status") }}?key=' + encodeURIComponent(el.dataset.key))).json();
+      if (s.log) el.querySelector('pre').textContent = s.log.join('\n');
+      if (s.status === 'done' || s.status === 'error') { location.reload(); return; }
+    } catch (e) {}
+    setTimeout(tick, 2500);
+  };
+  setTimeout(tick, 1500);
+})();
+</script>
+{% endblock %}

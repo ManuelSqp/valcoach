@@ -1,7 +1,7 @@
 """Habit tracker and practice plan, from hand-made game rows."""
 from datetime import date
 
-from valcoach.stats import habits, practice
+from nexus.stats import habits, practice
 
 
 def _row(i, alone_far, traded, fd=1, fk=1):

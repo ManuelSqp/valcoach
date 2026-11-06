@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Rounds & economy · {{ p.riot_id }} · Nexus{% endblock %}
+{% macro wr(v, n=None) %}{% if v is none %}<span class="muted">–</span>{% else %}<span class="{{ 'up' if v >= 0.55 else ('down' if v < 0.45 else '') }}">{{ (v * 100)|round|int }}%</span>{% endif %}{% endmacro %}
+{% block head %}
+<style>
+.rk{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:18px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+@media(max-width:900px){.rk{grid-template-columns:1fr 1fr}}
+.rk>div{padding:16px 18px;border-left:1px solid var(--line)}.rk>div:first-child{border-left:0}
+.rk .t{font-size:13px;color:var(--muted);font-weight:600}.rk b{display:block;font-size:36px;font-weight:800;font-stretch:66%;line-height:1.05;margin:4px 0;font-family:var(--font-num)}
+.rk .s{font-size:12.5px;color:var(--muted)}
+.mu{display:grid;grid-template-columns:minmax(0,1fr) 120px 70px;gap:4px 14px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.mu:first-of-type{border-top:0}.mu .tt{font-weight:650}.mu .d{font-size:12.5px;color:var(--muted)}
+.mu .bar{height:8px;border-radius:99px;background:var(--panel3);overflow:hidden}.mu .bar i{display:block;height:100%;border-radius:99px}
+.mu .v{text-align:right;font-size:15px;font-weight:700}
+.kv2{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;font-size:14px}.kv2 span{color:var(--muted)}
+.notes li{margin:6px 0}.notes li.bad::marker{color:var(--red)}.notes li.good::marker{color:var(--win)}
+</style>
+{% endblock %}
+{% block content %}
+{% import "_ui.html" as vc %}
+{{ vc.pagehead('Rounds & economy', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+   (e.rounds ~ ' rounds from ' ~ e.games ~ ' games with round data') if e.rounds else 'No rounds with buy data yet') }}
+<nav class="subtabs" aria-label="Queue">{% for val, label in queues %}<a class="{{ 'on' if queue == val }}" href="{{ url_for('rounds_page', pid=p.id, queue=val) }}">{{ label }}</a>{% endfor %}</nav>
+{% include "_oldrows.html" %}
+{% if not e.rounds %}
+<section class="card"><p class="muted" style="margin:0">Buys come from games with round data loaded with Nexus 3.6 or newer.{% if can_edit %} Import on <a href="{{ url_for('stats', pid=p.id) }}">Stats &amp; maps</a>.{% endif %}</p></section>
+{% else %}
+<div class="rk">{% for k in e.kinds %}<div><span class="t">{{ k.text }}</span><b>{{ wr(k.wr) }}</b>
+  <span class="s">{{ k.won }} of {{ k.rounds }} won, {{ (k.share * 100)|round|int }}% of rounds<br>Attack {{ wr(k.attack.wr) }} · Defense {{ wr(k.defense.wr) }}</span></div>{% endfor %}</div>
+
+<div class="grid2" style="align-items:start">
+  <section class="card"><h2>When the buys are uneven</h2>
+    <p class="small muted" style="margin:-6px 0 6px">Your team's buy against theirs (average loadout at the start of the round).</p>
+    {% for m in e.matchups %}<div class="mu"><span><span class="tt">{{ m.title }}</span><br><span class="d">{{ m.text }} · {{ m.rounds }} rounds</span></span>
+      <span class="bar">{% if m.wr is not none %}<i style="width:{{ (m.wr * 100)|round|int }}%;background:{{ 'var(--win)' if m.wr >= 0.55 else ('var(--red)' if m.wr < 0.45 else 'var(--accent)') }}"></i>{% endif %}</span>
+      <span class="v">{{ wr(m.wr) }}</span></div>{% endfor %}
+  </section>
+  <section class="card"><h2>Key rounds</h2>
+    <div class="kv2">
+      <span>Round after a won pistol (bonus)</span><b>{{ wr(e.bonus.wr) }} <span class="small muted" style="font-weight:400">({{ e.bonus.rounds }})</span></b>
+      <span>Round after a lost pistol</span><b>{{ wr(e.after_pistol_loss.wr) }} <span class="small muted" style="font-weight:400">({{ e.after_pistol_loss.rounds }})</span></b>
+      <span>Post-plant (you alive at the plant)</span><b>{{ wr(e.postplant.wr) }} <span class="small muted" style="font-weight:400">({{ e.postplant.rounds }})</span></b>
+      <span>Retake (they planted, you alive)</span><b>{{ wr(e.retake.wr) }} <span class="small muted" style="font-weight:400">({{ e.retake.rounds }})</span></b>
+      <span>You bought while the team saved</span><b>{{ wr(e.buy_alone.wr) }} <span class="small muted" style="font-weight:400">({{ e.buy_alone.rounds }})</span></b>
+      <span>The team full bought, you didn't</span><b>{{ wr(e.saved_alone.wr) }} <span class="small muted" style="font-weight:400">({{ e.saved_alone.rounds }})</span></b>
+    </div>
+    <p class="small muted" style="margin:10px 0 0">In brackets: how many rounds.</p>
+  </section>
+</div>
+{% if e.notes %}<section class="card"><h2>What stands out</h2><ul class="notes">{% for n in e.notes %}<li class="{{ 'bad' if n.bad else 'good' }}">{{ n.text }}</li>{% endfor %}</ul></section>{% endif %}
+<p class="small muted">Buy types from the team's average loadout: eco under 2,000 credits, force 2,000 to 3,900, full buy 3,900 and more. Pistol rounds are rounds 1 and 13.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Account · Nexus{% endblock %}
+{% block head %}
+<style>
+.styles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.stylecard{display:flex;flex-direction:column;gap:4px;padding:8px;border:2px solid var(--line);border-radius:var(--radius);cursor:pointer;background:var(--panel2);margin:0;color:var(--text)}
+.stylecard:hover{border-color:var(--line2)}.stylecard.on,.stylecard:has(input:checked){border-color:var(--accent)}
+.stylecard:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.sprev{display:block;width:100%;height:auto;aspect-ratio:8/5;border-radius:6px;background:var(--panel3);object-fit:cover}
+.sname{font-weight:700;font-size:13px}.sdesc{font-size:11.5px;color:var(--muted);line-height:1.35}
+.navopts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.langopts{display:flex;gap:8px;flex-wrap:wrap}
+.langopt{display:inline-flex;align-items:center;gap:8px;margin:0;padding:9px 16px;border:2px solid var(--line);border-radius:var(--radius);background:var(--panel2);font-size:14.5px;font-weight:650;cursor:pointer}
+.langopt:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.navopt{display:flex;gap:12px;align-items:center;margin:0;padding:10px 12px;border:2px solid var(--line);border-radius:var(--radius);background:var(--panel2);color:var(--text);font-size:13px;font-weight:400;cursor:pointer}
+.navopt:hover{border-color:var(--line2)}.navopt:has(input:checked){border-color:var(--accent)}.navopt:has(input:focus-visible){box-shadow:var(--focus)}
+.navopt b{display:block;font-weight:700;font-size:14px}
+.navpic{flex:none;position:relative;width:72px;height:48px;border-radius:6px;background:var(--bg);border:1px solid var(--line2);overflow:hidden}
+.navpic i{position:absolute;background:var(--panel3)}.navpic.side i{left:0;top:0;bottom:0;width:18px}.navpic.top i{left:0;right:0;top:0;height:10px}
+.navpic b{position:absolute;height:5px;border-radius:2px;background:var(--line2)}
+.navpic.side b{left:24px;right:8px}.navpic.top b{left:8px;right:8px}
+.navpic b:nth-of-type(1){top:9px;background:var(--accent);right:30px}.navpic.top b:nth-of-type(1){top:17px}
+.navpic b:nth-of-type(2){top:20px}.navpic.top b:nth-of-type(2){top:28px}
+.navpic b:nth-of-type(3){top:31px}.navpic.top b:nth-of-type(3){top:39px}
+.widthpic{flex:none;position:relative;width:72px;height:48px;border-radius:6px;background:var(--bg);border:1px solid var(--line2);overflow:hidden}
+.widthpic i{position:absolute;top:8px;bottom:8px;border-radius:3px;background:var(--panel3);border:1px solid var(--line2)}
+.widthpic.narrow i{left:18px;right:18px}.widthpic.full i{left:4px;right:4px}
+.widthpic.auto i{left:18px;right:18px;border-style:dashed}
+.anims{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.switch{display:flex;gap:10px;align-items:flex-start;margin:0;color:var(--text);font-size:13px;cursor:pointer;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel2)}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.switch .tr{flex:none;width:34px;height:20px;border-radius:99px;background:var(--line2);position:relative;transition:background .15s;margin-top:1px}
+.switch .tr::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s}
+.switch input:checked+.tr{background:var(--win)}.switch input:checked+.tr::after{left:17px}
+.switch input:focus-visible+.tr{outline:2px solid var(--accent);outline-offset:2px}
+.switch b{display:block;font-weight:600}
+</style>
+{% endblock %}
+{% block content %}
+{% import "_ui.html" as vc %}
+<div class="pagehead"><div><div class="crumbs">Account</div><h1>{{ user.username }}</h1><div class="ctx">{{ 'Admin' if user.is_admin else 'User' }}, {{ usage.profiles }} player{{ '' if usage.profiles == 1 else 's' }}, {{ usage.jobs }} report{{ '' if usage.jobs == 1 else 's' }}, member since {{ user.created_at|localtime }}</div></div></div>
+
+<form method="post" class="card">
+  <h2>In-game name</h2>
+  <div class="row" style="align-items:flex-end">
+    <div style="flex:1;max-width:360px"><input type="text" name="display_name" value="{{ user.display_name }}" placeholder="Name#TAG" maxlength="40"></div>
+    <button class="btn">Save</button></div>
+  <div class="hint">Teammates see this instead of your username, e.g. when the team owner adds you to a team.</div>
+</form>
+
+
+<form method="post" class="card" id="look">
+  <input type="hidden" name="look" value="1">
+  <h2>Look &amp; feel</h2>
+  <p class="small muted" style="margin:-6px 0 10px">Only for you: every user picks their own. The style changes the whole look and layout, not just the colours.</p>
+  <div class="styles">
+    {% for key, (label, desc, _) in styles.items() %}
+    <label class="stylecard {{ 'on' if ui.style == key }}">
+      <input type="radio" name="style" value="{{ key }}" {{ 'checked' if ui.style == key }} class="sr-only">
+      <img class="sprev" src="{{ url_for('static', filename='styles/previews/' ~ key ~ '.webp') }}?v={{ app_version }}" alt="" loading="lazy" width="480" height="300">
+      <span class="sname">{{ label }}</span><span class="sdesc">{{ desc }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  <h2 style="margin-top:18px">Language</h2>
+  <div class="langopts" role="radiogroup" aria-label="Language">{% for key, label in langs.items() %}
+    <label class="langopt"><input type="radio" name="lang" value="{{ key }}" {{ 'checked' if ui.lang == key }}><span translate="no">{{ label }}</span></label>{% endfor %}</div>
+  <p class="small muted" style="margin:6px 0 0">Menus, pages, messages and notifications. The coach's own texts stay in each player's coaching language (Player &amp; playbook).</p>
+  <h2 style="margin-top:18px">Menu</h2>
+  <div class="navopts">{% for key, (label, desc) in navs.items() %}
+    <label class="navopt"><input type="radio" name="nav" value="{{ key }}" {{ 'checked' if ui.nav == key }} class="sr-only">
+      <span class="navpic {{ key }}" aria-hidden="true"><i></i><b></b><b></b><b></b></span>
+      <span><b>{{ label }}</b><span class="small muted">{{ desc }}</span></span></label>{% endfor %}</div>
+  <p class="small muted" style="margin:6px 0 0">On a phone the menu is always behind the ☰ button.</p>
+  <h2 style="margin-top:18px">Page width</h2>
+  <div class="navopts">{% for key, (label, desc) in widths.items() %}
+    <label class="navopt"><input type="radio" name="width" value="{{ key }}" {{ 'checked' if ui.width == key }} class="sr-only">
+      <span class="widthpic {{ key }}" aria-hidden="true"><i></i></span>
+      <span><b>{{ label }}</b><span class="small muted">{{ desc }}</span></span></label>{% endfor %}</div>
+  <h2 style="margin-top:18px">Animations</h2>
+  <div class="anims">{% for key, (label, desc) in animations.items() %}
+    <label class="switch"><input type="checkbox" name="anim_{{ key }}" value="1" {{ 'checked' if ui.anim[key] }}><span class="tr" aria-hidden="true"></span>
+      <span><b>{{ label }}</b><span class="small muted">{{ desc }}</span></span></label>{% endfor %}</div>
+  <p class="small muted" style="margin:8px 0 12px">If your computer is set to reduce motion, animations stay off anyway.</p>
+  <button class="btn primary">Save</button>
+</form>
+
+<section class="card" id="app">
+  <h2>Install as an app &amp; notifications</h2>
+  <div class="grid2" style="align-items:start">
+    <div>
+      <h3>Install</h3>
+      <p class="small muted" style="margin:0 0 10px">Nexus on your home screen or desktop: its own icon and window, no browser bar. No app store needed.</p>
+      <button type="button" class="btn sm primary" id="installbtn" hidden>Install Nexus</button>
+      <p class="small" id="installed" hidden style="color:var(--win)">Installed: you're using the app.</p>
+      <ul class="small" id="installhow" style="margin:6px 0 0;padding-left:18px">
+        <li><b>iPhone / iPad</b> (Safari): Share button › <i>Add to Home Screen</i>.</li>
+        <li><b>Android</b> (Chrome): ⋮ menu › <i>Install app</i> or <i>Add to Home screen</i>.</li>
+        <li><b>Windows / Mac</b> (Chrome, Edge): the install icon at the right of the address bar.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Notifications on this device</h3>
+      {% if not push_ok %}<p class="small" style="color:var(--amber)">Push isn't installed on the server yet: run <code>pip install -e .</code> there and restart Nexus.</p>
+      {% else %}
+      <p class="small muted" style="margin:0 0 10px" id="pushstate">Checking…</p>
+      <div class="row" style="gap:8px">
+        <button type="button" class="btn sm primary" id="pushon" hidden>Turn on</button>
+        <button type="button" class="btn sm" id="pushtest" hidden>Send a test</button>
+        <button type="button" class="btn sm ghost" id="pushoff" hidden>Turn off on this device</button>
+      </div>
+      <p class="small muted" style="margin:8px 0 0">On {{ push_devices }} device{{ '' if push_devices == 1 else 's' }}. iPhone and iPad: only in the installed app (iOS 16.4 or newer).</p>
+      <form method="post" style="margin-top:12px"><input type="hidden" name="notify" value="1">
+        {% for k, (label, desc) in push_kinds.items() %}<label class="switch" style="margin-bottom:6px"><input type="checkbox" name="n_{{ k }}" value="1" {{ 'checked' if push_on[k] }}><span class="tr" aria-hidden="true"></span>
+          <span><b>{{ label }}</b><span class="small muted">{{ desc }}</span></span></label>{% endfor %}
+        <button class="btn sm">Save</button></form>
+      {% endif %}
+    </div>
+  </div>
+</section>
+<script>
+(function () {
+  const ib = document.getElementById('installbtn');
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (standalone) { document.getElementById('installed').hidden = false; document.getElementById('installhow').hidden = true; }
+  const offer = () => { if (window.vcInstall && !standalone) ib.hidden = false; };
+  offer(); document.addEventListener('vc-installable', offer);
+  ib.addEventListener('click', async () => { if (!window.vcInstall) return; window.vcInstall.prompt(); await window.vcInstall.userChoice; window.vcInstall = null; ib.hidden = true; });
+
+  const st = document.getElementById('pushstate'); if (!st) return;
+  const on = document.getElementById('pushon'), off = document.getElementById('pushoff'), test = document.getElementById('pushtest');
+  const toast = (m, k) => window.nexusToast ? window.nexusToast(m, k) : alert(m);
+  const b64 = s => { const p = '='.repeat((4 - s.length % 4) % 4); const r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from([...r].map(c => c.charCodeAt(0))); };
+  const post = (u, b) => fetch(u, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b || {})});
+  async function sub() { const reg = await navigator.serviceWorker.ready; return [reg, await reg.pushManager.getSubscription()]; }
+  async function show() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) { st.textContent = "This browser can't show notifications from websites" + (/iPhone|iPad/.test(navigator.userAgent) ? " here: install Nexus to your home screen first." : "."); return; }
+    if (Notification.permission === 'denied') { st.textContent = "Notifications are blocked for this site: allow them in the browser's site settings."; return; }
+    const [, s] = await sub();
+    st.textContent = s ? 'On for this device.' : 'Off for this device.';
+    on.hidden = !!s; off.hidden = !s; test.hidden = !s;
+  }
+  on.addEventListener('click', async () => {
+    try {
+      const perm = await Notification.requestPermission(); if (perm !== 'granted') { show(); return; }
+      const k = await (await fetch('/api/push/key')).json(); if (!k.key) throw new Error(k.error || 'no key');
+      const [reg] = await sub();
+      const s = await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: b64(k.key)});
+      const r = await post('/api/push/subscribe', s.toJSON()); if (!r.ok) throw new Error('not saved');
+      toast('Notifications on'); show();
+    } catch (e) { toast('Could not turn notifications on: ' + e.message, 'error'); }
+  });
+  off.addEventListener('click', async () => { const [, s] = await sub(); if (s) { await post('/api/push/unsubscribe', {endpoint: s.endpoint}); await s.unsubscribe(); } toast('Notifications off on this device'); show(); });
+  test.addEventListener('click', async () => { const r = await post('/api/push/test'); toast(r.ok ? 'Test sent' : 'No device has notifications on', r.ok ? '' : 'error'); });
+  show();
+})();
+</script>
+
+<div class="grid2">
+<form method="post" class="card" autocomplete="off">
+  <h2>Change password</h2>
+  <div class="field"><label>Current password</label><input type="password" name="current" required autocomplete="current-password"></div>
+  <div class="field"><label>New password</label><input type="password" name="password" required minlength="{{ min_password }}" autocomplete="new-password">
+    <div class="hint">At least {{ min_password }} characters. Your other devices get logged out.</div></div>
+  <div class="field"><label>Repeat new password</label><input type="password" name="password2" required minlength="{{ min_password }}" autocomplete="new-password"></div>
+  <button class="btn primary" type="submit">Change password</button>
+</form>
+
+<section class="card">
+  <h2>Recordings</h2>
+  {% if vod_root %}
+  <p>VODs are picked from <code>{{ vod_root }}</code> on the server.</p>
+  {% else %}
+  <p class="muted">No recordings folder is set for your account, so upload VODs on the coach page.</p>
+  {% endif %}
+  <p class="hint">{% if user.is_admin %}Change it under <a href="{{ url_for('user_edit', uid=user.id) }}">Users</a>.{% else %}Only the admin can change this, because it's a folder on the server.{% endif %}</p>
+</section>
+</div>
+
+<section class="card" id="devices">
+  <h2>Nexus app for Windows</h2>
+  <p class="small muted" style="max-width:80ch;margin:-4px 0 12px">Nexus in its own window, plus what only works on your PC: it puts the coach's
+    KovaaK's playlists into KovaaK's, sends your new KovaaK's scores, and cuts your matches out of Medal recordings and uploads them,
+    so the recording is ready on the match's coach page. Download <a href="{{ url_for('this_pc') }}">the installer</a>, enter the address
+    <code translate="no">{{ request.host_url.rstrip('/') }}</code> and log in as usual: the app then appears in this list.</p>
+  {% if devices %}
+  <div class="tablewrap"><table><thead><tr><th>Device</th><th>Logged in</th><th>Last used</th><th></th></tr></thead><tbody>
+  {% for d in devices %}<tr><td translate="no">{{ d.name }}</td><td>{{ d.created_at|localtime }}</td><td>{{ d.last_used|localtime if d.last_used else '–' }}</td>
+    <td style="text-align:right"><form method="post" action="{{ url_for('device_delete', device_id=d.id) }}" data-q="Log out this device? The app has to log in again." onsubmit="return confirm(this.dataset.q)"><button class="btn sm ghost">Log out</button></form></td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="hint">Changing your password logs out every device too.</p>
+  {% else %}<p class="muted small">No device is logged in.</p>{% endif %}
+</section>
+{% endblock %}

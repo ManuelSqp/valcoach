@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Settings · Nexus{% endblock %}
+{% block content %}
+<div class="pagehead"><div><div class="crumbs">Admin</div><h1>Settings</h1><div class="ctx">Server-wide settings, shared by all users. Only admins see this page. Nexus {{ app_version }}</div></div></div>
+<nav class="setnav" aria-label="Settings sections">
+  <a href="#henrik">Match data</a><a href="#ollama">Local model</a><a href="#claude">Claude</a><a href="#search">Web search</a><a href="#video">Video</a><a href="#pros">Pros &amp; videos</a><a href="#server">Server</a><a href="#backup">Backups</a>
+</nav>
+<style>
+.setnav{position:sticky;top:0;z-index:5;display:flex;gap:4px;flex-wrap:wrap;padding:8px 0 10px;margin-bottom:6px;background:var(--bg)}
+.setnav a{text-decoration:none;font-size:13px;font-weight:600;padding:5px 12px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.setnav a:hover{color:var(--text);border-color:var(--line2)}
+section.card[id]{scroll-margin-top:60px}
+</style>
+<form method="post" autocomplete="off">
+
+<section class="card" id="henrik">
+  <h2>HenrikDev API</h2>
+  <div class="field">
+    <label>API key {% if key_set %}<span style="color:var(--win)">✓ set ({{ key_hint }})</span>{% endif %}</label>
+    <input type="password" name="henrik_api_key" placeholder="{{ 'Leave empty to keep the current key' if key_set else 'HDEV-…' }}">
+    <div class="hint">Get one instantly in the HenrikDev Discord: verify, go to <b>#get-a-key</b>, choose <b>VALORANT (Basic Key)</b>.</div>
+    {% if key_set %}<label class="choice" style="margin-top:8px"><input type="checkbox" name="clear_api_key" value="1"><span>Remove the key</span></label>{% endif %}
+    <div class="row" style="gap:8px;margin-top:8px"><button type="button" class="btn sm ghost tbtn" data-test="henrik">Test</button><span class="tres small" data-for="henrik"></span></div>
+  </div>
+  <details><summary>Advanced</summary>
+    <div class="field" style="margin-top:10px"><label>API base URL</label><input type="text" name="henrik_base_url" value="{{ s.henrik_base_url }}"></div>
+  </details>
+</section>
+
+<section class="card" id="ollama">
+  <h2>Ollama</h2>
+  {% if ollama_error %}<div class="flash error">Ollama is not reachable at {{ s.ollama_url }}: {{ ollama_error }}</div>
+  {% else %}<div class="flash ok">Ollama is reachable · {{ models|length }} model{{ '' if models|length == 1 else 's' }} installed</div>{% endif %}
+  <div class="row" style="gap:8px;margin-bottom:10px"><button type="button" class="btn sm ghost tbtn" data-test="ollama">Test</button><span class="tres small" data-for="ollama"></span><span class="small muted">checks that the model below is installed</span></div>
+  <div class="grid2">
+    <div class="field"><label>Ollama URL</label><input type="text" name="ollama_url" value="{{ s.ollama_url }}"></div>
+    <div class="field"><label>Model</label>
+      <input type="text" name="ollama_model" value="{{ s.ollama_model }}" list="models">
+      <datalist id="models">{% for m in models %}<option value="{{ m }}">{% endfor %}</datalist>
+      {% if models and s.ollama_model not in models %}<div class="hint" style="color:var(--amber)">This model is not installed: <code>ollama pull {{ s.ollama_model }}</code></div>{% endif %}</div>
+    <div class="field"><label>Temperature</label><input type="number" step="0.05" name="ollama_temperature" value="{{ s.ollama_temperature }}"></div>
+    <div class="field"><label>Context size (num_ctx)</label><input type="number" name="ollama_num_ctx" value="{{ s.ollama_num_ctx }}"></div>
+    <div class="field"><label>Rounds coached in parallel</label><input type="number" name="ollama_parallel" value="{{ s.ollama_parallel }}" min="1">
+      <div class="hint">Keep at or below OLLAMA_NUM_PARALLEL.</div></div>
+    <div class="field"><label>Timeout per request (s)</label><input type="number" name="ollama_timeout_s" value="{{ s.ollama_timeout_s }}"></div>
+    <div class="field"><label>Reasoning ("thinking")</label>
+      <select name="ollama_think">
+        <option value="off" {{ 'selected' if s.ollama_think == 'off' }}>Off (fast, recommended)</option>
+        <option value="on" {{ 'selected' if s.ollama_think == 'on' }}>On (slower, may be more thorough)</option>
+        <option value="" {{ 'selected' if s.ollama_think == '' }}>Model default (don't send the setting)</option>
+      </select>
+      <div class="hint">For reasoning models such as Qwen 3.8 and Gemma 4. If a model rejects this setting, choose "Model default".</div></div>
+  </div>
+</section>
+
+<section class="card" id="claude">
+  <h2>Claude (Anthropic API, optional)</h2>
+  <p class="hint" style="margin-top:-6px">With a key, the Claude models show up in the model picker next to every button that runs the model,
+    for admins and for users you give <i>Can use Claude</i> under Users. The local model stays the default.</p>
+  <div class="grid2">
+    <div class="field"><label>Anthropic API key {% if claude_hint %}<span style="color:var(--win)">✓ set ({{ claude_hint }})</span>{% endif %}</label>
+      <input type="password" name="claude_api_key" autocomplete="off" placeholder="{{ 'Leave empty to keep the current key' if claude_hint else 'sk-ant-…' }}">
+      <div class="hint">console.anthropic.com → API keys. Pay as you go: set a spending limit there as well.</div>
+      {% if claude_hint %}<label class="choice" style="margin-top:8px"><input type="checkbox" name="clear_claude_key" value="1"><span>Remove the key</span></label>{% endif %}
+      <div class="row" style="gap:8px;margin-top:8px"><button type="button" class="btn sm ghost tbtn" data-test="claude">Test</button><span class="tres small" data-for="claude"></span></div></div>
+    <div class="field"><label>Claude models offered</label>
+      <input type="text" name="claude_models" value="{{ s.claude_models }}">
+      <div class="hint">Model names, comma separated. Haiku is cheapest, Sonnet the best value for coaching, Opus the strongest.</div></div>
+    <div class="field"><label>Monthly budget (US$)</label>
+      <input type="number" name="claude_budget_usd" value="{{ s.claude_budget_usd }}" min="0" step="1">
+      <div class="hint">Claude stops for the rest of the month once this is spent (0 = no limit). This month so far: <b>US$ {{ '%.2f'|format(claude_month) }}</b>.</div></div>
+    <div class="field"><label>If Claude can't be used</label>
+      <label class="choice"><input type="checkbox" name="claude_fallback" value="1" {{ 'checked' if s.claude_fallback == '1' }}><span><b>The local model answers instead</b><span class="muted small">No key, no credit, budget used up or the API down: the job still finishes.</span></span></label></div>
+    <div class="field"><label>Model for automatic jobs</label>
+      <select name="llm_auto">{% for c in auto_choices %}<option value="{{ c.value }}" {{ 'selected' if c.value == s.llm_auto }}>{{ c.label }}</option>{% endfor %}</select>
+      <div class="hint">Nightly Premier reviews and the weekly focus, which run without anyone pressing a button.</div></div>
+  </div>
+</section>
+
+<section class="card" id="search">
+  <h2>Web search (optional)</h2>
+  <p class="hint" style="margin-top:-6px">The coach can look things up instead of guessing: agent abilities and patch changes when you ask the coach,
+    KovaaK's playlists and share codes on the Aim page. Answers show the pages they used.</p>
+  <div class="grid2">
+    <div class="field"><label>Search with</label>
+      <select name="search_provider">{% for k, v in search_providers.items() %}<option value="{{ k }}" {{ 'selected' if s.search_provider == k }}>{{ v }}</option>{% endfor %}</select>
+      <div class="hint">SearXNG is the most reliable: free and on your own server. DuckDuckGo needs no setup, but it has no official search API and often refuses searches from programs, sometimes from the first one, so use it as the backup at most. Claude's search costs US$ 10 per 1,000 searches plus the tokens (counted in the Claude budget).</div>
+      <div class="row" style="gap:8px;margin-top:8px"><button type="button" class="btn sm ghost tbtn" data-test="search">Test</button><span class="small muted">save first</span></div><div class="tres small" data-for="search" style="margin-top:6px"></div></div>
+    <div class="field"><label>Backup search</label>
+      <select name="search_backup">{% for k, v in search_providers.items() %}<option value="{{ k }}" {{ 'selected' if s.search_backup == k }}>{{ 'None' if not k else v }}</option>{% endfor %}</select>
+      <div class="hint">Used when the main search fails or finds nothing, e.g. when DuckDuckGo blocks for a while.</div></div>
+    <div class="field"><label>SearXNG URL</label>
+      <input type="text" name="searxng_url" value="{{ s.searxng_url }}" placeholder="http://10.0.0.5:8080">
+      <div class="hint">SearXNG must allow JSON answers: in its <code>settings.yml</code> under <code>search:</code> set <code>formats: [html, json]</code>, then restart it.</div></div>
+  </div>
+</section>
+
+<section class="card" id="video">
+  <h2>Video analysis</h2>
+  <p class="hint" style="margin-top:-6px">Each user's recordings folder is set under <a href="{{ url_for('users') }}">Users</a>.</p>
+  <div class="grid2">
+    <div class="field"><label>Minimap area (x, y, width, height)</label><input type="text" name="minimap_roi" value="{{ s.minimap_roi }}">
+      <div class="hint">Fractions of the game picture (black bars of an ultrawide recording are left out automatically). The default fits 16:9 with the minimap top-left at default size.</div></div>
+    <div class="field"><label>Kill-feed area (x, y, width, height)</label><input type="text" name="killfeed_roi" value="{{ s.killfeed_roi }}"></div>
+    <div class="field"><label>Minimap samples per second</label><input type="number" step="0.5" name="sample_fps" value="{{ s.sample_fps }}"></div>
+  </div>
+</section>
+
+<section class="card" id="pros">
+  <h2>Pro players &amp; videos</h2>
+  <div class="field">
+    <label>YouTube Data API key (optional) {% if yt_hint %}<span style="color:var(--win)">✓ set ({{ yt_hint }})</span>{% endif %}</label>
+    <input type="password" name="youtube_api_key" placeholder="{{ 'Leave empty to keep the current key' if yt_hint else 'AIza…' }}">
+    <div class="hint">Without a key the <i>Pro &amp; videos</i> page shows YouTube search links. With one it shows the videos themselves
+      (Google Cloud console → enable <b>YouTube Data API v3</b> → Credentials → API key; free quota ≈ 100 searches a day, results are cached for a day).</div>
+    {% if yt_hint %}<label class="choice" style="margin-top:8px"><input type="checkbox" name="clear_youtube_key" value="1"><span>Remove the key</span></label>{% endif %}
+  </div>
+  <div class="field">
+    <label>Pro players to compare with {% if pros_custom %}<span class="muted">(edited)</span>{% else %}<span class="muted">(built-in list)</span>{% endif %}</label>
+    <textarea name="pros_yaml" rows="14">{{ pros_text }}</textarea>
+    <div class="hint">Rosters change: remove who's no longer relevant and add who you like. Style values are 0–1, relative to other pros.</div>
+    {% if pros_custom %}<label class="choice" style="margin-top:8px"><input type="checkbox" name="reset_pros" value="1"><span>Reset to the built-in list</span></label>{% endif %}
+  </div>
+</section>
+
+<section class="card" id="server">
+  <h2>Server</h2>
+  <div class="grid2">
+    <div class="field"><label>Coaching jobs at the same time</label><input type="number" name="workers" value="{{ s.workers }}" min="1" max="8">
+      <div class="hint">Currently running with {{ running_workers }}. Other jobs wait in a queue. 1 is best on one machine; changes apply after a restart.</div></div>
+    <div class="field"><label>Max reports per user at once</label><input type="number" name="max_jobs_per_user" value="{{ s.max_jobs_per_user }}" min="1" max="50">
+      <div class="hint">Queued + running. Stops one user from filling the shared queue.</div></div>
+    <div class="field"><label>Max VOD upload size (GB)</label><input type="number" step="0.5" name="max_upload_gb" value="{{ s.max_upload_gb }}" min="0.1" max="64">
+      <div class="hint">Uploads are also refused if less than 1 GB of disk would stay free.</div></div>
+  </div>
+  <label class="choice"><input type="checkbox" name="allow_signup" value="1" {{ 'checked' if s.allow_signup == '1' }}>
+    <span><b>Allow sign-up</b><span class="muted small">Anyone who can reach this page can create an account (as a normal user). Off: only admins create accounts under Users.</span></span></label>
+</section>
+
+<section class="card" id="backup">
+  <h2>Backups</h2>
+  <p class="hint" style="margin-top:-6px">Every night from 04:00: the database, players, teams, notes, strats and reports in one .tar.gz.
+    Left out: the match cache, VODs and clips (they can be loaded or cut again). Restore: stop Nexus, unpack the archive into the data folder, start it again.</p>
+  <label class="choice"><input type="checkbox" name="backup_on" value="1" {{ 'checked' if s.backup_on == '1' }}><span><b>Back up every night</b></span></label>
+  <div class="grid2">
+    <div class="field"><label>Folder</label><input type="text" name="backup_dir" value="{{ s.backup_dir }}" placeholder="{{ backup_folder }}">
+      <div class="hint">Full path on this server. Empty = inside the data folder, which doesn't help if the disk dies: use your NAS (e.g. /mnt/nas/nexus-backups).</div></div>
+    <div class="field"><label>Backups to keep</label><input type="number" name="backup_keep" value="{{ s.backup_keep }}" min="1" max="365">
+      <div class="hint">The newest ones stay, older ones are deleted.</div></div>
+  </div>
+  <p class="small" style="margin:6px 0 0">{% if backup_last.at %}Last backup: {{ backup_last.at|epoch }} ·
+    {% if backup_last.ok %}<span style="color:var(--win)">✓ {{ backup_last.file }} ({{ '%.1f'|format(backup_last.size / 1048576) }} MB, {{ backup_last.secs }} s)</span>
+    {% else %}<span style="color:var(--red)">✗ {{ backup_last.error }}</span>{% endif %}{% else %}No backup yet.{% endif %}
+    {% if backups %}<br><span class="muted">In {{ backup_folder }}: {% for b in backups %}{{ b.name }}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}</p>
+</section>
+
+<button class="btn primary" type="submit">Save settings</button>
+</form>
+<form method="post" action="{{ url_for('backup_now') }}" style="margin-top:10px"><button class="btn ghost">Back up now</button></form>
+<script>
+document.querySelectorAll('.tbtn').forEach(b => b.onclick = async () => {
+  const out = document.querySelector(`.tres[data-for="${b.dataset.test}"]`);
+  b.disabled = true; out.textContent = 'testing…'; out.style.color = '';
+  try {
+    const r = await fetch(`{{ url_for('settings') }}/test/${b.dataset.test}`, {method: 'POST'});
+    const j = await r.json();
+    if (j.parts) {                       // several searches: a line each, with its own mark
+      out.replaceChildren(...j.parts.map(p => {
+        const d = document.createElement('div');
+        d.textContent = (p.ok ? '✓ ' : '✗ ') + (p.role === 'backup' ? (window.vcT ? vcT('Backup:') : 'Backup:') + ' ' : '') + p.msg;
+        d.style.color = p.ok ? 'var(--win)' : 'var(--red)';
+        return d;
+      }));
+      out.style.color = '';
+    } else {
+      out.textContent = (j.ok ? '✓ ' : '✗ ') + j.msg; out.style.color = j.ok ? 'var(--win)' : 'var(--red)';
+    }
+  } catch (e) { out.textContent = '✗ ' + e.message; out.style.color = 'var(--red)'; }
+  b.disabled = false;
+});
+</script>
+{% endblock %}

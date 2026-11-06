@@ -1,8 +1,28 @@
 # Changelog
 
 The running version is shown next to the logo in the web app, in *Settings*, at the top of
-every report, and with `valcoach --version`. Update: `git pull`, `pip install -e .`,
-`sudo systemctl restart valcoach` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
+every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
+`sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
+
+## 4.5.0
+- **valcoach is now Nexus.** The name in the app, the Python package (`nexus/`), the command (`nexus web`,
+  `nexus --version`), the service (`deploy/nexus.service`), the Docker image and the environment variables
+  (`NEXUS_BACKUP_ROOTS`, `NEXUS_MODEL`). What carries over by itself: `data/valcoach.db` is renamed to
+  `data/nexus.db` at the first start (with its `-wal`/`-shm` files), backups named `valcoach-backup-…` still count
+  for the list and how many are kept, the old `VALCOACH_*` variables still work, logins and the language cookie
+  stay. Once on the server: `pip uninstall -y valcoach && pip install -e .`, then install `nexus.service` instead
+  of `valcoach.service` (README › *Coming from valcoach*). The GitHub repository keeps its name for now.
+- **Nexus for Windows instead of the companion app.** One app that shows Nexus in its own window (WebView2) with
+  everything the website has, plus **This PC** in the menu, which only exists in the app: the player, a tile each
+  for playlists, scores and Medal, the two folders, the switches, the activity, *Sync now*, updates and *Change
+  server*. You log in in the window like on the website; the website then gives the app its own key for that PC
+  (`POST /account/devices/pair`, with the session and the usual same-site check), so there's no second login. Tray
+  icon, *Start with Windows*, the installer and the updates stay. Links to other websites open in the browser, and
+  only Nexus's own pages can talk to the app.
+- **From the companion app:** it updates to the new app by itself (each release has the installer a second time
+  under its old name, `valcoach-companion-setup.exe`). The installer removes the old program file and shortcuts,
+  the app takes over the settings, what was uploaded already, the device key and *Start with Windows*.
+- *Account*: the section is now *Nexus app for Windows*; the coach page says *From the Nexus app*.
 
 ## 4.4.2
 - **Companion app without the long scroll:** a sidebar with *Overview*, *KovaaK's*, *Medal* and *Settings*, one page
