@@ -177,4 +177,19 @@
   <p class="hint">{% if user.is_admin %}Change it under <a href="{{ url_for('user_edit', uid=user.id) }}">Users</a>.{% else %}Only the admin can change this, because it's a folder on the server.{% endif %}</p>
 </section>
 </div>
+
+<section class="card" id="devices">
+  <h2>Companion app</h2>
+  <p class="small muted" style="max-width:80ch;margin:-4px 0 12px">A small Windows app that puts the coach's KovaaK's playlists into KovaaK's, sends your new KovaaK's scores,
+    and cuts your matches out of Medal recordings and uploads them, so the recording is ready on the match's coach page.
+    Download it from the <a href="https://github.com/ManuelSqp/valcoach/releases" target="_blank" rel="noopener noreferrer">releases on GitHub</a>
+    and log in with this account and the server address <code translate="no">{{ request.host_url.rstrip('/') }}</code>.</p>
+  {% if devices %}
+  <div class="tablewrap"><table><thead><tr><th>Device</th><th>Logged in</th><th>Last used</th><th></th></tr></thead><tbody>
+  {% for d in devices %}<tr><td translate="no">{{ d.name }}</td><td>{{ d.created_at|localtime }}</td><td>{{ d.last_used|localtime if d.last_used else '–' }}</td>
+    <td style="text-align:right"><form method="post" action="{{ url_for('device_delete', device_id=d.id) }}" data-q="Log out this device? The app has to log in again." onsubmit="return confirm(this.dataset.q)"><button class="btn sm ghost">Log out</button></form></td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="hint">Changing your password logs out every device too.</p>
+  {% else %}<p class="muted small">No device is logged in.</p>{% endif %}
+</section>
 {% endblock %}

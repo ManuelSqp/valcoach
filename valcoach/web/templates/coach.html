@@ -21,6 +21,10 @@
     <h2>Recording (VOD)</h2>
     <div class="choices">
       <label class="choice"><input type="radio" name="vod" value="" {{ 'checked' if not suggested }}><span><b>No VOD</b><span class="muted small">Match data only. Fast, no minimap tracking.</span></span></label>
+      {% if companion_clip %}
+      <label class="choice suggest"><input type="radio" name="vod" value="companion" checked>
+        <span><b>From the companion app</b><span class="muted small"><span translate="no">{{ companion_clip.name or 'Medal' }}</span> · {{ companion_clip.size|filesize }} · <span style="color:var(--win)">cut to this match</span></span></span></label>
+      {% endif %}
       {% for v in vods %}
       <label class="choice {{ 'suggest' if v.rel == suggested }}"><input type="radio" name="vod" value="{{ v.rel }}" {{ 'checked' if v.rel == suggested }}>
         <span><b>{{ v.name }}</b><span class="muted small">{{ v.mtime|epoch }} · {{ v.size|filesize }}{% if v.rel == suggested %} · <span style="color:var(--win)">saved right after this match</span>{% endif %}</span></span></label>

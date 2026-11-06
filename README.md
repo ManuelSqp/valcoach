@@ -1,6 +1,6 @@
 # valcoach
 
-**Version 4.2.2** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.3.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -156,6 +156,13 @@ the coach finds more online.
 
 **Ask the coach:** *Practice › Ask the coach* is a chat with the coach about one player. It knows the player's stats,
 habits, aim and KovaaK's scores and remembers the conversation (per user and player).
+
+**Companion app (Windows):** [companion/](companion/README.md) is a small tray app for each player. It puts the
+coach's KovaaK's playlists into KovaaK's, sends new KovaaK's scores, and cuts the matches out of Medal session
+recordings (by the start time in Medal's file name and Riot's match start) and uploads them, so the recording is
+picked already on the match's coach page. It logs in once and gets its own key for that PC (*Account › Companion
+app* lists and removes them). Download it from the releases (`companion-v...`); uploaded clips no report used are
+deleted after 14 days (`companion_keep_days`).
 
 ### What's in a report
 

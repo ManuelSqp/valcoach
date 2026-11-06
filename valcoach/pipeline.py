@@ -88,6 +88,7 @@ def history(cfg: Config, queue: str | None = None, size: int = 10, start: int = 
         rows.append({
             "match_id": m.match_id,
             "started_at": m.started_at,
+            "length_s": round(m.game_length_ms / 1000),
             "queue": m.queue,
             "map": m.map_name,
             "score": f"{own}-{opp}",

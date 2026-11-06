@@ -2514,3 +2514,57 @@ def test_kovaaks_community_playlists(app, monkeypatch):
     c.post(f"/profiles/{pid}/aim", data={"action": "k_add_shared", "code": "KovaaKsTestingNewPeekCode", "name": "Peek drills",
                                          "url": "https://example.org/c"})
     assert "Peek drills" in c.get(f"/profiles/{pid}/aim").data.decode()
+
+
+def test_companion_app_api(app, monkeypatch):
+    from valcoach import pipeline
+    c = setup_admin(app)
+    pid = add_profile(c)
+    store = app.extensions["valcoach"]["store"]
+    anon = app.test_client()
+    assert anon.get("/api/companion/me").status_code == 401
+    assert anon.post("/api/companion/login", json={"username": "manuel", "password": "nope"}).status_code == 401
+    r = anon.post("/api/companion/login", json={"username": "manuel", "password": ADMIN_PW, "device": "Gaming PC"})
+    assert r.status_code == 200, r.data
+    token = r.get_json()["token"]
+    H = {"Authorization": f"Bearer {token}"}
+    me = anon.get("/api/companion/me", headers=H).get_json()
+    assert me["players"][0]["id"] == pid and me["chunk"] > 0
+    assert anon.get("/account", headers=H).status_code == 302                  # the key only opens the app's API
+    assert "Gaming PC" in c.get("/account").data.decode()
+    # playlists for KovaaK's
+    pl = anon.get(f"/api/companion/players/{pid}/playlists", headers=H).get_json()["playlists"]
+    assert {x["kind"] for x in pl} == {"warmup", "training"} and pl[0]["file_name"].endswith(".json")
+    # scores from the stats folder
+    csv_text = ("Kill #,Timestamp,Bot,Weapon,TTK,Shots,Hits,Accuracy,Damage Done,Damage Possible,Efficiency,Cheated\n"
+                "\nScore:,812.5\nScenario:,1wall6targets TE\nChallenge Start:,20:01:02.000\n")
+    r = anon.post(f"/api/companion/players/{pid}/kovaaks", headers=H, data={
+        "files": [(io.BytesIO(csv_text.encode()), "1wall6targets TE - Challenge - 2026.11.06-20.01.40 Stats.csv")]},
+        content_type="multipart/form-data")
+    assert r.status_code == 200 and r.get_json()["new"] == 1, r.data
+    # matches with start and length, then a clip for one of them
+    monkeypatch.setattr(pipeline, "history", lambda cfg, size=10, **k: [
+        {"match_id": "abc-123", "started_at": "2026-11-06T19:10:00+00:00", "length_s": 2400, "map": "Ascent",
+         "queue": "competitive", "score": "13-9", "agent": "Jett", "coachable": True}])
+    ms = anon.get(f"/api/companion/players/{pid}/matches", headers=H).get_json()["matches"]
+    assert ms[0]["start"] == 1793992200.0 and ms[0]["length_s"] == 2400 and not ms[0]["has_clip"]
+    body = b"\x00" * 1000
+    up = anon.post("/api/companion/uploads", headers=H, json={"name": "abc.mp4", "size": len(body)}).get_json()
+    assert anon.put(f"/api/companion/uploads/{up['id']}?offset=0", headers=H, data=body).get_json()["received"] == 1000
+    r = anon.post(f"/api/companion/players/{pid}/clips", headers=H,
+                  json={"match_id": "abc-123", "upload_id": up["id"], "source": "MedalTVValorant20261106200223161.mp4"})
+    assert r.status_code == 200, r.data
+    assert anon.get(f"/api/companion/players/{pid}/matches", headers=H).get_json()["matches"][0]["has_clip"]
+    from valcoach.web.companion import clip_for
+    assert clip_for(store, 1, "abc-123")["size"] == 1000
+    # someone else's player: not found; logging out the device in Account kills the key
+    other = store.create_user("burn2", "correct-horse-2")
+    oth = store.create_profile(other, "Other", "TAG")
+    assert anon.get(f"/api/companion/players/{oth}/playlists", headers=H).status_code == 404
+    dev = store.devices(1)[0]["id"]
+    c.post(f"/account/devices/{dev}/delete")
+    assert anon.get("/api/companion/me", headers=H).status_code == 401
+    # changing the password logs every device out
+    t2 = anon.post("/api/companion/login", json={"username": "manuel", "password": ADMIN_PW}).get_json()["token"]
+    store.set_password(1, "another-pass-99")
+    assert anon.get("/api/companion/me", headers={"Authorization": f"Bearer {t2}"}).status_code == 401

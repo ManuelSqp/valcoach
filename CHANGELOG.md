@@ -4,6 +4,25 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart valcoach` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.3.0
+- **Companion app for Windows** (new, in `companion/`): a small tray app for each player that every few minutes
+  - puts the coach's KovaaK's warm-up and training playlists into KovaaK's Playlists folder (dated, once a day;
+    the coach's own files older than a month are removed, nothing else is touched),
+  - sends new KovaaK's scores from KovaaK's `stats` folder to the Aim page,
+  - cuts your matches out of **Medal** session recordings and uploads them: Medal names a recording after its start
+    to the millisecond, Riot's data has each match's start and length, so every match in an evening-long
+    recording is found, however long you were in the menu. Cut without re-encoding, 90 s before and 60 s after the
+    match; a recording whose length doesn't fit its times (Medal paused) is skipped instead of cut wrong.
+  Each part can be switched off. Built as one .exe by GitHub Actions (push a tag `companion-v1.0.0`).
+- **The coach page picks the companion app's clip** of a match by itself (*From the companion app*). Like any
+  uploaded VOD it's deleted after the report; clips no report used are deleted after 14 days
+  (`companion_keep_days`).
+- **Account › Companion app**: the devices logged in to your account, each with *Log out*. The app logs in with
+  username and password once and gets its own key for that PC (only its hash is stored; it only opens the app's
+  `/api/companion/...` calls, and changing your password logs out every device). Logging in from the app counts
+  toward the same lockout as the login page.
+- The match list gives each match's length to the app (`length_s`).
+
 ## 4.2.2
 - **Settings › Web search › Test shows each search on its own line** with its own ✓ or ✗ (before: one line with a
   green ✓ as soon as either search worked, even when the main one had failed).

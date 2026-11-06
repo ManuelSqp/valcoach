@@ -1,0 +1,45 @@
+# Builds the companion app (companion/) as one Windows .exe.
+# Push a tag like companion-v1.0.0 to publish it as a GitHub release; "Run workflow" builds it for testing
+# (the .exe is then under the run's Artifacts).
+name: companion
+
+on:
+  push:
+    tags: ["companion-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install "./companion[build]" pytest
+      - name: Tests (the parts that don't need a screen)
+        run: pytest -q -p no:cacheprovider tests/test_companion.py
+      - name: Build the .exe
+        working-directory: companion
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name valcoach-companion
+          --collect-binaries imageio_ffmpeg --collect-submodules keyring
+          --hidden-import pystray._win32 run_companion.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: valcoach-companion
+          path: companion/dist/valcoach-companion.exe
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/companion-v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" companion/dist/valcoach-companion.exe
+          --title "Companion app ${GITHUB_REF_NAME#companion-v}"
+          --notes "Windows app for valcoach: KovaaK's playlists and scores, matches out of Medal recordings. See companion/README.md."
