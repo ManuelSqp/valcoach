@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 APP = "valcoach-companion"
+_save_lock = threading.Lock()
 
 
 def folder() -> Path:
@@ -31,6 +33,8 @@ class Settings:
     upload_matches: bool = True
     only_coachable: bool = True
     autostart: bool = False
+    check_updates: bool = True
+    last_update_check: float = 0.0
     every_min: int = 5
     since: float = field(default_factory=lambda: time.time() - 86400)   # older recordings and scores are left alone
     # what was done: recording name -> {"state": "done"|"waiting"|"skipped", "why": ..., "matches": [...]}
@@ -50,14 +54,16 @@ def load() -> Settings:
 
 
 def save(s: Settings) -> None:
-    s.stats_sent = s.stats_sent[-5000:]
-    if len(s.recordings) > 500:
-        for k in sorted(s.recordings)[:-500]:
-            s.recordings.pop(k)
-    p = folder() / "config.json"
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(asdict(s), indent=1), encoding="utf-8")
-    tmp.replace(p)
+    """Write the settings (the window and the sync both save: one at a time, never a half-written file)."""
+    with _save_lock:
+        s.stats_sent = s.stats_sent[-5000:]
+        if len(s.recordings) > 500:
+            for k in sorted(s.recordings)[:-500]:
+                s.recordings.pop(k)
+        p = folder() / "config.json"
+        tmp = p.with_suffix(f".{threading.get_ident()}.tmp")
+        tmp.write_text(json.dumps(asdict(s), indent=1), encoding="utf-8")
+        tmp.replace(p)
 
 
 def _token_file(server: str) -> Path:

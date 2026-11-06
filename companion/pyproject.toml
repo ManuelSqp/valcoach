@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "valcoach-companion"
-version = "1.0.0"
+version = "1.1.0"
 description = "valcoach companion: KovaaK's playlists and scores, and matches cut out of Medal recordings"
 requires-python = ">=3.11"
 dependencies = [
@@ -13,6 +13,7 @@ dependencies = [
   "pystray>=0.19",
   "pillow>=10",
   "imageio-ffmpeg>=0.5",
+  "customtkinter>=5.2",
 ]
 
 [project.optional-dependencies]
