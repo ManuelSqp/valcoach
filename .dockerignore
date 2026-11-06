@@ -11,3 +11,4 @@ tests/
 *.mp4
 *.mkv
 config.toml
+companion/

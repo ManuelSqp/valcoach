@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "valcoach-companion"
+version = "1.0.0"
+description = "valcoach companion: KovaaK's playlists and scores, and matches cut out of Medal recordings"
+requires-python = ">=3.11"
+dependencies = [
+  "requests>=2.31",
+  "keyring>=24",
+  "pystray>=0.19",
+  "pillow>=10",
+  "imageio-ffmpeg>=0.5",
+]
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6"]
+
+[project.gui-scripts]
+valcoach-companion = "valcoach_companion.app:main"
+
+[tool.setuptools]
+packages = ["valcoach_companion"]

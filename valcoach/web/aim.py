@@ -120,6 +120,31 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
             skip = {x["name"] for x in kv.build("warmup", need, cat, runs, week=week)["items"]}
         return kv.build(kind, need, cat, runs, week=week, exclude=skip)
 
+    def import_runs(pid: int, uid: int, files: list[tuple[str, bytes]]) -> tuple[list, int, int, int]:
+        """KovaaK's stats files (csv or zip) into the player's scores. -> (runs read, new runs, scenarios learned,
+        files that couldn't be read). Scenarios the coach doesn't know yet go into this user's own list."""
+        runs, bad = [], 0
+        for name, data in files:
+            if not name.lower().endswith((".csv", ".zip")):
+                bad += 1
+                continue
+            r, b = kv.read_upload(name, data)
+            runs += r
+            bad += b
+        d = _read(player_path(pid), {})
+        d["kovaaks"], new = kv.merge_runs(d.get("kovaaks", []), runs)
+        _write(player_path(pid), d)
+        known = {s["name"] for s in scenarios(pid, uid)}
+        unknown = sorted({r["s"] for r in runs} - known)
+        learned = add_scenarios(user_path(uid), [{"name": n, "focus": kv.guess(n)[0], "level": kv.guess(n)[1]}
+                                                 for n in unknown], uid) if unknown else 0
+        return runs, new, learned, bad
+
+    def playlist_files(pid: int, uid: int, player_name: str) -> list[dict]:
+        """Both KovaaK's playlists the coach writes for this player, as files: [{kind, file_name, data}]."""
+        return [{"kind": k, "file_name": kv.file_name(k), "data": kv.playlist_file(plan(pid, uid, k), player_name)}
+                for k in kv.KINDS]
+
     def done_today(pid: int, rid: str) -> bool:
         today = date.today().isoformat()
         return any(x.get("date") == today and x.get("routine") == rid for x in _read(player_path(pid), {}).get("log", []))
@@ -386,23 +411,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                 fs = files_of("files")
                 if not fs:
                     return back_to
-                runs, bad = [], 0
-                for fh in fs:
-                    name = fh.filename or ""
-                    if not name.lower().endswith((".csv", ".zip")):
-                        bad += 1
-                        continue
-                    r, b = kv.read_upload(name, fh.read())
-                    runs += r
-                    bad += b
-                d = _read(player_path(p.id), {})
-                d["kovaaks"], new = kv.merge_runs(d.get("kovaaks", []), runs)
-                _write(player_path(p.id), d)
-                # scenarios found in the scores that the coach doesn't know yet: into your own list
-                known = {s["name"] for s in scenarios(p.id, uid)}
-                unknown = sorted({r["s"] for r in runs} - known)
-                learned = add_scenarios(user_path(uid), [{"name": n, "focus": kv.guess(n)[0], "level": kv.guess(n)[1]}
-                                                         for n in unknown], uid) if unknown else 0
+                runs, new, learned, bad = import_runs(p.id, uid, [(fh.filename or "", fh.read()) for fh in fs])
                 msg = [f"New runs imported: {new} ({len(runs) - new} were already there)."]
                 if learned:
                     msg.append(f"New scenarios the coach can use now: {learned}.")
@@ -537,5 +546,6 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         return sent
 
     ext = app.extensions["valcoach"]
-    ext["aim"] = {"card": card, "team_routine": team_routine, "is_aimlabs": am.is_aimlabs, "tick": tick}
+    ext["aim"] = {"card": card, "team_routine": team_routine, "is_aimlabs": am.is_aimlabs, "tick": tick,
+                  "import_runs": import_runs, "playlist_files": playlist_files}
     ext.setdefault("ticks", []).append(tick)

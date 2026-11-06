@@ -5,6 +5,8 @@ they belong to that profile's owner too. Server settings are shared.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -169,6 +171,15 @@ CREATE TABLE IF NOT EXISTS availability (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (team_id, pid, day)
 );
+CREATE TABLE IF NOT EXISTS devices (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  token_hash  TEXT NOT NULL UNIQUE,
+  session_key TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  last_used   TEXT
+);
 """
 
 DEFAULTS: dict[str, str] = {
@@ -198,6 +209,7 @@ DEFAULTS: dict[str, str] = {
     "workers": "1",
     "allow_signup": "0",
     "max_upload_gb": "20",         # per uploaded VOD
+    "companion_keep_days": "14",   # clips from the companion app that no report used yet
     "max_jobs_per_user": "3",      # queued + running at the same time
     "youtube_api_key": "",         # optional: inline videos on the Pro & videos page
     # web search for the coach (Settings › Web search): "", "duckduckgo", "searxng" or "claude", plus a backup
@@ -565,6 +577,42 @@ class Store:
         self._exec("UPDATE users SET password_hash = ?, session_key = ? WHERE id = ?",
                    (generate_password_hash(password), key, uid))
         return key
+
+    # ---- devices (the companion app): a key per device, stored only as a hash ----------------------------
+    @staticmethod
+    def _token_hash(token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    def add_device(self, uid: int, name: str) -> str:
+        """A new key for one device of this user -> the key (shown once, only its hash is kept). Changing the
+        password makes every device log in again (the key is bound to the account's session key)."""
+        u = self.user(uid)
+        token = "vc_" + secrets.token_urlsafe(32)
+        self._exec("INSERT INTO devices(user_id, name, token_hash, session_key, created_at) VALUES(?, ?, ?, ?, ?)",
+                   (uid, (name or "Device").strip()[:60] or "Device", self._token_hash(token), u.session_key, now()))
+        return token
+
+    def device_user(self, token: str) -> tuple[User, int] | None:
+        """(user, device id) for a device key, or None (unknown, deleted, user disabled or password changed)."""
+        if not token or not token.startswith("vc_") or len(token) > 100:
+            return None
+        rows = self._all("SELECT * FROM devices WHERE token_hash = ?", (self._token_hash(token),))
+        if not rows:
+            return None
+        u = self.user(rows[0]["user_id"])
+        if u is None or u.disabled or not hmac.compare_digest(u.session_key, rows[0]["session_key"]):
+            return None
+        last = rows[0]["last_used"]
+        if not last or datetime.now(timezone.utc) - datetime.fromisoformat(last) > timedelta(minutes=5):
+            self._exec("UPDATE devices SET last_used = ? WHERE id = ?", (now(), rows[0]["id"]))
+        return u, int(rows[0]["id"])
+
+    def devices(self, uid: int) -> list[dict]:
+        return [dict(r) for r in self._all("SELECT id, name, created_at, last_used FROM devices WHERE user_id = ? "
+                                           "ORDER BY id DESC", (uid,))]
+
+    def delete_device(self, uid: int, device_id: int) -> bool:
+        return self._exec("DELETE FROM devices WHERE id = ? AND user_id = ?", (device_id, uid)).rowcount > 0
 
     def touch_user(self, uid: int) -> None:
         self._exec("UPDATE users SET last_seen = ? WHERE id = ?", (now(), uid))

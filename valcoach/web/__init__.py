@@ -41,7 +41,7 @@ HISTORY_PAGE = 10     # full matches per page (each uncached match costs one API
 STORED_PAGE = 20      # stored-archive rows per page (one API request per page)
 PLAYBOOK_EXAMPLE = (Path(__file__).parent / "playbook_example.yaml").read_text()
 PUBLIC_ENDPOINTS = {"login", "signup", "setup", "static", "shared_report", "shared_vod", "manifest", "service_worker", "offline",
-                    "i18n_catalog", "set_lang"}
+                    "i18n_catalog", "set_lang", "companion_login"}
 MAX_LOGIN_FAILS = 5
 LOCKOUT_S = 600
 MAX_CACHE_ENTRIES = 200                # match-list cache (one entry per player / queue / page)
@@ -371,6 +371,17 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             if request.endpoint not in ("setup", "static"):
                 return redirect(url_for("setup"))
             return None
+        if request.path.startswith("/api/companion/"):
+            # the companion app: its own device key (Authorization: Bearer vc_...), never the browser session
+            auth = request.headers.get("Authorization", "")
+            found = store.device_user(auth[7:].strip()) if auth.startswith("Bearer ") else None
+            if found:
+                g.user, g.device_id = found
+                g.lang = g.user.ui["lang"]
+                return None
+            if request.endpoint in PUBLIC_ENDPOINTS:
+                return None
+            return jsonify(error="Log in again in the app (the key was removed or the password changed)."), 401
         uid = session.get("uid")
         if uid:
             u = store.user(uid)
@@ -462,30 +473,37 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             flash(err, "error")
         return render_template("auth.html", mode="setup", orphans=orphans)
 
+    def check_login(username: str, password: str):
+        """-> (user, '', 200) or (None, why, HTTP status). Five wrong passwords per address and username lock it for
+        10 minutes (the login page and the companion app share this)."""
+        key = f"{request.remote_addr}|{username.lower()}"
+        if len(login_fails) > MAX_TRACKED_LOGINS:
+            # forget expired lockouts so the table can't grow without end
+            for k in [k for k, ts in login_fails.items() if not ts or time.time() - ts[-1] >= LOCKOUT_S]:
+                del login_fails[k]
+        recent = [t for t in login_fails.get(key, []) if time.time() - t < LOCKOUT_S]
+        login_fails[key] = recent
+        if len(recent) >= MAX_LOGIN_FAILS:
+            return None, "Too many failed attempts. Try again in 10 minutes.", 429
+        user = store.verify_login(username, password)
+        if user:
+            login_fails.pop(key, None)
+            return user, "", 200
+        recent.append(time.time())
+        return None, "Wrong username or password.", 401
+
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if g.user:
             return redirect(url_for("index"))
         if request.method == "POST":
             username = request.form.get("username", "").strip()
-            key = f"{request.remote_addr}|{username.lower()}"
-            if len(login_fails) > MAX_TRACKED_LOGINS:
-                # forget expired lockouts so the table can't grow without end
-                for k in [k for k, ts in login_fails.items() if not ts or time.time() - ts[-1] >= LOCKOUT_S]:
-                    del login_fails[k]
-            recent = [t for t in login_fails.get(key, []) if time.time() - t < LOCKOUT_S]
-            login_fails[key] = recent
-            if len(recent) >= MAX_LOGIN_FAILS:
-                flash("Too many failed attempts. Try again in 10 minutes.", "error")
-                return render_template("auth.html", mode="login", username=username), 429
-            user = store.verify_login(username, request.form.get("password", ""))
+            user, err, code = check_login(username, request.form.get("password", ""))
             if user:
-                login_fails.pop(key, None)
                 log_in(user)
                 return redirect_next()
-            recent.append(time.time())
-            flash("Wrong username or password.", "error")
-            return render_template("auth.html", mode="login", username=username), 401
+            flash(err, "error")
+            return render_template("auth.html", mode="login", username=username), code
         return render_template("auth.html", mode="login", username="")
 
     @app.route("/signup", methods=["GET", "POST"])
@@ -574,7 +592,14 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         from .ui import ANIMATIONS, NAVS, STYLES, WIDTHS
         from .push import KINDS, available as push_ok, wants
         return render_template("account.html", navs=NAVS, widths=WIDTHS, push_kinds=KINDS, push_ok=push_ok(),
-                               push_on={k: wants(g.user, k) for k in KINDS}, push_devices=len(store.push_subs(g.user.id)), usage=usage, vod_root=vod_root(g.user), styles=STYLES, animations=ANIMATIONS)
+                               push_on={k: wants(g.user, k) for k in KINDS}, push_devices=len(store.push_subs(g.user.id)), usage=usage, vod_root=vod_root(g.user), styles=STYLES, animations=ANIMATIONS,
+                               devices=store.devices(g.user.id))
+
+    @app.post("/account/devices/<int:device_id>/delete")
+    def device_delete(device_id: int):
+        if store.delete_device(g.user.id, device_id):
+            flash("Device logged out.", "ok")
+        return redirect(url_for("account") + "#devices")
 
     # -------------------------------------------------------------- quick search (Ctrl+K)
     @app.get("/api/search-index")
@@ -880,6 +905,13 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                     flash(str(e), "error")
                     return redirect(request.url)
                 vod_path, uploaded = str(dest), True
+            elif choice == "companion":                    # the clip the companion app cut and uploaded
+                from .companion import clip_for
+                clip = clip_for(store, g.user.id, match.match_id)
+                if clip is None:
+                    flash("The companion app's clip of this match isn't there anymore.", "error")
+                    return redirect(url_for("coach", pid=pid, match_id=match.match_id))
+                vod_path, vod_name, uploaded = clip["path"], clip.get("name") or Path(clip["path"]).name, True
             elif choice:
                 path = resolve_vod(g.user, choice)
                 if path is None:
@@ -911,8 +943,12 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             "agent": me.agent, "kda": f"{me.kills}/{me.deaths}/{me.assists}", "rounds": len(match.rounds),
         }
         vods, suggested = list_vods(g.user, pipeline.match_end_epoch(match))
+        from .companion import clip_for
+        companion_clip = clip_for(store, g.user.id, match.match_id)
+        if companion_clip:
+            suggested = "companion"
         notes = pipeline.read_notes(cfg, match.match_id)
-        return render_template("coach.html", p=p, match_id=match.match_id, s=summary, vods=vods,
+        return render_template("coach.html", p=p, match_id=match.match_id, s=summary, vods=vods, companion_clip=companion_clip,
                                suggested=suggested, vod_root=vod_root(g.user), notes_count=len(notes),
                                jobs=store.jobs_for_match(pid, match.match_id), active_pid=pid)
 
@@ -1472,6 +1508,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
 
     from .stats_views import register as register_stats
     register_stats(app, store, stats_runner, get_profile)
+    from .companion import register as register_companion
+    register_companion(app, store, uploads, check_login)
     from .overview import register as register_overview
     register_overview(app, store, started_at)
     if start_workers:

@@ -18,7 +18,7 @@ jobs:
           python-version: "3.12"
       - run: pip install "ruff>=0.6"
       # Settings are in pyproject.toml ([tool.ruff]); target-version py311 also catches syntax 3.11 can't run.
-      - run: ruff check valcoach tests
+      - run: ruff check valcoach tests companion
 
   pytest:
     runs-on: ubuntu-latest

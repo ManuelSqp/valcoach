@@ -1,3 +1,3 @@
 """valcoach v2 - match-data-first Valorant coach."""
 
-__version__ = "4.2.2"
+__version__ = "4.3.0"
