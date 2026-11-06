@@ -4,6 +4,18 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `valcoach --version`. Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart valcoach` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.4.0
+- **Companion app: an installer instead of a loose .exe.** `valcoach-companion-setup.exe` installs it for your
+  Windows user (no admin rights) into `%LOCALAPPDATA%\Programs\valcoach companion`, with a Start menu entry and an
+  uninstaller under *Settings › Apps*; the downloaded installer can be deleted right away. Uninstalling also
+  removes *Start with Windows*.
+- **The companion app has valcoach's version** (this one is 4.4.0 too, after 1.1.0). Releases are the normal
+  valcoach tags `vX.Y.Z`: pushing one builds the installer on Windows and attaches it to that release (the workflow
+  refuses a tag that doesn't match the version, and a test checks that both version numbers agree). The
+  `companion-v...` tags are gone.
+- **Updates go through the installer:** the app downloads it to the temp folder, checks it against the SHA-256
+  GitHub lists for the file and runs it silently; the app closes and starts again by itself.
+
 ## 4.3.1
 - **Companion app 1.1.0:**
   - **Updates itself.** Once a day (and on *Check for updates*) it looks for a newer release on GitHub; *Update now*

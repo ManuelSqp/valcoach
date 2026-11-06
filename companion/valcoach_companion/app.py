@@ -455,9 +455,10 @@ class App:
 
         def work():
             try:
-                with self.busy:                   # never swap the app in the middle of an upload
-                    new = updater.download(info, Path(sys.executable).parent, progress)
-                    updater.install(new)
+                with self.busy:                   # never update in the middle of an upload
+                    import tempfile
+                    setup = updater.download(info, Path(tempfile.gettempdir()), progress)
+                    updater.install(setup)
             except (updater.UpdateError, OSError) as e:
                 self.say(f"Update: {e}")
                 self.root.after(0, lambda: (self.banner_btn.configure(state="normal", text="Try again"),

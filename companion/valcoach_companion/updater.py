@@ -1,9 +1,9 @@
-"""Updates from GitHub: the newest release tagged companion-vX.Y.Z, downloaded and swapped in for the running .exe.
+"""Updates from GitHub: the newest valcoach release (tag vX.Y.Z, the same version as the web app) that has the
+companion's installer attached.
 
-Windows can't overwrite a running .exe, but it can rename it: the new file is downloaded next to it, the running one
-becomes valcoach-companion.exe.old, the new one takes its name, the app starts it and quits. The next start removes
-the .old file. The download comes from GitHub over HTTPS and must match the release's SHA-256 (GitHub lists it for
-every file) and size before anything is replaced.
+The installer is downloaded to the temp folder, must match the release's SHA-256 (GitHub lists it for every file)
+and size, and then runs silently: it closes the app, replaces the installed files and starts the app again.
+The next start removes the downloaded installer.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import requests
@@ -20,8 +21,9 @@ from . import __version__
 
 REPO = os.environ.get("VALCOACH_COMPANION_REPO", "ManuelSqp/valcoach")
 API = "https://api.github.com/repos/{repo}/releases?per_page=30"
-TAG_RE = re.compile(r"^companion-v(\d+)\.(\d+)\.(\d+)$")
-ASSET = "valcoach-companion.exe"
+TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+ASSET = "valcoach-companion-setup.exe"
+SILENT = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS", "/SP-"]
 
 
 class UpdateError(RuntimeError):
@@ -34,7 +36,7 @@ def version_tuple(v: str) -> tuple[int, int, int]:
 
 
 def latest(current: str = __version__, session=None) -> dict | None:
-    """The newest released companion app if it's newer than this one: {version, url, size, sha256, page, notes}."""
+    """The newest released companion installer if it's newer than this app: {version, url, size, sha256, page, notes}."""
     s = session or requests
     try:
         r = s.get(API.format(repo=REPO), timeout=15, headers={"Accept": "application/vnd.github+json",
@@ -64,12 +66,13 @@ def latest(current: str = __version__, session=None) -> dict | None:
 
 
 def download(info: dict, folder: Path, progress=lambda done, total: None, session=None) -> Path:
-    """The new .exe into `folder` (as .download until it's complete and checked)."""
+    """The installer into `folder` (as .download until it's complete and checked) -> its final path."""
     url = info.get("url", "")
     if not url.startswith("https://github.com/") and not url.startswith("https://objects.githubusercontent.com/"):
         raise UpdateError("The download isn't on GitHub")
     s = session or requests
-    part = Path(folder) / (ASSET + ".download")
+    final = Path(folder) / f"valcoach-companion-setup-{info.get('version', 'new')}.exe"
+    part = final.with_name(final.name + ".download")
     h = hashlib.sha256()
     done = 0
     try:
@@ -91,35 +94,28 @@ def download(info: dict, folder: Path, progress=lambda done, total: None, sessio
     if info.get("sha256") and h.hexdigest() != info["sha256"]:
         part.unlink(missing_ok=True)
         raise UpdateError("The download doesn't match the release (SHA-256): nothing was changed")
-    return part
+    os.replace(part, final)
+    return final
 
 
 def can_install() -> bool:
-    """Only the .exe can replace itself (running from Python source: update with git / pip instead)."""
+    """Only on Windows, from the built app (running from Python source: update with git / pip instead)."""
     return bool(getattr(sys, "frozen", False)) and sys.platform == "win32"
 
 
-def install(new: Path) -> None:
-    """Swap the new .exe in and start it. The caller quits right after."""
-    exe = Path(sys.executable)
-    old = exe.with_name(exe.name + ".old")
-    old.unlink(missing_ok=True)
-    os.replace(exe, old)                       # a running .exe can be renamed, not overwritten
-    try:
-        os.replace(new, exe)
-    except OSError:
-        os.replace(old, exe)                   # put the old one back
-        raise
-    subprocess.Popen([str(exe)], close_fds=True, creationflags=0x00000008)   # DETACHED_PROCESS
+def install(setup: Path) -> None:
+    """Start the installer silently; the caller quits right after (the installer also closes the app if needed,
+    and starts it again when it's done)."""
+    subprocess.Popen([str(setup), *SILENT], close_fds=True, creationflags=0x00000008)   # DETACHED_PROCESS
 
 
 def cleanup() -> None:
-    """Remove what the last update left behind."""
-    if not getattr(sys, "frozen", False):
-        return
-    exe = Path(sys.executable)
-    for leftover in (exe.with_name(exe.name + ".old"), exe.with_name(ASSET + ".download")):
+    """Remove installers from earlier updates (and the .exe the very first version left next to itself)."""
+    for f in Path(tempfile.gettempdir()).glob("valcoach-companion-setup-*.exe*"):
         try:
-            leftover.unlink(missing_ok=True)
+            f.unlink()
         except OSError:
-            pass                               # the old one may still be closing: next start
+            pass                               # still running: next start
+    if getattr(sys, "frozen", False):
+        exe = Path(sys.executable)
+        exe.with_name(exe.name + ".old").unlink(missing_ok=True)

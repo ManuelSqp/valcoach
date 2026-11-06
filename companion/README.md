@@ -13,33 +13,37 @@ Each of the three can be switched off.
 
 ## Install
 
-1. Download `valcoach-companion.exe` from the repository's
-   [releases](https://github.com/ManuelSqp/valcoach/releases) (tags `companion-v...`).
-2. Start it. Windows may warn that the app is unknown (it isn't signed): *More info › Run anyway*.
-3. Enter the valcoach address (e.g. `https://coach.example.com`), your valcoach username and password, and
+1. Download `valcoach-companion-setup.exe` from the newest [release](https://github.com/ManuelSqp/valcoach/releases)
+   and run it. Windows may warn that the installer is unknown (it isn't signed): *More info › Run anyway*.
+   It installs for your Windows user only (no admin rights) into `%LOCALAPPDATA%\Programs\valcoach companion`,
+   with a Start menu entry; the downloaded installer can be deleted right after. Uninstall it under
+   *Settings › Apps*.
+2. Enter the valcoach address (e.g. `https://coach.example.com`), your valcoach username and password, and
    *Log in*. The app gets a key for this PC; the password isn't stored. The key is in Windows' Credential Manager.
    *Account › Companion app* in valcoach lists your devices and logs one out; changing your password logs out all.
-4. Pick your player, check the two folders (it looks for KovaaK's in your Steam libraries and for Medal in
-   `Videos\Medal`), and tick *Start with Windows* if you like.
+3. Pick your player, check the two folders (it looks for KovaaK's in your Steam libraries and for Medal in
+   `Videos\Medal`), and switch on *Start with Windows* if you like.
 
 Closing the window keeps it running in the tray; *Quit* in the tray menu ends it.
 
-## Updates
+## Versions and updates
 
-The app looks for a newer release once a day (and on *Check for updates*). When there is one, a bar at the top
-says so, and *Update now* downloads it, checks it against the SHA-256 GitHub lists for the file, swaps it in and
-restarts the app: nothing else to do. Running it from Python source instead, *Open download* opens the release page.
+The app has **the same version as valcoach** (4.4.0 and 4.4.0); a test checks that `companion/valcoach_companion/
+__init__.py` and `valcoach/__init__.py` agree. Once a day (and on *Check for updates*) the app looks for a newer
+valcoach release on GitHub that has the installer attached. *Update now* downloads it to the temp folder, checks it
+against the SHA-256 GitHub lists for the file, and runs it silently: it closes the app, replaces the files and
+starts the app again. Running from Python source instead, *Open download* opens the release page.
 
-**Publishing a new version:** raise `__version__` in `companion/valcoach_companion/__init__.py` (and in
-`companion/pyproject.toml`), merge, then push a tag with the same version:
+**Publishing a release:** after merging, push the version as a tag:
 
 ```
 git switch main && git pull
-git tag companion-v1.1.0
-git push origin companion-v1.1.0
+git tag v4.4.0
+git push origin v4.4.0
 ```
 
-The workflow refuses a tag that doesn't match the app's version, builds the .exe on Windows and creates the release.
+`.github/workflows/companion.yml` checks that the tag matches valcoach's version, builds the app and the installer
+on Windows and attaches `valcoach-companion-setup.exe` to the release `v4.4.0` (creating it if it isn't there yet).
 Every installed app offers the update within a day.
 
 ## How the matches are found in a Medal recording
@@ -62,13 +66,16 @@ valcoach's kill-feed sync lines it up exactly afterwards.
 
 ## Build it yourself
 
+On Windows, with Python 3.12 and [Inno Setup 6](https://jrsoftware.org/isinfo.php):
+
 ```bash
-pip install "./companion[build]"
+pip install -e . "./companion[build]"
 cd companion
 python -c "from valcoach_companion.app import logo; logo(256).save('icon.ico', sizes=[(16, 16), (32, 32), (48, 48), (256, 256)])"
-pyinstaller --noconfirm --onefile --windowed --name valcoach-companion --icon icon.ico --collect-data customtkinter \
+pyinstaller --noconfirm --onedir --windowed --name valcoach-companion --icon icon.ico --collect-data customtkinter \
   --collect-binaries imageio_ffmpeg --collect-submodules keyring --hidden-import pystray._win32 run_companion.py
+iscc /DAppVersion=4.4.0 installer.iss          # -> dist\valcoach-companion-setup.exe
 ```
 
-GitHub Actions does the same on Windows (`.github/workflows/companion.yml`): push a tag `companion-v1.0.0` and the
-.exe lands in a release. Without installing: `pip install ./companion` then `python -m valcoach_companion`.
+*Run workflow* on the companion workflow does the same on GitHub (the installer is under the run's Artifacts).
+Without building anything: `pip install ./companion` then `python -m valcoach_companion`.
