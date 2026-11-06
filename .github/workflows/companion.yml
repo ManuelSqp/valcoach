@@ -1,11 +1,12 @@
-# Builds the companion app (companion/) as one Windows .exe.
-# Push a tag like companion-v1.0.0 to publish it as a GitHub release; "Run workflow" builds it for testing
-# (the .exe is then under the run's Artifacts).
+# Builds the companion app (companion/) and its Windows installer.
+# A release tag vX.Y.Z (valcoach's version: the app has the same one) builds valcoach-companion-setup.exe and
+# attaches it to that GitHub release (created if it doesn't exist yet). "Run workflow" builds it for testing:
+# the installer is then under the run's Artifacts.
 name: companion
 
 on:
   push:
-    tags: ["companion-v*"]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -14,37 +15,52 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install "./companion[build]" pytest
+        run: pip install -e . "./companion[build]" pytest
       - name: Tests (the parts that don't need a screen)
         run: pytest -q -p no:cacheprovider tests/test_companion.py
-      - name: Check the tag matches the app's version
-        if: startsWith(github.ref, 'refs/tags/companion-v')
+      - name: Version
+        id: version
         shell: bash
         run: |
-          v=$(python -c "import sys; sys.path.insert(0, 'companion'); import valcoach_companion as c; print(c.__version__)")
-          test "companion-v$v" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME but the app says $v"; exit 1; }
-      - name: Build the .exe
+          v=$(python -c "import valcoach; print(valcoach.__version__)")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            test "v$v" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME, but valcoach says $v"; exit 1; }
+          fi
+      - name: Build the app
         working-directory: companion
         run: |
           python -c "from valcoach_companion.app import logo; logo(256).save('icon.ico', sizes=[(16, 16), (32, 32), (48, 48), (256, 256)])"
-          pyinstaller --noconfirm --onefile --windowed --name valcoach-companion --icon icon.ico --collect-data customtkinter --collect-binaries imageio_ffmpeg --collect-submodules keyring --hidden-import pystray._win32 run_companion.py
+          pyinstaller --noconfirm --onedir --windowed --name valcoach-companion --icon icon.ico --collect-data customtkinter --collect-binaries imageio_ffmpeg --collect-submodules keyring --hidden-import pystray._win32 run_companion.py
+      - name: Build the installer
+        working-directory: companion
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y | Out-Null }
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
-          name: valcoach-companion
-          path: companion/dist/valcoach-companion.exe
-      - name: Release
-        if: startsWith(github.ref, 'refs/tags/companion-v')
+          name: valcoach-companion-setup
+          path: companion/dist/valcoach-companion-setup.exe
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "$GITHUB_REF_NAME" companion/dist/valcoach-companion.exe
-          --title "Companion app ${GITHUB_REF_NAME#companion-v}"
-          --notes "Windows app for valcoach: KovaaK's playlists and scores, matches out of Medal recordings. See companion/README.md."
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" companion/dist/valcoach-companion-setup.exe --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" companion/dist/valcoach-companion-setup.exe \
+              --title "valcoach ${GITHUB_REF_NAME#v}" \
+              --notes "What changed: see CHANGELOG.md. The companion app for Windows: valcoach-companion-setup.exe below."
+          fi

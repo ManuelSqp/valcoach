@@ -84,6 +84,12 @@ def test_one_sync_cuts_the_match_out_and_uploads_it(tmp_path, monkeypatch):
     json.dumps(s.recordings)
 
 
+def test_the_app_has_valcoach_s_version():
+    import valcoach
+    import valcoach_companion
+    assert valcoach_companion.__version__ == valcoach.__version__
+
+
 def test_updates_pick_the_newest_release_and_check_the_download(tmp_path):
     import hashlib
     from valcoach_companion import updater
@@ -103,30 +109,29 @@ def test_updates_pick_the_newest_release_and_check_the_download(tmp_path):
 
         def __exit__(self, *a):
             return False
-    exe = b"MZ new app"
-    good = "sha256:" + hashlib.sha256(exe).hexdigest()
+    setup = b"MZ installer"
+    good = "sha256:" + hashlib.sha256(setup).hexdigest()
 
-    def rel(tag, digest=good, draft=False):
+    def rel(tag, digest=good, draft=False, asset="valcoach-companion-setup.exe"):
         return {"tag_name": tag, "draft": draft, "prerelease": False, "html_url": f"https://github.com/r/{tag}",
-                "assets": [{"name": "valcoach-companion.exe", "size": len(exe), "digest": digest,
-                            "browser_download_url": f"https://github.com/r/releases/download/{tag}/valcoach-companion.exe"}]}
+                "assets": [{"name": asset, "size": len(setup), "digest": digest,
+                            "browser_download_url": f"https://github.com/r/releases/download/{tag}/{asset}"}]}
 
     class S:
         def __init__(self, releases):
             self.releases = releases
 
         def get(self, url, **k):
-            return R(self.releases) if "api.github.com" in url else R(body=exe)
-    s = S([rel("v4.3.0"), rel("companion-v1.0.0"), rel("companion-v1.2.0"), rel("companion-v1.10.0", draft=True),
-           rel("companion-v1.1.5")])
-    info = updater.latest("1.1.0", session=s)
-    assert info["version"] == "1.2.0" and info["sha256"] == good[7:]                 # 1.10 is a draft
-    assert updater.latest("1.2.0", session=s) is None
+            return R(self.releases) if "api.github.com" in url else R(body=setup)
+    s = S([rel("v4.3.0", asset="something-else.zip"), rel("companion-v9.0.0"), rel("v4.4.0"), rel("v4.10.0", draft=True),
+           rel("v4.3.5")])
+    info = updater.latest("4.3.1", session=s)
+    assert info["version"] == "4.4.0" and info["sha256"] == good[7:]       # 4.10 is a draft, 9.0.0 the old naming
+    assert updater.latest("4.4.0", session=s) is None
     path = updater.download(info, tmp_path, session=s)
-    assert path.read_bytes() == exe
-    bad = dict(info, sha256="0" * 64)
+    assert path.name == "valcoach-companion-setup-4.4.0.exe" and path.read_bytes() == setup
     with pytest.raises(updater.UpdateError):
-        updater.download(bad, tmp_path, session=s)
-    assert not (tmp_path / "valcoach-companion.exe.download").exists()              # nothing half-written stays
+        updater.download(dict(info, sha256="0" * 64), tmp_path, session=s)
+    assert not list(tmp_path.glob("*.download"))                            # nothing half-written stays
     with pytest.raises(updater.UpdateError):
-        updater.download(dict(info, url="https://evil.example/app.exe"), tmp_path, session=s)
+        updater.download(dict(info, url="https://evil.example/setup.exe"), tmp_path, session=s)

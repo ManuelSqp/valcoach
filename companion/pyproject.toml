@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "valcoach-companion"
-version = "1.1.0"
+dynamic = ["version"]
 description = "valcoach companion: KovaaK's playlists and scores, and matches cut out of Medal recordings"
 requires-python = ">=3.11"
 dependencies = [
@@ -24,3 +24,6 @@ valcoach-companion = "valcoach_companion.app:main"
 
 [tool.setuptools]
 packages = ["valcoach_companion"]
+
+[tool.setuptools.dynamic]
+version = {attr = "valcoach_companion.__version__"}
