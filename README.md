@@ -1,7 +1,7 @@
-# valcoach
+# Nexus
 
-**Version 4.4.2** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
-next to the logo in the web app, in *Settings*, at the top of every report, and in `valcoach --version`.
+**Version 4.5.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
 with a web app so several players can use it.
@@ -34,7 +34,7 @@ pytest -q                     # ~170 tests, ~3 min, builds a synthetic match + V
 ollama pull qwen3.8:27b       # default; alternatives below
 ```
 
-**Update:** `git pull`, then `pip install -e .` and restart the app (`sudo systemctl restart valcoach`,
+**Update:** `git pull`, then `pip install -e .` and restart the app (`sudo systemctl restart nexus`,
 or `docker compose up -d --build`). Your `data/` folder and `config.toml` aren't in git, so they stay as they are.
 
 ### What the server needs
@@ -78,7 +78,7 @@ server overview. The key can also come from `ANTHROPIC_API_KEY`.
 changes, abilities, pros, KovaaK's playlists and share codes) in *Ask the coach*, in the questions about a round of a
 report and on the Aim page; answers list the pages they used. Pick a main search and a backup, which takes over
 when the main one fails or finds nothing:
-- **DuckDuckGo**: free, nothing to set up. DuckDuckGo has no official search API, so valcoach reads its plain HTML
+- **DuckDuckGo**: free, nothing to set up. DuckDuckGo has no official search API, so Nexus reads its plain HTML
   results page, and DuckDuckGo often refuses searches that don't come from a browser (sometimes the very first one).
   Fine as a backup; for the main search SearXNG is the reliable choice.
 - **SearXNG**, your own search server (free, nothing leaves your network except the searches). It has to answer
@@ -95,7 +95,7 @@ fetched from public addresses, never from the server itself or your LAN.
 
 ```bash
 source .venv/bin/activate
-valcoach web                  # http://<ip>:10070
+nexus web                  # http://<ip>:10070
 ```
 
 Options: `--port 10070`, `--host 127.0.0.1` (this PC only), `--data data`
@@ -133,9 +133,9 @@ light or dark, menu on the left or at the top, centred or full width) is under A
 **Deutsch / English:** every user picks the interface language under Account › Look & feel (the login page
 follows the browser, or the switch above the form). Menus, pages, messages, notifications and, per team, the
 Discord posts are translated; the coach's own texts stay in each player's coaching language. Translations live
-in `valcoach/i18n/de.json` (`#` = any number, `{name}` = any text); a missing line simply stays English.
+in `nexus/i18n/de.json` (`#` = any number, `{name}` = any text); a missing line simply stays English.
 
-**On your phone or a second screen:** Account › *Install as an app* puts valcoach on your home screen (no app
+**On your phone or a second screen:** Account › *Install as an app* puts Nexus on your home screen (no app
 store) and turns on notifications (report ready, match day). *Match day › Match screen* shows the comp, plans,
 strats, lineups and the opponent for the match you're playing, with an Attack / Defense switch. A finished report
 can be shared as a read-only link (on its page: *Make a share link*).
@@ -157,13 +157,13 @@ the coach finds more online.
 **Ask the coach:** *Practice › Ask the coach* is a chat with the coach about one player. It knows the player's stats,
 habits, aim and KovaaK's scores and remembers the conversation (per user and player).
 
-**Companion app (Windows):** [companion/](companion/README.md) is a small tray app for each player. It puts the
-coach's KovaaK's playlists into KovaaK's, sends new KovaaK's scores, and cuts the matches out of Medal session
-recordings (by the start time in Medal's file name and Riot's match start) and uploads them, so the recording is
-picked already on the match's coach page. It logs in once and gets its own key for that PC (*Account › Companion
-app* lists and removes them). Install it with `valcoach-companion-setup.exe` from the releases; it has the same
-version as valcoach and updates itself. Uploaded clips no report used are deleted after 14 days
-(`companion_keep_days`).
+**Nexus for Windows:** [desktop/](desktop/README.md) is an app that shows Nexus in its own window and adds
+*This PC* to the menu. It puts the coach's KovaaK's playlists into KovaaK's, sends new KovaaK's scores, and cuts
+the matches out of Medal session recordings (by the start time in Medal's file name and Riot's match start) and
+uploads them, so the recording is picked already on the match's coach page. You log in in the window like on the
+website; the app then gets its own key for that PC (*Account › Nexus app for Windows* lists and removes them).
+Install it with `nexus-setup.exe` from the releases; it has the same version as Nexus and updates itself.
+Uploaded clips no report used are deleted after 14 days (`companion_keep_days`).
 
 ### What's in a report
 
@@ -197,7 +197,7 @@ version as valcoach and updates itself. Uploaded clips no report used are delete
 - **Duels**: did you die while looking at your killer (lost aim duel), or was they
   at your side / behind you (positioning)? Damage you did to your killer, kills and
   deaths by range, headshot / leg-shot share per main weapon.
-- View directions come from the API. valcoach checks them per match (killers must
+- View directions come from the API. Nexus checks them per match (killers must
   face their victims); if the data doesn't fit, duel analysis falls back to
   positions and damage and the log says so.
 
@@ -243,7 +243,7 @@ role that suits their team role and that the team is thin on, picked from what's
 **Whole-team match review.** *Review the whole team* on the coach page (on by default) adds a **Your team** section to
 the report: every player of your team gets what went well, what to fix (with round links) and **how the team can
 help them**, judged against their roles. The *Together* tab shows trades, deaths not traded, deaths alone and
-deaths while outnumbered for everyone, and who traded whom. CLI: `valcoach coach <match> --team`.
+deaths while outnumbered for everyone, and who traded whom. CLI: `nexus coach <match> --team`.
 
 **Sharing a team.** Teammates get their own login (admin: *Users*, or turn on sign-up) with their in-game name.
 Under *Members, maps & Discord → Teammates with access* you add them; they then see the team and their teammates'
@@ -350,7 +350,7 @@ so coaching them can fail.
   `Origin` header). Behind a reverse proxy, keep the original `Host` header or
   set `X-Forwarded-Host`.
 - Forgotten admin password: run
-  `python -c "from valcoach.web.store import Store; s=Store('data'); s.set_password(s.user_by_name('user').id, 'new-password')"`
+  `python -c "from nexus.web.store import Store; s=Store('data'); s.set_password(s.user_by_name('user').id, 'new-password')"`
   in the project folder.
 
 Only open the app on your LAN or behind your reverse proxy (with HTTPS). It
@@ -375,18 +375,31 @@ Record as **MP4 with H.264**, because browsers can't play every MKV.
 **Option A: systemd** (simplest, uses your existing `.venv`)
 
 ```bash
-sudo cp deploy/valcoach.service /etc/systemd/system/
-sudo nano /etc/systemd/system/valcoach.service    # check User= and paths
+sudo cp deploy/nexus.service /etc/systemd/system/
+sudo nano /etc/systemd/system/nexus.service    # check User= and paths
 sudo systemctl daemon-reload
-sudo systemctl enable --now valcoach
-journalctl -u valcoach -f                         # logs
+sudo systemctl enable --now nexus
+journalctl -u nexus -f                         # logs
 ```
 
-After an update: `git pull`, `pip install -e .` in the venv, then `sudo systemctl restart valcoach`.
+After an update: `git pull`, `pip install -e .` in the venv, then `sudo systemctl restart nexus`.
 The service may only write to `data/`; if a recordings folder lives somewhere
 else, it still works (read-only is enough). Backups to another folder (Settings › Backups) need that folder
 added to the service as `ReadWritePaths=/path/to/backups`; it must be inside `/mnt`, `/media`, `/srv`, `/home`,
-`/backup(s)` or `/var/backups`, or listed in `Environment=VALCOACH_BACKUP_ROOTS=/your/folder` (`:`-separated).
+`/backup(s)` or `/var/backups`, or listed in `Environment=NEXUS_BACKUP_ROOTS=/your/folder` (`:`-separated).
+
+**Coming from valcoach (4.4 or older)?** Nexus was called valcoach before 4.5. Once, after `git pull`:
+
+```bash
+source .venv/bin/activate
+pip uninstall -y valcoach && pip install -e .     # the command is now `nexus`
+sudo systemctl disable --now valcoach
+sudo cp deploy/nexus.service /etc/systemd/system/  # take over User=, paths and ReadWritePaths= from valcoach.service
+sudo systemctl daemon-reload && sudo systemctl enable --now nexus
+```
+
+`data/valcoach.db` becomes `data/nexus.db` by itself at the first start, old backups still count, and
+`VALCOACH_BACKUP_ROOTS` / `VALCOACH_MODEL` keep working (the new names are `NEXUS_…`). Logins stay valid.
 
 **Option B: Docker Compose**
 
@@ -398,7 +411,7 @@ docker compose logs -f
 - Uses host networking, so Ollama on the same host is reached at `127.0.0.1:11434`
   as before and the app stays on port 10070.
 - `./data` is mounted at `/data`. Existing reports and uploads keep working:
-  valcoach finds them in the new location automatically.
+  Nexus finds them in the new location automatically.
 - Recordings folders: mount them at the **same path** as on the host
   (see the commented line in `docker-compose.yml`).
 - Update: `git pull`, then the same `up -d --build`.
@@ -414,7 +427,7 @@ Use one or the other, not both (both want port 10070).
 | Minimap → Rotate | **Fixed** (orientation *Always the same* or *Based on side*, both work) |
 | Minimap → Keep player centered | **Off** |
 | Minimap size / zoom | anything, but **keep it the same** across recordings |
-| Colour-blind mode / enemy highlight | default (otherwise adjust `COLOR_RANGES` in `valcoach/video/minimap.py`) |
+| Colour-blind mode / enemy highlight | default (otherwise adjust `COLOR_RANGES` in `nexus/video/minimap.py`) |
 | HUD | default kill-feed position (top right) |
 
 The first time, check the minimap/kill-feed areas with the CLI (below). If
@@ -427,11 +440,11 @@ anchor (the VOD time of one kill).
 on the first start of the web app to pre-fill Settings and create your profile.
 
 ```bash
-valcoach history                                   # last 10 matches
-valcoach coach latest --vod match.mp4              # full run, writes output/*.html
-valcoach coach <match_id> --no-llm                 # facts only
-valcoach calibrate-minimap <match_id> match.mp4    # debug images in output/calibration/
-valcoach notes-template <match_id>
+nexus history                                   # last 10 matches
+nexus coach latest --vod match.mp4              # full run, writes output/*.html
+nexus coach <match_id> --no-llm                 # facts only
+nexus calibrate-minimap <match_id> match.mp4    # debug images in output/calibration/
+nexus notes-template <match_id>
 ```
 
 `calibrate-minimap` draws the minimap area (orange), the kill-feed area
@@ -467,7 +480,7 @@ Settings (web) or `[video]` (CLI).
 | `coach/teamreview.py` | whole-team review of one match (facts per teammate, trades, model write-up) |
 | `stats/` | history import, per map / agent aggregates, findings, team comps with subs, pick helper, tips, playstyle + pro matching (`style.py`, `pros.yaml`), YouTube search, team roles (`teamroles.py`) |
 
-Data of the web app lives in `data/`: `valcoach.db`, `cache/` (matches, maps,
+Data of the web app lives in `data/`: `nexus.db`, `cache/` (matches, maps,
 minimap calibrations), `profiles/<id>/` (playbook, notes), `uploads/`,
 `reports/<job>/`, `uploads/<user>/`, `profiles/<id>/stats/` (imported games, tips). Deleting a report also deletes its uploaded VOD.
 

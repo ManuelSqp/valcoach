@@ -8,11 +8,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 import synth  # noqa: E402
 import synth_history as sh  # noqa: E402
 
-from valcoach.stats import roles  # noqa: E402
-from valcoach.stats.aggregate import (by_agent, by_map, filter_rows, local_meta, map_detail,  # noqa: E402
+from nexus.stats import roles  # noqa: E402
+from nexus.stats.aggregate import (by_agent, by_map, filter_rows, local_meta, map_detail,  # noqa: E402
                                       pattern, summary)
-from valcoach.stats.comp import Pool, best_comp, parse_meta, pick_helper, team_plan  # noqa: E402
-from valcoach.stats.games import ROW_VERSION, GameStore, import_games  # noqa: E402
+from nexus.stats.comp import Pool, best_comp, parse_meta, pick_helper, team_plan  # noqa: E402
+from nexus.stats.games import ROW_VERSION, GameStore, import_games  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -159,7 +159,7 @@ def test_pick_helper_fills_missing_role():
 
 
 def test_tips_prompt_and_schema(imported):
-    from valcoach.stats.tips import facts, write_tips
+    from nexus.stats.tips import facts, write_tips
     gs, _, _ = imported
     rows = filter_rows(gs.rows())
 
@@ -186,7 +186,7 @@ def test_pick_helper_names_a_role_you_dont_play():
 
 def test_client_reports_rate_limit_waits(tmp_path, monkeypatch):
     import requests
-    from valcoach import henrik
+    from nexus import henrik
     calls = []
 
     class Resp:
@@ -225,7 +225,7 @@ def test_role_mix_from_meta_is_followed_when_possible():
 # playstyle, pros, videos
 # ---------------------------------------------------------------------------
 def test_profile_uses_lobby_percentiles(imported):
-    from valcoach.stats.style import profile
+    from nexus.stats.style import profile
     gs, _, _ = imported
     rows = filter_rows(gs.rows())
     assert all("lobby" in r and len(r["lobby"]) == 10 for r in rows if r["source"] == "full")
@@ -254,7 +254,7 @@ def test_lobby_backfilled_from_cache(tmp_path, cache, history):
 
 
 def test_pro_list_and_matching():
-    from valcoach.stats.style import load_pros, match_pros
+    from nexus.stats.style import load_pros, match_pros
     pros = load_pros("")
     assert len(pros) >= 10 and all(p["role"] in roles.ROLES for p in pros)
     entry = {"games": 50, "dims": {"opening": 0.9, "kills": 0.85, "assists": 0.2, "survive": 0.4},
@@ -271,7 +271,7 @@ def test_pro_list_and_matching():
 
 
 def test_video_queries(imported):
-    from valcoach.stats.style import load_pros, match_pros, profile, video_queries
+    from nexus.stats.style import load_pros, match_pros, profile, video_queries
     gs, _, _ = imported
     rows = filter_rows(gs.rows())
     prof = profile(rows)
@@ -289,7 +289,7 @@ def test_video_queries(imported):
 
 
 def test_youtube_search_and_cache(tmp_path):
-    from valcoach.stats.youtube import YouTubeError, search
+    from nexus.stats.youtube import YouTubeError, search
 
     class Resp:
         def __init__(self, code, body):
@@ -321,8 +321,8 @@ def test_youtube_search_and_cache(tmp_path):
 
 
 def test_watch_guide_prompt(imported):
-    from valcoach.stats.style import load_pros, match_pros, profile, video_queries
-    from valcoach.stats.tips import write_watch_guide
+    from nexus.stats.style import load_pros, match_pros, profile, video_queries
+    from nexus.stats.tips import write_watch_guide
     gs, _, _ = imported
     rows = filter_rows(gs.rows())
     prof = profile(rows)
@@ -342,7 +342,7 @@ def test_watch_guide_prompt(imported):
 
 
 def test_team_roles_scores_and_lineup(tmp_path, cache, history):
-    from valcoach.stats.teamroles import PRIMARY, TEAM_ROLES, team_roles
+    from nexus.stats.teamroles import PRIMARY, TEAM_ROLES, team_roles
     members = []
     for n, t in [("adv1ce", "LFT"), ("red-0", "T"), ("red-2", "T"), ("red-3", "T"), ("red-4", "T")]:
         gs = GameStore(tmp_path / f"{n}.json")
@@ -368,7 +368,7 @@ def test_team_roles_scores_and_lineup(tmp_path, cache, history):
 # batch 2: team data, comps top 3, discord
 # ---------------------------------------------------------------------------
 def test_team_matches_tips_and_map_facts(tmp_path, cache, history):
-    from valcoach.stats.teamdata import map_facts, team_matches, teammate_tips
+    from nexus.stats.teamdata import map_facts, team_matches, teammate_tips
     (cache / "matches").mkdir(exist_ok=True)
     for d in history:                                   # what the importer caches
         (cache / "matches" / f"{d['metadata']['match_id']}.json").write_text(json.dumps({"status": 200, "data": d}))
@@ -389,7 +389,7 @@ def test_team_matches_tips_and_map_facts(tmp_path, cache, history):
 
 def test_first_contact_skips_zones_without_a_timing_window(tmp_path, monkeypatch):
     from types import SimpleNamespace as NS
-    from valcoach.stats import teamdata
+    from nexus.stats import teamdata
     monkeypatch.setattr(teamdata, "_map_info", lambda *a: NS(area=lambda x, y: "A", zone=lambda x, y: x))
     monkeypatch.setattr(teamdata, "_spawn", lambda *a: None)
     rounds = [NS(side_of=lambda t: "defense", winning_team="Red", plant=None,
@@ -400,7 +400,7 @@ def test_first_contact_skips_zones_without_a_timing_window(tmp_path, monkeypatch
 
 
 def test_top_comps_are_different():
-    from valcoach.stats.comp import top_comps
+    from nexus.stats.comp import top_comps
     cs = top_comps(_pools(), "Ascent")
     assert len(cs) == 3 and cs[0]["total"] >= cs[1]["total"] >= cs[2]["total"]
     sets = [{p["agent"] for p in c["picks"]} for c in cs]
@@ -408,10 +408,10 @@ def test_top_comps_are_different():
 
 
 def test_discord_payloads():
-    from valcoach.discord import DiscordError, focus_embeds, post, prep_embeds, valid_url
+    from nexus.discord import DiscordError, focus_embeds, post, prep_embeds, valid_url
     assert valid_url("https://discord.com/api/webhooks/123456/abcDEF-_x")
     assert not valid_url("https://example.com/api/webhooks/1/x") and not valid_url("")
-    from valcoach.stats.comp import top_comps
+    from nexus.stats.comp import top_comps
     plans = {"Ascent": {"plans": [{"title": "A fake", "side": "attack", "idea": "fake A, hit B", "timing": "1:05",
                                    "if_then": ["if they stack B, go A"], "steps": [{"player": "duel", "what": "lurk B"}]}]}}
     e = prep_embeds("Peek911", [{"map": "Ascent", "comps": top_comps(_pools(), "Ascent")}], plans)
@@ -435,7 +435,7 @@ def test_discord_payloads():
 
 
 def test_game_plan_steps_cleaned_and_ordered():
-    from valcoach.stats.gameplans import write_plans
+    from nexus.stats.gameplans import write_plans
 
     class LLM:
         model = "m"
@@ -453,8 +453,8 @@ def test_game_plan_steps_cleaned_and_ordered():
 def test_secrets_stay_out_of_network_errors(tmp_path, monkeypatch):
     """requests puts the whole URL in its error text, and those texts are shown to teammates."""
     import requests
-    from valcoach import discord
-    from valcoach.stats import youtube
+    from nexus import discord
+    from nexus.stats import youtube
     monkeypatch.setattr(youtube, "API", "https://127.0.0.1:9/youtube/v3/search")   # nothing listens here
     with pytest.raises(requests.RequestException) as e:
         youtube.search("SECRETKEY", "q", tmp_path)
@@ -488,7 +488,7 @@ def test_rows_v3_clutch_duels_retakes(imported):
 
 def test_progress_weeks_trend_and_focus_check():
     from datetime import datetime, timedelta, timezone
-    from valcoach.stats import progress as prog
+    from nexus.stats import progress as prog
     now = datetime(2026, 10, 30, 12, tzinfo=timezone.utc)
 
     def row(days, won, kast, fk, fd):
@@ -514,8 +514,8 @@ def test_progress_weeks_trend_and_focus_check():
 
 
 def test_training_aim_routine_and_learning_path(imported):
-    from valcoach.stats import training as tr
-    from valcoach.stats.style import load_pros
+    from nexus.stats import training as tr
+    from nexus.stats.style import load_pros
     gs, _, _ = imported
     rows = gs.rows()
     a = tr.aim_profile(rows)
@@ -528,7 +528,7 @@ def test_training_aim_routine_and_learning_path(imported):
     assert r[0]["key"] == "crosshair" and r[-1]["key"] == "dm_warm" and len({x["key"] for x in r}) == len(r)
     refs = tr.team_refs("me", {"me": weak, "mate": {**weak, "hs": 0.25}})
     assert refs and refs[0]["who"] == "mate" and refs[0]["what"] == "headshots"
-    from valcoach.stats.teamroles import FALLBACK_AGENTS, ROLE_AGENTS
+    from nexus.stats.teamroles import FALLBACK_AGENTS, ROLE_AGENTS
     learn = tr.agents_to_learn("Support", {"Sova": 20}, {"Initiator": 2, "Controller": 0}, {"Omen": 0.3}, 5, ROLE_AGENTS, FALLBACK_AGENTS)
     assert 3 <= len(learn) <= 5 and learn[0]["agent_role"] == "Controller" and learn[0]["agent"] == "Omen"
     assert all(x["agent"] != "Sova" for x in learn)
@@ -539,7 +539,7 @@ def test_training_aim_routine_and_learning_path(imported):
 
 def test_premier_schedule_from_api_and_builtin():
     from datetime import datetime, timezone
-    from valcoach.stats.premier_schedule import BUILTIN, current, schedule
+    from nexus.stats.premier_schedule import BUILTIN, current, schedule
     api = [{"id": "old", "events": [{"type": "LEAGUE", "starts_at": "2025-01-01T00:00:00Z", "ends_at": "2025-01-05T00:00:00Z",
                                      "map_selection": {"maps": [{"name": "Icebox"}]}}]},
            {"id": "S2", "events": [
@@ -564,7 +564,7 @@ def test_premier_schedule_from_api_and_builtin():
 def _quiz_match():
     """Round 1: you're left 1v2 after the plant. Round 2: you die first, 30 m from your team, untraded.
     Round 3: your team is 5v3 and loses."""
-    from valcoach.models import Kill, Match, Player, PlayerLoc, Round, SpikeEvent
+    from nexus.models import Kill, Match, Player, PlayerLoc, Round, SpikeEvent
     red = [f"r{i}" for i in range(5)]
     blue = [f"b{i}" for i in range(5)]
     pl = {pu: Player(pu, pu, "T", "Red" if pu in red else "Blue", "Sova" if pu == "r0" else "Jett", "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, {})
@@ -584,7 +584,7 @@ def _quiz_match():
 
 
 def test_quiz_moments_and_pick():
-    from valcoach.stats.quiz import moments, pick
+    from nexus.stats.quiz import moments, pick
     ms = moments(_quiz_match(), "r0", None)
     kinds = {m["kind"]: m for m in reversed(ms)}          # the first of each kind
     assert set(kinds) == {"clutch", "alone", "advantage"} and len(ms) == 4      # round 3 ends in a 1v3 too
@@ -599,7 +599,7 @@ def test_quiz_moments_and_pick():
 
 
 def test_rank_history():
-    from valcoach.stats import rank as rk
+    from nexus.stats import rank as rk
     items = [{"match_id": f"m{i}", "tier": {"id": 14, "name": "GOLD 3"}, "ranking_in_tier": 10 * i, "last_mmr_change": 10,
               "date": f"2026-10-{i + 1:02d}T20:00:00Z"} for i in range(5)]
     items.append({"currenttierpatched": "Platinum 1", "ranking_in_tier": 5, "mmr_change_to_last_game": 20, "date_raw": 1793300000})
@@ -618,7 +618,7 @@ def test_rank_history():
 
 def test_premier_schedule_skips_an_old_api_season():
     from datetime import datetime, timezone
-    from valcoach.stats.premier_schedule import current, schedule
+    from nexus.stats.premier_schedule import current, schedule
     old = [{"id": "S1", "events": [{"type": "LEAGUE", "starts_at": f"2025-03-0{d}T00:00:00Z", "ends_at": f"2025-03-0{d + 1}T00:00:00Z",
                                     "map_selection": {"maps": [{"name": "Ascent"}]}} for d in (1, 3, 5)]}]
     now = datetime(2026, 10, 30, tzinfo=timezone.utc)
@@ -647,7 +647,7 @@ class _Session:
 
 
 def test_claude_client_cost_budget_and_fallback(tmp_path, monkeypatch):
-    from valcoach.coach import llm as L
+    from nexus.coach import llm as L
     monkeypatch.setattr(L.time, "sleep", lambda s: None)
     L.set_usage_file(tmp_path / "llm_usage.json")
     ok = _Resp(200, {"content": [{"type": "tool_use", "name": "answer", "input": {"x": 1}}], "stop_reason": "tool_use",
@@ -692,9 +692,9 @@ def test_claude_client_cost_budget_and_fallback(tmp_path, monkeypatch):
 
 
 def test_make_llm_choices():
-    from valcoach.coach.llm import ClaudeLLM, WithFallback, make_llm
-    from valcoach.coach.ollama import Ollama
-    from valcoach.config import Config
+    from nexus.coach.llm import ClaudeLLM, WithFallback, make_llm
+    from nexus.coach.ollama import Ollama
+    from nexus.config import Config
     cfg = Config()
     cfg.ollama.model = "gemma4:26b"
     assert isinstance(make_llm(cfg), Ollama) and make_llm(cfg).model == "gemma4:26b"
@@ -709,8 +709,8 @@ def test_make_llm_choices():
 
 
 def test_rows_v5_utility_economy_teammates(imported):
-    from valcoach.stats.agentroles import agent_detail, grid
-    from valcoach.stats.rounds import economy, kind, teammates
+    from nexus.stats.agentroles import agent_detail, grid
+    from nexus.stats.rounds import economy, kind, teammates
     gs, _, _ = imported
     rows = gs.rows()
     full = [r for r in rows if r["source"] == "full"]
@@ -732,7 +732,7 @@ def test_rows_v5_utility_economy_teammates(imported):
 
 
 def test_review_evening_summary_and_scouted_round_types():
-    from valcoach.stats import evening as ev
+    from nexus.stats import evening as ev
     rounds = [{"n": n, "won": n % 2 == 0, "side": "attack", "score": "0–0", "tags": tags, "why": [ev.THEMES[t][0] for t in tags]}
               for n, tags in [(1, ["pistol_lost", "untraded"]), (2, []), (3, ["lead_lost", "untraded"]), (4, []), (5, ["untraded", "opening_lost"]),
                               (6, []), (7, ["opening_lost"])]]
@@ -758,9 +758,9 @@ def test_review_evening_summary_and_scouted_round_types():
 
 def test_round_facts_and_round_types_on_synthetic(tmp_path):
     import synth
-    from valcoach.parse import parse_match
-    from valcoach.stats import evening as ev
-    from valcoach.stats.rounds import round_types
+    from nexus.parse import parse_match
+    from nexus.stats import evening as ev
+    from nexus.stats.rounds import round_types
     files = synth.write_all(tmp_path, with_vod=False, n_rounds=6)
     m = parse_match(json.loads(Path(files["match"]).read_text()))
     side = m.teams[0]
@@ -773,7 +773,7 @@ def test_round_facts_and_round_types_on_synthetic(tmp_path):
 
 
 def test_aim_routines_pick_and_effect():
-    from valcoach.stats import aim
+    from nexus.stats import aim
     r, err = aim.clean({"name": "x", "kind": "link", "url": "javascript:alert(1)"})
     assert r is None and "https" in err
     r, _ = aim.clean({"name": "KK", "kind": "kovaaks", "code": "Abc-123", "focus": ["tracking", "bogus"], "minutes": "500"})
@@ -801,7 +801,7 @@ def _kcsv(scenario="1wall 6targets small", score=812.5, shots=100, hits=80):
 def test_kovaaks_files_scores_and_playlists():
     import io as _io
     import zipfile as _zip
-    from valcoach.stats import kovaaks as kv
+    from nexus.stats import kovaaks as kv
     # playlists in both spellings KovaaK's has used
     old = kv.read_playlist(json.dumps({"playlistName": "A", "shareCode": "KovaaKsTest", "scenarioList": [
         {"scenario_Name": " Wide Wall 10 Extra Small Moving ", "play_Count": 2}, {"scenario_Name": "bad/name"}]}))
@@ -845,15 +845,15 @@ def test_kovaaks_files_scores_and_playlists():
     assert any(x["level"] == 3 for x in flicks_mastered["items"] if x["focus"] == "flicks")
     from datetime import date as _date
     f = kv.playlist_file(w, "Player", _date(2026, 11, 3))
-    assert f["playlistName"] == "valcoach warm-up 03-11-2026 (Player)" and kv.file_name("training", _date(2026, 11, 3)) == "valcoach_training_03-11-2026.json"
+    assert f["playlistName"] == "Nexus warm-up 03-11-2026 (Player)" and kv.file_name("training", _date(2026, 11, 3)) == "nexus_training_03-11-2026.json"
     assert f["scenarioList"][0] == {"scenario_name": w["items"][0]["name"], "play_Count": 1} and f["version"] == 31
     assert kv.guess("VoxTargetSwitch xsmall 200%") == (["switching", "micro"], 3)
     assert kv.guess("Smooth Strafe Track Easy")[0][0] == "tracking"
 
 
 def test_web_search_helpers_and_community_playlists():
-    from valcoach.coach import websearch as ws
-    from valcoach.stats import kovaaks as kv
+    from nexus.coach import websearch as ws
+    from nexus.stats import kovaaks as kv
 
     class R:
         def __init__(self, code, data):
@@ -901,7 +901,7 @@ def test_web_search_helpers_and_community_playlists():
 
 
 def test_duckduckgo_results_and_the_backup_search():
-    from valcoach.coach import websearch as ws
+    from nexus.coach import websearch as ws
     page = """<div class="result results_links web-result"><div class="links_main result__body">
       <h2 class="result__title"><a rel="nofollow" class="result__a" href="https://playvalorant.com/patch-12">Patch <b>12</b> notes</a></h2>
       <a class="result__snippet" href="https://playvalorant.com/patch-12">Jett&#x27;s dash is <b>shorter</b>.</a></div></div>
@@ -946,7 +946,7 @@ def test_web_pages_are_read_from_the_checked_address(monkeypatch):
     name in the Host header; a redirect to a non-public name is refused."""
     import http.server
     import threading
-    from valcoach.coach import websearch as ws
+    from nexus.coach import websearch as ws
     seen = []
 
     class H(http.server.BaseHTTPRequestHandler):

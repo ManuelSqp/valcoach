@@ -1,0 +1,86 @@
+# Builds the Nexus app for Windows (desktop/) and its installer, and attaches nexus-setup.exe to the GitHub
+# release of the same version (the app has Nexus's version). The same file is attached a second time as
+# valcoach-companion-setup.exe: the companion app up to 4.4 looks for that name when it updates itself.
+# It starts when
+# - a tag vX.Y.Z is pushed (git push origin v4.4.1): the release is created if it isn't there yet,
+# - a release is published on GitHub's page (that creates the tag, but doesn't count as a push),
+# - "Run workflow" is pressed: with "release" set to a tag (e.g. v4.4.0) it attaches the installer to that
+#   existing release; left empty it only builds (the installer is then under the run's Artifacts).
+name: desktop
+
+on:
+  push:
+    tags: ["v*"]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Attach to this release (tag, e.g. v4.4.0); empty = only build"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-${{ inputs.release || github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      TAG: ${{ inputs.release || github.event.release.tag_name || (startsWith(github.ref, 'refs/tags/v') && github.ref_name) || '' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release || github.ref }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e . "./desktop[build]" pytest
+      - name: Tests (the parts that don't need a screen)
+        run: pytest -q -p no:cacheprovider tests/test_desktop.py
+      - name: Version
+        id: version
+        shell: bash
+        run: |
+          v=$(python -c "import nexus; print(nexus.__version__)")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ -n "$TAG" ]; then
+            test "v$v" = "$TAG" || { echo "Release $TAG, but nexus says $v"; exit 1; }
+          fi
+      - name: Build the app
+        working-directory: desktop
+        run: |
+          python -c "from nexus_desktop.app import logo; logo(256).save('icon.ico', sizes=[(16, 16), (32, 32), (48, 48), (256, 256)])"
+          pyinstaller --noconfirm --onedir --windowed --name nexus --icon icon.ico --collect-data webview --collect-binaries webview --hidden-import webview.platforms.winforms --hidden-import webview.platforms.edgechromium --hidden-import clr --collect-binaries imageio_ffmpeg --collect-submodules keyring --hidden-import pystray._win32 run_nexus.py
+      - name: Build the installer
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y | Out-Null }
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item dist\nexus-setup.exe dist\valcoach-companion-setup.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-setup
+          path: desktop/dist/nexus-setup.exe
+      - name: Attach to the release
+        if: env.TAG != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" desktop/dist/nexus-setup.exe desktop/dist/valcoach-companion-setup.exe --clobber
+          else
+            gh release create "$TAG" desktop/dist/nexus-setup.exe desktop/dist/valcoach-companion-setup.exe \
+              --title "Nexus ${TAG#v}" \
+              --notes "What changed: see CHANGELOG.md. The Nexus app for Windows: nexus-setup.exe below (valcoach-companion-setup.exe is the same file, for updates from the companion app up to 4.4)."
+          fi

@@ -1,4 +1,4 @@
-# Example notes file. Create a real one with:  valcoach notes-template <match_id>
+# Example notes file. Create a real one with:  nexus notes-template <match_id>
 # Notes for the match being coached are passed to that round's review.
 # Notes from other matches are used as style examples ("this is the feedback I want").
 match_id: example-not-a-real-match

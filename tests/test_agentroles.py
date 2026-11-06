@@ -1,5 +1,5 @@
 """Agents & roles: preferred class, role fit and the verdict, from hand-made game rows."""
-from valcoach.stats import agentroles, roles
+from nexus.stats import agentroles, roles
 
 
 def _row(agent, won=True, **kw):

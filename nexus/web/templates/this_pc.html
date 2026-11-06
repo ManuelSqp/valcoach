@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% import "_ui.html" as vc %}
+{% block title %}This PC · Nexus{% endblock %}
+{% block head %}<style>
+.pc-state{display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin:-6px 0 18px}
+.pc-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.pc-dot.ok{background:var(--win)}.pc-dot.busy{background:var(--amber);animation:pcpulse 1.2s ease-in-out infinite}
+@keyframes pcpulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.pc-dot.busy{animation:none}}
+.pc-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px}
+.pc-tile{display:block;text-align:left;font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;cursor:pointer}
+.pc-tile:hover{border-color:var(--line2)}
+.pc-tile>span{display:block;font-size:12.5px;color:var(--muted)}
+.pc-tile b{display:block;font-size:22px;font-weight:800;font-stretch:72%;line-height:1.25;font-family:var(--font-num)}
+.pc-tile b.ok{color:var(--win)}.pc-tile b.warn{color:var(--amber)}.pc-tile b.off{color:var(--muted)}
+.pc-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:0 18px}
+.pc-folder{display:flex;gap:8px;align-items:center;margin:4px 0 12px}
+.pc-folder code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel2);font-size:12.5px}
+.pc-folder code.missing{color:var(--amber)}
+.pc-switches{display:grid;gap:6px;margin-bottom:12px}
+.switch{display:flex;gap:10px;align-items:flex-start;margin:0;color:var(--text);font-size:13px;cursor:pointer;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel2)}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.switch .tr{flex:none;width:34px;height:20px;border-radius:99px;background:var(--line2);position:relative;transition:background .15s;margin-top:1px}
+.switch .tr::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s}
+.switch input:checked+.tr{background:var(--win)}
+.switch input:checked+.tr::after{left:17px}
+.switch input:focus-visible+.tr{outline:2px solid var(--accent);outline-offset:2px}
+.pc-log{margin:0 0 12px;max-height:260px;overflow:auto;font:12.5px/1.6 ui-monospace,Consolas,monospace;white-space:pre-wrap;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px}
+.pc-update{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pc-update .progress{display:block;flex-basis:100%;margin-top:4px}
+.pc-player{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.pc-player select{max-width:320px}
+</style>{% endblock %}
+{% block content %}
+{% call vc.pagehead('This PC', ctx='What the Nexus app does on this computer') %}
+  <button type="button" class="btn primary" id="pc-sync" hidden>Sync now</button>
+{% endcall %}
+
+<section class="card" id="pc-outside">
+  <h2>Only in the Nexus app</h2>
+  <p style="max-width:70ch">This page belongs to the Nexus app for Windows. The app shows Nexus in its own window and does what a
+    website can't: it puts the coach's playlists into KovaaK's, sends your KovaaK's scores, and cuts your matches out of
+    Medal recordings and uploads them.</p>
+  <p><a class="btn primary" href="{{ download }}" target="_blank" rel="noopener noreferrer">Download the installer</a></p>
+  <p class="hint">Run nexus-setup.exe, enter <code translate="no">{{ request.host_url.rstrip('/') }}</code> as the address and log in as usual.
+    Windows may warn that the app isn't signed: <i>More info › Run anyway</i>.</p>
+</section>
+
+<div id="pc-app" hidden>
+  <div class="pc-state"><span class="pc-dot" id="pc-dot"></span><span id="pc-state">Starting…</span></div>
+
+  <div class="flash ok pc-update" id="pc-update" hidden>
+    <span id="pc-update-text"></span>
+    <button type="button" class="btn sm primary" id="pc-update-btn">Update now</button>
+    <div class="progress" id="pc-update-bar" hidden><div></div></div>
+  </div>
+
+  <div class="pc-player">
+    <label for="pc-player" class="muted">Player</label>
+    {% if players %}
+    <select id="pc-player">{% for p in players %}<option value="{{ p.id }}" translate="no">{{ p.riot_id }}</option>{% endfor %}</select>
+    {% else %}<span class="muted">No player in your account yet: <a href="{{ url_for('profile_new') }}">add one</a>.</span>{% endif %}
+  </div>
+
+  <div class="pc-tiles">
+    <button type="button" class="pc-tile" data-go="pc-kovaaks"><span>Playlists</span><b id="t-playlists">–</b><span id="t-playlists-sub"></span></button>
+    <button type="button" class="pc-tile" data-go="pc-kovaaks"><span>Scores</span><b id="t-scores">–</b><span id="t-scores-sub"></span></button>
+    <button type="button" class="pc-tile" data-go="pc-medal"><span>Medal</span><b id="t-medal">–</b><span id="t-medal-sub"></span></button>
+  </div>
+
+  <div class="pc-cols">
+    <section class="panel" id="pc-kovaaks">
+      <header><h2>KovaaK's</h2></header>
+      <p class="small muted" style="margin-top:0">The coach's warm-up and training playlists land in KovaaK's › Playlists › Local Playlists, dated.
+        Your scores go to the Aim page.</p>
+      <div class="small muted">Game folder (the one with Saved and stats in it)</div>
+      <div class="pc-folder"><code id="f-kovaaks" translate="no"></code><button type="button" class="btn sm ghost" data-pick="kovaaks">Change</button></div>
+      <div class="pc-switches">
+        <label class="switch"><input type="checkbox" data-key="put_playlists"><span class="tr" aria-hidden="true"></span><span>Put the playlists into KovaaK's (once a day)</span></label>
+        <label class="switch"><input type="checkbox" data-key="send_scores"><span class="tr" aria-hidden="true"></span><span>Send new scores to Nexus</span></label>
+      </div>
+    </section>
+
+    <section class="panel" id="pc-medal">
+      <header><h2>Medal</h2></header>
+      <p class="small muted" style="margin-top:0">Each match is cut out of your session recordings (by the start time in the file name and
+        Riot's match start) and uploaded. It's then ready on the match's coach page.</p>
+      <div class="small muted">Recordings folder (where Medal saves MedalTVValorant….mp4)</div>
+      <div class="pc-folder"><code id="f-medal" translate="no"></code><button type="button" class="btn sm ghost" data-pick="medal">Change</button></div>
+      <div class="pc-switches">
+        <label class="switch"><input type="checkbox" data-key="upload_matches"><span class="tr" aria-hidden="true"></span><span>Cut my matches out and upload them</span></label>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <header><h2>Activity</h2></header>
+    <pre class="pc-log" id="pc-log" translate="no"></pre>
+  </section>
+
+  <section class="panel">
+    <header><h2>App</h2></header>
+    <div class="pc-switches">
+      <label class="switch"><input type="checkbox" data-key="autostart"><span class="tr" aria-hidden="true"></span><span>Start with Windows (in the tray)</span></label>
+      <label class="switch"><input type="checkbox" data-key="check_updates"><span class="tr" aria-hidden="true"></span><span>Look for updates once a day</span></label>
+    </div>
+    <div class="row between" style="margin-bottom:12px">
+      <span class="small muted">Version <span id="pc-version" translate="no"></span> · <span id="pc-device" translate="no"></span></span>
+      <span class="row">
+        <button type="button" class="btn sm ghost" id="pc-check">Check for updates</button>
+        <button type="button" class="btn sm ghost" id="pc-server">Change server</button>
+      </span>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const toast = (m, k) => window.nexusToast ? window.nexusToast(m, k) : null;
+  let api = null, timer = null, logLen = -1;
+
+  function tile(id, on, ok, sub) {
+    const b = $(id);
+    b.textContent = on && ok ? 'On' : (on ? 'Check folder' : 'Off');
+    b.className = on && ok ? 'ok' : (on ? 'warn' : 'off');
+    $(id + '-sub').textContent = on ? sub : 'Switched off';
+  }
+
+  function render(s) {
+    $('pc-dot').className = 'pc-dot' + (s.busy ? ' busy' : (s.last_sync ? ' ok' : ''));
+    $('pc-state').textContent = s.busy ? 'Working…' : (s.last_sync ? `Up to date · last check ${s.last_sync}, every ${s.every_min} min` : 'Starting…');
+    $('pc-version').textContent = s.version; $('pc-device').textContent = s.device;
+    const sel = $('pc-player');
+    if (sel && s.player_id && document.activeElement !== sel) sel.value = String(s.player_id);
+    for (const k of ['kovaaks', 'medal']) {
+      const c = $('f-' + k), path = s[k + '_dir'];
+      c.textContent = path || 'Not set'; c.title = path || '';
+      c.classList.toggle('missing', !s[k + '_ok']);
+    }
+    document.querySelectorAll('input[data-key]').forEach(i => { if (document.activeElement !== i) i.checked = !!s[i.dataset.key]; });
+    tile('t-playlists', s.put_playlists, s.kovaaks_ok, !s.kovaaks_ok ? 'Folder not found' : (s.last_playlists ? 'Last written ' + s.last_playlists : 'Not written yet'));
+    tile('t-scores', s.send_scores, s.kovaaks_ok, !s.kovaaks_ok ? 'Folder not found' : `${s.scores_sent} file${s.scores_sent === 1 ? '' : 's'} sent`);
+    tile('t-medal', s.upload_matches, s.medal_ok, !s.medal_ok ? 'Folder not found' : `${s.matches_uploaded} match${s.matches_uploaded === 1 ? '' : 'es'} uploaded`);
+    if (s.log.length !== logLen) {
+      const l = $('pc-log'), atEnd = l.scrollTop + l.clientHeight >= l.scrollHeight - 4;
+      l.textContent = s.log.length ? s.log.join('\n') : 'Nothing yet.'; logLen = s.log.length;
+      if (atEnd) l.scrollTop = l.scrollHeight;
+    }
+    const u = s.update, box = $('pc-update');
+    box.hidden = !u;
+    if (u) {
+      $('pc-update-text').textContent = s.update_error ? s.update_error : `Version ${u.version} is available (you have ${s.version}).`;
+      const btn = $('pc-update-btn'), bar = $('pc-update-bar');
+      bar.hidden = s.update_progress === null;
+      if (s.update_progress !== null) bar.firstElementChild.style.width = Math.round(s.update_progress * 100) + '%';
+      btn.disabled = s.update_progress !== null;
+      btn.textContent = s.update_progress !== null ? 'Downloading…' : (s.update_error ? 'Try again' : (u.can_install ? 'Update now' : 'Open download'));
+    }
+  }
+
+  async function refresh() {
+    try { render(await api.status()); } catch (e) {}
+  }
+
+  async function call(fn) {
+    try { const r = await fn(); if (r && r.error) toast(r.error, 'error'); } catch (e) { toast(String(e), 'error'); }
+    refresh();
+  }
+
+  function start() {
+    if (api || !(window.pywebview && window.pywebview.api && window.pywebview.api.status)) return;
+    api = window.pywebview.api;
+    $('pc-outside').hidden = true; $('pc-app').hidden = false; $('pc-sync').hidden = false;
+    $('pc-sync').addEventListener('click', () => call(() => api.sync_now()));
+    $('pc-check').addEventListener('click', () => call(() => api.check_updates()));
+    $('pc-update-btn').addEventListener('click', () => call(() => api.update_now()));
+    $('pc-server').addEventListener('click', () => { if (confirm('Connect the app to another Nexus server?')) api.change_server(); });
+    document.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => call(() => api.pick_folder(b.dataset.pick))));
+    document.querySelectorAll('input[data-key]').forEach(i => i.addEventListener('change', () => call(() => api.set(i.dataset.key, i.checked))));
+    document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => $(b.dataset.go).scrollIntoView({behavior: 'smooth', block: 'start'})));
+    const sel = $('pc-player');
+    if (sel) sel.addEventListener('change', () => call(() => api.set('player_id', +sel.value)));
+    refresh();
+    timer = setInterval(refresh, 1500);
+  }
+  window.addEventListener('pywebviewready', start);
+  document.addEventListener('nexus-paired', refresh);
+  start();
+})();
+</script>
+{% endblock %}

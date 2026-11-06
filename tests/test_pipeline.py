@@ -8,12 +8,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 import synth  # noqa: E402
 
-from valcoach.analysis.core import death_infos  # noqa: E402
-from valcoach.coach.engine import analyse, run_coach  # noqa: E402
-from valcoach.coach.ollama import parse_json  # noqa: E402
-from valcoach.maps import MapRegistry  # noqa: E402
-from valcoach.parse import infer_attackers, parse_match  # noqa: E402
-from valcoach.report import render_report  # noqa: E402
+from nexus.analysis.core import death_infos  # noqa: E402
+from nexus.coach.engine import analyse, run_coach  # noqa: E402
+from nexus.coach.ollama import parse_json  # noqa: E402
+from nexus.maps import MapRegistry  # noqa: E402
+from nexus.parse import infer_attackers, parse_match  # noqa: E402
+from nexus.report import render_report  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -39,14 +39,14 @@ def focus(match):
 
 @pytest.fixture(scope="session")
 def sync(data, match):
-    from valcoach.video.sync import sync_vod
+    from nexus.video.sync import sync_vod
     return sync_vod(match, str(data["vod"]), synth.KF_ROI)
 
 
 @pytest.fixture(scope="session")
 def calibration(data, match, map_info, sync, focus):
-    from valcoach.video.io import roi_px, video_info
-    from valcoach.video.minimap import calibrate, collect_calibration_samples
+    from nexus.video.io import roi_px, video_info
+    from nexus.video.minimap import calibrate, collect_calibration_samples
     samples = collect_calibration_samples(match, map_info, str(data["vod"]), sync, synth.MM_ROI, focus)
     info = video_info(str(data["vod"]))
     roi = roi_px(synth.MM_ROI, info.width, info.height)
@@ -128,7 +128,7 @@ def test_sync_recovers_offset(sync):
 
 
 def test_sync_anchor(data, match):
-    from valcoach.video.sync import sync_from_anchor
+    from nexus.video.sync import sync_from_anchor
     k = match.rounds[2].kills[0]
     res = sync_from_anchor(match, str(data["vod"]), 3, 1, k.t_match_ms / 1000 + synth.TRUE_OFFSET_S)
     assert res.global_offset_s == pytest.approx(synth.TRUE_OFFSET_S, abs=0.01)
@@ -144,7 +144,7 @@ def test_minimap_calibration(calibration, data):
 
 
 def test_minimap_self_tracking(data, match, map_info, calibration, sync):
-    from valcoach.video.minimap import describe_track, track_round
+    from nexus.video.minimap import describe_track, track_round
     r = 3
     tr = track_round(match, r, map_info, calibration, str(data["vod"]), sync, synth.MM_ROI)
     selfs = [p for p in tr.points if p.kind == "self"]
@@ -160,8 +160,8 @@ def test_minimap_self_tracking(data, match, map_info, calibration, sync):
 
 
 def test_teammate_tracking(data, match, map_info, calibration, sync, focus):
-    from valcoach.video.allies import ally_paths, coverage, enemy_sightings
-    from valcoach.video.minimap import track_round
+    from nexus.video.allies import ally_paths, coverage, enemy_sightings
+    from nexus.video.minimap import track_round
     errs, covs = [], []
     for r in (1, 3, 5):
         tr = track_round(match, r, map_info, calibration, str(data["vod"]), sync, synth.MM_ROI)
@@ -181,7 +181,7 @@ def test_teammate_tracking(data, match, map_info, calibration, sync, focus):
 
 
 def test_estimates_hold_then_move():
-    from valcoach.coach.replay import ESTIMATE, KNOWN, SPAWN, _track
+    from nexus.coach.replay import ESTIMATE, KNOWN, SPAWN, _track
     speed = 0.01 / 1000                                   # 0.01 map widths per second
     # known at 0 s and at 20 s, 0.05 apart: the walk takes 5 s, so they hold until 15 s
     pts = _track([(10_000, [0.2, 0.5], KNOWN), (30_000, [0.25, 0.5], KNOWN)], None, speed)
@@ -196,7 +196,7 @@ def test_estimates_hold_then_move():
 
 
 def test_replay_uses_measured_teammates(match, map_info, focus):
-    from valcoach.coach.replay import build_replay
+    from nexus.coach.replay import build_replay
     an = analyse(match, focus, map_info)
     rnd = match.rounds[2]
     mate = next(p.puuid for p in match.players.values() if p.team == match.team_of(focus) and p.puuid != focus)
@@ -259,7 +259,7 @@ def test_parse_json_tolerant():
 
 
 def test_cli_end_to_end(tmp_path, data):
-    from valcoach.cli import main
+    from nexus.cli import main
     cfg = tmp_path / "config.toml"
     cfg.write_text(f"""
 [player]
@@ -287,7 +287,7 @@ sample_fps = 2
 
 def test_ollama_think_flag_and_errors(monkeypatch):
     import requests as rq
-    from valcoach.coach.ollama import Ollama, OllamaError
+    from nexus.coach.ollama import Ollama, OllamaError
     sent = []
 
     class R:
@@ -315,7 +315,7 @@ def test_ollama_think_flag_and_errors(monkeypatch):
 
 def test_ollama_check_exact_model(monkeypatch):
     import requests as rq
-    from valcoach.coach.ollama import Ollama, OllamaError
+    from nexus.coach.ollama import Ollama, OllamaError
 
     class R:
         def raise_for_status(self):
@@ -333,7 +333,7 @@ def test_ollama_check_exact_model(monkeypatch):
 
 def test_ollama_speed_stats_and_case(monkeypatch):
     import requests as rq
-    from valcoach.coach.ollama import Ollama
+    from nexus.coach.ollama import Ollama
 
     class G:
         def raise_for_status(self):
@@ -365,7 +365,7 @@ def test_ollama_speed_stats_and_case(monkeypatch):
 
 
 def test_view_calibration_and_duels(match, map_info, focus):
-    from valcoach.analysis.view import calibrate
+    from nexus.analysis.view import calibrate
     vm = calibrate(match)
     assert vm.ok and vm.sign == synth.VIEW_SIGN and abs(vm.offset - synth.VIEW_OFFSET) < 1e-6
     assert vm.median_error_deg < 10
@@ -386,7 +386,7 @@ def test_view_calibration_and_duels(match, map_info, focus):
 
 
 def test_view_off_when_data_is_noise():
-    from valcoach.analysis.view import calibrate
+    from nexus.analysis.view import calibrate
     raw = synth.build_match(n_rounds=6, seed=3)
     import random
     rng = random.Random(1)
@@ -398,8 +398,8 @@ def test_view_off_when_data_is_noise():
 
 
 def test_duel_view_without_victim_location():
-    from valcoach.analysis.view import ViewModel, duel_view
-    from valcoach.models import Kill, PlayerLoc
+    from nexus.analysis.view import ViewModel, duel_view
+    from nexus.models import Kill, PlayerLoc
     vm = ViewModel(sign=1, offset=0.0, median_error_deg=5, samples=10)
     k = Kill(round=0, t_round_ms=1000, t_match_ms=1000, killer="a", killer_team="Red", victim="b",
              victim_team="Blue", assistants=[], weapon="Vandal", weapon_type="", victim_x=1000, victim_y=0,
@@ -412,7 +412,7 @@ def test_replay_and_report(tmp_path, match, map_info, focus, sync):
     an = analyse(match, focus, map_info)
     an.self_paths = {0: [(1.0, 5000, 0), (5.0, 1000, 0), (12.0, -1500, 5000)]}
     rep = run_coach(an, FakeLLM(), mode="both", parallel=2, sync=sync)
-    from valcoach.coach.replay import map_meta
+    from nexus.coach.replay import map_meta
     rep.map = map_meta(map_info, None)
     r0 = rep.rounds[0]["replay"]
     kinds = [e["kind"] for e in r0["events"]]
@@ -435,8 +435,8 @@ def test_replay_and_report(tmp_path, match, map_info, focus, sync):
 
 def test_agent_icons(tmp_path, match, monkeypatch):
     import requests as rq
-    from valcoach.coach.replay import agent_icons
-    from valcoach.maps import AgentRegistry
+    from nexus.coach.replay import agent_icons
+    from nexus.maps import AgentRegistry
 
     def offline(*a, **k):
         raise rq.ConnectionError("offline")
@@ -456,7 +456,7 @@ def test_agent_icons(tmp_path, match, monkeypatch):
 
 
 def test_nav_routes_follow_corridors(tmp_path):
-    from valcoach.coach.nav import NavGrid, path_length
+    from nexus.coach.nav import NavGrid, path_length
     img = synth.write_map_image(tmp_path)
     nav = NavGrid.from_image(img)
     assert nav is not None
@@ -472,8 +472,8 @@ def test_nav_routes_follow_corridors(tmp_path):
 
 
 def test_replay_tracks(tmp_path, match, map_info, focus):
-    from valcoach.coach.nav import NavGrid
-    from valcoach.coach.replay import build_replay
+    from nexus.coach.nav import NavGrid
+    from nexus.coach.replay import build_replay
     an = analyse(match, focus, map_info)
     nav = NavGrid.from_image(synth.write_map_image(tmp_path))
     rnd = match.rounds[2]
@@ -502,7 +502,7 @@ def test_missing_utility_is_unknown_not_zero(map_info):
     assert m.has_utility is False and match_has_utility_default()
     focus = m.find_player("adv1ce", "LFT").puuid
     an = analyse(m, focus, map_info)
-    from valcoach.coach.summarize import round_summary
+    from nexus.coach.summarize import round_summary
     txt = round_summary(an.team_facts[0], an.player_facts[0])
     assert "utility_casts" not in txt and "ult_used" not in txt and "ults_used" not in txt
     assert an.player_stats.utility_per_round is None
@@ -518,8 +518,8 @@ def test_jobs_work_without_opencv(match, map_info, focus):
     import subprocess
     code = (
         "import sys, json; sys.modules['cv2'] = None\n"
-        "import valcoach.coach.engine, valcoach.coach.replay, valcoach.pipeline, valcoach.report\n"
-        "from valcoach.coach.nav import NavGrid\n"
+        "import nexus.coach.engine, nexus.coach.replay, nexus.pipeline, nexus.report\n"
+        "from nexus.coach.nav import NavGrid\n"
         "print(NavGrid.from_image('/nope.png'))\n"
     )
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
@@ -529,7 +529,7 @@ def test_jobs_work_without_opencv(match, map_info, focus):
 
 def test_simplify_keeps_corners():
     import numpy as np
-    from valcoach.coach.nav import _simplify
+    from nexus.coach.nav import _simplify
     pts = np.array([[0, 0], [1, 0.01], [2, 0], [3, 0], [3, 1], [3, 2], [3, 3]], dtype=float)
     out = _simplify(pts, 0.5)
     assert out.tolist() == [[0, 0], [3, 0], [3, 3]]
@@ -537,7 +537,7 @@ def test_simplify_keeps_corners():
 
 
 def test_generic_round_summaries_are_hidden():
-    from valcoach.report import _useful_summary
+    from nexus.report import _useful_summary
     assert _useful_summary("Round 1 review for BurnTheGoat#NOW (Cypher).") is None
     assert _useful_summary("Round 9 Review: BurnTheGoat#NOW (Cypher)") is None
     assert _useful_summary("Round 10 Review") is None
@@ -547,7 +547,7 @@ def test_generic_round_summaries_are_hidden():
 
 
 def test_whole_team_review(tmp_path, match, map_info, focus):
-    from valcoach.coach.teamreview import facts, review
+    from nexus.coach.teamreview import facts, review
     team = match.team_of(focus)
     f = facts(match, team, map_info)
     assert set(f["players"]) == {p.puuid for p in match.players_on(team)}
@@ -578,7 +578,7 @@ def test_whole_team_review(tmp_path, match, map_info, focus):
 
 
 def test_team_review_trades_are_consistent(match, map_info, focus):
-    from valcoach.coach.teamreview import facts
+    from nexus.coach.teamreview import facts
     f = facts(match, match.team_of(focus), map_info)
     by_name = {d["name"]: d for d in f["players"].values()}
     for name, d in by_name.items():
@@ -589,7 +589,7 @@ def test_team_review_trades_are_consistent(match, map_info, focus):
 # review fixes (see notes/review-fixes-2.15.md)
 def test_live_api_utility_shape():
     """Live API: match totals filled, every per-round cast null. Rounds must not claim "no utility"."""
-    from valcoach.coach.summarize import match_stats_block, round_summary
+    from nexus.coach.summarize import match_stats_block, round_summary
     raw = synth.build_match(n_rounds=4)
     for r in raw["data"]["rounds"]:
         for st in r["stats"]:
@@ -606,7 +606,7 @@ def test_live_api_utility_shape():
 
 
 def test_non_round_modes_are_not_coachable():
-    from valcoach.pipeline import coachable
+    from nexus.pipeline import coachable
     assert coachable(parse_match(synth.build_match(n_rounds=4))) is None
     for mode_type in ("Deathmatch", "Team Deathmatch", "Gauntlet: Glitched"):
         raw = synth.build_match(n_rounds=4)
@@ -618,7 +618,7 @@ def test_non_round_modes_are_not_coachable():
 
 
 def test_time_out_detected_without_result_text():
-    from valcoach.analysis.team import analyse_team_round
+    from nexus.analysis.team import analyse_team_round
     # Red attacks round 1, loses with 1 player left, no plant, API result empty -> time ran out
     m = _mini_match([("b1", "Blue", "r1", "Red", 10_000, 0, [])], winner="Blue", result="")
     att = analyse_team_round(m, m.rounds[0], "Red", None)
@@ -632,8 +632,8 @@ def test_time_out_detected_without_result_text():
 
 
 def test_match_ids_and_broken_notes(tmp_path):
-    from valcoach.config import CoachCfg, Config, PathsCfg
-    from valcoach.pipeline import load_match, read_notes
+    from nexus.config import CoachCfg, Config, PathsCfg
+    from nexus.pipeline import load_match, read_notes
     cfg = Config(coach=CoachCfg(notes_dir=str(tmp_path)), paths=PathsCfg(cache_dir=str(tmp_path)), root=tmp_path)
     for bad in ("..", "../../etc/passwd", "a b", "x" * 65):
         with pytest.raises(ValueError):
@@ -648,8 +648,8 @@ def test_match_ids_and_broken_notes(tmp_path):
 
 def test_prompts_show_field_rules_to_the_model():
     """Ollama only enforces the schema; the field descriptions must be in the prompt text."""
-    from valcoach.coach import prompts
-    from valcoach.coach.engine import clean_feedback
+    from nexus.coach import prompts
+    from nexus.coach.engine import clean_feedback
     s = prompts.round_schema("both", ["A Main"], has_vod=False)
     guide = prompts.field_guide(s)
     assert "player.better_option:" in guide and "Never 'None' or 'N/A'" in guide
@@ -666,8 +666,8 @@ def test_prompts_show_field_rules_to_the_model():
 
 def test_new_llm_features_send_their_field_rules(monkeypatch):
     """Weekly focus, map tips, game plans and the team review also tell the model what each field means."""
-    from valcoach.coach.prompts import field_guide
-    from valcoach.stats import tips, weekly
+    from nexus.coach.prompts import field_guide
+    from nexus.stats import tips, weekly
     for sch in (weekly.schema(), tips.schema()):
         assert field_guide(sch).count("\n- ") >= 2
     seen = []
@@ -686,9 +686,9 @@ def test_ultrawide_bars_and_map_turning_by_side(tmp_path, data, match, map_info,
     """16:9 game recorded on an ultrawide screen (black bars left/right), minimap orientation
     'Based on side' (turns 180 deg when the player's team swaps sides). Both broke a real VOD."""
     import copy
-    from valcoach.video.io import video_info, video_roi
-    from valcoach.video.minimap import calibrate, collect_calibration_samples, track_round
-    from valcoach.video.sync import SyncResult
+    from nexus.video.io import video_info, video_roi
+    from nexus.video.minimap import calibrate, collect_calibration_samples, track_round
+    from nexus.video.sync import SyncResult
     vod = tmp_path / "wide.mp4"
     gt = synth.render_vod(json.loads(Path(data["match"]).read_text()), vod, bars=200, flip_from_round=4)
     info = video_info(str(vod))
@@ -716,8 +716,8 @@ def test_ultrawide_bars_and_map_turning_by_side(tmp_path, data, match, map_info,
 def test_track_counts_capped_and_own_path_ends_at_death(data, match, map_info, calibration, sync, focus, tmp_path):
     """Real VOD: the minimap summary said '11 allies in A' (stack estimates, fragments, HUD marks), and
     'your path' went on after your death (the yellow icon then is the teammate you spectate)."""
-    from valcoach.coach.nav import NavGrid
-    from valcoach.video.minimap import track_round
+    from nexus.coach.nav import NavGrid
+    from nexus.video.minimap import track_round
     nav = NavGrid.from_image(synth.write_map_image(tmp_path))
     r = 2
     death = next(k.t_round_ms / 1000 for k in match.rounds[r].kills if k.victim == focus)
@@ -741,7 +741,7 @@ def test_pale_own_icon_is_detected():
     """On defense a translucent white circle lies over your icon: the yellow ring is pale but bright."""
     import cv2
     import numpy as np
-    from valcoach.video.minimap import detect_blobs
+    from nexus.video.minimap import detect_blobs
     img = np.full((200, 200, 3), (150, 152, 155), np.uint8)
     cv2.circle(img, (100, 100), 7, (170, 235, 240), 3)          # BGR: pale yellow, S ~75, V ~240
     cv2.rectangle(img, (20, 20), (50, 40), (110, 150, 150), -1)  # site marker: as pale, but dark
@@ -752,8 +752,8 @@ def test_pale_own_icon_is_detected():
 def test_own_icon_picked_from_api_positions_not_a_yellow_portrait():
     """Real VOD: a teammate's yellowish agent portrait was bigger than your (pale) yellow icon, so 'your
     path' jumped 20-70 m. Your icon is now followed from your exact positions at the kills."""
-    from valcoach.models import Kill, PlayerLoc, Round
-    from valcoach.video.minimap import Blob, _pick_self
+    from nexus.models import Kill, PlayerLoc, Round
+    from nexus.video.minimap import Blob, _pick_self
     loc = PlayerLoc("me", "Red", 1000, 1000)
     kill = Kill(0, 2000, 2000, "me", "Red", "enemy", "Blue", [], "Vandal", "Rifle", 0, 0, [loc])
     rnd = Round(0, "Red", "Elimination", "", "Red", None, None, {}, [kill])
@@ -768,7 +768,7 @@ def test_own_icon_picked_from_api_positions_not_a_yellow_portrait():
     assert len(xs) == 20 and max(xs) < 2000                  # the portrait was never taken
 
 def test_playbook_with_wrong_structure_does_not_crash(tmp_path):
-    from valcoach.coach.engine import load_playbook
+    from nexus.coach.engine import load_playbook
     p = tmp_path / "playbook.yaml"
     for text in ("maps:\n - Ascent\n", "maps:\n 2024: x\n"):
         p.write_text(text)
@@ -779,7 +779,7 @@ def test_playbook_with_wrong_structure_does_not_crash(tmp_path):
 def test_ollama_waits_before_retrying_an_unreachable_server(monkeypatch):
     """Connection errors are retried after 2, 4 s (not instantly); a reply that isn't JSON is retried right away."""
     import requests
-    from valcoach.coach import ollama as O
+    from nexus.coach import ollama as O
     waits, calls = [], []
 
     class Resp:
@@ -802,7 +802,7 @@ def test_ollama_waits_before_retrying_an_unreachable_server(monkeypatch):
 
 
 def test_fallback_passes_retries_to_the_primary_model():
-    from valcoach.coach.llm import WithFallback
+    from nexus.coach.llm import WithFallback
     seen = {}
 
     class Primary:

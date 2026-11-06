@@ -1,4 +1,4 @@
-# Contributing to valcoach
+# Contributing to Nexus
 
 ## Set up
 
@@ -14,15 +14,15 @@ The tests need no API keys and no Ollama: they build their own synthetic matches
 ```bash
 pytest -q                    # the whole suite (a few minutes)
 pytest -q -k aim             # only tests with "aim" in the name
-ruff check valcoach tests    # the same lint check as CI
+ruff check nexus tests desktop    # the same lint check as CI
 ```
 
 ## Pull requests
 
 - One topic per pull request; the tests and ruff must pass (CI runs both on Python 3.11 and 3.12).
 - New behaviour comes with a test, and with a line in `CHANGELOG.md` if people will notice it.
-- Bump the version in `valcoach/__init__.py`, `pyproject.toml` and the README's **Version** line for a release.
-- Text people read in the web app: add the German line to `valcoach/i18n/de.json` (`#` = any number,
+- Bump the version in `nexus/__init__.py`, `desktop/nexus_desktop/__init__.py`, `pyproject.toml` and the README's **Version** line for a release.
+- Text people read in the web app: add the German line to `nexus/i18n/de.json` (`#` = any number,
   `{name}` = any text). A missing line just stays English.
 - Keep examples and docs generic (`Name#TAG`, `teammate1`), not about a real player or team.
 - Never commit `data/` (database with API keys and password hashes) or `config.toml`.

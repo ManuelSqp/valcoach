@@ -12,7 +12,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 import synth  # noqa: E402
 
-from valcoach.web import create_app  # noqa: E402
+from nexus.web import create_app  # noqa: E402
 
 MATCH_ID = "synthetic-match-0001"
 ADMIN_PW = "admin-pass-123"
@@ -39,7 +39,7 @@ def app(tmp_path, synthetic):
     shutil.copy(synthetic["vod"], vods / "Valorant 2026-10-20 19-17.mp4")
     app = create_app(data)
     app.config["TESTING"] = True
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     store.set("henrik_api_key", "HDEV-test")
     store.set("minimap_roi", ", ".join(map(str, synth.MM_ROI)))
     store.set("killfeed_roi", ", ".join(map(str, synth.KF_ROI)))
@@ -47,14 +47,14 @@ def app(tmp_path, synthetic):
     store.set("search_provider", "")          # no web search from tests (tests that need it fake it)
     app.recordings = str(tmp_path / "recordings")
     yield app
-    app.extensions["valcoach"]["runner"].shutdown()
+    app.extensions["nexus"]["runner"].shutdown()
 
 
 def setup_admin(app, username="manuel"):
     c = app.test_client()
     r = c.post("/setup", data={"username": username, "password": ADMIN_PW, "password2": ADMIN_PW})
     assert r.status_code == 302, r.data
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     store.update_user(store.user_by_name(username).id, vod_dir=app.recordings)
     return c
 
@@ -186,7 +186,7 @@ def test_full_job_with_vod_and_notes(app):
     assert f'src="/jobs/{jid}/vod"' in html and 'id="r6"' in html
     v = c.get(f"/jobs/{jid}/vod", headers={"Range": "bytes=0-1023"})
     assert v.status_code == 206 and len(v.data) == 1024
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     job = store.job(jid)
     report = json.loads(Path(job.json_path).read_text())
     assert report["rounds"][1]["own_note"] == "Entry was not traded"
@@ -209,7 +209,7 @@ def test_recordings_folder_is_per_user(app):
                  data={"mode": "team", "vod": "upload", "no_llm": "1", "no_minimap": "1",
                        "upload_id": send_upload(bob, b"\x00" * 2048)})
     jid = r.headers["Location"].split("/")[-1]
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     assert f"/uploads/{store.user_by_name('bob').id}/" in store.job(jid).vod_path
 
 
@@ -237,7 +237,7 @@ def test_two_users_share_the_queue(app):
     id1, id2 = (r.headers["Location"].split("/")[-1] for r in (j1, j2))
     assert wait_job(admin, id1)["status"] == "done"
     assert wait_job(bob, id2)["status"] == "done"
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     a = json.loads(Path(store.job(id1).json_path).read_text())
     b = json.loads(Path(store.job(id2).json_path).read_text())
     assert a["meta"]["player"] == "adv1ce#LFT" and b["meta"]["player"] == "blue-0#T"
@@ -273,7 +273,7 @@ def test_login_lockout_and_password_change(app):
 def test_admin_user_management(app):
     admin = setup_admin(app)
     bob = make_user(app, admin, "bob")
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     bob_id = store.user_by_name("bob").id
     me_id = store.user_by_name("manuel").id
     # duplicate / invalid
@@ -317,7 +317,7 @@ def test_signup_toggle(app):
     assert b"Create one" in c.get("/login").data
     r = c.post("/signup", data={"username": "newbie", "password": "newbie-pass", "password2": "newbie-pass"})
     assert r.status_code == 302 and r.headers["Location"].endswith("/profiles/new")
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     assert store.user_by_name("newbie").is_admin == 0
     assert c.get("/settings").status_code == 403
     r = app.test_client().post("/signup", data={"username": "NEWBIE", "password": "x" * 9, "password2": "x" * 9})
@@ -344,7 +344,7 @@ def test_migration_from_v21_database(tmp_path, synthetic):
     """A database from the version without accounts: profiles + reports move to the new admin."""
     data = tmp_path / "old"
     prepare_data(data, synthetic)
-    db = sqlite3.connect(data / "valcoach.db")
+    db = sqlite3.connect(data / "nexus.db")
     db.executescript("""
     CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL COLLATE NOCASE,
@@ -368,7 +368,7 @@ def test_migration_from_v21_database(tmp_path, synthetic):
     db.close()
 
     app = create_app(data, start_workers=False)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     assert store.job("oldjob") is not None            # rebuild didn't cascade-delete jobs
     assert store.profile(7).owner_id is None
     c = app.test_client()
@@ -382,21 +382,21 @@ def test_migration_from_v21_database(tmp_path, synthetic):
     assert store.get("henrik_api_key") == "HDEV-old" and store.get("access_password_hash") == ""
     assert b"adv1ce" in c.get("/").data
     assert c.get("/jobs/oldjob").status_code == 200
-    app.extensions["valcoach"]["runner"].shutdown()
+    app.extensions["nexus"]["runner"].shutdown()
 
 
 def test_restart_recovers_jobs(tmp_path):
     data = tmp_path / "d"
     app = create_app(data, start_workers=False)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     uid = store.create_user("manuel", ADMIN_PW, is_admin=True)
     pid = store.create_profile(uid, "adv1ce", "LFT")
     store.create_job("run1", pid, MATCH_ID, "both")
     store.update_job("run1", status="running")
-    app.extensions["valcoach"]["runner"].shutdown()
+    app.extensions["nexus"]["runner"].shutdown()
     app2 = create_app(data)
-    assert app2.extensions["valcoach"]["store"].job("run1").status == "error"
-    app2.extensions["valcoach"]["runner"].shutdown()
+    assert app2.extensions["nexus"]["store"].job("run1").status == "error"
+    app2.extensions["nexus"]["runner"].shutdown()
 
 
 def test_seed_from_config(tmp_path):
@@ -404,18 +404,18 @@ def test_seed_from_config(tmp_path):
     cfg.write_text('[player]\nname = "adv1ce"\ntag = "LFT"\n[henrik]\napi_key = "HDEV-x"\n'
                    '[ollama]\nmodel = "qwen3:30b"\n')
     app = create_app(tmp_path / "d", config_seed=cfg, start_workers=False)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     assert store.get("henrik_api_key") == "HDEV-x" and store.get("ollama_model") == "qwen3:30b"
     c = app.test_client()
     c.post("/setup", data={"username": "manuel", "password": ADMIN_PW, "password2": ADMIN_PW})
     assert [p.riot_id for p in store.profiles(store.user_by_name("manuel").id)] == ["adv1ce#LFT"]
-    app.extensions["valcoach"]["runner"].shutdown()
+    app.extensions["nexus"]["runner"].shutdown()
 
 
 def test_player_order(app):
     admin = setup_admin(app)
     bob = make_user(app, admin, "bob")
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     me = store.user_by_name("manuel").id
     a = add_profile(admin, "zed", "Z")
     b = add_profile(admin, "adv1ce", "LFT")
@@ -446,7 +446,7 @@ def test_player_order(app):
 def test_migration_from_v22_adds_order(tmp_path):
     data = tmp_path / "v22"
     data.mkdir()
-    db = sqlite3.connect(data / "valcoach.db")
+    db = sqlite3.connect(data / "nexus.db")
     db.executescript("""
     CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
       password_hash TEXT NOT NULL, is_admin INTEGER NOT NULL DEFAULT 0, vod_dir TEXT NOT NULL DEFAULT '',
@@ -462,7 +462,7 @@ def test_migration_from_v22_adds_order(tmp_path):
     """)
     db.commit()
     db.close()
-    from valcoach.web.store import Store
+    from nexus.web.store import Store
     s = Store(data)
     assert [p.name for p in s.profiles(1)] == ["Adv1ce", "bravo", "zed"]     # alphabetical to start
     s.reorder_profiles(1, [1, 3, 2])
@@ -471,7 +471,7 @@ def test_migration_from_v22_adds_order(tmp_path):
 
 def test_unknown_db_columns_are_ignored(tmp_path):
     """A column added by another version must not crash loading (the 'position' bug)."""
-    from valcoach.web.store import Store
+    from nexus.web.store import Store
     s = Store(tmp_path / "d")
     uid = s.create_user("manuel", ADMIN_PW, is_admin=True)
     s.create_profile(uid, "adv1ce", "LFT")
@@ -484,7 +484,7 @@ def test_unknown_db_columns_are_ignored(tmp_path):
 
 def test_paths_follow_moved_data_folder(tmp_path):
     """Reports/uploads saved with absolute paths still open after the data folder moved (Docker)."""
-    from valcoach.web.store import Store
+    from nexus.web.store import Store
     s = Store(tmp_path / "new-location")
     (s.data_dir / "reports" / "job1").mkdir(parents=True)
     (s.data_dir / "reports" / "job1" / "r.html").write_text("<html>")
@@ -496,7 +496,7 @@ def test_paths_follow_moved_data_folder(tmp_path):
 
 
 def test_history_paging_and_stored(app, monkeypatch):
-    from valcoach import pipeline
+    from nexus import pipeline
     calls = []
 
     def fake_recent(cfg, queue=None, size=10, start=0):
@@ -528,7 +528,7 @@ def test_history_paging_and_stored(app, monkeypatch):
 
 
 def _wait_stats(app, key, timeout=60):
-    sr = app.extensions["valcoach"]["stats"]
+    sr = app.extensions["nexus"]["stats"]
     t0 = time.time()
     while time.time() - t0 < timeout:
         st = sr.status(key)
@@ -540,11 +540,11 @@ def _wait_stats(app, key, timeout=60):
 
 def test_stats_teams_and_pick_helper(app, monkeypatch):
     import synth_history as sh
-    from valcoach import pipeline
+    from nexus import pipeline
     history = sh.build_history(24)
     monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrik(history, full_depth=6))
     c = setup_admin(app)
-    synth.write_agent_cache(Path(app.extensions["valcoach"]["store"].data_dir) / "cache")
+    synth.write_agent_cache(Path(app.extensions["nexus"]["store"].data_dir) / "cache")
     me = add_profile(c)
     assert b"No stats yet" in c.get(f"/profiles/{me}/stats").data
     assert b"No games yet" in c.get(f"/profiles/{me}/agents").data
@@ -599,13 +599,13 @@ def test_stats_teams_and_pick_helper(app, monkeypatch):
     assert other.get(f"/teams/{tid}").status_code == 404
     assert other.get(f"/profiles/{me}/stats").status_code == 404
     assert other.get(f"/profiles/{me}/agents").status_code == 404
-    app.extensions["valcoach"]["stats"].shutdown()
+    app.extensions["nexus"]["stats"].shutdown()
 
 
 def test_pro_and_videos_page(app, monkeypatch):
     import synth_history as sh
-    from valcoach import pipeline
-    from valcoach.stats import youtube
+    from nexus import pipeline
+    from nexus.stats import youtube
     history = sh.build_history(24)
     monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrik(history, full_depth=6))
     c = setup_admin(app)
@@ -630,7 +630,7 @@ def test_pro_and_videos_page(app, monkeypatch):
             pro = system.split("The player picked ")[1].split(" as the pro")[0]
             return {"pro_summary": f"Copy how {pro} spaces for the entry.", "items": [{"id": i, "watch_for": f"note {i}"} for i in ids],
                     "habits": ["Trade your entry within 2 s"]}
-    import valcoach.coach.ollama as oll
+    import nexus.coach.ollama as oll
     monkeypatch.setattr(oll, "Ollama", FakeOllama)
     monkeypatch.setattr(youtube, "search", lambda key, q, cache, n=3, session=None: [
         {"id": "x1", "title": f"Video for {q}", "channel": "ch", "published": "2026-10-01",
@@ -643,9 +643,9 @@ def test_pro_and_videos_page(app, monkeypatch):
     c.post(f"/profiles/{me}/pros/build", data={"queue": "all"})
     assert _wait_stats(app, f"watch:{me}:all")["status"] == "done"
     page = c.get(f"/profiles/{me}/pros").data.decode()
-    from valcoach.stats.style import load_pros, match_pros, profile
-    from valcoach.stats.aggregate import filter_rows
-    sr_ = app.extensions["valcoach"]["stats"]
+    from nexus.stats.style import load_pros, match_pros, profile
+    from nexus.stats.aggregate import filter_rows
+    sr_ = app.extensions["nexus"]["stats"]
     ms = match_pros(profile(filter_rows(sr_.games(me).rows(), "all")), load_pros(""))
     first, second = ms[0]["name"], ms[1]["name"]
     assert f"Copy how {first} spaces for the entry." in page and "Watch for:</b> note v1" in page
@@ -659,16 +659,16 @@ def test_pro_and_videos_page(app, monkeypatch):
     assert f"Copy how {second} spaces for the entry." in page2
     assert f"Copy how {first} spaces" in c.get(f"/profiles/{me}/pros?pro={first}").data.decode()   # still there
     assert set(sr_.read_watch(me, "all")["by_pro"]) == {m["name"] for m in ms}
-    app.extensions["valcoach"]["stats"].shutdown()
+    app.extensions["nexus"]["stats"].shutdown()
 
 
 def test_premier_team_import_and_roles(app, monkeypatch):
     import synth_history as sh
-    from valcoach import pipeline
+    from nexus import pipeline
     history = sh.build_history(30)
     monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrikPremier(history, full_depth=10))
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     existing = add_profile(c)                                   # adv1ce already exists: reused, not duplicated
     r = c.post("/teams", data={"premier_name": "Red Squad#RED", "premier_region": "eu"})
     tid = int(r.headers["Location"].rsplit("/", 1)[1])
@@ -704,18 +704,18 @@ def test_premier_team_import_and_roles(app, monkeypatch):
     c.post(f"/teams/{tid}/premier-sync")
     _wait_stats(app, f"premier:{tid}")
     assert next(m for m in store.team(tid).member_list if m["pid"] == me)["roles"] == ["Anchor", "IGL"]
-    app.extensions["valcoach"]["stats"].shutdown()
+    app.extensions["nexus"]["stats"].shutdown()
 
 
 @pytest.mark.parametrize("mode", ["nonames", "none"])
 def test_premier_roster_without_names(app, monkeypatch, mode):
     """Live HenrikDev returns members with name/tag = null (or no members): names come from the matches / by-puuid."""
     import synth_history as sh
-    from valcoach import pipeline
+    from nexus import pipeline
     history = sh.build_history(30)
     monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrikPremier(history, full_depth=10, members=mode))
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     r = c.post("/teams", data={"premier_name": "Red Squad#RED", "premier_region": "eu"})
     tid = int(r.headers["Location"].rsplit("/", 1)[1])
     st = _wait_stats(app, f"premier:{tid}")
@@ -727,7 +727,7 @@ def test_premier_roster_without_names(app, monkeypatch, mode):
     assert sum(m["kind"] == "starter" for m in store.team(tid).member_list) == 5
     for m in store.team(tid).member_list:
         _wait_stats(app, f"import:{m['pid']}")
-    app.extensions["valcoach"]["stats"].shutdown()
+    app.extensions["nexus"]["stats"].shutdown()
 
 
 @pytest.mark.parametrize("roster_in_match", [True, False])
@@ -735,12 +735,12 @@ def test_premier_no_members_one_match(app, monkeypatch, roster_in_match):
     """Live case: 0 members and a single Premier match (new season). Use the match's Premier roster,
     or else the side your own player was on."""
     import synth_history as sh
-    from valcoach import pipeline
+    from nexus import pipeline
     history = sh.build_history(30)
     monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrikPremier(
         history, full_depth=10, members="none-1match", roster_in_match=roster_in_match))
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     add_profile(c)                                              # adv1ce#LFT is in your workspace
     r = c.post("/teams", data={"premier_name": "Red Squad#RED", "premier_region": "eu"})
     tid = int(r.headers["Location"].rsplit("/", 1)[1])
@@ -754,13 +754,13 @@ def test_premier_no_members_one_match(app, monkeypatch, roster_in_match):
         assert "played on your side" in "\n".join(st["log"])
     for m in store.team(tid).member_list:
         _wait_stats(app, f"import:{m['pid']}")
-    app.extensions["valcoach"]["stats"].shutdown()
+    app.extensions["nexus"]["stats"].shutdown()
 
 
 def test_changelog_page_and_update_note(app):
-    from valcoach import __version__
+    from nexus import __version__
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     page = c.get("/").data.decode()
     assert f">{__version__}" in page and "was updated to" not in page        # fresh install: no note
     uid = store.user_by_name("manuel").id
@@ -797,10 +797,10 @@ class _FakeModel:
 
 def _premier_team(app, c, monkeypatch):
     import synth_history as sh
-    from valcoach import pipeline
+    from nexus import pipeline
     history = sh.build_history(30)
     monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrikPremier(history, full_depth=10, roster_in_match=True))
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     # the importer caches full matches; the fake doesn't, so put them where the team data looks
     cache = Path(store.data_dir) / "cache" / "matches"
     cache.mkdir(parents=True, exist_ok=True)
@@ -815,8 +815,8 @@ def _premier_team(app, c, monkeypatch):
 
 
 def test_shared_team_notes_plans_focus_discord(app, monkeypatch):
-    import valcoach.coach.ollama as oll
-    from valcoach import discord as dc
+    import nexus.coach.ollama as oll
+    from nexus import discord as dc
     monkeypatch.setattr(oll, "Ollama", _FakeModel)
     sent = []
 
@@ -825,7 +825,7 @@ def test_shared_team_notes_plans_focus_discord(app, monkeypatch):
         text = ""
     monkeypatch.setattr(dc.requests, "post", lambda url, json, timeout: sent.append((url, json)) or Resp())
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     tid = _premier_team(app, c, monkeypatch)
     names = {store.profile(m["pid"]).name: m["pid"] for m in store.team(tid).member_list}
 
@@ -886,8 +886,8 @@ def test_shared_team_notes_plans_focus_discord(app, monkeypatch):
 
     # --- the schedule: due on its day/hour once a week, not again after posting
     from datetime import datetime
-    sr = app.extensions["valcoach"]["stats"]
-    job = app.extensions["valcoach"]["weekly_job"]
+    sr = app.extensions["nexus"]["stats"]
+    job = app.extensions["nexus"]["weekly_job"]
     info = store.team(tid).discord_info
     info.pop("last_focus_week")
     store.update_team(tid, discord=info)
@@ -901,7 +901,7 @@ def test_shared_team_notes_plans_focus_discord(app, monkeypatch):
 
 def test_strat_book(app, monkeypatch):
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     cache = Path(store.data_dir) / "cache"
     synth.write_agent_cache(cache)
     synth.write_map_image(cache)
@@ -950,7 +950,7 @@ def test_strat_book(app, monkeypatch):
     assert store.strat(copy_id)["data"]["notes"] == "dash B"
     assert friend.post(f"/teams/{tid}/strats/{copy_id}/delete").status_code == 302    # their own copy
     # post a picture to Discord
-    from valcoach import discord as dc
+    from nexus import discord as dc
     sent = []
 
     class Resp:
@@ -969,7 +969,7 @@ def test_strat_book(app, monkeypatch):
 
 
 def test_ability_shapes_catalog():
-    from valcoach.web.abilityshapes import CATALOG, shape_for, color_for, AGENT_COLORS
+    from nexus.web.abilityshapes import CATALOG, shape_for, color_for, AGENT_COLORS
     fl = shape_for("Fault Line")
     assert fl["k"] == "strip" and fl["w"] == 7.5 and (fl["min"], fl["max"]) == (8, 56)
     assert shape_for("Rolling Thunder")["off"] == 8 and shape_for("ROLLING  thunder") is not None
@@ -990,8 +990,8 @@ def test_ability_shapes_catalog():
 def test_nightly_sync_and_sortable_roles(app):
     from datetime import datetime
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
-    sr = app.extensions["valcoach"]["stats"]
+    store = app.extensions["nexus"]["store"]
+    sr = app.extensions["nexus"]["stats"]
     me = add_profile(c)
     tid = store.create_team(store.user_by_name("manuel").id, "Squad")
     store.update_team(tid, members=[{"pid": me, "kind": "starter"}])
@@ -1008,7 +1008,7 @@ def test_nightly_sync_and_sortable_roles(app):
     store.update_team(tid, sync=info)
     assert sr.tick_nightly(job, now=datetime(2026, 11, 3, 4, 59)) == [tid]       # next night, catching up
     # the real job: same as the buttons (no Premier tag -> import the players)
-    app.extensions["valcoach"]["nightly_job"](store.team(tid))
+    app.extensions["nexus"]["nightly_job"](store.team(tid))
     assert sr.status(f"import:{me}") is not None
     _wait_stats(app, f"import:{me}")
     # settings: off, and a different hour
@@ -1029,7 +1029,7 @@ def test_nightly_sync_and_sortable_roles(app):
 def test_bad_ids_and_anchor_inputs(app):
     c = setup_admin(app)
     pid = add_profile(c)
-    for mid in ("..", "x.json", "valcoach.db"):
+    for mid in ("..", "x.json", "nexus.db"):
         assert c.get(f"/profiles/{pid}/coach/{mid}").status_code == 404, mid
         assert c.get(f"/profiles/{pid}/notes/{mid}").status_code == 404, mid
     r = c.get(f"/profiles/{pid}/open?match_id=../x")
@@ -1043,7 +1043,7 @@ def test_bad_ids_and_anchor_inputs(app):
 def test_deathmatch_is_not_coachable(app, synthetic):
     raw = json.loads(Path(synthetic["match"]).read_text())
     raw["data"]["metadata"]["queue"] = {"id": "deathmatch", "name": "Deathmatch", "mode_type": "Deathmatch"}
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     (store.data_dir / "cache" / "matches" / "dm-match-1.json").write_text(json.dumps(raw))
     c = setup_admin(app)
     pid = add_profile(c)
@@ -1055,7 +1055,7 @@ def test_deathmatch_is_not_coachable(app, synthetic):
 def test_job_quota_upload_limit_and_running_delete(app):
     c = setup_admin(app)
     pid = add_profile(c)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     # a job that sits in the queue (never submitted) counts against the quota
     store.create_job("held1", pid, MATCH_ID, "team")
     store.set("max_jobs_per_user", "1")
@@ -1097,7 +1097,7 @@ def test_forms_from_other_sites_are_blocked(app):
 def test_job_is_claimed_once(app):
     c = setup_admin(app)
     pid = add_profile(c)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     store.create_job("twice1", pid, MATCH_ID, "team")
     assert store.claim_job("twice1") is True
     assert store.claim_job("twice1") is False          # second submit of the same job does nothing
@@ -1107,7 +1107,7 @@ def test_job_is_claimed_once(app):
 def test_strat_board_only_stores_typed_fields(app):
     """A team member can't plant HTML in fields the editor shows as numbers."""
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     me = add_profile(c)
     tid = store.create_team(store.user_by_name("manuel").id, "Squad")
     store.update_team(tid, members=[{"pid": me, "kind": "starter"}], maps=["Testmap"])
@@ -1134,11 +1134,11 @@ def test_uptime_clock_in_nav(app):
 
 def test_upload_in_chunks_ends_up_as_the_job_vod(app):
     """No request may be bigger than a chunk: waitress buffers a body before the app can refuse it."""
-    from valcoach.web.uploads import CHUNK_BYTES, MAX_REQUEST_BYTES
+    from nexus.web.uploads import CHUNK_BYTES, MAX_REQUEST_BYTES
     assert app.config["MAX_CONTENT_LENGTH"] == MAX_REQUEST_BYTES
     c = setup_admin(app)
     pid = add_profile(c)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     data = bytes(range(256)) * ((CHUNK_BYTES + 5000) // 256)
     uid = send_upload(c, data, "My Match.mp4")
     r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}",
@@ -1157,7 +1157,7 @@ def test_upload_limits_come_before_the_first_byte(app, monkeypatch):
     from collections import namedtuple
     c = setup_admin(app)
     add_profile(c)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     tmp = store.data_dir / "tmp"
     assert app.test_client().post("/api/uploads", json={"name": "a.mp4", "size": 1}).status_code == 401
     assert app.test_client().put("/api/uploads/x?offset=0", data=b"x").status_code == 401
@@ -1176,7 +1176,7 @@ def test_upload_limits_come_before_the_first_byte(app, monkeypatch):
 
 
 def test_upload_position_owner_and_incomplete_file(app):
-    from valcoach.web.uploads import CHUNK_BYTES
+    from nexus.web.uploads import CHUNK_BYTES
     c = setup_admin(app)
     pid = add_profile(c)
     bob = make_user(app, c, "bob")
@@ -1199,21 +1199,21 @@ def test_upload_position_owner_and_incomplete_file(app):
 
 def test_abandoned_uploads_are_removed(app, monkeypatch):
     import time as t
-    from valcoach.web.uploads import MAX_OPEN_PER_USER, STALE_S
+    from nexus.web.uploads import MAX_OPEN_PER_USER, STALE_S
     c = setup_admin(app)
-    tmp = app.extensions["valcoach"]["store"].data_dir / "tmp"
+    tmp = app.extensions["nexus"]["store"].data_dir / "tmp"
     for _ in range(MAX_OPEN_PER_USER + 2):           # page reloaded in the middle of an upload
         assert c.post("/api/uploads", json={"name": "a.mp4", "size": 10}).status_code == 200
     assert len(list(tmp.iterdir())) == MAX_OPEN_PER_USER
     real = t.time
-    monkeypatch.setattr("valcoach.web.uploads.time.time", lambda: real() + STALE_S + 1)
+    monkeypatch.setattr("nexus.web.uploads.time.time", lambda: real() + STALE_S + 1)
     assert make_user(app, c, "bob").post("/api/uploads", json={"name": "a.mp4", "size": 10}).status_code == 200
     assert len(list(tmp.iterdir())) == 1
 
 
 def test_roster_drafts(app):
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     me = add_profile(c)
     other = add_profile(c, name="Burn", tag="#NOW")
     tid = store.create_team(store.user_by_name("manuel").id, "Squad")
@@ -1261,9 +1261,9 @@ def test_roster_drafts(app):
 
 def _run_with_model(app, c, monkeypatch, answer, parallel=1):
     """One coaching run; answer(n) is called for the n-th model request and may raise."""
-    from valcoach.coach.ollama import Ollama
+    from nexus.coach.ollama import Ollama
     pid = add_profile(c)
-    ext = app.extensions["valcoach"]
+    ext = app.extensions["nexus"]
     store = ext["store"]
     store.set("ollama_parallel", str(parallel))
     calls = []
@@ -1317,14 +1317,14 @@ def test_no_warning_in_a_report_without_model_problems(app, monkeypatch):
 def test_premier_scouting_veto_reviews_and_brief(app, monkeypatch):
     from datetime import datetime
     import synth_history as sh
-    from valcoach import pipeline
-    import valcoach.discord as discord
+    from nexus import pipeline
+    import nexus.discord as discord
     history = sh.build_history(30)
     monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrikPremier(history, full_depth=10, roster_in_match=True))
     posted = []
     monkeypatch.setattr(discord, "post", lambda url, content="", embeds=None, session=None: posted.append(embeds))
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     add_profile(c)
     r = c.post("/teams", data={"premier_name": "Red Squad#RED", "premier_region": "eu"})
     tid = int(r.headers["Location"].rsplit("/", 1)[1])
@@ -1342,7 +1342,7 @@ def test_premier_scouting_veto_reviews_and_brief(app, monkeypatch):
     c.post(f"/teams/{tid}/premier/scout", data={"division": "1"})
     st = _wait_stats(app, f"scout:{tid}")
     assert st["status"] == "done", st
-    pj = app.extensions["valcoach"]["premier"]
+    pj = app.extensions["nexus"]["premier"]
     idx = pj.scout_index(tid)
     assert set(idx["teams"]) == {"team-2", "team-3"} and idx["division"]["division"] == 12
     s = pj.scouted(tid, "team-2")
@@ -1386,19 +1386,19 @@ def test_premier_scouting_veto_reviews_and_brief(app, monkeypatch):
     c.post(f"/teams/{tid}/premier/settings", data={"on": "1", "days": ["4"], "time": "20:00", "before": "60"})
     cfg = store.team(tid).sync_info["brief"]
     assert cfg["on"] and cfg["days"] == [4] and cfg["time"] == "20:00"
-    tick = app.extensions["valcoach"]["ticks"][0]
+    tick = app.extensions["nexus"]["ticks"][0]
     assert tick(datetime(2026, 10, 30, 18, 30)) == []                 # Friday, too early
     assert tick(datetime(2026, 10, 30, 19, 15)) == [tid]              # 45 min before
     assert tick(datetime(2026, 10, 30, 19, 40)) == []                 # once a day
     assert posted and "Match day: Ascent" in posted[-1][0]["title"]
-    sr = app.extensions["valcoach"]["stats"]
+    sr = app.extensions["nexus"]["stats"]
     sr.shutdown()
 
 
 def test_scouting_veto_and_season_map():
     from datetime import datetime, timezone
-    from valcoach.stats.scouting import how_to_play, veto
-    from valcoach.web.premier_views import season_week_map
+    from nexus.stats.scouting import how_to_play, veto
+    from nexus.web.premier_views import season_week_map
     v = veto({"Bind": {"games": 6, "wins": 5}, "Lotus": {"games": 4, "wins": 1}, "Ascent": {"games": 2, "wins": 1}},
              {"Bind": {"games": 3, "wins": 1}, "Lotus": {"games": 5, "wins": 5}, "Haven": {"games": 2, "wins": 1}},
              ["Ascent", "Bind", "Haven", "Lotus"], {"Bind": {"attack": .6, "defense": .45}}, {"Bind": {"attack": .5, "defense": .5}})
@@ -1413,11 +1413,11 @@ def test_scouting_veto_and_season_map():
 
 def test_progress_and_training_pages(app, monkeypatch):
     import synth_history as sh
-    from valcoach import pipeline
+    from nexus import pipeline
     history = sh.build_history(24)
     monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrik(history, full_depth=10))
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     me = add_profile(c)
     assert "No games yet" in c.get(f"/profiles/{me}/progress").data.decode()
     c.post(f"/profiles/{me}/stats/import")
@@ -1426,7 +1426,7 @@ def test_progress_and_training_pages(app, monkeypatch):
     assert "Clutches, retakes, post-plants" in page and "KAST" in page and "1v1" in page
     # rank over time from the RR history (kept locally), with a chart
     assert "Rank over time" in page and "<svg class=\"rkc\"" in page and " RR</div>" in page
-    entries = app.extensions["valcoach"]["stats"].rank_path(me)
+    entries = app.extensions["nexus"]["stats"].rank_path(me)
     assert entries.exists() and len(json.loads(entries.read_text())["entries"]) >= 5
     entries.unlink()                                       # without it: the rank shown in each match
     page = c.get(f"/profiles/{me}/progress").data.decode()
@@ -1444,12 +1444,12 @@ def test_progress_and_training_pages(app, monkeypatch):
     # another user can't tick someone else's routine
     c2 = make_user(app, c, "burn")
     assert c2.post(f"/profiles/{me}/training/done").status_code == 404
-    app.extensions["valcoach"]["stats"].shutdown()
+    app.extensions["nexus"]["stats"].shutdown()
 
 
 def test_look_and_feel_search_and_lineups(app):
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     me = add_profile(c)
     page = c.get("/").data.decode()
     assert 'class="skin-classic a-count a-lift a-tabs a-loaders a-toasts"' in page and "ui.js" in page and "styles/" not in page
@@ -1458,7 +1458,7 @@ def test_look_and_feel_search_and_lineups(app):
     assert r.status_code == 302
     page = c.get("/").data.decode()
     assert 'class="skin-hud a-count a-tabs a-loaders"' in page and "styles/hud.css" in page
-    assert "fonts.googleapis.com" not in page                                  # fonts ship with valcoach
+    assert "fonts.googleapis.com" not in page                                  # fonts ship with Nexus
     assert c.get("/static/fonts/rajdhani-600.woff2").status_code == 200
     assert c.get("/static/styles/hud.css").status_code == 200
     c.post("/account", data={"look": "1", "style": "<script>"})            # unknown style -> classic
@@ -1498,7 +1498,7 @@ def test_look_and_feel_search_and_lineups(app):
 
 
 def test_clip_info():
-    from valcoach.web.lineups import clip_info
+    from nexus.web.lineups import clip_info
     assert clip_info("https://youtu.be/abcdefghijk")["thumb"].endswith("/abcdefghijk/mqdefault.jpg")
     assert clip_info("https://www.youtube.com/shorts/abcdefghijk")["thumb"]
     assert clip_info("https://medal.tv/games/valorant/clips/xyz")["thumb"] is None
@@ -1508,9 +1508,9 @@ def test_clip_info():
 
 def test_availability_and_subs(app):
     from datetime import date
-    from valcoach.web.availability import day_summary, match_days, summary_line
+    from nexus.web.availability import day_summary, match_days, summary_line
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     pids = [add_profile(c, name=f"P{i}", tag="#T") for i in range(6)]
     tid = store.create_team(store.user_by_name("manuel").id, "Squad")
     store.update_team(tid, members=[{"pid": p, "kind": "starter" if i < 5 else "sub"} for i, p in enumerate(pids)], maps=["Bind"])
@@ -1564,8 +1564,8 @@ def test_availability_and_subs(app):
 
 def test_decision_quiz(app, monkeypatch):
     import synth_history as sh
-    from valcoach import pipeline
-    from valcoach.coach.ollama import Ollama
+    from nexus import pipeline
+    from nexus.coach.ollama import Ollama
     history = sh.build_history(24)
     monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrik(history, full_depth=10))
     seen = {}
@@ -1581,13 +1581,13 @@ def test_decision_quiz(app, monkeypatch):
     monkeypatch.setattr(Ollama, "check", lambda self: None)
     monkeypatch.setattr(Ollama, "chat_json", chat_json)
     # the synthetic games have no 1vX / lonely deaths: one made-up moment per game (moments() itself: test_stats)
-    import valcoach.stats.quiz as qz
+    import nexus.stats.quiz as qz
     monkeypatch.setattr(qz, "moments", lambda m, pu, mi: [{"kind": "clutch", "t_ms": 60000, "happened": "You lost the 1v2.",
         "facts": {"match_id": m.match_id, "map": m.map_name, "round": 9, "side": "defense", "agent": "Sova", "score": "4–4",
                   "won": False, "time_s": 60, "you_vs": "1v2", "spike": "spike planted on B 10 s ago"}}])
     c = setup_admin(app)
     me = add_profile(c)
-    cache = Path(app.extensions["valcoach"]["store"].data_dir) / "cache" / "matches"      # the real client caches every match
+    cache = Path(app.extensions["nexus"]["store"].data_dir) / "cache" / "matches"      # the real client caches every match
     cache.mkdir(parents=True, exist_ok=True)
     for d in history:
         (cache / f"{d['metadata']['match_id']}.json").write_text(json.dumps({"status": 200, "data": d}))
@@ -1597,7 +1597,7 @@ def test_decision_quiz(app, monkeypatch):
     assert c.post(f"/profiles/{me}/quiz").status_code == 302
     st = _wait_stats(app, f"quiz:{me}")
     assert st["status"] == "done", st
-    sr = app.extensions["valcoach"]["stats"]
+    sr = app.extensions["nexus"]["stats"]
     q = sr.read_quiz(me)
     assert 2 <= len(q["questions"]) <= 5 and all(x["happened"] and x["map"] for x in q["questions"])
     assert "time_s" in seen["user"] and "happened" not in seen["user"]          # the model never sees the outcome
@@ -1611,17 +1611,17 @@ def test_decision_quiz(app, monkeypatch):
     assert "Your scores" in c.get(f"/profiles/{me}/quiz").data.decode()
     c2 = make_user(app, c, "burn")
     assert c2.post(f"/profiles/{me}/quiz").status_code == 404
-    app.extensions["valcoach"]["stats"].shutdown()
+    app.extensions["nexus"]["stats"].shutdown()
 
 
 def test_server_overview_permission(app, monkeypatch):
-    import valcoach.web.overview as ov
-    from valcoach import henrik
+    import nexus.web.overview as ov
+    from nexus import henrik
     monkeypatch.setattr(ov, "model_usage", lambda url, now=None: {"reachable": False, "loaded": [], "installed": 0, "error": "ConnectionError",
                                                                   "requests_day": 0, "avg_s": None, "tokens_day": 0})
     henrik.USAGE.extend([(time.time(), 200, "match"), (time.time(), 429, "premier")])
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     store.set("henrik_api_key", "HDEV-secret-key")
     page = c.get("/admin/overview").data.decode()
     assert "Server overview" in page and "HenrikDev API" in page and "Rate-limited" in page and "offline" in page
@@ -1640,7 +1640,7 @@ def test_server_overview_permission(app, monkeypatch):
 
 
 def test_report_votes_focus_and_note_hints(app, monkeypatch):
-    from valcoach.coach.engine import _examples_block, load_votes
+    from nexus.coach.engine import _examples_block, load_votes
     fb = {"summary": "Fight at A", "importance": 2, "key_moment": {"time": "1:05", "what": "You peeked A Main alone"},
           "player": {"went_well": [], "mistakes": ["Peeked <b>alone</b> into two"], "better_option": "Wait for the flash"}}
     c = setup_admin(app)
@@ -1657,7 +1657,7 @@ def test_report_votes_focus_and_note_hints(app, monkeypatch):
     assert c.post(f"/api/jobs/{job.id}/vote", json={"round": 1, "who": "boss", "text": "x", "vote": "up"}).status_code == 400
     html = c.get(f"/jobs/{job.id}/report").data.decode()
     assert '"1|Peeked <b>alone<\\/b> into two": "up"' in html                # the vote shows again; no </ in the script
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     notes_dir = store.profile_dir(job.profile_id) / "notes"
     liked, disliked = load_votes(notes_dir)
     assert liked == [text] and disliked == ["Play safer"]
@@ -1684,7 +1684,7 @@ def test_report_votes_focus_and_note_hints(app, monkeypatch):
 def test_quiz_categories_ratings_and_training(app, monkeypatch):
     c = setup_admin(app)
     me = add_profile(c)
-    sr = app.extensions["valcoach"]["stats"]
+    sr = app.extensions["nexus"]["stats"]
     qs = [{"id": f"q{i}", "kind": k, "kind_label": "x", "map": "Bind", "round": i, "side": "attack", "match_id": "m",
            "question": f"Q{i}?", "options": ["a", "b", "c"], "best": 0, "why": "because", "happened": "lost", "won": False}
           for i, k in enumerate(["clutch", "clutch", "alone"])]
@@ -1701,12 +1701,12 @@ def test_quiz_categories_ratings_and_training(app, monkeypatch):
     assert c.post(f"/api/profiles/{me}/quiz/rate", json={"id": "q1", "rating": "obvious"}).status_code == 200
     assert c.post(f"/api/profiles/{me}/quiz/rate", json={"id": "q1", "rating": "meh"}).status_code == 400
     assert c.post(f"/api/profiles/{me}/quiz/rate", json={"id": "nope", "rating": "good"}).status_code == 400
-    from valcoach.stats.quiz import rated_block
+    from nexus.stats.quiz import rated_block
     blk = rated_block(sr.read_quiz(me)["bank"])
     assert "Q0? Best call: a" in blk and "(too obvious) Q1?" in blk
     # quiz → own focus → team focus page and brief
-    tid = app.extensions["valcoach"]["store"].create_team(app.extensions["valcoach"]["store"].user_by_name("manuel").id, "Squad")
-    app.extensions["valcoach"]["store"].update_team(tid, members=[{"pid": me, "kind": "starter"}], maps=["Bind"])
+    tid = app.extensions["nexus"]["store"].create_team(app.extensions["nexus"]["store"].user_by_name("manuel").id, "Squad")
+    app.extensions["nexus"]["store"].update_team(tid, members=[{"pid": me, "kind": "starter"}], maps=["Bind"])
     c.post(f"/api/profiles/{me}/own-focus", json={"focus": "Play the timer", "source": "quiz"})
     sr.save_quiz(me, sr.read_quiz(me))
     page = c.get(f"/teams/{tid}/premier/brief?map=Bind").data.decode()
@@ -1714,10 +1714,10 @@ def test_quiz_categories_ratings_and_training(app, monkeypatch):
 
 
 def test_strat_step_calls_and_availability_reminder(app, monkeypatch):
-    import valcoach.discord as discord
+    import nexus.discord as discord
     from datetime import date
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     pids = [add_profile(c, name=f"P{i}", tag="#T") for i in range(5)]
     tid = store.create_team(store.user_by_name("manuel").id, "Squad")
     store.update_team(tid, members=[{"pid": p, "kind": "starter"} for p in pids], maps=["Testmap"],
@@ -1754,7 +1754,7 @@ def test_strat_step_calls_and_availability_reminder(app, monkeypatch):
 
 
 def test_discord_mentions_are_limited():
-    from valcoach import discord
+    from nexus import discord
     seen = []
 
     class S:
@@ -1768,16 +1768,16 @@ def test_discord_mentions_are_limited():
 
 
 def test_model_picker_claude_permission_and_runs(app, monkeypatch):
-    from valcoach.coach import llm as L
-    from valcoach.coach.ollama import Ollama
-    import valcoach.web.models as wm
+    from nexus.coach import llm as L
+    from nexus.coach.ollama import Ollama
+    import nexus.web.models as wm
     monkeypatch.setattr(wm, "local_models", lambda url: ["gemma4:26b", "qwen3.8:27b"])
     used = []
     monkeypatch.setattr(Ollama, "check", lambda self: None)
     monkeypatch.setattr(L.ClaudeLLM, "chat_json", lambda self, system, user, schema, **k: used.append(self.model) or {"questions": []})
     monkeypatch.setattr(Ollama, "chat_json", lambda self, system, user, schema, **k: used.append(self.model) or {"questions": []})
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     store.set("ollama_model", "gemma4:26b")
     me = add_profile(c)
     # no key: only local models
@@ -1797,9 +1797,9 @@ def test_model_picker_claude_permission_and_runs(app, monkeypatch):
     page = c.get(f"/profiles/{me}/quiz").data.decode()
     assert "☁ Claude Sonnet 5.5" in page and "☁ Claude Haiku 5.5" in page
     # a run with the picked model; the pick is remembered as the default
-    sr = app.extensions["valcoach"]["stats"]
+    sr = app.extensions["nexus"]["stats"]
     sr.games(me).save({"version": 1, "games": {}, "puuid": ""})
-    import valcoach.stats.quiz as qz
+    import nexus.stats.quiz as qz
     monkeypatch.setattr(qz, "pick", lambda found, n=6: [{"id": f"q{i}", "kind": "clutch", "happened": "x", "facts": {"map": "Bind", "round": 1, "side": "attack", "match_id": "m", "won": False}} for i in range(3)])
     c.post(f"/profiles/{me}/quiz", data={"llm": "claude:claude-sonnet-5-5"})
     _wait_stats(app, f"quiz:{me}")
@@ -1826,12 +1826,12 @@ def test_model_picker_claude_permission_and_runs(app, monkeypatch):
     L._add_usage("claude-sonnet-5-5", 100_000, 20_000, 0.4)
     page = c.get("/admin/overview").data.decode()
     assert "Claude (Anthropic API)" in page and "US$ 0.40" in page and "of 15 budget" in page
-    app.extensions["valcoach"]["stats"].shutdown()
+    app.extensions["nexus"]["stats"].shutdown()
 
 
 def test_last_active_on_users_page(app):
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     c2 = make_user(app, c, "burn")
     uid = store.user_by_name("burn").id
     c2.get("/")
@@ -1851,8 +1851,8 @@ def test_last_active_on_users_page(app):
 
 
 def test_ask_the_coach_and_clips(app, monkeypatch, synthetic):
-    import valcoach.web.report_tools as rt
-    from valcoach.coach.ollama import Ollama
+    import nexus.web.report_tools as rt
+    from nexus.coach.ollama import Ollama
     fb = {"summary": "Fight at A", "importance": 2, "player": {"went_well": [], "mistakes": ["Peeked alone"], "better_option": "Wait"}}
     c = setup_admin(app)
     job, _ = _run_with_model(app, c, monkeypatch, lambda n: fb)
@@ -1879,7 +1879,7 @@ def test_ask_the_coach_and_clips(app, monkeypatch, synthetic):
     c2 = make_user(app, c, "burn")
     assert c2.post(f"/api/jobs/{job.id}/ask", json={"round": 2, "question": "x"}).status_code == 404
     # a failing model: the error comes back once
-    from valcoach.coach.ollama import OllamaError
+    from nexus.coach.ollama import OllamaError
     monkeypatch.setattr(Ollama, "chat_json", lambda *a, **k: (_ for _ in ()).throw(OllamaError("model down")))
     c.post(f"/api/jobs/{job.id}/ask", json={"round": 3, "question": "Why?"})
     for _ in range(100):
@@ -1899,7 +1899,7 @@ def test_ask_the_coach_and_clips(app, monkeypatch, synthetic):
     assert s["error"] and "/srv/secret" not in s["error"]
     # clips from the VOD (ffmpeg); no VOD -> 404
     assert c.get(f"/jobs/{job.id}/clip?t=1").status_code == 404
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     store.update_job(job.id, vod_path=str(synthetic["vod"]))
     if rt.ffmpeg():
         r = c.get(f"/jobs/{job.id}/clip?t=0.5&len=3&dl=1")
@@ -1912,12 +1912,12 @@ def test_ask_the_coach_and_clips(app, monkeypatch, synthetic):
 
 def test_settings_test_buttons(app, monkeypatch):
     import requests as rq
-    from valcoach import henrik
+    from nexus import henrik
     c = setup_admin(app)
     assert c.post("/settings/test/claude").get_json() == {"ok": False, "msg": "No key saved yet."}
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     store.set("claude_api_key", "sk-ant-secret")
-    import valcoach.web.models as wm
+    import nexus.web.models as wm
     monkeypatch.setattr(wm, "local_models", lambda url: [])
     monkeypatch.setattr(rq, "get", lambda url, **k: type("R", (), {"status_code": 401, "json": lambda self: {}})())
     j = c.post("/settings/test/claude").get_json()
@@ -1933,26 +1933,26 @@ def test_settings_test_buttons(app, monkeypatch):
 
 def test_heat_map_on_stats(app, monkeypatch):
     import synth_history as sh
-    from valcoach import pipeline
+    from nexus import pipeline
     history = sh.build_history(20)
     monkeypatch.setattr(pipeline, "get_client", lambda cfg: sh.FakeHenrik(history, full_depth=10))
-    from valcoach.maps import MapRegistry
+    from nexus.maps import MapRegistry
     orig = MapRegistry.get
     monkeypatch.setattr(MapRegistry, "get", lambda self, map_id="", name="": orig(self, "00000000-test-map0-0000-000000000001"))
     c = setup_admin(app)
     me = add_profile(c)
     c.post(f"/profiles/{me}/stats/import")
     assert _wait_stats(app, f"import:{me}")["status"] == "done"
-    rows = app.extensions["valcoach"]["stats"].games(me).rows()
+    rows = app.extensions["nexus"]["stats"].games(me).rows()
     m = next(r["map"] for r in rows if r.get("source") == "full" and r.get("deaths_at"))
     page = c.get(f"/profiles/{me}/stats?map={m}").data.decode()
     assert "heatsvg" in page and "deaths," in page and 'data-hs="defense"' in page
-    app.extensions["valcoach"]["stats"].shutdown()
+    app.extensions["nexus"]["stats"].shutdown()
 
 
 def test_strat_history_and_restore(app, monkeypatch):
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     tid = store.create_team(store.user_by_name("manuel").id, "Squad")
     store.update_team(tid, maps=["Testmap"])
     r = c.post(f"/teams/{tid}/strats", data={"name": "B split", "map": "Testmap", "side": "attack"})
@@ -1978,7 +1978,7 @@ def test_strat_history_and_restore(app, monkeypatch):
 def test_home_today_nav_and_tabs(app):
     from datetime import date
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     page = c.get("/").data.decode()
     assert "Get started" in page
     pids = [add_profile(c, name=f"P{i}", tag="#T") for i in range(3)]
@@ -2024,12 +2024,12 @@ def test_home_today_nav_and_tabs(app):
 
 
 def test_backups_and_discord_channels(app, tmp_path, monkeypatch):
-    monkeypatch.setenv("VALCOACH_BACKUP_ROOTS", str(tmp_path))         # a backup folder outside the data folder
+    monkeypatch.setenv("NEXUS_BACKUP_ROOTS", str(tmp_path))         # a backup folder outside the data folder
     import tarfile
-    from valcoach.discord import channel
-    from valcoach.web import backup
+    from nexus.discord import channel
+    from nexus.web import backup
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     pid = add_profile(c)
     (store.profile_dir(pid) / "notes").mkdir(parents=True, exist_ok=True)
     (store.profile_dir(pid) / "notes" / "m.yaml").write_text("rounds: {1: hi}")
@@ -2042,17 +2042,17 @@ def test_backups_and_discord_channels(app, tmp_path, monkeypatch):
                                   "minimap_roi": store.get("minimap_roi"), "killfeed_roi": store.get("killfeed_roi")})
     assert r.status_code == 302 and store.get("backup_dir") == str(dest) and store.get("backup_keep") == "2"
     c.post("/settings/backup-now")
-    files = list(dest.glob("valcoach-backup-*.tar.gz"))
+    files = list(dest.glob("nexus-backup-*.tar.gz"))
     assert len(files) == 1
     with tarfile.open(files[0]) as tar:
         names = tar.getnames()
-    assert "valcoach.db" in names and any(n.endswith("notes/m.yaml") for n in names) and not any(n.startswith("cache") for n in names)
+    assert "nexus.db" in names and any(n.endswith("notes/m.yaml") for n in names) and not any(n.startswith("cache") for n in names)
     assert backup.last(store)["ok"] and "Last backup" in c.get("/admin/overview").data.decode()
     # keep 2: older ones go
     for i in range(3):
-        (dest / f"valcoach-backup-2020-01-0{i + 1}_0400.tar.gz").write_text("old")
+        (dest / f"nexus-backup-2020-01-0{i + 1}_0400.tar.gz").write_text("old")
     backup.run(store)
-    assert len(list(dest.glob("valcoach-backup-*.tar.gz"))) == 2
+    assert len(list(dest.glob("nexus-backup-*.tar.gz"))) == 2
     # nightly: runs once after 04:00
     from datetime import datetime
     store.set("backup_last", "")
@@ -2067,9 +2067,9 @@ def test_backups_and_discord_channels(app, tmp_path, monkeypatch):
 
 
 def test_share_report_pwa_push_and_match_screen(app, monkeypatch):
-    from valcoach.web import push
+    from nexus.web import push
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     pid = add_profile(c)
     # a finished report
     store.create_job("sh1", pid, MATCH_ID, "both")
@@ -2104,14 +2104,14 @@ def test_share_report_pwa_push_and_match_screen(app, monkeypatch):
         assert c.post("/api/push/subscribe", json={"endpoint": "https://push.example/abc", "keys": {"p256dh": "k", "auth": "a"}}).get_json()["devices"] == 1
         sent = []
         monkeypatch.setattr(push, "_send_one", lambda store_, sub, payload, priv, claim: sent.append(payload) or True)
-        assert c.post("/api/push/test").get_json()["devices"] == 1 and sent[-1]["title"] == "valcoach"
-        app.extensions["valcoach"]["runner"].on_finish("sh1", "done")
+        assert c.post("/api/push/test").get_json()["devices"] == 1 and sent[-1]["title"] == "Nexus"
+        app.extensions["nexus"]["runner"].on_finish("sh1", "done")
         import time as _t
         _t.sleep(0.3)
         assert sent[-1]["title"] == "Report ready: Ascent 13-9" and sent[-1]["url"] == "/jobs/sh1/report"
         c.post("/account", data={"notify": "1"})                               # everything off
         n = len(sent)
-        app.extensions["valcoach"]["runner"].on_finish("sh1", "done")
+        app.extensions["nexus"]["runner"].on_finish("sh1", "done")
         _t.sleep(0.3)
         assert len(sent) == n
         assert "pywebpush" not in c.get("/account").data.decode()
@@ -2130,7 +2130,7 @@ def test_share_report_pwa_push_and_match_screen(app, monkeypatch):
 
 def test_habits_page_and_practice_plan(app, monkeypatch):
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     pid = add_profile(c)
     assert "No games yet" in c.get(f"/profiles/{pid}/habits").data.decode()
     tid = store.create_team(store.user_by_name("manuel").id, "Squad")
@@ -2157,7 +2157,7 @@ def test_habits_page_and_practice_plan(app, monkeypatch):
 def test_review_evening(app):
     import json as _json
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     raw = _json.loads((store.data_dir / "cache" / "matches" / f"{MATCH_ID}.json").read_text())
     players = raw.get("data", raw)["players"]
     side = players[0]["team_id"]
@@ -2213,7 +2213,7 @@ def test_review_evening(app):
 
 def test_small_fixes_37(app):
     import json as _json
-    from valcoach.web.overview import loaded_model
+    from nexus.web.overview import loaded_model
     c = setup_admin(app)
     # Ollama memory: all on the GPU, split, CPU only
     assert loaded_model({"name": "m", "size": 4 * 2**30, "size_vram": 4 * 2**30})["where"] == "gpu"
@@ -2226,7 +2226,7 @@ def test_small_fixes_37(app):
     # error pages don't mark a menu entry as the current page
     assert 'aria-current="page"' not in c.get("/teams/999").data.decode()
     # a damaged draft doesn't break the drafts page
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     pid = add_profile(c)
     tid = store.create_team(store.user_by_name("manuel").id, "Squad")
     store.update_team(tid, members=[{"pid": pid, "kind": "starter"}], maps=["Lotus"])
@@ -2240,7 +2240,7 @@ def test_small_fixes_37(app):
 
 def test_aim_routines_and_warmup(app):
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     pid = add_profile(c)
     uid = store.user_by_name("manuel").id
     tid = store.create_team(uid, "Squad")
@@ -2283,7 +2283,7 @@ def test_aim_routines_and_warmup(app):
     stranger = make_user(app, c, "stranger")
     assert stranger.get(f"/profiles/{pid}/aim").status_code == 404
     # 30 minutes before the match: one warm-up push run per team and day
-    ext = app.extensions["valcoach"]
+    ext = app.extensions["nexus"]
     tick = ext["aim"]["tick"]
     ext["minutes_to_match"] = lambda t: 30
     assert tick() == [tid] and tick() == []
@@ -2293,7 +2293,7 @@ def test_aim_routines_and_warmup(app):
 
 def test_german_interface_and_language_switch(app):
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     page = c.get("/account").data.decode()
     assert "Log out" in page and 'lang="en"' in page and "i18n.js" not in page
     c.post("/account", data={"look": "1", "style": "classic", "nav": "side", "lang": "de"})
@@ -2320,7 +2320,7 @@ def test_german_interface_and_language_switch(app):
     assert anon.get("/lang/de?next=//evil.example").headers["Location"].endswith("/login")
     assert anon.get("/lang/xx").status_code == 404
     # Discord posts follow the team's language
-    from valcoach import discord
+    from nexus import discord
     info = {"prep_url": "https://discord.com/api/webhooks/1/abc", "lang": "de"}
     store.update_team(tid, discord=info)
     content, embeds = discord._translate(discord._lang(info["prep_url"]), "Posted to Discord", [{"title": "Rounds that decided it"}])
@@ -2331,12 +2331,12 @@ def test_kovaaks_playlists_scores_and_scenarios(app):
     import io as _io
     import zipfile as _zip
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     pid = add_profile(c)
     page = c.get(f"/profiles/{pid}/aim").data.decode()
     assert "KovaaK's playlists from the coach" in page and "Download for KovaaK's" in page
     r = c.get(f"/profiles/{pid}/aim/kovaaks/warmup.json")
-    assert r.status_code == 200 and "valcoach_warmup_" in r.headers["Content-Disposition"]
+    assert r.status_code == 200 and "nexus_warmup_" in r.headers["Content-Disposition"]
     data = r.get_json()
     assert data["scenarioList"] and all(set(x) == {"scenario_name", "play_Count"} for x in data["scenarioList"])
     assert c.get(f"/profiles/{pid}/aim/kovaaks/other.json").status_code == 404
@@ -2382,8 +2382,8 @@ def test_kovaaks_playlists_scores_and_scenarios(app):
 
 
 def test_ask_the_coach_chat_with_web_search(app, monkeypatch):
-    from valcoach.coach import websearch as ws
-    from valcoach.coach.ollama import Ollama
+    from nexus.coach import websearch as ws
+    from nexus.coach.ollama import Ollama
     c = setup_admin(app)
     pid = add_profile(c)
     page = c.get(f"/profiles/{pid}/ask").data.decode()
@@ -2429,9 +2429,9 @@ def test_ask_the_coach_chat_with_web_search(app, monkeypatch):
 def test_settings_web_search_width_and_backup_message(app, tmp_path):
     import errno
     from urllib.parse import urlparse
-    from valcoach.web import backup
+    from nexus.web import backup
     c = setup_admin(app)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     c.post("/settings", data={"search_provider": "searxng", "searxng_url": ""})
     assert store.get("search_provider") == ""                                  # no URL: stays off
     c.post("/settings", data={"search_provider": "duckduckgo", "search_backup": "searxng", "searxng_url": ""})
@@ -2443,7 +2443,7 @@ def test_settings_web_search_width_and_backup_message(app, tmp_path):
     c.post("/settings", data={"search_provider": "duckduckgo", "search_backup": "searxng", "searxng_url": "http://10.0.0.5:8080"})
     assert store.get("search_provider") == "duckduckgo" and store.get("search_backup") == "searxng"
     # Test: a line per search, each with its own result
-    from valcoach.coach import websearch as ws
+    from nexus.coach import websearch as ws
 
     def fake_one(st, which):
         if which == "duckduckgo":
@@ -2475,7 +2475,7 @@ def test_settings_web_search_width_and_backup_message(app, tmp_path):
     assert backup.check_folder(data / "bk", data) == "" and "not found" in backup.check_folder(data / "nope", data)
     for bad in ("/etc", "/", "/mnt/../etc", "relative/path", "/usr/local/bk"):
         assert backup.check_folder(bad, data), bad
-    assert backup.clean_folder("/mnt/nas/valcoach", data)[0] is not None
+    assert backup.clean_folder("/mnt/nas/Nexus", data)[0] is not None
     c.post("/settings", data={"backup_keep": "14", "backup_dir": "/etc"})
     assert store.get("backup_dir") != "/etc"
     # redirects after a form or a language switch stay on this site, whatever browsers make of the target
@@ -2487,7 +2487,7 @@ def test_settings_web_search_width_and_backup_message(app, tmp_path):
 
 
 def test_kovaaks_community_playlists(app, monkeypatch):
-    from valcoach.coach import websearch as ws
+    from nexus.coach import websearch as ws
     c = setup_admin(app)
     pid = add_profile(c)
     page = c.get(f"/profiles/{pid}/aim").data.decode()
@@ -2517,10 +2517,10 @@ def test_kovaaks_community_playlists(app, monkeypatch):
 
 
 def test_companion_app_api(app, monkeypatch):
-    from valcoach import pipeline
+    from nexus import pipeline
     c = setup_admin(app)
     pid = add_profile(c)
-    store = app.extensions["valcoach"]["store"]
+    store = app.extensions["nexus"]["store"]
     anon = app.test_client()
     assert anon.get("/api/companion/me").status_code == 401
     assert anon.post("/api/companion/login", json={"username": "manuel", "password": "nope"}).status_code == 401
@@ -2555,7 +2555,7 @@ def test_companion_app_api(app, monkeypatch):
                   json={"match_id": "abc-123", "upload_id": up["id"], "source": "MedalTVValorant20261106200223161.mp4"})
     assert r.status_code == 200, r.data
     assert anon.get(f"/api/companion/players/{pid}/matches", headers=H).get_json()["matches"][0]["has_clip"]
-    from valcoach.web.companion import clip_for
+    from nexus.web.companion import clip_for
     assert clip_for(store, 1, "abc-123")["size"] == 1000
     # someone else's player: not found; logging out the device in Account kills the key
     other = store.create_user("burn2", "correct-horse-2")
@@ -2568,3 +2568,52 @@ def test_companion_app_api(app, monkeypatch):
     t2 = anon.post("/api/companion/login", json={"username": "manuel", "password": ADMIN_PW}).get_json()["token"]
     store.set_password(1, "another-pass-99")
     assert anon.get("/api/companion/me", headers={"Authorization": f"Bearer {t2}"}).status_code == 401
+
+
+def test_nexus_app_pairs_with_the_session_and_has_its_page(app):
+    c = setup_admin(app)
+    pid = add_profile(c)
+    store = app.extensions["nexus"]["store"]
+    # "This PC" is in the menu but hidden: base.html shows it only inside the app (window.pywebview)
+    home = c.get("/").data.decode()
+    assert 'data-app-only hidden' in home and "/this-pc" in home and "/account/devices/pair" in home
+    page = c.get("/this-pc").data.decode()
+    assert "Only in the Nexus app" in page and f'<option value="{pid}"' in page and "releases/latest" in page
+    assert app.test_client().get("/this-pc").status_code == 302                       # logged out: login first
+    # the app's key for this PC comes from the website session (same-site POST)
+    r = c.post("/account/devices/pair", json={"device": "Gaming PC"}, headers={"Origin": "http://localhost"})
+    assert r.status_code == 200, r.data
+    d = r.get_json()
+    assert d["user"] == "manuel" and d["token"].startswith("vc_")
+    assert app.test_client().get("/api/companion/me", headers={"Authorization": f"Bearer {d['token']}"}).status_code == 200
+    assert store.devices(1)[0]["name"] == "Gaming PC"
+    # from another website: refused (CSRF); without a session: no key
+    assert c.post("/account/devices/pair", json={}, headers={"Origin": "https://evil.example"}).status_code == 403
+    assert app.test_client().post("/account/devices/pair", json={}).status_code in (302, 401)
+    assert len(store.devices(1)) == 1
+
+
+def test_old_database_name_and_backups_are_taken_over(tmp_path, monkeypatch):
+    from nexus.web import backup
+    from nexus.web.store import Store
+    data = tmp_path / "data"
+    Store(data).set("henrik_api_key", "HDEV-old")
+    (data / "nexus.db").rename(data / "valcoach.db")               # what 4.4 left behind
+    store = Store(data)
+    assert (data / "nexus.db").exists() and not (data / "valcoach.db").exists()
+    assert store.get("henrik_api_key") == "HDEV-old"
+    # backups made before the rename still count (list, newest first, and retention)
+    dest = data / "backups"
+    dest.mkdir()
+    (dest / "valcoach-backup-2026-10-01_0400.tar.gz").write_text("old")
+    (dest / "nexus-backup-2026-09-01_0400.tar.gz").write_text("older")
+    names = [b["name"] for b in backup.list_backups(store)]
+    assert names == ["valcoach-backup-2026-10-01_0400.tar.gz", "nexus-backup-2026-09-01_0400.tar.gz"]
+    store.set("backup_keep", "1")
+    backup.make_backup(store)
+    left = sorted(p.name for p in dest.iterdir())
+    assert len(left) == 1 and left[0].startswith("nexus-backup-")
+    # the environment variables keep working under their old names
+    monkeypatch.delenv("NEXUS_BACKUP_ROOTS", raising=False)
+    monkeypatch.setenv("VALCOACH_BACKUP_ROOTS", "/srv/old-name")
+    assert "/srv/old-name" in backup.allowed_roots(data)

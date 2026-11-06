@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Habits · {{ p.riot_id }} · Nexus{% endblock %}
+{% macro pct(v) %}{{ '–' if v is none else ((v * 100)|round|int ~ '%') }}{% endmacro %}
+{% macro spark(x) -%}
+{%- set W, H = 160, 40 -%}
+{%- set vals = x.trend -%}
+{%- set top = ([x.bad_at * 1.6] + (vals|reject('none')|list))|max -%}{%- set top = [[top, 1]|min, 0.05]|max -%}
+<svg class="spark" viewBox="0 0 {{ W }} {{ H }}" preserveAspectRatio="none" aria-label="last games">
+  {%- set ty = (H - x.bad_at / top * H) %}
+  {%- if x.dir == 'high' %}<rect x="0" y="0" width="{{ W }}" height="{{ ty }}" class="zone"/>{% else %}<rect x="0" y="{{ ty }}" width="{{ W }}" height="{{ H - ty }}" class="zone"/>{% endif %}
+  <line x1="0" x2="{{ W }}" y1="{{ ty }}" y2="{{ ty }}" class="limit"/>
+  {%- set n = vals|length %}{% set pts = [] %}
+  {%- for v in vals %}{% if v is not none %}{% set _ = pts.append(((loop.index0 * W / ([n - 1, 1]|max))|round(1)) ~ ',' ~ ((H - [[v / top, 1]|min, 0]|max * H)|round(1))) %}{% endif %}{% endfor %}
+  {%- if pts %}<polyline points="{{ pts|join(' ') }}" class="line"/>{% endif %}
+</svg>
+{%- endmacro %}
+{% block head %}
+<style>
+.hsum{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+.hsum span{font-size:14px;padding:6px 12px;border-radius:99px;background:var(--panel);border:1px solid var(--line)}
+.hsum b{font-size:16px;margin-right:4px}
+.hgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}@media(max-width:980px){.hgrid{grid-template-columns:1fr}}
+.hc{margin:0}.hc header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.hc h2{margin:0 0 2px}.hc .what{font-size:13px;color:var(--muted);margin:0 0 12px}
+.hst{flex:none;font-size:12.5px;font-weight:700;padding:2px 10px;border-radius:99px;white-space:nowrap}
+.hst.worse,.hst.new{background:var(--red-soft);color:var(--red)}.hst.same{background:var(--accent-soft);color:var(--amber)}
+.hst.better{background:rgba(106,168,247,.14);color:var(--blue)}.hst.gone,.hst.fine{background:var(--win-soft);color:var(--win)}
+.hst.few{background:var(--panel3);color:var(--muted)}
+.nums{display:grid;grid-template-columns:auto auto 1fr;gap:4px 18px;align-items:end;margin-bottom:10px}
+.nums div span{display:block;font-size:12px;color:var(--muted)}.nums div b{font-size:26px;font-weight:800;font-stretch:72%;font-family:var(--font-num)}
+.nums .bad{color:var(--red)}.nums .ok{color:var(--win)}
+.spark{width:100%;height:44px;display:block}.spark .zone{fill:var(--red-soft);stroke:none}.spark .limit{stroke:var(--red);stroke-dasharray:3 3;stroke-width:1;opacity:.7}
+.spark .line{fill:none;stroke:var(--text);stroke-width:1.8;vector-effect:non-scaling-stroke}
+.drill{font-size:13.5px;background:var(--panel2);border-radius:8px;padding:9px 12px;margin:10px 0 0}.drill b{font-weight:650}
+.cs{margin:12px 0 0;padding:0;list-style:none}.cs li{font-size:13.5px;padding:7px 0;border-top:1px solid var(--line)}
+.cs li .src{font-size:12px;color:var(--muted)}.cs .vd{font-size:12px;font-weight:650;margin-left:6px}
+.cs .vd.good{color:var(--win)}.cs .vd.bad{color:var(--red)}.cs .vd.same{color:var(--amber)}.cs .vd.wait{color:var(--muted)}
+.hfoot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.fine-list{display:flex;flex-wrap:wrap;gap:8px}.fine-list span{font-size:13px;padding:4px 10px;border-radius:99px;background:var(--panel2);border:1px solid var(--line)}
+</style>
+{% endblock %}
+{% block content %}
+{% import "_ui.html" as vc %}
+{{ vc.pagehead('Habits', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+    'Your last ' ~ h.recent ~ ' games with round data compared with the ' ~ h.before ~ ' before' if h.games else 'No games with round data yet') }}
+<nav class="subtabs" aria-label="Queue">{% for val, label in queues %}<a class="{{ 'on' if queue == val }}" href="{{ url_for('habits', pid=p.id, queue=val) }}">{{ label }}</a>{% endfor %}</nav>
+
+{% if not h.games %}
+<section class="card"><h2>No games yet</h2><p class="muted" style="margin:0">Habits need games with round data: import the history on <a href="{{ url_for('stats', pid=p.id) }}">Stats &amp; maps</a>.</p></section>
+{% else %}
+{% set cnt = {} %}{% for x in h.habits %}{% set _ = cnt.update({x.status: cnt.get(x.status, 0) + 1}) %}{% endfor %}
+<div class="hsum">
+  {% for st, lab in (('worse', 'getting worse'), ('same', 'still there'), ('new', 'new'), ('better', 'getting better'), ('gone', 'gone')) if cnt.get(st) %}<span><b>{{ cnt[st] }}</b>{{ lab }}</span>{% endfor %}
+  {% if own %}<span>Your focus this week: <b style="font-size:14px">{{ own.focus }}</b></span>{% endif %}
+</div>
+
+<div class="hgrid">
+{% for x in h.habits if x.status not in ('fine', 'few') or x.coach %}
+  <section class="card hc" id="h-{{ x.key }}">
+    <header><div><h2>{{ x.title }}</h2><p class="what">{{ x.what[:1]|upper ~ x.what[1:] }}. Costs rounds {{ 'above' if x.dir == 'high' else 'below' }} {{ pct(x.bad_at) }}.</p></div>
+      <span class="hst {{ x.status }}">{{ x.status_text }}</span></header>
+    <div class="nums">
+      <div><span>Before</span><b class="{{ 'bad' if x.before is not none and ((x.dir == 'high' and x.before > x.bad_at) or (x.dir == 'low' and x.before < x.bad_at)) else 'ok' if x.before is not none }}">{{ pct(x.before) }}</b></div>
+      <div><span>Now</span><b class="{{ 'bad' if x.now is not none and ((x.dir == 'high' and x.now > x.bad_at) or (x.dir == 'low' and x.now < x.bad_at)) else 'ok' if x.now is not none }}">{{ pct(x.now) }}</b></div>
+      <div title="Your last 20 games (3-game average). The red area costs rounds.">{{ spark(x) }}</div>
+    </div>
+    {% if x.coach %}<ul class="cs">{% for c in x.coach[:3] %}<li>“{{ c.text }}”
+      <span class="vd {{ 'good' if c.verdict == 'better since' else 'bad' if c.verdict == 'worse since' else 'same' if c.verdict == 'no change since' else 'wait' }}">{{ c.verdict[:1]|upper ~ c.verdict[1:] }}{% if c.after is not none and c.before is not none %} ({{ pct(c.before) }} → {{ pct(c.after) }}){% endif %}</span><br>
+      <span class="src"><a href="{{ c.url }}">{{ c.source }}</a>{% if fmt_date(c.date) %}, {{ fmt_date(c.date) }}{% endif %}</span></li>{% endfor %}
+      {% if x.coach|length > 3 %}<li class="src">and {{ x.coach|length - 3 }} more {{ 'time' if x.coach|length == 4 else 'times' }}</li>{% endif %}</ul>{% endif %}
+    {% if x.status not in ('gone', 'fine') %}<p class="drill"><b>Try:</b> {{ x.drill }}</p>{% endif %}
+    {% if can_edit and x.status not in ('gone', 'fine') %}<div class="hfoot"><span class="small muted">Work on it this week:</span>
+      <button type="button" class="btn sm" data-focus="{{ x.title }}" data-why="{{ x.drill }}">Make it my focus</button></div>{% endif %}
+  </section>
+{% endfor %}
+</div>
+
+{% set fine = h.habits|selectattr('status', 'in', ['fine'])|rejectattr('coach')|list %}
+{% if fine %}<section class="card" style="margin-top:16px"><h2>Fine right now</h2>
+  <div class="fine-list">{% for x in fine %}<span>{{ x.title }}: {{ pct(x.now) }}</span>{% endfor %}</div></section>{% endif %}
+
+{% if h.notes %}<section class="card"><h2>Other things the coach said</h2>
+  <p class="small muted" style="margin:-6px 0 8px">Tips that don't match a number Nexus can measure. The ones said most often first.</p>
+  <ul class="cs">{% for n in h.notes %}<li>“{{ n.text }}”{% if n.times > 1 %} <span class="vd same">{{ n.times }}×</span>{% endif %}{% if n.fix %}<br><span class="small">{{ n.fix }}</span>{% endif %}<br>
+    <span class="src"><a href="{{ n.url }}">{{ n.source }}</a>{% if fmt_date(n.date) %}, {{ fmt_date(n.date) }}{% endif %}</span></li>{% endfor %}</ul></section>{% endif %}
+<p class="small muted">A habit counts as gone when your recent games are back under the line. Tips from reports are matched by their words; the numbers before and after the report show whether it worked.</p>
+<script>
+document.querySelectorAll('[data-focus]').forEach(b => b.addEventListener('click', async () => {
+  const r = await fetch('{{ url_for("own_focus", pid=p.id) }}', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({focus: b.dataset.focus, why: b.dataset.why, source: 'own'})});
+  window.nexusToast && window.nexusToast(r.ok ? 'Your focus this week: ' + b.dataset.focus : 'Not saved', r.ok ? '' : 'error');
+}));
+</script>
+{% endif %}
+{% endblock %}

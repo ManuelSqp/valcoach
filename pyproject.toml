@@ -3,8 +3,8 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "valcoach"
-version = "4.4.2"
+name = "nexus"
+version = "4.5.0"
 description = "Local Valorant coach: HenrikDev match data + VOD sync + minimap parsing + Ollama coaching, with a web app"
 requires-python = ">=3.11"
 dependencies = [
@@ -26,13 +26,13 @@ dependencies = [
 dev = ["pytest>=8", "ruff>=0.6", "pre-commit>=3"]
 
 [project.scripts]
-valcoach = "valcoach.cli:main"
+nexus = "nexus.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["valcoach*"]
+include = ["nexus*"]
 
 [tool.setuptools.package-data]
-valcoach = ["web/templates/*.html", "web/static/*", "web/static/styles/*.css", "web/static/fonts/*", "web/static/styles/previews/*", "web/static/icons/*", "web/templates/*.js", "web/playbook_example.yaml", "replay.js", "stats/pros.yaml", "i18n/*.json"]
+nexus = ["web/templates/*.html", "web/static/*", "web/static/styles/*.css", "web/static/fonts/*", "web/static/styles/previews/*", "web/static/icons/*", "web/templates/*.js", "web/playbook_example.yaml", "replay.js", "stats/pros.yaml", "i18n/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -51,5 +51,5 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"valcoach/web/__init__.py" = ["E402"]   # some imports have to come after the app's constants
+"nexus/web/__init__.py" = ["E402"]   # some imports have to come after the app's constants
 "tests/*" = ["E702"]

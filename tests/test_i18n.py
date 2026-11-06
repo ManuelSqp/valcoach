@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from valcoach import i18n
-from valcoach.i18n import Catalog, translate_html, tr
+from nexus import i18n
+from nexus.i18n import Catalog, translate_html, tr
 
 
 def cat():

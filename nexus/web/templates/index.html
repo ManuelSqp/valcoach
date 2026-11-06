@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% block title %}Home · Nexus{% endblock %}
+{% block head %}
+<style>
+/* the week's map: the one loud thing on the page */
+.wk{position:relative;overflow:hidden;border-radius:16px;background:var(--panel);border:1px solid var(--line);margin-bottom:16px;isolation:isolate}
+.wk-map{position:absolute;inset:-10% -4% -10% auto;width:min(58%,560px);z-index:-1;opacity:.5;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 55%);mask-image:linear-gradient(90deg,transparent,#000 55%)}
+.wk-map img{width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.15);mix-blend-mode:screen;opacity:.55}
+[data-theme=light] .wk-map img{mix-blend-mode:multiply;opacity:.35;filter:grayscale(1) invert(1) contrast(1.1)}
+.wk-grid{position:absolute;inset:0;z-index:-2;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:44px 44px;opacity:.35;
+  -webkit-mask-image:linear-gradient(100deg,transparent 35%,#000);mask-image:linear-gradient(100deg,transparent 35%,#000)}
+.wk-in{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,340px);gap:22px 34px;padding:22px 26px 24px}
+.wk-team{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted);font-weight:600}
+.wk-team a{color:var(--text);text-decoration:none}
+.livedot{width:8px;height:8px;border-radius:50%;background:var(--red);animation:lpulse 1.6s infinite}@keyframes lpulse{50%{opacity:.3}}.wk-team a:hover{text-decoration:underline}
+.wk-name{font-size:clamp(64px,9vw,118px);line-height:.86;font-weight:850;font-stretch:62%;letter-spacing:-.01em;margin:14px 0 14px;color:var(--text)}
+.wk-name.none{font-size:40px;font-stretch:72%;color:var(--muted);line-height:1.1}
+.wk-meta{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:14px;color:var(--muted)}
+.wk-meta b{color:var(--text);font-weight:650}
+.wk-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.wk-side{align-self:end;background:color-mix(in srgb,var(--panel2) 82%,transparent);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.wk-side h3{margin:0 0 2px;font-size:15px;font-weight:700;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.wk-side h3 a{font-size:12.5px;font-weight:600;color:var(--muted)}
+.lvl{font-size:13px;font-weight:650}.lvl.ok{color:var(--win)}.lvl.maybe{color:var(--amber)}.lvl.short{color:var(--red)}
+.roster{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
+.rc{display:inline-flex;align-items:center;gap:6px;padding:3px 9px 3px 4px;border-radius:99px;font-size:12.5px;font-weight:600;background:var(--panel3);color:var(--muted);border:1px solid transparent}
+.rc i{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:11px;font-weight:800;background:var(--line);color:var(--muted)}
+.rc.yes{color:var(--text)}.rc.yes i{background:var(--win);color:#06231b}
+.rc.maybe i{background:var(--amber);color:#2a1c02}
+.rc.no{text-decoration:line-through;opacity:.7}.rc.no i{background:var(--red);color:#2b0a06}
+.rc.me{border-color:var(--line2)}
+.subline{font-size:12.5px;color:var(--muted);margin-top:6px}.subline b{color:var(--text)}
+.mine{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:13.5px}
+.mine.ask span{color:var(--amber)}
+.avq{display:inline-flex;gap:4px}.avq button{font:inherit;font-size:12.5px;font-weight:700;padding:0 10px;height:30px;border-radius:7px;border:1px solid var(--line2);background:var(--panel);color:var(--muted);cursor:pointer}
+.avq button:hover{color:var(--text)}
+.avq button.yes.on{background:var(--win);border-color:var(--win);color:#06231b}.avq button.maybe.on{background:var(--amber);border-color:var(--amber);color:#2a1c02}.avq button.no.on{background:var(--red);border-color:var(--red);color:#2b0a06}
+@media(max-width:1000px){.wk-in{grid-template-columns:1fr}.wk-map{width:90%;opacity:.35}}
+
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:34px}
+@media(max-width:1000px){.cols{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:6px 18px 8px}
+.panel>header{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px 0 6px}
+.panel>header h2{margin:0}.panel>header a{font-size:13px;color:var(--muted)}
+.li{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line);font-size:14.5px;color:var(--text);text-decoration:none}
+a.li:hover .li-t{text-decoration:underline;text-decoration-color:var(--accent)}
+.li-i{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--panel3);color:var(--muted)}
+.li-i svg{width:17px;height:17px}
+.li-i.ok{background:var(--win-soft);color:var(--win)}.li-i.warn{background:var(--accent-soft);color:var(--accent)}.li-i.bad{background:var(--red-soft);color:var(--red)}
+.li-s{display:block;font-size:12.5px;color:var(--muted);margin-top:1px}
+.li .go{color:var(--faint);font-size:13px;white-space:nowrap}
+.up{color:var(--win);font-weight:700}.down{color:var(--red);font-weight:700}
+.newk{display:inline-block;font-size:11.5px;font-weight:650;color:var(--muted);background:var(--panel3);border-radius:5px;padding:0 6px;margin-right:6px}
+.steps{counter-reset:s}.steps .li-i{font-weight:800;color:var(--text)}
+.sec{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0 0 12px}
+.sec h2{font-size:22px;font-weight:800;font-stretch:72%;margin:0}
+.sec p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.teamcard .mem{display:flex;flex-wrap:wrap;gap:4px;margin:10px 0 6px}.teamcard .mem span{font-size:12.5px;padding:1px 8px;border-radius:99px;background:var(--panel3);color:var(--text)}
+.teamcard .mem span.sub{color:var(--muted);background:transparent;border:1px dashed var(--line2)}
+.teamcard .fo{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}.teamcard .fo b{color:var(--text)}
+</style>
+{% endblock %}
+{% macro ic(name) %}<svg viewBox="0 0 24 24" aria-hidden="true">{% if name == 'fire' %}<path d="M12 21c-3.9 0-6.5-2.6-6.5-6.1 0-3.4 2.6-5.3 3.9-8.4.6 2 1.7 3 2.9 3.5.2-2.4 1.5-4.6 3.4-6 .1 3.3 2.8 5.4 2.8 9.3 0 4.1-2.6 7.7-6.5 7.7z"/>{% elif name == 'rank' %}<path d="M4 17l5-5 4 3 7-8"/><path d="M15 7h5v5"/>{% elif name == 'quiz' %}<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17.2h.01"/>{% elif name == 'report' %}<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/>{% elif name == 'dl' %}<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>{% elif name == 'run' %}<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>{% elif name == 'warn' %}<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/>{% elif name == 'target' %}<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>{% elif name == 'new' %}<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>{% endif %}</svg>{% endmacro %}
+{% block content %}
+{% for x in td.teams %}{% set a = x.avail %}{% set f = x.own or x.focus %}
+<section class="wk" aria-label="{{ x.t.name }} this week">
+  <div class="wk-grid"></div>
+  {% if x.map %}<div class="wk-map"><img src="{{ url_for('map_image', name=x.map) }}" alt="" onerror="this.parentNode.remove()"></div>{% endif %}
+  <div class="wk-in">
+    <div>
+      <div class="wk-team"><span class="avatar sm">{{ x.t.name[:1]|upper }}</span><a href="{{ url_for('team_premier', tid=x.t.id) }}">{{ x.t.name }}</a><span>· {{ 'Match time' if x.live else 'Premier this week' }}</span>{% if x.live %}<span class="livedot" aria-hidden="true"></span>{% endif %}</div>
+      {% if x.map %}<div class="wk-name">{{ x.map }}</div>{% else %}<div class="wk-name none">No map set for this week</div>{% endif %}
+      <div class="wk-meta">
+        {% if a %}<span>Next match <b>{{ 'today' if a.today else a.label }}</b></span>{% endif %}
+        {% if f %}<span>Your focus <b>{{ f.focus }}</b></span>{% endif %}
+        {% if x.warm %}<span>Warm up first: <a href="{{ url_for('aim', pid=x.warm.pid) }}#warmup"><b>{{ x.warm.routine.name }}</b></a> ({{ x.warm.routine.minutes }} min)</span>{% endif %}
+        {% if not x.map and not a %}<span>Set match days under Premier to see who can play.</span>{% endif %}
+      </div>
+      <div class="wk-acts">
+        {% if x.live %}<a class="btn primary" href="{{ url_for('team_match', tid=x.t.id) }}">Open match screen</a>{% endif %}
+        {% if x.map %}<a class="btn {{ '' if x.live else 'primary' }}" href="{{ url_for('team_brief', tid=x.t.id) }}">Open match-day brief</a>{% endif %}
+        {% if not x.live %}<a class="btn" href="{{ url_for('team_match', tid=x.t.id) }}">Match screen</a>{% endif %}
+        <a class="btn" href="{{ url_for('team', tid=x.t.id) }}">Team comps</a>
+        <a class="btn ghost" href="{{ url_for('team_strats', tid=x.t.id) }}">Strat book</a>
+      </div>
+    </div>
+    {% if a %}
+    <div class="wk-side">
+      <h3><span>Who can play {{ 'today' if a.today else a.label }}</span><a href="{{ url_for('team_availability', tid=x.t.id) }}">All days</a></h3>
+      <span class="lvl {{ a.level }}">{{ a.yes|length }} of 5 confirmed{% if a.maybe %} · {{ a.maybe|length }} maybe{% endif %}{% if a.unknown %} · {{ a.unknown|length }} no answer{% endif %}</span>
+      <div class="roster">{% for m in a.yes + a.maybe + a.unknown + a.no %}{% set st = a.state[m.pid] or 'unknown' %}
+        <span class="rc {{ st }} {{ 'me' if x.mine and x.mine.pid == m.pid }}" title="{{ m.name }}: {{ {'yes': 'can play', 'maybe': 'maybe', 'no': 'can\'t play', 'unknown': 'no answer yet'}[st] }}"><i>{{ {'yes': '✓', 'maybe': '?', 'no': '✕', 'unknown': '·'}[st] }}</i>{{ m.name }}</span>{% endfor %}</div>
+      {% for slot in a.missing %}<div class="subline">{{ slot.name }} can't play{% if slot.subs %}: <b>{{ slot.subs[0].name }}</b> could take {{ slot.agent or 'the spot' }} ({{ slot.subs[0].why }}){% endif %}</div>{% endfor %}
+      {% if x.mine %}<div class="mine {{ 'ask' if not x.my_answer }}"><span>{{ 'Can you play?' if not x.my_answer else 'Your answer' }}</span>
+        <span class="avq" data-url="/api/teams/{{ x.t.id }}/availability" data-pid="{{ x.mine.pid }}" data-day="{{ a.day }}">
+        {% for st, lab in (('yes', 'Yes'), ('maybe', 'Maybe'), ('no', 'No')) %}<button type="button" class="{{ st }} {{ 'on' if x.my_answer == st }}" data-st="{{ st }}">{{ lab }}</button>{% endfor %}</span></div>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endfor %}
+
+<div class="cols">
+  {% set me = td.me %}
+  {% if me %}
+  <section class="panel" aria-label="You">
+    <header><h2>{{ me.p.name }}</h2><a href="{{ url_for('stats', pid=me.p.id) }}">Stats &amp; maps</a></header>
+    {% if not me.games %}<div class="li"><span class="li-i warn">{{ ic('dl') }}</span><span class="li-t">No games yet<span class="li-s">Import your match history to get stats and reports.</span></span>
+      <form method="post" action="{{ url_for('stats_import', pid=me.p.id) }}"><button class="btn sm primary">Import</button></form></div>{% endif %}
+    <a class="li" href="{{ url_for('training', pid=me.p.id) }}#routine"><span class="li-i {{ 'ok' if me.warmup_done else 'warn' }}">{{ ic('fire') }}</span>
+      <span class="li-t">{{ 'Warm-up done today' if me.warmup_done else 'Warm-up not done yet' }}<span class="li-s">{{ me.streak }}-day streak</span></span><span class="go">Training</span></a>
+    {% if me.rank %}<a class="li" href="{{ url_for('progress', pid=me.p.id) }}"><span class="li-i">{{ ic('rank') }}</span>
+      <span class="li-t">{{ me.rank.name }}{% if me.rank.rr is not none %}, {{ me.rank.rr }} RR{% endif %}<span class="li-s">{% if me.rank.delta14 is not none %}<span class="{{ 'up' if me.rank.delta14 > 0 else ('down' if me.rank.delta14 < 0 else '') }}">{{ '+' if me.rank.delta14 > 0 }}{{ me.rank.delta14 }} RR</span> in the last 14 days{% else %}Rank over time{% endif %}</span></span><span class="go">Progress</span></a>{% endif %}
+    <a class="li" href="{{ url_for('quiz', pid=me.p.id) }}"><span class="li-i {{ 'warn' if me.quiz }}">{{ ic('quiz') }}</span>
+      <span class="li-t">{% if me.quiz %}{{ me.quiz }} quiz questions waiting{% elif me.has_quiz %}Quiz done{% else %}No quiz yet{% endif %}<span class="li-s">{% if me.quiz %}Decisions from your own rounds{% elif me.has_quiz %}A new one is made after a few more games{% else %}Questions from your own rounds{% endif %}</span></span>
+      {% if me.quiz %}<span class="btn sm primary">Play</span>{% else %}<span class="go">Quiz</span>{% endif %}</a>
+    {% if me.report %}<a class="li" href="{{ url_for('job_report', jid=me.report.id) }}" target="_blank"><span class="li-i">{{ ic('report') }}</span>
+      <span class="li-t">Last report<span class="li-s">{{ me.report.map }} {{ me.report.score }}</span></span><span class="go">Open</span></a>{% endif %}
+  </section>
+  {% elif not td.teams %}
+  <section class="panel steps"><header><h2>Get started</h2></header>
+    <a class="li" href="{{ url_for('profile_new') }}"><span class="li-i">1</span><span class="li-t">Add your player<span class="li-s">Riot name and tag, then import your history.</span></span><span class="btn sm primary">Add player</span></a>
+    <a class="li" href="{{ url_for('teams') }}"><span class="li-i">2</span><span class="li-t">Create your team<span class="li-s">From Premier or by hand, then add your teammates.</span></span><span class="btn sm">Create team</span></a>
+    <a class="li" href="{{ url_for('account') }}"><span class="li-i">3</span><span class="li-t">Set your in-game name<span class="li-s">So Nexus knows which player is you.</span></span><span class="btn sm ghost">Account</span></a>
+  </section>
+  {% endif %}
+  <section class="panel" aria-label="Activity">
+    <header><h2>{{ 'New since your last visit' if td.new else 'Activity' }}</h2></header>
+    {% for j in td.jobs %}<div class="li"><span class="li-i {{ 'bad' if j.error else '' }}">{{ ic('warn' if j.error else 'run') }}</span>
+      <span class="li-t">{{ j.what }}{% if j.who %}, {{ j.who }}{% endif %}<span class="li-s" {% if j.error %}style="color:var(--red)"{% endif %}>{{ j.error or j.status }}</span></span>
+      {% if j.jid %}<a class="go" href="{{ url_for('job', jid=j.jid) }}">View</a>{% else %}<span></span>{% endif %}</div>{% endfor %}
+    {% for n in td.new %}<a class="li" href="{{ url_for(n.url[0], **n.url[1]) }}"><span class="li-i">{{ ic('new') }}</span><span class="li-t">{{ n.text }}<span class="li-s"><span class="newk">{{ n.kind }}</span>{{ n.team }}</span></span><span class="go"></span></a>{% endfor %}
+    {% if not td.jobs and not td.new %}<p class="muted small" style="margin:4px 0 14px">Nothing new. Reviews, strats, drafts and notes your team changes show up here.</p>{% endif %}
+  </section>
+</div>
+<script>
+document.querySelectorAll('.avq').forEach(box => box.addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const st = b.classList.contains('on') ? '' : b.dataset.st;
+  const r = await fetch(box.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({pid: +box.dataset.pid, day: box.dataset.day, state: st})});
+  if (r.ok) { box.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.st === st)); window.nexusToast && window.nexusToast('Saved'); setTimeout(() => location.reload(), 900); }
+  else { const j = await r.json().catch(() => ({})); window.nexusToast && window.nexusToast(j.error || 'Not saved', 'error'); }
+}));
+</script>
+
+<div class="sec"><div><h2>Your teams</h2></div>
+  <a class="btn sm" href="{{ url_for('teams') }}">{{ 'Manage teams' if teams else 'New team' }}</a></div>
+<div class="grid" style="margin-bottom:28px">
+  {% for x in teams %}
+  <a class="player teamcard" href="{{ url_for('team', tid=x.t.id) }}">
+    <div class="name">{{ x.t.name }}</div>
+    <div class="mem">{% for n in x.starters %}<span>{{ n }}</span>{% else %}<span class="sub">no starters yet</span>{% endfor %}{% for n in x.subs %}<span class="sub" title="sub">{{ n }}</span>{% endfor %}</div>
+    <div class="muted small">{{ x.t.map_list|length or 'Auto' }} maps in the pool{% if x.shared %}, shared with you{% endif %}</div>
+    {% if x.focus %}<div class="fo">Your focus this week: <b>{{ x.focus.focus }}</b></div>{% endif %}
+  </a>
+  {% else %}
+  <a class="player add" href="{{ url_for('teams') }}">+ Create a team<br><span class="small">comps per map from everyone's stats</span></a>
+  {% endfor %}
+</div>
+
+<div class="sec"><div><h2>Your players</h2><p>Only you see these players, their notes, playbooks and reports.{% if profiles|length > 1 %} Drag the handle to change the order.{% endif %}</p></div>
+  <a class="btn sm" href="{{ url_for('profile_new') }}">Add player</a></div>
+<div class="grid sortable" id="players" style="margin-bottom:28px">
+  {% for p in profiles %}
+  <a class="player" href="{{ url_for('profile', pid=p.id) }}" data-pid="{{ p.id }}">
+    {% if profiles|length > 1 %}<span class="grip" tabindex="0" role="button" title="Drag to reorder"
+      aria-label="Move {{ p.name }}. Use the arrow keys to move it.">⋮⋮</span>{% endif %}
+    <div class="name"><span class="pos">{{ loop.index }}</span>{{ p.name }}<span class="muted">#{{ p.tag }}</span></div>
+    <div class="muted small">{{ p.region|upper }} · coaching: {{ p.mode|mode_label }} · {{ counts[p.id] }} report{{ '' if counts[p.id] == 1 else 's' }}</div>
+  </a>
+  {% endfor %}
+  
+</div>
+
+<section class="card">
+  <div class="sec" style="margin-bottom:6px"><h2>Recent reports</h2></div>
+  {% if jobs %}
+  <div class="tablewrap"><table>
+    <tr><th>Player</th><th>Match</th><th>Score</th><th class="hide-sm">Mode</th><th class="hide-sm">VOD</th><th>Status</th><th class="hide-sm">Created</th><th></th></tr>
+    {% for j in jobs %}
+    <tr>
+      <td>{{ names.get(j.profile_id, '?') }}</td>
+      <td>{{ j.map or '…' }} <span class="muted small">{{ j.started_at_match|localtime }}</span></td>
+      <td>{{ j.score }}</td>
+      <td class="hide-sm">{{ j.mode|mode_label }}</td>
+      <td class="muted small hide-sm">{{ 'yes' if j.vod_path else '—' }}</td>
+      <td><span class="pill {{ j.status }}">{{ j.status }}</span></td>
+      <td class="muted small hide-sm">{{ j.created_at|localtime }}</td>
+      <td style="text-align:right">
+        {% if j.status == 'done' %}<a class="btn sm primary" href="{{ url_for('job_report', jid=j.id) }}" target="_blank">Open report</a>
+        {% else %}<a class="btn sm" href="{{ url_for('job', jid=j.id) }}">View</a>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}
+  <div class="empty">No reports yet. Open a player, pick a match and press <b>Coach</b>.</div>
+  {% endif %}
+</section>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  const grid = document.getElementById('players');
+  const cards = () => [...grid.querySelectorAll('.player[data-pid]')];
+  const order = () => cards().map(c => Number(c.dataset.pid));
+  let drag = null;
+
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600);
+  }
+
+  function renumber() {
+    cards().forEach((c, i) => { const p = c.querySelector('.pos'); if (p) p.textContent = i + 1; });
+    // keep the sidebar's player list in the same order
+    const first = document.querySelector('.vc-side a[data-pid]');
+    const box = first && first.parentNode, add = box && box.querySelector('a.add');
+    if (box) order().forEach(id => {
+      const link = box.querySelector(`a[data-pid="${id}"]`);
+      if (link) box.insertBefore(link, add);
+    });
+  }
+
+  async function save(before) {
+    const now = order();
+    if (JSON.stringify(now) === JSON.stringify(before)) return;
+    renumber();
+    try {
+      const r = await fetch('/api/profiles/order', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({order: now}),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || r.status);
+      toast('Order saved');
+    } catch (e) {
+      toast('Could not save the order, reloading…');
+      setTimeout(() => location.reload(), 1200);
+    }
+  }
+
+  // ---- mouse / touch / pen (pointer events) ----
+  function onDown(e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    const card = e.currentTarget.closest('.player');
+    const r = card.getBoundingClientRect();
+    const ph = document.createElement('div');
+    ph.className = 'player placeholder';
+    ph.style.height = r.height + 'px';
+    card.after(ph);
+    Object.assign(card.style, {position: 'fixed', left: r.left + 'px', top: r.top + 'px',
+                               width: r.width + 'px', height: r.height + 'px', margin: 0});
+    card.classList.add('dragging');
+    drag = {card, ph, dx: e.clientX - r.left, dy: e.clientY - r.top, before: order(), grip: e.currentTarget};
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onMove(e) {
+    if (!drag) return;
+    drag.card.style.left = (e.clientX - drag.dx) + 'px';
+    drag.card.style.top = (e.clientY - drag.dy) + 'px';
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const target = el && el.closest('#players .player[data-pid]:not(.dragging)');
+    if (!target) return;
+    const t = target.getBoundingClientRect();
+    // one card per row (phone): above/below decides; several per row: left/right decides
+    const oneColumn = t.width > grid.clientWidth * 0.6;
+    const sameRow = e.clientY >= t.top && e.clientY <= t.bottom;
+    const before = (oneColumn || !sameRow) ? e.clientY < t.top + t.height / 2
+                                           : e.clientX < t.left + t.width / 2;
+    before ? target.before(drag.ph) : target.after(drag.ph);
+  }
+
+  function onUp() {
+    if (!drag) return;
+    const {card, ph, before} = drag;
+    ph.replaceWith(card);
+    card.removeAttribute('style');
+    card.classList.remove('dragging');
+    drag = null;
+    save(before);
+  }
+
+  // ---- keyboard: focus the handle, then arrow keys ----
+  function onKey(e) {
+    const card = e.currentTarget.closest('.player');
+    const before = order();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      const prev = card.previousElementSibling;
+      if (prev && prev.dataset.pid) prev.before(card);
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      const next = card.nextElementSibling;
+      if (next && next.dataset.pid) next.after(card);
+    } else return;
+    e.preventDefault();
+    e.currentTarget.focus();
+    save(before);
+  }
+
+  grid.querySelectorAll('.grip').forEach(h => {
+    h.addEventListener('pointerdown', onDown);
+    h.addEventListener('pointermove', onMove);
+    h.addEventListener('pointerup', onUp);
+    h.addEventListener('pointercancel', onUp);
+    h.addEventListener('keydown', onKey);
+    // the handle sits inside the card link: don't open the player when dragging
+    h.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
+  });
+})();
+</script>
+{% endblock %}
