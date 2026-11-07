@@ -304,6 +304,7 @@
   const ROOM = {x0: -34, x1: 34, z0: -36, z1: 8, h: 14};
   const WALL = [0.2, 0.235, 0.29], FLOOR = [0.16, 0.185, 0.22], COVER = [0.32, 0.35, 0.4];
   const TARGET = [0.95, 0.33, 0.3], TARGET_ON = [1.0, 0.62, 0.35];
+  const AGENT = [0.78, 0.26, 0.26], AGENT_HEAD = [0.95, 0.45, 0.38];
   function drawRoom() {
     const {x0, x1, z0, z1, h} = ROOM, t = 0.2;
     draw(meshes.box, model(x0, -t, z0, x1 - x0, t, z1 - z0), FLOOR, 1);
@@ -335,10 +336,90 @@
   const atAngle = (deg, dist, y) => [Math.sin(deg * Math.PI / 180) * dist, y, -Math.cos(deg * Math.PI / 180) * dist];
 
   // ------------------------------------------------------------------ scenarios (ids as in stats/trainer.py)
-  // Each: setup(st), update(st, dt), and the targets in st.targets [{c:[x,y,z], r, born, on}] + st.covers.
+  // Each: setup(st), update(st, dt), hit(st, tg, head); the targets in st.targets ({c:[x,y,z], r, born} spheres,
+  // or {agent: true, c: feet} enemy models) and walls in st.covers. Targets never go into the floor or ceiling.
+  const D2R = Math.PI / 180;
+  // a point at (yaw, pitch, distance) from the eye, kept between the floor and the ceiling
+  function place(ty, tp, d, r) {
+    const lo = Math.atan2(r + 0.25 - EYE, d), hi = Math.atan2(ROOM.h - 1.5 - EYE, d);
+    tp = clamp(tp, lo, hi);
+    return [Math.sin(ty) * Math.cos(tp) * d, EYE + Math.sin(tp) * d, -Math.cos(ty) * Math.cos(tp) * d];
+  }
+  // how a flick went (sens finder and flick scenarios): progress along the line to the target, the first stop
+  function pathStart(st, ty, tp, r, d, flick) {
+    const len = Math.hypot(ty - yaw, tp - pitch);
+    st.path = {y0: yaw, p0: pitch, vy: ty - yaw, vp: tp - pitch, len, tol: Math.atan(r / d), flick, max: 0, peak: 0, stop: null, py: yaw, pp: pitch};
+  }
+  function pathUpdate(st, dt) {
+    const p = st.path;
+    if (!p || !dt || !p.len) return;
+    const prog = ((yaw - p.y0) * p.vy + (pitch - p.p0) * p.vp) / (p.len * p.len);
+    const speed = Math.hypot(yaw - p.py, pitch - p.pp) / dt;
+    p.py = yaw; p.pp = pitch;
+    p.max = Math.max(p.max, prog);
+    p.peak = Math.max(p.peak, speed);
+    if (p.stop === null && p.peak > p.len * 2 && speed < p.peak * 0.15) p.stop = prog;    // the first stop after the flick
+  }
+  function pathHit(st) {
+    const p = st.path;
+    if (p && p.flick && p.len > 8 * D2R) {
+      const tol = p.tol / p.len;
+      (st.over = st.over || []).push(Math.max(0, p.max - 1 - tol));
+      (st.under = st.under || []).push(p.stop === null ? 0 : Math.max(0, 1 - tol - p.stop));
+    }
+  }
+  // one target at a time, somewhere between amin and amax degrees away from the crosshair
+  function flicks(o) {
+    return {
+      kind: 'click',
+      setup(st) { st.targets = []; this.spawn(st); },
+      spawn(st) {
+        const a = rand(o.amin, o.amax) * D2R, side = Math.random() < 0.5 ? -1 : 1, up = rand(-1, 1) * (o.vert || 0.35);
+        let ty = yaw + side * a * Math.sqrt(1 - Math.min(0.9, up * up)), tp = clamp(pitch + up * a, (o.pmin || -6) * D2R, (o.pmax || 10) * D2R);
+        if (Math.abs(ty) > 70 * D2R) ty = yaw - side * a;                  // keep it in front, not behind you
+        const d = rand(o.dmin, o.dmax), c = place(ty, tp, d, o.r);
+        const realP = Math.asin((c[1] - EYE) / d);
+        st.targets = [{c, r: o.r, born: st.t}];
+        pathStart(st, ty, realP, o.r, d, true);
+      },
+      update(st, dt) { pathUpdate(st, dt); },
+      hit(st) { pathHit(st); this.spawn(st); },
+    };
+  }
+  // one target that strafes left and right; stops: chance to stand still for a moment (counter-strafe)
+  function tracker(o) {
+    return {
+      kind: 'track',
+      setup(st, here) {
+        let x = 0, y = o.y;
+        if (here) {                                 // in the sens test: start right where the crosshair is
+          x = clamp(Math.tan(yaw) * o.d, -o.bound, o.bound);
+          y = clamp(EYE + Math.tan(pitch) * o.d, 0.9, 2.6);
+        }
+        st.targets = [{c: [x, y, -o.d], r: o.r, born: st.t, y0: y}];
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        st.mv = {v: here ? dir * o.vmin : 0, goal: dir * rand(o.vmin, o.vmax), flip: st.t + rand(o.fmin, o.fmax)};
+      },
+      update(st, dt) {
+        const tg = st.targets[0], m = st.mv;
+        if (!tg) return;
+        if (st.t >= m.flip || Math.abs(tg.c[0]) > o.bound) {
+          if (Math.abs(tg.c[0]) > o.bound) m.goal = -Math.sign(tg.c[0]) * rand(o.vmin, o.vmax);
+          else if (o.stop && m.goal && Math.random() < o.stop) m.goal = 0;               // stands for a moment
+          else m.goal = (m.goal ? -Math.sign(m.goal) : (Math.random() < 0.5 ? -1 : 1)) * rand(o.vmin, o.vmax);
+          m.flip = st.t + (m.goal === 0 ? rand(0.12, 0.35) : rand(o.fmin, o.fmax));
+        }
+        const acc = (o.acc || 26) * dt;
+        m.v += clamp(m.goal - m.v, -acc, acc);
+        tg.c[0] += m.v * dt;
+        tg.c[1] = tg.y0 + (o.bob ? Math.sin(st.t * 2.1) * o.bob : 0);
+      },
+    };
+  }
   const GRID_X = [-2.4, -1.2, 0, 1.2, 2.4], GRID_Y = [0.75, 1.65, 2.55, 3.45];
   const SC = {
     grid: {
+      kind: 'click',
       setup(st) { st.cells = new Set(); st.targets = []; for (let i = 0; i < 3; i++) this.spawn(st); },
       spawn(st) {
         let k; do { k = Math.floor(Math.random() * 20); } while (st.cells.has(k));
@@ -349,6 +430,7 @@
       since(st) { return st.lastHit; },
     },
     headline: {
+      kind: 'click',
       setup(st) { st.prev = 0; st.targets = []; this.spawn(st); },
       spawn(st) {
         let a; do { a = rand(-45, 45); } while (Math.abs(a - st.prev) < 12);
@@ -358,16 +440,21 @@
       hit(st) { this.spawn(st); },
     },
     micro: {
+      kind: 'click',
       setup(st) { st.ya = 0; st.pa = 0; st.targets = []; this.spawn(st); },
       spawn(st) {
         const step = rand(1.4, 4.5), dir = Math.random() * 2 * Math.PI;
         st.ya = clamp(st.ya + Math.cos(dir) * step, -28, 28); st.pa = clamp(st.pa + Math.sin(dir) * step * 0.5, -3, 4);
-        const d = 18, c = atAngle(st.ya, d * Math.cos(st.pa * Math.PI / 180), EYE + Math.tan(st.pa * Math.PI / 180) * d);
+        const d = 18, c = atAngle(st.ya, d * Math.cos(st.pa * D2R), EYE + Math.tan(st.pa * D2R) * d);
         st.targets = [{c, r: 0.11, born: st.t}];
       },
       hit(st) { this.spawn(st); },
     },
+    // close: big targets 6–8 m away, far around you (an enemy in your face). far: small ones 22–30 m away
+    flick_close: flicks({dmin: 6, dmax: 8, r: 0.32, amin: 35, amax: 85, pmin: -8, pmax: 12, vert: 0.3}),
+    flick_far: flicks({dmin: 22, dmax: 30, r: 0.2, amin: 6, amax: 28, pmin: -3, pmax: 5, vert: 0.25}),
     peek: {
+      kind: 'click',
       setup(st) {
         st.covers = [-4.5, 0, 4.5].map(x => ({min: [x - 0.8, 0, -14.5], max: [x + 0.8, 3.2, -13.5]}));
         st.window = 0.9; st.targets = []; st.next = st.t + 0.6; st.escaped = 0;
@@ -396,89 +483,122 @@
       },
       hit(st) { st.targets = []; st.window = Math.max(0.38, st.window - 0.025); st.next = st.t + rand(0.35, 0.9); },
     },
-    // the sens finder's test: flicks and micro corrections (with how each flick went), then tracking (st.split:
-    // where tracking starts; 13 of 20 s in the quick finder, 16 of 25 s in the thorough one)
-    mix: {
-      setup(st) { st.n = 0; st.over = []; st.under = []; st.trackOn = 0; st.trackT = 0; st.tracking = false; st.targets = []; this.spawn(st); },
-      spawn(st) {
-        st.n++;
-        const flick = st.n % 2 === 1, D = Math.PI / 180;
-        let ty, tp, d, r;
-        if (flick) {
-          ty = clamp(yaw + (Math.random() < 0.5 ? -1 : 1) * rand(15, 50) * D, -60 * D, 60 * D);
-          if (Math.abs(ty - yaw) < 12 * D) ty = yaw + (ty > 0 ? -1 : 1) * rand(20, 45) * D;
-          tp = clamp(pitch + rand(-6, 6) * D, -8 * D, 12 * D); d = 12; r = 0.3;
-        } else {
-          const a = Math.random() * 2 * Math.PI, s = rand(2, 5) * D;
-          ty = yaw + Math.cos(a) * s; tp = clamp(pitch + Math.sin(a) * s * 0.6, -8 * D, 12 * D); d = 18; r = 0.12;
-        }
-        st.targets = [{c: [Math.sin(ty) * Math.cos(tp) * d, EYE + Math.sin(tp) * d, -Math.cos(ty) * Math.cos(tp) * d], r, born: st.t}];
-        const len = Math.hypot(ty - yaw, tp - pitch);
-        st.path = {y0: yaw, p0: pitch, vy: ty - yaw, vp: tp - pitch, len, tol: Math.atan(r / d), flick, max: 0, peak: 0, stop: null, py: yaw, pp: pitch};
-      },
-      hit(st) {
-        const p = st.path;
-        if (p && p.flick && p.len > 8 * Math.PI / 180) {
-          const tol = p.tol / p.len;
-          st.over.push(Math.max(0, p.max - 1 - tol));
-          st.under.push(p.stop === null ? 0 : Math.max(0, 1 - tol - p.stop));
-        }
-        this.spawn(st);
+    // Hold the angle: a doorway in front of you, an enemy model comes out of the left or right side: a wide swing
+    // (stops in the opening for a moment), a jiggle (shows a shoulder and the head, goes straight back) or a run
+    // through the opening. Only the head kills; a body shot is counted but the enemy keeps going.
+    holdangle: {
+      kind: 'click', heads: true,
+      setup(st) {
+        const D = rand(10, 17), W = rand(2.6, 4.2), x0 = rand(-1.2, 1.2);
+        st.door = {D, W, x0, l: x0 - W / 2, r: x0 + W / 2, z: -D - 1.4};
+        st.covers = [{min: [x0 - W / 2 - 7, 0, -D - 0.5], max: [x0 - W / 2, 3.6, -D + 0.5]},
+                     {min: [x0 + W / 2, 0, -D - 0.5], max: [x0 + W / 2 + 7, 3.6, -D + 0.5]},
+                     {min: [x0 - W / 2 - 7, 3.6, -D - 0.5], max: [x0 + W / 2 + 7, 4.2, -D + 0.5]}];
+        st.window = 0.8; st.targets = []; st.next = st.t + rand(0.5, 1.1); st.escaped = 0; st.body = 0;
       },
       update(st, dt) {
-        if (!st.tracking && st.t >= (st.split || 13)) {                  // second part: tracking
-          st.tracking = true; st.path = null;
-          // right where the crosshair is, already moving: no searching, no waiting
-          const x = clamp(Math.sin(yaw) * 9, -4.5, 4.5), y = clamp(EYE + Math.tan(pitch) * 9, 0.9, 2.6);
-          st.targets = [{c: [x, y, -Math.sqrt(Math.max(16, 81 - x * x))], r: 0.38, born: st.t, y0: y}];
-          const dir = Math.random() < 0.5 ? -1 : 1;
-          st.v = dir * 2.5; st.goal = dir * rand(2.8, 4.5); st.flip = st.t + rand(0.4, 0.9);
-          cue('Track it: stay on the target');
-        }
-        if (st.tracking) {
-          SC.track.update(st, dt);
-          st.trackT += dt;
-          if (aimed()) st.trackOn += dt;
+        const dr = st.door;
+        let tg = st.targets[0];
+        if (!tg && st.t >= st.next) {
+          const side = Math.random() < 0.5 ? -1 : 1;                   // -1: from the left wall
+          const edge = side < 0 ? dr.l : dr.r, hidden = edge + side * 0.9, roll = Math.random();
+          const type = roll < 0.5 ? 'swing' : roll < 0.75 ? 'jiggle' : 'cross';
+          const stopAt = type === 'swing' ? edge - side * rand(0.7, Math.max(0.9, dr.W * 0.55))
+                       : type === 'jiggle' ? edge - side * 0.42 : (side < 0 ? dr.r : dr.l) + side * -0.9;
+          tg = {agent: true, c: [hidden, 0, dr.z], born: Infinity, type, side, edge, stopAt, phase: 'out', t0: st.t,
+                speed: type === 'jiggle' ? 4.2 : 5.4};
+          st.targets = [tg];
           return;
         }
-        const p = st.path;
-        if (!p || !dt) return;
-        const prog = ((yaw - p.y0) * p.vy + (pitch - p.p0) * p.vp) / (p.len * p.len);
-        const speed = Math.hypot(yaw - p.py, pitch - p.pp) / dt;
-        p.py = yaw; p.pp = pitch;
-        p.max = Math.max(p.max, prog);
-        p.peak = Math.max(p.peak, speed);
-        if (p.stop === null && p.peak > p.len * 2 && speed < p.peak * 0.15) p.stop = prog;    // the first stop after the flick
-      },
-    },
-    track: {
-      setup(st) {
-        st.targets = [{c: [0, 1.35, -9], r: 0.38, born: st.t}];
-        st.v = 0; st.goal = 3.5; st.flip = st.t + 0.6; st.on = 0;
-      },
-      update(st, dt) {
-        const tg = st.targets[0];
         if (!tg) return;
-        if (st.t >= st.flip || Math.abs(tg.c[0]) > 5) {
-          const dir = Math.abs(tg.c[0]) > 5 ? -Math.sign(tg.c[0]) : -Math.sign(st.goal || 1);
-          st.goal = dir * rand(2.4, 5.2); st.flip = st.t + rand(0.25, 1.1);
+        const dir = Math.sign(tg.stopAt - tg.c[0]);
+        // visible from the moment the head clears the wall edge: that's when the reaction time starts
+        if (tg.born === Infinity && (tg.c[0] - tg.edge) * -tg.side > 0.05) tg.born = st.t;
+        if (tg.phase === 'out') {
+          tg.c[0] += dir * tg.speed * dt;
+          if (Math.sign(tg.stopAt - tg.c[0]) !== dir) {
+            tg.c[0] = tg.stopAt;
+            if (tg.type === 'cross') { this.gone(st); return; }
+            tg.phase = 'stay'; tg.t0 = st.t;
+          }
+        } else if (tg.phase === 'stay' && st.t - tg.t0 >= (tg.type === 'jiggle' ? 0.06 : st.window)) {
+          tg.phase = 'in';
+        } else if (tg.phase === 'in') {
+          const home = tg.edge + tg.side * 0.9;
+          tg.c[0] += Math.sign(home - tg.c[0]) * tg.speed * dt;
+          if ((tg.c[0] - home) * tg.side >= 0) this.gone(st);
         }
-        const acc = 26 * dt;
-        st.v += clamp(st.goal - st.v, -acc, acc);
-        tg.c[0] += st.v * dt;
-        tg.c[1] = (tg.y0 || 1.35) + Math.sin(st.t * 2.1) * 0.06;
+      },
+      gone(st) { st.targets = []; st.escaped++; st.window = Math.min(0.9, st.window + 0.03); st.next = st.t + rand(0.5, 1.3); },
+      hit(st, tg, head) {
+        if (!head) { st.body++; return false; }                    // keeps going
+        st.targets = []; st.window = Math.max(0.42, st.window - 0.02); st.next = st.t + rand(0.5, 1.3);
+        return true;
       },
     },
+    track: tracker({d: 9, r: 0.38, y: 1.35, bob: 0.06, vmin: 2.4, vmax: 5.2, fmin: 0.25, fmax: 1.1, bound: 5}),
+    // close: an enemy 4.5 m away, fast across the screen. far: small, 20 m away. reactive: short ADAD strafes
+    // with sudden stops, like a player dodging
+    track_close: tracker({d: 4.5, r: 0.34, y: 1.4, bob: 0.05, vmin: 3.4, vmax: 6.2, fmin: 0.25, fmax: 0.8, bound: 2.8, acc: 32}),
+    track_far: tracker({d: 20, r: 0.24, y: 1.45, bob: 0.04, vmin: 2.0, vmax: 4.2, fmin: 0.5, fmax: 1.5, bound: 9}),
+    track_react: tracker({d: 9, r: 0.36, y: 1.4, vmin: 4.2, vmax: 6.2, fmin: 0.12, fmax: 0.45, bound: 4.5, acc: 60, stop: 0.3}),
   };
+  // The sens finder's test: parts of the same scenarios back to back, without breaks (switching seamlessly, the
+  // trackers starting at the crosshair). quick: flicks (close and far in turn), then tracking. 15 and 30 minutes:
+  // close flicks, far flicks, close tracking, far tracking, reactive tracking.
+  const PART = {
+    flick: {flick: true, h: {
+      kind: 'click',
+      near: flicks({dmin: 10, dmax: 12, r: 0.3, amin: 15, amax: 50}),
+      far: flicks({dmin: 18, dmax: 20, r: 0.12, amin: 2, amax: 5, vert: 0.6}),
+      setup(st) { st.flickN = 0; st.targets = []; this.spawn(st); },
+      spawn(st) { st.flickN++; (st.flickN % 2 ? this.near : this.far).spawn(st); },
+      update(st, dt) { pathUpdate(st, dt); },
+      hit(st) { pathHit(st); this.spawn(st); },
+    }},
+    fc: {flick: true, h: SC.flick_close}, ff: {flick: true, h: SC.flick_far},
+    tm: {h: SC.track}, tc: {h: SC.track_close}, tf: {h: SC.track_far}, tr: {h: SC.track_react},
+  };
+  const PART_LABEL = {fc: 'Close flicks', ff: 'Far flicks', tc: 'Close tracking', tf: 'Far tracking', tr: 'Reactive tracking', flick: 'Flicks', tm: 'Tracking'};
+  const PART_NAME = {flick: 'Flicks', fc: 'Close flicks', ff: 'Far flicks', tm: 'Track it', tc: 'Close tracking: stay on it',
+                     tf: 'Far tracking: stay on it', tr: 'Reactive tracking: stay on it'};
+  SC.mix = {
+    kind: 'click',
+    setup(st) {
+      st.parts = {}; st.over = []; st.under = []; st.trackOn = 0; st.trackT = 0; st.segI = -1;
+      this.next(st);
+    },
+    next(st) {                       // the next part of the round, at the crosshair
+      st.segI++;
+      const [type, secs] = st.segs[st.segI], p = PART[type];
+      st.seg = {type, until: (st.segI ? st.seg.until : 0) + secs, h: p.h, flick: !!p.flick};
+      st.tracking = !p.flick; st.path = null;
+      st.parts[type] = st.parts[type] || {points: 0, hits: 0, shots: 0, on: 0, t: 0};
+      p.h.setup(st, true);
+      if (st.segI > 0 || st.started) cue(PART_NAME[type]);
+    },
+    update(st, dt) {
+      while (st.t >= st.seg.until && st.segI < st.segs.length - 1) this.next(st);
+      const part = st.parts[st.seg.type];
+      if (st.seg.h.update) st.seg.h.update(st, dt);
+      if (st.tracking) {
+        const on = !!aimed();
+        st.trackT += dt; part.t += dt;
+        if (on) { st.trackOn += dt; part.on += dt; }
+      }
+    },
+    hit(st, tg) { st.seg.h.hit(st, tg); },
+  };
+  for (const [id, sc] of Object.entries(SC)) if (!byId[id]) byId[id] = {id, name: id, kind: sc.kind, seconds: 45, about: ''};
 
   // ------------------------------------------------------------------ one run
   let st = null, yaw = 0, pitch = 0, raf = 0, last = 0, plan = null, raw = null, firing = false, audio = null;
   const scale = () => clamp(+C.scale || 1, 0.25, 4);
-  function tick() {
+  function tick(hz = 1250) {
     try {
       audio = audio || new (window.AudioContext || window.webkitAudioContext)();
       const o = audio.createOscillator(), g = audio.createGain();
-      o.frequency.value = 1250; g.gain.setValueAtTime(0.06, audio.currentTime);
+      o.frequency.value = hz; g.gain.setValueAtTime(0.06, audio.currentTime);
       g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.06);
       o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + 0.07);
     } catch (e) {}
@@ -486,45 +606,66 @@
   function aimDir() {
     return [Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
   }
-  function aimed() {        // the target under the crosshair (not behind cover), or null
+  // the enemy model (feet at c): boxes for legs, body and arms, a sphere for the head at eye height (1.6 m)
+  const HEAD_Y = 1.6, HEAD_R = 0.13;
+  function agentBoxes(c) {
+    const [x, y, z] = c, b = (x0, y0, z0, x1, y1, z1) => ({min: [x + x0, y + y0, z + z0], max: [x + x1, y + y1, z + z1]});
+    return [b(-0.19, 0, -0.12, 0.19, 0.86, 0.12), b(-0.25, 0.86, -0.15, 0.25, 1.42, 0.15),
+            b(-0.37, 0.92, -0.1, -0.25, 1.4, 0.1), b(0.25, 0.92, -0.1, 0.37, 1.4, 0.1), b(-0.06, 1.42, -0.06, 0.06, 1.5, 0.06)];
+  }
+  function aimedHit() {     // {tg, head} under the crosshair (not behind cover), or null
     if (!st) return null;
     const o = [0, EYE, 0], d = aimDir();
-    let best = null, bt = Infinity;
-    for (const tg of st.targets) { const t = hitSphere(o, d, tg.c, tg.r); if (t < bt) { bt = t; best = tg; } }
+    let best = null, bt = Infinity, head = true;
+    for (const tg of st.targets) {
+      if (tg.agent) {
+        const th = hitSphere(o, d, [tg.c[0], tg.c[1] + HEAD_Y, tg.c[2]], HEAD_R);
+        if (th < bt) { bt = th; best = tg; head = true; }
+        for (const b of agentBoxes(tg.c)) { const tb = hitBox(o, d, b); if (tb < bt) { bt = tb; best = tg; head = false; } }
+      } else {
+        const t = hitSphere(o, d, tg.c, tg.r);
+        if (t < bt) { bt = t; best = tg; head = true; }
+      }
+    }
     if (best) for (const b of st.covers || []) if (hitBox(o, d, b) < bt) return null;
-    return best;
+    return best ? {tg: best, head} : null;
   }
+  function aimed() { const h = aimedHit(); return h ? h.tg : null; }
   function newRun(id) {
     const sc = byId[id], seconds = plan ? plan.items[plan.i].seconds : finder ? finder.mode.secs : sc.seconds;
     firing = false;
-    st = {id, kind: sc.kind, seconds, t: 0, phase: 'ready', targets: [], covers: null, hits: 0, shots: 0, points: 0,
-          times: [], lastHit: 0, on: 0};
+    st = {id, kind: SC[id].kind || sc.kind, seconds, t: 0, phase: 'ready', targets: [], covers: null, hits: 0, shots: 0,
+          points: 0, times: [], lastHit: 0, on: 0, stalls: []};
     yaw = 0; pitch = 0;
-    if (finder) st.split = finder.mode.split;
+    if (finder) st.segs = finder.mode.segs;
     SC[id].setup(st);
   }
   function score() {
     if (!st) return 0;
     if (st.kind === 'track') return Math.round(1000 * st.on / st.seconds);
-    if (st.id === 'mix') return Math.round(st.points * (st.shots ? st.hits / st.shots : 0) + 1000 * st.trackOn / Math.max(1, st.seconds - (st.split || 13)));
+    if (st.id === 'mix') return Math.round(st.points * (st.shots ? st.hits / st.shots : 0) + 1000 * st.trackOn / Math.max(1, st.trackT));
     const acc = st.shots ? st.hits / st.shots : 0;
     return Math.round(st.points * acc);
   }
   function shoot() {
     if (!st || st.phase !== 'run' || st.kind === 'track' || st.tracking) return;
-    st.shots++;
-    const tg = aimed();
-    if (!tg) return;
+    const part = st.seg ? st.parts[st.seg.type] : null;
+    st.shots++; if (part) part.shots++;
+    const h = aimedHit();
+    if (!h) return;
+    const {tg, head} = h;
+    if (SC[st.id].hit(st, tg, head) === false) { tick(520); return; }        // a body shot: counted, not a kill
     const since = SC[st.id].since ? Math.max(tg.born, SC[st.id].since(st)) : tg.born;
-    const ms = (st.t - since) * 1000;
-    st.hits++; st.times.push(ms); st.lastHit = st.t;
-    st.points += 100 + clamp(100 * (1 - (ms - 250) / 750), 0, 100);
-    SC[st.id].hit(st, tg);
+    const ms = Math.max(0, (st.t - since) * 1000);
+    const pts = 100 + clamp(100 * (1 - (ms - 250) / 750), 0, 100);
+    st.hits++; st.times.push(ms); st.lastHit = st.t; st.points += pts;
+    if (part) { part.hits++; part.points += pts; }
     tick();
   }
   function frame(now) {
     raf = requestAnimationFrame(frame);
-    const dt = Math.min(0.05, (now - (last || now)) / 1000); last = now;
+    const gap = now - (last || now), dt = Math.min(0.05, gap / 1000); last = now;
+    if (st && st.phase === 'run' && gap > 120) st.stalls.push(Math.round(gap));     // the browser stood still
     const [w, h] = devicePixels(canvas);
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     if (st && st.phase === 'count') {
@@ -552,6 +693,11 @@
     if (!st) return;
     for (const b of st.covers || []) draw(meshes.box, model(b.min[0], b.min[1], b.min[2], b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]), COVER, 1);
     for (const tg of st.targets) {
+      if (tg.agent) {
+        for (const b of agentBoxes(tg.c)) draw(meshes.box, model(b.min[0], b.min[1], b.min[2], b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]), AGENT, 0, 0.1);
+        draw(meshes.sphere, model(tg.c[0], tg.c[1] + HEAD_Y, tg.c[2], HEAD_R, HEAD_R * 1.1, HEAD_R), AGENT_HEAD, 0, 0.15);
+        continue;
+      }
       const on = tg === onTarget && (firing || st.tracking);
       draw(meshes.sphere, model(tg.c[0], tg.c[1], tg.c[2], tg.r, tg.r, tg.r), on ? TARGET_ON : TARGET, 0, on ? 0.25 : 0.12);
     }
@@ -568,7 +714,7 @@
     $('tr-score').textContent = score();
     if (st.tracking) { $('tr-l3').textContent = 'On target'; $('tr-acc').textContent = st.trackT ? Math.round(100 * st.trackOn / st.trackT) + '%' : '–'; }
     else if (st.kind === 'track') { $('tr-l3').textContent = 'On target'; $('tr-acc').textContent = st.t ? Math.round(100 * st.on / Math.max(st.t, 0.01)) + '%' : '–'; }
-    else { $('tr-l3').textContent = 'Accuracy'; $('tr-acc').textContent = st.shots ? Math.round(100 * st.hits / st.shots) + '%' : '–'; }
+    else { $('tr-l3').textContent = SC[st.id].heads ? 'Headshots' : 'Accuracy'; $('tr-acc').textContent = st.shots ? Math.round(100 * st.hits / st.shots) + '%' : '–'; }
   }
 
   // ------------------------------------------------------------------ mouse and pointer lock
@@ -616,25 +762,27 @@
     const sc = byId[st.id];
     if (finder) {
       hud.hidden = true;
-      const m = finder.mode, n = m.warm + m.r1.length + m.r2.length * m.rep + (m.control ? 2 : 0);
-      setPanel(`<div class="tr-step">Sens finder · ${m.name} · ${finder.i < m.warm ? 'warm-up' : `test ${finder.i - m.warm + 1} of ${n - m.warm}`}</div><h2>Find your sens</h2>
+      const m = finder.mode, n = finderRounds(m);
+      const how = m.segs.length > 2 ? 'Each round: close flicks, far flicks, then close, far and reactive tracking, without breaks. The text in the middle says what comes next. Shoot the targets; on the moving ones, just stay on them.'
+        : 'Each round: shoot the targets, and when the moving one comes, just stay on it.';
+      setPanel(`<div class="tr-step">Sens finder · ${esc(m.name)} · ${finder.i < m.warm ? 'warm-up' : `test ${finder.i - m.warm + 1} of ${n - m.warm}`}</div><h2>Find your sens</h2>
         <p>${m.warm === 1 ? 'One warm-up round' : 'Two warm-up rounds'} at your sens, then ${n - m.warm} rounds of ${m.secs} seconds at other sensitivities, blind and in random order.
-        Each round: shoot the targets, and when the moving one comes, just stay on it. Don't think about the sens, aim like in a match.</p>
+        ${how} Don't think about the sens, aim like in a match.</p>
         <p>About ${m.minutes} minutes · Esc pauses · F fullscreen</p>
-        <div class="tr-btns"><button type="button" class="btn primary" data-a="go">Click to start</button><button type="button" class="btn ghost" data-a="quit">Back</button></div>`);
+        <div class="tr-btns"><button type="button" class="btn primary" data-a="go">Click to start</button><button type="button" class="btn ghost" data-a="quit">Back</button>${xhBtn()}</div>`);
       return;
     }
     hud.hidden = true;
     setPanel(`${planStep()}<h2>${esc(sc.name)}</h2><p>${esc(sc.about)}</p><p>${st.seconds} seconds · ${sc.kind === 'track' ? 'hold the left mouse button on the target' : 'left click to shoot'} · Esc pauses · F fullscreen</p>
-      <div class="tr-btns"><button type="button" class="btn primary" data-a="go">Click to start</button><button type="button" class="btn ghost" data-a="quit">Back</button></div>`);
+      <div class="tr-btns"><button type="button" class="btn primary" data-a="go">Click to start</button><button type="button" class="btn ghost" data-a="quit">Back</button>${xhBtn()}</div>`);
   }
   function showPaused(again) {
     // the browser won't lock the mouse again right after Esc: Continue unlocks after a moment
-    const where = finder ? `<div class="tr-step">Sens finder · ${finder.mode.name} · ${finder.i < finder.mode.warm ? 'warm-up' : `test ${finder.i - finder.mode.warm + 1}`}</div>` : planStep();
+    const where = finder ? `<div class="tr-step">Sens finder · ${esc(finder.mode.name)} · ${finder.i < finder.mode.warm ? 'warm-up' : `test ${finder.i - finder.mode.warm + 1}`}</div>` : planStep();
     setPanel(`${where}<h2>Paused</h2><p>${again ? 'The browser needs a moment after Esc: click Continue once more.' : `${Math.ceil(st.seconds - st.t)} seconds left in this round.`}</p>
       <div class="tr-btns"><button type="button" class="btn primary" data-a="resume" id="tr-resume" disabled>Continue</button>
       ${finder ? '' : '<button type="button" class="btn ghost" data-a="restart">Start over</button>'}
-      <button type="button" class="btn ghost" data-a="quit">${finder ? 'Stop the sens finder' : 'Quit'}</button></div>
+      <button type="button" class="btn ghost" data-a="quit">${finder ? 'Stop the sens finder' : 'Quit'}</button>${xhBtn()}</div>
       <p style="margin:12px 0 0;font-size:12.5px">Enter or Space also continues.</p>`);
     const b = $('tr-resume'), wait = Math.max(0, 900 - (performance.now() - unlockedAt));
     setTimeout(() => { if (b.isConnected) { b.disabled = false; b.focus(); } }, wait);
@@ -662,6 +810,7 @@
   function toggleFs() { if (isFs()) exitFs(); else enterFs(); }
 
   async function go(resume) {
+    if (xPanel) xPanel.hidden = true;
     setPanel('');
     initAudio();
     if (wantFs()) enterFs();           // in the same click as the mouse lock
@@ -674,6 +823,13 @@
   }
   function initAudio() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch (e) {} }
 
+  function stallNote(stalls) {
+    if (!stalls || !stalls.length) return '';
+    return `<p class="tr-stall">The browser stood still ${stalls.length}× (up to ${Math.max(...stalls)} ms) during this, not the trainer: usually
+      another program or a browser tab working in the background. Closing those helps.</p>`;
+  }
+  const xhBtn = () => '<button type="button" class="btn ghost" data-a="xh">Crosshair</button>';
+
   async function finish() {
     if (finder) { finderNext(); return; }
     st.phase = 'done'; firing = false;
@@ -683,16 +839,19 @@
     const body = {scenario: st.id, score: s, seconds: st.seconds};
     if (st.kind === 'track') body.on_target = Math.round(1000 * st.on / st.seconds) / 1000;
     else Object.assign(body, {hits: st.hits, shots: st.shots, ms: avg || 0});
+    if (SC[st.id].heads) Object.assign(body, {body: st.body || 0, escaped: st.escaped || 0});
     if (plan) { plan.total += s; if (plan.i === plan.items.length - 1) Object.assign(body, {plan_done: plan.kind, plan_score: plan.total}); }
-    const cells = st.kind === 'track'
+    const cells = SC[st.id].heads
+      ? `<div><dt>Headshots</dt><dd>${st.hits}/${st.shots}</dd></div><div><dt>Body shots · got away</dt><dd>${st.body || 0} · ${st.escaped || 0}</dd></div><div><dt>Reaction</dt><dd>${avg !== null ? avg + ' ms' : '–'}</dd></div>`
+      : st.kind === 'track'
       ? `<div><dt>On target</dt><dd>${Math.round(100 * st.on / st.seconds)}%</dd></div><div><dt>While firing</dt><dd>${st.fire ? Math.round(100 * st.on / st.fire) : 0}%</dd></div><div><dt>Seconds</dt><dd>${st.seconds}</dd></div>`
       : `<div><dt>Hits</dt><dd>${st.hits}/${st.shots}</dd></div><div><dt>Accuracy</dt><dd>${st.shots ? Math.round(100 * st.hits / st.shots) : 0}%</dd></div><div><dt>Avg time</dt><dd>${avg !== null ? avg + ' ms' : '–'}</dd></div>`;
     const more = plan && plan.i < plan.items.length - 1;
     const nextName = more ? byId[plan.items[plan.i + 1].id].name : '';
-    setPanel(`${planStep()}<h2>${esc(sc.name)}</h2><div class="tr-big">${s}</div><div class="tr-best" id="tr-best"></div><dl>${cells}</dl>
+    setPanel(`${planStep()}<h2>${esc(sc.name)}</h2><div class="tr-big">${s}</div><div class="tr-best" id="tr-best"></div><dl>${cells}</dl>${stallNote(st.stalls)}
       <div class="tr-btns">${more ? `<button type="button" class="btn primary" data-a="next">Next: ${esc(nextName)}</button>`
         : (plan ? `<button type="button" class="btn primary" data-a="quit">Done · ${plan.total} points</button>` : `<button type="button" class="btn primary" data-a="restart">Again</button>`)}
-      ${plan ? '' : '<button type="button" class="btn ghost" data-a="quit">Back</button>'}</div>`);
+      ${plan ? '' : '<button type="button" class="btn ghost" data-a="quit">Back</button>'}${xhBtn()}</div>`);
     if (!C.can_save) { $('tr-best').textContent = 'Not saved (only the player or their owner can).'; return; }
     try {
       const r = await fetch(C.urls.run, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
@@ -709,29 +868,45 @@
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const r4 = v => Math.round(v * 10000) / 10000;
   const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
-  // quick: 1 warm-up, 5 wide, 5 close (20 s each). thorough: 2 warm-ups, your sens counted at the start and the end
-  // (to see how much you tire, stats/trainer.py corrects for it), 7 wide, 6 close played twice each (25 s each).
+  // Three lengths. quick (about 5 min): 1 warm-up, 5 wide, 5 close, 20 s rounds of flicks then tracking.
+  // 15 min: 2 warm-ups, your sens counted at the start and the end (to see how much you tire; stats/trainer.py
+  // corrects for it), 7 wide, 6 close played twice, 35 s rounds of close and far flicks, close, far and reactive
+  // tracking. 30 min: the same parts in 45 s rounds, 9 wide, 7 close played three times, your sens also in the
+  // middle, and a minute's break halfway.
+  const FIVE = [['fc', 9], ['ff', 9], ['tc', 6], ['tf', 5], ['tr', 6]];
   const MODES = {
-    quick: {name: 'quick', secs: 20, split: 13, warm: 1, minutes: 5, control: false, rep: 1,
+    quick: {name: 'quick', minutes: 5, secs: 20, segs: [['flick', 13], ['tm', 7]], warm: 1, control: 0, rep: 1,
             r1: [0.7, 0.85, 1, 1.15, 1.3], r2: [0.9, 0.95, 1, 1.05, 1.1]},
-    thorough: {name: 'thorough', secs: 25, split: 16, warm: 2, minutes: 11, control: true, rep: 2,
+    standard: {name: '15 min', minutes: 15, secs: 35, segs: FIVE, warm: 2, control: 2, rep: 2,
                r1: [0.65, 0.75, 0.87, 1, 1.15, 1.3, 1.5], r2: [0.88, 0.93, 0.97, 1.03, 1.07, 1.12]},
+    full: {name: '30 min', minutes: 30, secs: 45, segs: FIVE.map(([k, s]) => [k, Math.round(s * 45 / 35)]), warm: 2, control: 3, rep: 3, pause: 60,
+           r1: [0.6, 0.7, 0.8, 0.9, 1, 1.12, 1.25, 1.4, 1.6], r2: [0.86, 0.91, 0.96, 1, 1.04, 1.09, 1.14]},
   };
+  MODES.full.segs[MODES.full.segs.length - 1][1] += 45 - MODES.full.segs.reduce((a, s) => a + s[1], 0);
+  function finderRounds(m) { return m.warm + m.control + m.r1.length + m.r2.length * m.rep; }
   function startFinder(kind) {
     const m = MODES[kind] || MODES.quick, base = clamp(+C.sens_rec || sens(), 0.02, 15);
     const list = [...Array(m.warm).fill(r4(base)), ...(m.control ? [r4(base)] : []), ...shuffle(m.r1.map(f => r4(base * f)))];
-    finder = {mode: m, base, list, i: 0, done: [], round2: false};
+    finder = {kind, mode: m, base, list, i: 0, done: [], round2: false, stalls: [], paused: false};
     plan = null;
     open('mix');
   }
+  function partsOf(s) {             // per part: flicks as points × accuracy, tracking as the share of time on target
+    const out = {};
+    for (const [k, p] of Object.entries(s.parts || {})) {
+      out[k] = PART[k].flick ? Math.round(p.points * (p.shots ? p.hits / p.shots : 0) * 10) / 10 : Math.round(1000 * p.on / Math.max(p.t, 0.01)) / 1000;
+    }
+    return out;
+  }
   function finderNext() {
     const cur = finder.list[finder.i], m = finder.mode;
+    finder.stalls.push(...st.stalls);
     if (finder.i >= m.warm) {
       finder.done.push({sens: cur, i: finder.done.length, click: Math.round(st.points * (st.shots ? st.hits / st.shots : 0) * 10) / 10,
                         track: Math.round(1000 * st.trackOn / Math.max(st.trackT, 0.01)) / 1000,
                         over: Math.round(mean(st.over) * 1000) / 1000, under: Math.round(mean(st.under) * 1000) / 1000,
                         acc: st.shots ? Math.round(1000 * st.hits / st.shots) / 1000 : 0,
-                        ms: st.times.length ? Math.round(mean(st.times)) : 0});
+                        ms: st.times.length ? Math.round(mean(st.times)) : 0, parts: partsOf(st)});
     }
     finder.i++;
     if (finder.i === finder.list.length && !finder.round2) {        // round 2: close around round 1's best
@@ -739,17 +914,37 @@
       const r1 = finder.done.slice(m.control ? 1 : 0);
       const cmax = Math.max(...r1.map(t => t.click), 1e-9), tmax = Math.max(...r1.map(t => t.track), 1e-9);
       const best = r1.reduce((b, t) => ((t.click / cmax + t.track / tmax) > (b.click / cmax + b.track / tmax) ? t : b)).sens;
-      for (let k = 0; k < m.rep; k++) finder.list.push(...shuffle(m.r2.map(f => r4(best * f))));
-      if (m.control) finder.list.push(r4(finder.base));             // your sens once more at the end
+      const r2 = [];
+      for (let k = 0; k < m.rep; k++) r2.push(...shuffle(m.r2.map(f => r4(best * f))));
+      if (m.control >= 3) r2.splice(Math.floor(r2.length / 2), 0, r4(finder.base));   // your sens in the middle too
+      finder.list.push(...r2);
+      if (m.control >= 2) finder.list.push(r4(finder.base));             // and at the end
+      if (m.pause) finder.pauseAt = finder.i + Math.floor(r2.length / 2);
     }
     if (finder.i >= finder.list.length) { finderEnd(); return; }
     newRun('mix');
+    if (finder.pauseAt === finder.i) { finderBreak(); return; }
     if (document.pointerLockElement === canvas) {                   // straight on to the next one
       st.phase = 'count'; st.count = 2; $('tr-count').hidden = false; updateHud();
+      cue(`Test ${finder.i - m.warm + 1} of ${finderRounds(m) - m.warm}`);
     } else showReady();
   }
+  function finderBreak() {           // the 30-minute finder: a minute to shake out the hand
+    if (document.pointerLockElement) document.exitPointerLock();
+    st.phase = 'ready'; hud.hidden = true;
+    let left = finder.mode.pause;
+    setPanel(`<div class="tr-step">Sens finder · ${esc(finder.mode.name)} · halfway</div><h2>Break</h2>
+      <p>Take your hand off the mouse, shake it out, drink something. Continue when you're ready.</p><div class="tr-big" id="tr-break">${left}</div>
+      <div class="tr-btns"><button type="button" class="btn primary" data-a="go">Continue</button>${xhBtn()}</div>`);
+    const tmr = setInterval(() => {
+      const el = $('tr-break');
+      if (!el) { clearInterval(tmr); return; }
+      left--; el.textContent = Math.max(0, left);
+      if (left <= 0) clearInterval(tmr);
+    }, 1000);
+  }
   async function finderEnd() {
-    const tests = finder.done, base = finder.base, mode = finder.mode.name;
+    const tests = finder.done, base = finder.base;
     st.phase = 'done'; firing = false;
     if (document.pointerLockElement) document.exitPointerLock();
     hud.hidden = true;
@@ -757,7 +952,7 @@
     let d = null;
     if (C.can_save) {
       try {
-        const r = await fetch(C.urls.sens, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({base, tests, mode})});
+        const r = await fetch(C.urls.sens, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({base, tests, mode: finder.kind})});
         d = await r.json();
         if (!r.ok) throw new Error(d.error || r.status);
       } catch (e) { d = {error: String(e.message || e)}; }
@@ -766,13 +961,15 @@
     const fmt = v => (+v).toFixed(3);
     let body;
     if (d && !d.error) {
-      body = `<div class="tr-step">Sens finder</div><h2>This test says</h2><div class="tr-big">${fmt(d.this || best.sens)}</div>
+      const parts = d.parts && Object.keys(d.parts).length ? `<p class="tr-parts">${Object.entries(d.parts).map(([k, v]) => `${esc(PART_LABEL[k] || k)} <b>${fmt(v)}</b>`).join(' · ')}</p>` : '';
+      body = `<div class="tr-step">Sens finder · ${esc(finder.mode.name)}</div><h2>This test says</h2><div class="tr-big">${fmt(d.this || best.sens)}</div>${parts}
         <p>${d.sessions > 1 ? `With your ${d.sessions} tests together: <b>${fmt(d.sens)}</b> (${fmt(d.low)}–${fmt(d.high)}).` : 'One test is a first hint: test again on another day and Nexus combines them.'}
         ${d.edge ? ` The best was at the ${d.edge === 'higher' ? 'top' : 'bottom'} of what was tested: test again, it starts from there.` : ''}</p>`;
     } else {
       body = `<div class="tr-step">Sens finder</div><h2>Best in this test</h2><div class="tr-big">${fmt(best.sens)}</div>
         <p>${d && d.error ? 'Not saved: ' + esc(d.error) : 'Not saved (only the player or their owner can).'}</p>`;
     }
+    body += stallNote(finder.stalls);
     finder = null; C.dirty = !!(d && !d.error); C.goSens = true;
     setPanel(body + '<div class="tr-btns"><button type="button" class="btn primary" data-a="quit">See the chart</button></div>');
   }
@@ -800,9 +997,17 @@
     else if (act === 'restart') { if (finder) { finder.i = Math.max(0, finder.i); } newRun(st.id); go(false); }
     else if (act === 'next') { plan.i++; newRun(plan.items[plan.i].id); showReady(); }
     else if (act === 'quit') close();
+    else if (act === 'xh') openXh();
   });
+  // the crosshair settings inside the trainer: your real crosshair stays on the game behind them
+  const xPanel = $('tr-xpanel');
+  function openXh() { if (!xPanel) return; panel.hidden = true; xPanel.hidden = false; xShow(); const f = xPanel.querySelector('input,button'); if (f) f.focus(); }
+  function closeXh() { if (!xPanel || xPanel.hidden) return false; xPanel.hidden = true; panel.hidden = !panel.innerHTML; return true; }
+  if (xPanel) xPanel.addEventListener('click', e => { if (e.target.closest('[data-a="xdone"]')) closeXh(); });
   document.addEventListener('keydown', e => {
     if (!stage.classList.contains('on')) return;
+    if (e.key === 'Escape' && xPanel && !xPanel.hidden) { closeXh(); return; }
+    if (e.target && e.target.closest && e.target.closest('input')) return;          // typing a value in the crosshair panel
     if (e.key === 'Escape' && st && (st.phase === 'ready' || st.phase === 'done') && !document.pointerLockElement
         && performance.now() - unlockedAt > 600) close();
     if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); toggleFs(); }

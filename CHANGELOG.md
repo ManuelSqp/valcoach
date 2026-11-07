@@ -4,6 +4,24 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.7.0
+- **No more pauses in the sens test**: a new flick target was placed from where you aimed, and after a few low ones it
+  could land in the floor, hidden, so you searched until the round moved on. Targets now always stay between floor and
+  ceiling, every part of a round starts at your crosshair, and between rounds a line says which test is next. If the
+  browser itself stands still (another program, a busy tab), the result says so, so it isn't taken for the trainer.
+- **Crosshair inside the trainer**: *Crosshair* on the start, pause and result screens opens the settings next to the
+  game, so you see your real crosshair while changing it (Valorant code in and out as before). Esc or *Done* closes it.
+- **Sens finder in 5, 15 and 30 minutes.** 15 and 30 minutes play close flicks, far flicks, close, far and reactive
+  tracking in every round and show which sens each part likes (flicks often like a little less than tracking). 30
+  minutes: more sensitivities, the close ones three times, your own sens at the start, middle and end to measure tiring,
+  and a minute's break halfway. Longer tests count more (15 min twice, 30 min three times). Tiring is now worked out
+  from all rounds at your own sens.
+- **New scenarios**, grouped into flicks, duels and tracking: *Close flicks* (big targets far to the side, an enemy next
+  to you), *Far flicks* (small targets on a long angle), *Close tracking*, *Far tracking*, *Reactive tracking* (short
+  ADAD strafes and sudden stops), and **Hold the angle**: you hold a doorway and an enemy model swings wide, jiggles or
+  runs through from the left or the right. Only a headshot kills; body shots and enemies that got away are counted.
+  Today's training can pick them too.
+
 ## 4.6.1
 - **Aim trainer: fullscreen** while playing, on by default (a switch next to the sensitivity; F switches it while
   playing). In the Nexus app the whole window goes fullscreen.

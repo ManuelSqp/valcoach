@@ -67,7 +67,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         start = request.args.get("plan")
         rec = tr.recommend(d.get("sensfind", []))
         return render_template("trainer.html", p=p, active_pid=pid, can_save=can_save(p, can_edit),
-                               rec=rec, step=tr.sens_step(setup.get("sens"), rec["sens"]) if rec else None,
+                               groups=tr.GROUPS, part_names=tr.PARTS, rec=rec, step=tr.sens_step(setup.get("sens"), rec["sens"]) if rec else None,
                                chart=sens_chart(rec) if rec else None,
                                scenarios=tr.scenario_list(), summary=tr.summary(runs), plans=plans(pid, runs),
                                start=start if start in tr.PLANS else "", setup=setup, numbers=tr.numbers(setup),
@@ -125,7 +125,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         rec = tr.recommend(ss)
         this = tr.recommend([session])
         return jsonify(ok=True, this=this["sens"] if this else None, sens=rec["sens"], low=rec["low"], high=rec["high"],
-                       edge=rec["edge"], sessions=rec["sessions"], sure=rec["sure"])
+                       edge=rec["edge"], sessions=rec["sessions"], sure=rec["sure"], parts=this["parts"] if this else {})
 
     @app.post("/profiles/<int:pid>/trainer/setup")
     def trainer_setup(pid: int):
