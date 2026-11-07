@@ -12,13 +12,24 @@ every report, and with `nexus --version` (`valcoach --version` up to 4.4). Updat
   tracking. *Today's warm-up* is three short rounds; *today's training* picks the scenarios that fit what your matches
   show, the one furthest below your best first. Scores, best and trend per scenario, kept per player. Finishing a
   warm-up or training ticks it off on the Aim page, where both are new routines (*Open the trainer*).
-- **Sens finder** (in the aim trainer): about 5 minutes, eleven 20-second rounds of a mixed test (flicks, micro
-  corrections, tracking). One warm-up at your sens, then five sensitivities from 70% to 130% of it and five close
-  around the best of those, blind and in random order. It measures how you hit: overshooting the target (too fast),
+- **Sens finder** (in the aim trainer), in two modes. *Quick* (about 5 minutes): one warm-up at your sens, then ten
+  20-second rounds of a mixed test (flicks, micro corrections, tracking), five sensitivities from 70% to 130% of yours
+  and five close around the best of those. *Thorough* (about 11 minutes, counts twice): two warm-ups, then 21 rounds of
+  25 seconds, seven from 65% to 150%, six close values played twice each, and your own sens at the start and the end:
+  how much worse the last one was shows how much you tired, and the rounds in between are corrected for it. Both
+  blind and in random order. It measures how you hit: overshooting the target (too fast),
   stopping short (too slow), time to hit, accuracy and time on the moving target. A curve through the results gives the
   recommended sens and the range that works about as well, with cm per 360° and a chart. Tests of the last 90 days are
-  combined (each scaled to its own day), and it says how sure it is (one test, several days that agree). If the best
+  combined (each scaled to its own day), and it says how sure it is (one quick test, or several days that agree). If the best
   was at the end of what was tested, the next test starts there. A change of more than about 10% comes as weekly steps.
+- **Crosshair** (in the aim trainer): like Valorant's crosshair, in screen pixels: colour, outlines, centre dot, inner
+  and outer lines (length, thickness, gap, opacity), with a preview. Paste your Valorant crosshair code to take it over,
+  or copy yours as a code for Valorant. Kept per player.
+- **Esc pauses properly**: during a round and during the countdown, with *Continue* (also Enter or Space), a short
+  countdown back in, and the round goes on where it stopped. Esc no longer closes the trainer by accident, and when the
+  browser needs a moment after Esc before it can lock the mouse again, *Continue* waits for it.
+- In the sens finder's test the moving target now appears right at the crosshair and moving, with *Track it* and the
+  target lighting up while you're on it (it looked like a pause before). Between rounds: 2 seconds instead of 3.
 - **Mouse & monitor** (*Practice › Mouse & monitor*): the real DPI of your mouse (move it a known distance along a
   ruler, several tries averaged, compared with the DPI you set, with a hint when the browser's display scaling is the
   difference), the polling rate, the refresh rate your screen really shows (with a moving test square), and a button

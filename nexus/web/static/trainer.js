@@ -40,6 +40,152 @@
   sensIn.addEventListener('input', saveSetup);
   dpiIn.addEventListener('input', saveSetup);
 
+  // ------------------------------------------------------------------ crosshair (like Valorant's primary crosshair)
+  // Sizes in screen pixels like in Valorant. A Valorant crosshair code (Settings › Crosshair › Import/Export) can be
+  // pasted: "0;P;c;5;h;0;0l;4;0o;2;0a;1;1b;0" — c colour, u custom colour, h/t/o outlines, d/z/a centre dot,
+  // 0b/0t/0l/0v/0g/0o/0a inner lines, 1b/1t/1l/1v/1g/1o/1a outer lines.
+  const XCOLORS = ['#ffffff', '#00ff00', '#7fff00', '#dfff00', '#ffff00', '#00ffff', '#ff00ff', '#ff0000'];
+  const XDEF = {color: '#00ffff', outline: true, ot: 1, oo: 0.5, dot: false, dt: 2, da: 1,
+                inner: true, it: 2, il: 4, iv: 4, ig: false, io: 3, ia: 1,
+                outer: false, ot2: 2, ol: 2, ov: 2, og: false, oo2: 10, oa: 0.35};
+  function xLoad() {
+    let x = Object.assign({}, XDEF, C.crosshair || {});
+    try { const s = localStorage.getItem('vc-crosshair'); if (s && !C.crosshair) Object.assign(x, JSON.parse(s)); } catch (e) {}
+    return x;
+  }
+  let xh = xLoad();
+  function xParse(code) {
+    const p = String(code || '').trim().split(';');
+    if (p.length < 3) return null;
+    const x = Object.assign({}, XDEF, {outline: true, ot: 1, oo: 0.5, inner: true, it: 2, il: 6, iv: 6, io: 3, ia: 0.8,
+                                       outer: true, ot2: 2, ol: 2, ov: 2, oo2: 10, oa: 0.35, color: '#ffffff'});
+    let sec = '', ok = false;
+    for (let i = 0; i < p.length; i++) {
+      const k = p[i];
+      if (k === 'P' || k === 'A' || k === 'S') { sec = k; continue; }
+      if (sec !== 'P' || i + 1 >= p.length) continue;
+      const v = p[++i], n = parseFloat(v);
+      ok = true;
+      switch (k) {
+        case 'c': if (n >= 0 && n < 8) x.color = XCOLORS[n]; break;
+        case 'u': if (/^[0-9a-fA-F]{6,8}$/.test(v)) x.color = '#' + v.slice(0, 6).toLowerCase(); break;
+        case 'h': x.outline = v === '1'; break;
+        case 't': x.ot = n; break;
+        case 'o': x.oo = n; break;
+        case 'd': x.dot = v === '1'; break;
+        case 'z': x.dt = n; break;
+        case 'a': x.da = n; break;
+        case '0b': x.inner = v === '1'; break;
+        case '0t': x.it = n; break;
+        case '0l': x.il = n; if (!x.ig) x.iv = n; break;
+        case '0v': x.iv = n; break;
+        case '0g': x.ig = v === '1'; break;
+        case '0o': x.io = n; break;
+        case '0a': x.ia = n; break;
+        case '1b': x.outer = v === '1'; break;
+        case '1t': x.ot2 = n; break;
+        case '1l': x.ol = n; if (!x.og) x.ov = n; break;
+        case '1v': x.ov = n; break;
+        case '1g': x.og = v === '1'; break;
+        case '1o': x.oo2 = n; break;
+        case '1a': x.oa = n; break;
+        default: ok = ok && true;
+      }
+    }
+    if (!ok) return null;
+    for (const k of Object.keys(XDEF)) if (typeof XDEF[k] === 'number' && !isFinite(x[k])) x[k] = XDEF[k];
+    return xClean(x);
+  }
+  function xClean(x) {
+    const n = (v, lo, hi) => clamp(Math.round((+v || 0) * 1000) / 1000, lo, hi);
+    return {color: /^#[0-9a-f]{6}$/i.test(x.color) ? x.color.toLowerCase() : XDEF.color, outline: !!x.outline, ot: n(x.ot, 1, 6), oo: n(x.oo, 0, 1),
+            dot: !!x.dot, dt: n(x.dt, 1, 6), da: n(x.da, 0, 1), inner: !!x.inner, it: n(x.it, 0, 10), il: n(x.il, 0, 20), iv: n(x.iv, 0, 20),
+            ig: !!x.ig, io: n(x.io, 0, 20), ia: n(x.ia, 0, 1), outer: !!x.outer, ot2: n(x.ot2, 0, 10), ol: n(x.ol, 0, 20), ov: n(x.ov, 0, 20),
+            og: !!x.og, oo2: n(x.oo2, 0, 40), oa: n(x.oa, 0, 1)};
+  }
+  function xCode(x) {             // back to a code Valorant can import
+    const i = XCOLORS.indexOf(x.color), b = v => v ? 1 : 0;
+    return ['0', 'P', 'c', i >= 0 ? i : 8, ...(i < 0 ? ['u', x.color.slice(1).toUpperCase() + 'FF'] : []),
+      'h', b(x.outline), 't', x.ot, 'o', x.oo, 'd', b(x.dot), 'z', x.dt, 'a', x.da,
+      '0b', b(x.inner), '0t', x.it, '0l', x.il, ...(x.ig ? ['0v', x.iv, '0g', 1] : []), '0o', x.io, '0a', x.ia, '0m', 0, '0f', 0,
+      '1b', b(x.outer), '1t', x.ot2, '1l', x.ol, ...(x.og ? ['1v', x.ov, '1g', 1] : []), '1o', x.oo2, '1a', x.oa, '1m', 0, '1f', 0].join(';');
+  }
+  function xDraw(ctx, x, cx, cy, s = 1) {       // s: screen pixels per crosshair pixel
+    const rects = [];                 // [x, y, w, h, alpha]
+    const lines = (t, l, v, off, a) => {
+      if (!t || (!l && !v)) return;
+      const h0 = Math.round(t * s), o = Math.round(off * s), L = Math.round(l * s), V = Math.round(v * s);
+      const half = Math.floor(h0 / 2);
+      if (L) { rects.push([cx + o + 1, cy - half, L, h0, a]); rects.push([cx - o - L, cy - half, L, h0, a]); }
+      if (V) { rects.push([cx - half, cy + o + 1, h0, V, a]); rects.push([cx - half, cy - o - V, h0, V, a]); }
+    };
+    if (x.inner) lines(x.it, x.il, x.ig ? x.iv : x.il, x.io, x.ia);
+    if (x.outer) lines(x.ot2, x.ol, x.og ? x.ov : x.ol, x.oo2, x.oa);
+    if (x.dot) { const d = Math.round(x.dt * s), h = Math.floor(d / 2); rects.push([cx - h, cy - h, d, d, x.da]); }
+    if (x.outline && x.oo > 0) {
+      const w = Math.round(x.ot * s);
+      ctx.fillStyle = `rgba(0,0,0,${x.oo})`;
+      for (const [rx, ry, rw, rh, a] of rects) if (a > 0) ctx.fillRect(rx - w, ry - w, rw + 2 * w, rh + 2 * w);
+    }
+    ctx.fillStyle = x.color;
+    for (const [rx, ry, rw, rh, a] of rects) { ctx.globalAlpha = a; ctx.fillRect(rx, ry, rw, rh); }
+    ctx.globalAlpha = 1;
+  }
+  const xc = $('tr-xhair'), xctx = xc ? xc.getContext('2d') : null;
+  function xPaint() {                  // the crosshair over the game, in device pixels like Valorant
+    if (!xctx) return;
+    const w = Math.round(xc.clientWidth * devicePixelRatio), h = Math.round(xc.clientHeight * devicePixelRatio);
+    if (xc.width !== w || xc.height !== h) { xc.width = w; xc.height = h; }
+    xctx.clearRect(0, 0, w, h);
+    xDraw(xctx, xh, Math.floor(w / 2), Math.floor(h / 2), 1);
+  }
+  window.addEventListener('resize', xPaint);
+
+  // the settings on the page: a code, the main switches and sizes, a preview
+  const xForm = $('tr-xform'), xPrev = $('tr-xprev');
+  let xSaveT = null;
+  function xShow() {
+    if (!xForm) return;
+    for (const el of xForm.querySelectorAll('[data-x]')) {
+      const k = el.dataset.x;
+      if (el.type === 'checkbox') el.checked = !!xh[k]; else el.value = xh[k];
+    }
+    const code = $('tr-xcode-out'); if (code) code.value = xCode(xh);
+    if (xPrev) {
+      const c = xPrev.getContext('2d'), z = 4, w = xPrev.width, h = xPrev.height;
+      c.fillStyle = '#3a4252'; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#6b7488'; c.fillRect(0, h * 0.62, w, h * 0.38);
+      c.imageSmoothingEnabled = false;
+      xDraw(c, xh, Math.floor(w / 2), Math.floor(h / 2), z);
+    }
+    xPaint();
+  }
+  function xSave() {
+    try { localStorage.setItem('vc-crosshair', JSON.stringify(xh)); } catch (e) {}
+    clearTimeout(xSaveT);
+    if (!C.can_save) return;
+    xSaveT = setTimeout(() => fetch(C.urls.setup, {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({crosshair: xh})}).catch(() => {}), 600);
+  }
+  if (xForm) {
+    xForm.addEventListener('input', e => {
+      const el = e.target.closest('[data-x]');
+      if (!el) return;
+      xh[el.dataset.x] = el.type === 'checkbox' ? el.checked : (el.type === 'color' ? el.value : parseFloat(el.value));
+      xh = xClean(xh); xShow(); xSave();
+    });
+    $('tr-xcode-use').addEventListener('click', () => {
+      const x = xParse($('tr-xcode').value), msg = $('tr-xcode-msg');
+      if (!x) { msg.textContent = 'That doesn\'t look like a Valorant crosshair code.'; return; }
+      xh = x; xShow(); xSave(); msg.textContent = 'Crosshair taken over.';
+    });
+    $('tr-xreset').addEventListener('click', () => { xh = Object.assign({}, XDEF); xShow(); xSave(); });
+    $('tr-xcode-copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(xCode(xh)); $('tr-xcode-msg').textContent = 'Copied.'; } catch (e) { $('tr-xcode-out').select(); }
+    });
+  }
+  xShow();
+
   // ------------------------------------------------------------------ WebGL
   const gl = canvas.getContext('webgl', {antialias: true, alpha: false, desynchronized: true, powerPreference: 'high-performance'});
   const VS = `attribute vec3 p;attribute vec3 n;uniform mat4 vp;uniform mat4 m;varying vec3 wp;varying vec3 wn;
@@ -213,7 +359,8 @@
       },
       hit(st) { st.targets = []; st.window = Math.max(0.38, st.window - 0.025); st.next = st.t + rand(0.35, 0.9); },
     },
-    // the sens finder's test: 13 s flicks and micro corrections (with how each flick went), 7 s tracking
+    // the sens finder's test: flicks and micro corrections (with how each flick went), then tracking (st.split:
+    // where tracking starts; 13 of 20 s in the quick finder, 16 of 25 s in the thorough one)
     mix: {
       setup(st) { st.n = 0; st.over = []; st.under = []; st.trackOn = 0; st.trackT = 0; st.tracking = false; st.targets = []; this.spawn(st); },
       spawn(st) {
@@ -242,10 +389,14 @@
         this.spawn(st);
       },
       update(st, dt) {
-        if (!st.tracking && st.t >= 13) {                  // second part: tracking
+        if (!st.tracking && st.t >= (st.split || 13)) {                  // second part: tracking
           st.tracking = true; st.path = null;
-          st.targets = [{c: [Math.sin(yaw) * 9, 1.4, -Math.max(4, Math.cos(yaw) * 9)], r: 0.38, born: st.t}];
-          st.v = 0; st.goal = 3.5; st.flip = st.t + 0.5;
+          // right where the crosshair is, already moving: no searching, no waiting
+          const x = clamp(Math.sin(yaw) * 9, -4.5, 4.5), y = clamp(EYE + Math.tan(pitch) * 9, 0.9, 2.6);
+          st.targets = [{c: [x, y, -Math.sqrt(Math.max(16, 81 - x * x))], r: 0.38, born: st.t, y0: y}];
+          const dir = Math.random() < 0.5 ? -1 : 1;
+          st.v = dir * 2.5; st.goal = dir * rand(2.8, 4.5); st.flip = st.t + rand(0.4, 0.9);
+          cue('Track it: stay on the target');
         }
         if (st.tracking) {
           SC.track.update(st, dt);
@@ -278,7 +429,7 @@
         const acc = 26 * dt;
         st.v += clamp(st.goal - st.v, -acc, acc);
         tg.c[0] += st.v * dt;
-        tg.c[1] = 1.35 + Math.sin(st.t * 2.1) * 0.06;
+        tg.c[1] = (tg.y0 || 1.35) + Math.sin(st.t * 2.1) * 0.06;
       },
     },
   };
@@ -307,17 +458,18 @@
     return best;
   }
   function newRun(id) {
-    const sc = byId[id], seconds = plan ? plan.items[plan.i].seconds : sc.seconds;
+    const sc = byId[id], seconds = plan ? plan.items[plan.i].seconds : finder ? finder.mode.secs : sc.seconds;
     firing = false;
     st = {id, kind: sc.kind, seconds, t: 0, phase: 'ready', targets: [], covers: null, hits: 0, shots: 0, points: 0,
           times: [], lastHit: 0, on: 0};
     yaw = 0; pitch = 0;
+    if (finder) st.split = finder.mode.split;
     SC[id].setup(st);
   }
   function score() {
     if (!st) return 0;
     if (st.kind === 'track') return Math.round(1000 * st.on / st.seconds);
-    if (st.id === 'mix') return Math.round(st.points * (st.shots ? st.hits / st.shots : 0) + 1000 * st.trackOn / 7);
+    if (st.id === 'mix') return Math.round(st.points * (st.shots ? st.hits / st.shots : 0) + 1000 * st.trackOn / Math.max(1, st.seconds - (st.split || 13)));
     const acc = st.shots ? st.hits / st.shots : 0;
     return Math.round(st.points * acc);
   }
@@ -341,13 +493,17 @@
     if (st && st.phase === 'count') {
       st.count -= dt;
       $('tr-count').textContent = Math.max(1, Math.ceil(st.count));
-      if (st.count <= 0) { st.phase = 'run'; $('tr-count').hidden = true; for (const t of st.targets) t.born = 0; st.lastHit = 0; }
+      if (st.count <= 0) {
+        st.phase = 'run'; $('tr-count').hidden = true;
+        if (!st.started) { st.started = true; for (const t of st.targets) t.born = 0; st.lastHit = 0; }
+      }
     }
     let onTarget = null;
     if (st && st.phase === 'run') {
       st.t += dt;
       if (SC[st.id].update) SC[st.id].update(st, dt);
       if (st.kind === 'track') { onTarget = aimed(); if (firing && onTarget) st.on += dt; if (firing) st.fire = (st.fire || 0) + dt; }
+      else if (st.tracking) onTarget = aimed();
       if (st.t >= st.seconds) finish();
       updateHud();
     }
@@ -359,14 +515,22 @@
     if (!st) return;
     for (const b of st.covers || []) draw(meshes.box, model(b.min[0], b.min[1], b.min[2], b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]), COVER, 1);
     for (const tg of st.targets) {
-      const on = tg === onTarget && firing;
+      const on = tg === onTarget && (firing || st.tracking);
       draw(meshes.sphere, model(tg.c[0], tg.c[1], tg.c[2], tg.r, tg.r, tg.r), on ? TARGET_ON : TARGET, 0, on ? 0.25 : 0.12);
     }
+  }
+  let cueT = null;
+  function cue(text) {                       // a short line in the middle, e.g. when tracking starts
+    const w = $('tr-cue');
+    if (!w) return;
+    w.textContent = text; w.hidden = false;
+    clearTimeout(cueT); cueT = setTimeout(() => { w.hidden = true; }, 1300);
   }
   function updateHud() {
     $('tr-time').textContent = Math.max(0, Math.ceil(st.seconds - st.t));
     $('tr-score').textContent = score();
-    if (st.kind === 'track') { $('tr-l3').textContent = 'On target'; $('tr-acc').textContent = st.t ? Math.round(100 * st.on / Math.max(st.t, 0.01)) + '%' : '–'; }
+    if (st.tracking) { $('tr-l3').textContent = 'On target'; $('tr-acc').textContent = st.trackT ? Math.round(100 * st.trackOn / st.trackT) + '%' : '–'; }
+    else if (st.kind === 'track') { $('tr-l3').textContent = 'On target'; $('tr-acc').textContent = st.t ? Math.round(100 * st.on / Math.max(st.t, 0.01)) + '%' : '–'; }
     else { $('tr-l3').textContent = 'Accuracy'; $('tr-acc').textContent = st.shots ? Math.round(100 * st.hits / st.shots) + '%' : '–'; }
   }
 
@@ -398,11 +562,14 @@
     w.hidden = raw;
     w.textContent = raw ? '' : 'This browser can\'t read the mouse raw: Windows\' "Enhance pointer precision" and pointer speed apply. Chrome, Edge or the Nexus app can.';
   }
+  let unlockedAt = 0;
   document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement === canvas || !st) return;
-    firing = false;
-    if (st.phase === 'run') { st.phase = 'paused'; showPaused(); }
-    else if (st.phase === 'count') { st.phase = 'ready'; $('tr-count').hidden = true; hud.hidden = true; showReady(); }
+    firing = false; unlockedAt = performance.now();
+    if (st.phase === 'run' || st.phase === 'count') {
+      st.phase = 'paused'; $('tr-count').hidden = true;
+      showPaused();
+    }
   });
 
   // ------------------------------------------------------------------ panels
@@ -412,10 +579,11 @@
     const sc = byId[st.id];
     if (finder) {
       hud.hidden = true;
-      setPanel(`<div class="tr-step">Sens finder · ${finder.i === 0 ? 'warm-up' : `test ${finder.i} of 10`}</div><h2>Find your sens</h2>
-        <p>Eleven rounds of 20 seconds: one warm-up at your sens, then ten at other sensitivities, blind and in random order.
+      const m = finder.mode, n = m.warm + m.r1.length + m.r2.length * m.rep + (m.control ? 2 : 0);
+      setPanel(`<div class="tr-step">Sens finder · ${m.name} · ${finder.i < m.warm ? 'warm-up' : `test ${finder.i - m.warm + 1} of ${n - m.warm}`}</div><h2>Find your sens</h2>
+        <p>${m.warm === 1 ? 'One warm-up round' : 'Two warm-up rounds'} at your sens, then ${n - m.warm} rounds of ${m.secs} seconds at other sensitivities, blind and in random order.
         Each round: shoot the targets, and when the moving one comes, just stay on it. Don't think about the sens, aim like in a match.</p>
-        <p>About 5 minutes · Esc pauses</p>
+        <p>About ${m.minutes} minutes · Esc pauses</p>
         <div class="tr-btns"><button type="button" class="btn primary" data-a="go">Click to start</button><button type="button" class="btn ghost" data-a="quit">Back</button></div>`);
       return;
     }
@@ -423,18 +591,25 @@
     setPanel(`${planStep()}<h2>${esc(sc.name)}</h2><p>${esc(sc.about)}</p><p>${st.seconds} seconds · ${sc.kind === 'track' ? 'hold the left mouse button on the target' : 'left click to shoot'} · Esc pauses</p>
       <div class="tr-btns"><button type="button" class="btn primary" data-a="go">Click to start</button><button type="button" class="btn ghost" data-a="quit">Back</button></div>`);
   }
-  function showPaused() {
-    setPanel(`<h2>Paused</h2><p>${Math.ceil(st.seconds - st.t)} seconds left.</p>
-      <div class="tr-btns"><button type="button" class="btn primary" data-a="resume">Continue</button><button type="button" class="btn ghost" data-a="restart">Start over</button><button type="button" class="btn ghost" data-a="quit">Quit</button></div>`);
+  function showPaused(again) {
+    // the browser won't lock the mouse again right after Esc: Continue unlocks after a moment
+    const where = finder ? `<div class="tr-step">Sens finder · ${finder.mode.name} · ${finder.i < finder.mode.warm ? 'warm-up' : `test ${finder.i - finder.mode.warm + 1}`}</div>` : planStep();
+    setPanel(`${where}<h2>Paused</h2><p>${again ? 'The browser needs a moment after Esc: click Continue once more.' : `${Math.ceil(st.seconds - st.t)} seconds left in this round.`}</p>
+      <div class="tr-btns"><button type="button" class="btn primary" data-a="resume" id="tr-resume" disabled>Continue</button>
+      ${finder ? '' : '<button type="button" class="btn ghost" data-a="restart">Start over</button>'}
+      <button type="button" class="btn ghost" data-a="quit">${finder ? 'Stop the sens finder' : 'Quit'}</button></div>
+      <p style="margin:12px 0 0;font-size:12.5px">Enter or Space also continues.</p>`);
+    const b = $('tr-resume'), wait = Math.max(0, 900 - (performance.now() - unlockedAt));
+    setTimeout(() => { if (b.isConnected) { b.disabled = false; b.focus(); } }, wait);
   }
   async function go(resume) {
     setPanel('');
     initAudio();
     await lock();
-    if (document.pointerLockElement !== canvas) { resume ? showPaused() : showReady(); return; }   // the browser said no: try again
+    if (document.pointerLockElement !== canvas) { resume ? showPaused(true) : showReady(); return; }   // the browser said no: try again
     hud.hidden = false;
-    if (resume) { st.phase = 'run'; return; }
-    st.phase = 'count'; st.count = 3; $('tr-count').hidden = false;
+    // back in: a short countdown, then on where it stopped (a round that hadn't started yet gets the full one)
+    st.phase = 'count'; st.count = resume && st.started ? 1.5 : (finder && finder.i > 0 ? 2 : 3); $('tr-count').hidden = false;
     updateHud();
   }
   function initAudio() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch (e) {} }
@@ -474,16 +649,25 @@
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const r4 = v => Math.round(v * 10000) / 10000;
   const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
-  function startFinder() {
-    const base = clamp(+C.sens_rec || sens(), 0.02, 15);
-    finder = {base, list: [r4(base), ...shuffle([0.7, 0.85, 1, 1.15, 1.3].map(f => r4(base * f)))], i: 0, done: [], round2: false};
+  // quick: 1 warm-up, 5 wide, 5 close (20 s each). thorough: 2 warm-ups, your sens counted at the start and the end
+  // (to see how much you tire, stats/trainer.py corrects for it), 7 wide, 6 close played twice each (25 s each).
+  const MODES = {
+    quick: {name: 'quick', secs: 20, split: 13, warm: 1, minutes: 5, control: false, rep: 1,
+            r1: [0.7, 0.85, 1, 1.15, 1.3], r2: [0.9, 0.95, 1, 1.05, 1.1]},
+    thorough: {name: 'thorough', secs: 25, split: 16, warm: 2, minutes: 11, control: true, rep: 2,
+               r1: [0.65, 0.75, 0.87, 1, 1.15, 1.3, 1.5], r2: [0.88, 0.93, 0.97, 1.03, 1.07, 1.12]},
+  };
+  function startFinder(kind) {
+    const m = MODES[kind] || MODES.quick, base = clamp(+C.sens_rec || sens(), 0.02, 15);
+    const list = [...Array(m.warm).fill(r4(base)), ...(m.control ? [r4(base)] : []), ...shuffle(m.r1.map(f => r4(base * f)))];
+    finder = {mode: m, base, list, i: 0, done: [], round2: false};
     plan = null;
     open('mix');
   }
   function finderNext() {
-    const cur = finder.list[finder.i];
-    if (finder.i > 0) {
-      finder.done.push({sens: cur, click: Math.round(st.points * (st.shots ? st.hits / st.shots : 0) * 10) / 10,
+    const cur = finder.list[finder.i], m = finder.mode;
+    if (finder.i >= m.warm) {
+      finder.done.push({sens: cur, i: finder.done.length, click: Math.round(st.points * (st.shots ? st.hits / st.shots : 0) * 10) / 10,
                         track: Math.round(1000 * st.trackOn / Math.max(st.trackT, 0.01)) / 1000,
                         over: Math.round(mean(st.over) * 1000) / 1000, under: Math.round(mean(st.under) * 1000) / 1000,
                         acc: st.shots ? Math.round(1000 * st.hits / st.shots) / 1000 : 0,
@@ -492,18 +676,20 @@
     finder.i++;
     if (finder.i === finder.list.length && !finder.round2) {        // round 2: close around round 1's best
       finder.round2 = true;
-      const cmax = Math.max(...finder.done.map(t => t.click), 1e-9), tmax = Math.max(...finder.done.map(t => t.track), 1e-9);
-      const best = finder.done.reduce((b, t) => ((t.click / cmax + t.track / tmax) > (b.click / cmax + b.track / tmax) ? t : b)).sens;
-      finder.list.push(...shuffle([0.9, 0.95, 1, 1.05, 1.1].map(f => r4(best * f))));
+      const r1 = finder.done.slice(m.control ? 1 : 0);
+      const cmax = Math.max(...r1.map(t => t.click), 1e-9), tmax = Math.max(...r1.map(t => t.track), 1e-9);
+      const best = r1.reduce((b, t) => ((t.click / cmax + t.track / tmax) > (b.click / cmax + b.track / tmax) ? t : b)).sens;
+      for (let k = 0; k < m.rep; k++) finder.list.push(...shuffle(m.r2.map(f => r4(best * f))));
+      if (m.control) finder.list.push(r4(finder.base));             // your sens once more at the end
     }
     if (finder.i >= finder.list.length) { finderEnd(); return; }
     newRun('mix');
     if (document.pointerLockElement === canvas) {                   // straight on to the next one
-      st.phase = 'count'; st.count = 3; $('tr-count').hidden = false; updateHud();
+      st.phase = 'count'; st.count = 2; $('tr-count').hidden = false; updateHud();
     } else showReady();
   }
   async function finderEnd() {
-    const tests = finder.done, base = finder.base;
+    const tests = finder.done, base = finder.base, mode = finder.mode.name;
     st.phase = 'done'; firing = false;
     if (document.pointerLockElement) document.exitPointerLock();
     hud.hidden = true;
@@ -511,7 +697,7 @@
     let d = null;
     if (C.can_save) {
       try {
-        const r = await fetch(C.urls.sens, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({base, tests})});
+        const r = await fetch(C.urls.sens, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({base, tests, mode})});
         d = await r.json();
         if (!r.ok) throw new Error(d.error || r.status);
       } catch (e) { d = {error: String(e.message || e)}; }
@@ -534,7 +720,7 @@
   function open(id) {
     if (!initGL()) { window.nexusToast && window.nexusToast('This browser has no WebGL: the trainer can\'t run here.', 'error'); return; }
     stage.classList.add('on'); document.body.style.overflow = 'hidden';
-    newRun(id); showReady();
+    newRun(id); showReady(); requestAnimationFrame(xPaint);
     last = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
   function close() {
@@ -556,7 +742,12 @@
   });
   document.addEventListener('keydown', e => {
     if (!stage.classList.contains('on')) return;
-    if (e.key === 'Escape' && st && (st.phase === 'ready' || st.phase === 'done') && !document.pointerLockElement) close();
+    if (e.key === 'Escape' && st && (st.phase === 'ready' || st.phase === 'done') && !document.pointerLockElement
+        && performance.now() - unlockedAt > 600) close();
+    if ((e.key === 'Enter' || e.key === ' ') && st && st.phase === 'paused' && !document.pointerLockElement) {
+      const b = $('tr-resume');
+      if (b && !b.disabled) { e.preventDefault(); go(true); }
+    }
   });
   document.querySelectorAll('[data-play]').forEach(b => b.addEventListener('click', () => { plan = null; open(b.dataset.play); }));
   document.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', () => {
@@ -564,11 +755,10 @@
     plan = {kind: p.kind, name: p.name, items: p.items, i: 0, total: 0};
     open(p.items[0].id);
   }));
-  const sensGo = $('tr-sens-go');
-  if (sensGo) sensGo.addEventListener('click', startFinder);
+  document.querySelectorAll('[data-finder]').forEach(b => b.addEventListener('click', () => startFinder(b.dataset.finder)));
   if (C.start && C.plans[C.start]) {
     const b = document.querySelector(`[data-plan="${C.start}"]`);
     if (b) b.scrollIntoView({block: 'center'});
   }
-  window.nexusTrainer = {open, startFinder, finder: () => finder, state: () => st, aim: (y, p) => { yaw = y; pitch = p; }, shoot, score};   // for tests
+  window.nexusTrainer = {open, startFinder, xParse, xCode, crosshair: () => xh, finder: () => finder, state: () => st, aim: (y, p) => { yaw = y; pitch = p; }, shoot, score};   // for tests
 })();
