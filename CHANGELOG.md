@@ -4,6 +4,13 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.6.1
+- **Aim trainer: fullscreen** while playing, on by default (a switch next to the sensitivity; F switches it while
+  playing). In the Nexus app the whole window goes fullscreen.
+- **Crosshair drawn on the screen's real pixels**: with Windows display scaling (e.g. 125%) the browser stretched it
+  by a fraction of a pixel, which made the lines look smeared and uneven. It's also exactly the same on all four
+  sides now (the right and bottom lines sat one pixel further out), in the game and in the preview.
+
 ## 4.6.0
 - **Aim trainer** (*Practice › Aim trainer*): Nexus's own aim trainer in the browser and in the Nexus app. It plays
   like Valorant: your Valorant sensitivity, Valorant's field of view (103° at 16:9) and raw mouse input through
