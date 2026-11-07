@@ -2730,6 +2730,7 @@ def test_trainer_crosshair_is_kept_and_checked(app):
     assert r.status_code == 200 and r.get_json()["setup"]["crosshair"]["color"] == "#00ff00"
     page = c.get(f"/profiles/{pid}/trainer").data.decode()
     assert 'id="crosshair"' in page and '"dot": true' in page and "tr-xhair" in page
+    assert 'id="tr-fs"' in page                                                  # the fullscreen switch
     assert tr.clean_crosshair(dict(x, color="red")) is None                       # not a colour
     assert tr.clean_crosshair(dict(x, il=500)) is None                            # out of range
     assert tr.clean_crosshair(dict(x, dot="yes"))["dot"] is False                 # switches are true or false

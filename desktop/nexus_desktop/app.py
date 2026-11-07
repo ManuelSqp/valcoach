@@ -180,6 +180,7 @@ class App:
         self.start_hidden = start_hidden
         self.setup_mode = not self.s.server
         self.quitting = False
+        self.fullscreen_on = False
         self.window = None
         self.tray = None
         try:
@@ -488,6 +489,15 @@ class Bridge:
 
     def update_now(self) -> dict:
         self._ok().update_now()
+        return {"ok": True}
+
+    def fullscreen(self, on) -> dict:
+        """The aim trainer playing fullscreen: the whole window (the page alone can't in WebView2)."""
+        a = self._ok()
+        on = bool(on)
+        if a.fullscreen_on != on:
+            a.window.toggle_fullscreen()
+            a.fullscreen_on = on
         return {"ok": True}
 
     def change_server(self) -> dict:

@@ -110,20 +110,28 @@
       '0b', b(x.inner), '0t', x.it, '0l', x.il, ...(x.ig ? ['0v', x.iv, '0g', 1] : []), '0o', x.io, '0a', x.ia, '0m', 0, '0f', 0,
       '1b', b(x.outer), '1t', x.ot2, '1l', x.ol, ...(x.og ? ['1v', x.ov, '1g', 1] : []), '1o', x.oo2, '1a', x.oa, '1m', 0, '1f', 0].join(';');
   }
-  function xDraw(ctx, x, cx, cy, s = 1) {       // s: screen pixels per crosshair pixel
-    const rects = [];                 // [x, y, w, h, alpha]
+  function xDraw(ctx, x, cx, cy, s = 1) {       // s: screen pixels per crosshair pixel; (cx, cy): the centre pixel
+    // Mirror-exact on all four sides. An odd thickness is centred on the centre pixel, an even one on the corner
+    // between pixels; the gap is measured from that centre, the same on every side.
+    const rects = [];                 // [x, y, w, h, alpha], whole pixels only
     const lines = (t, l, v, off, a) => {
       if (!t || (!l && !v)) return;
-      const h0 = Math.round(t * s), o = Math.round(off * s), L = Math.round(l * s), V = Math.round(v * s);
-      const half = Math.floor(h0 / 2);
-      if (L) { rects.push([cx + o + 1, cy - half, L, h0, a]); rects.push([cx - o - L, cy - half, L, h0, a]); }
-      if (V) { rects.push([cx - half, cy + o + 1, h0, V, a]); rects.push([cx - half, cy - o - V, h0, V, a]); }
+      const T = Math.round(t), odd = T % 2 === 1, u = s;
+      const lo = c => (odd ? c - (T - 1) / 2 * u : c - T / 2 * u);                     // first pixel of the bar across
+      const far = c => (odd ? c + u : c);                                               // first pixel after the centre
+      const o = Math.round(off) * u, L = Math.round(l) * u, V = Math.round(v) * u, W = T * u;
+      if (L) { rects.push([far(cx) + o, lo(cy), L, W, a]); rects.push([cx - o - L, lo(cy), L, W, a]); }
+      if (V) { rects.push([lo(cx), far(cy) + o, W, V, a]); rects.push([lo(cx), cy - o - V, W, V, a]); }
     };
     if (x.inner) lines(x.it, x.il, x.ig ? x.iv : x.il, x.io, x.ia);
     if (x.outer) lines(x.ot2, x.ol, x.og ? x.ov : x.ol, x.oo2, x.oa);
-    if (x.dot) { const d = Math.round(x.dt * s), h = Math.floor(d / 2); rects.push([cx - h, cy - h, d, d, x.da]); }
+    if (x.dot) {
+      const D = Math.round(x.dt), st = D % 2 ? (D - 1) / 2 * s : D / 2 * s;
+      rects.push([cx - st, cy - st, D * s, D * s, x.da]);
+    }
+    for (const r of rects) { r[0] = Math.round(r[0]); r[1] = Math.round(r[1]); }
     if (x.outline && x.oo > 0) {
-      const w = Math.round(x.ot * s);
+      const w = Math.round(x.ot) * s;
       ctx.fillStyle = `rgba(0,0,0,${x.oo})`;
       for (const [rx, ry, rw, rh, a] of rects) if (a > 0) ctx.fillRect(rx - w, ry - w, rw + 2 * w, rh + 2 * w);
     }
@@ -131,14 +139,40 @@
     for (const [rx, ry, rw, rh, a] of rects) { ctx.globalAlpha = a; ctx.fillRect(rx, ry, rw, rh); }
     ctx.globalAlpha = 1;
   }
+  // Canvases sized to the exact device pixels they cover (with Windows display scaling, e.g. 125%, a rounded size
+  // makes the browser stretch the picture by a fraction of a pixel: smeared, uneven crosshair lines).
+  const exact = new Map();             // canvas -> [w, h] in device pixels
+  function devicePixels(cv) {
+    const r = cv.getBoundingClientRect();
+    const guess = [Math.round(r.width * devicePixelRatio), Math.round(r.height * devicePixelRatio)];
+    const known = exact.get(cv);       // the browser's exact count, when it agrees with the guess (within a pixel)
+    return known && Math.abs(known[0] - guess[0]) <= 1 && Math.abs(known[1] - guess[1]) <= 1 ? known : guess;
+  }
+  function watchPixels(cv, then) {
+    if (!cv || !window.ResizeObserver) return;
+    try {
+      new ResizeObserver(es => {
+        for (const e of es) {
+          const b = e.devicePixelContentBoxSize && e.devicePixelContentBoxSize[0];
+          if (b) exact.set(cv, [b.inlineSize, b.blockSize]);
+          else exact.delete(cv);
+        }
+        then();
+      }).observe(cv, {box: 'device-pixel-content-box'});
+    } catch (e) {
+      new ResizeObserver(() => { exact.delete(cv); then(); }).observe(cv);
+    }
+  }
   const xc = $('tr-xhair'), xctx = xc ? xc.getContext('2d') : null;
   function xPaint() {                  // the crosshair over the game, in device pixels like Valorant
     if (!xctx) return;
-    const w = Math.round(xc.clientWidth * devicePixelRatio), h = Math.round(xc.clientHeight * devicePixelRatio);
+    const [w, h] = devicePixels(xc);
     if (xc.width !== w || xc.height !== h) { xc.width = w; xc.height = h; }
     xctx.clearRect(0, 0, w, h);
     xDraw(xctx, xh, Math.floor(w / 2), Math.floor(h / 2), 1);
   }
+  watchPixels(xc, xPaint);
+  watchPixels(canvas, () => {});
   window.addEventListener('resize', xPaint);
 
   // the settings on the page: a code, the main switches and sizes, a preview
@@ -152,7 +186,9 @@
     }
     const code = $('tr-xcode-out'); if (code) code.value = xCode(xh);
     if (xPrev) {
-      const c = xPrev.getContext('2d'), z = 4, w = xPrev.width, h = xPrev.height;
+      const [w, h] = devicePixels(xPrev), z = Math.max(1, Math.round(4 * devicePixelRatio));
+      if (xPrev.width !== w || xPrev.height !== h) { xPrev.width = w; xPrev.height = h; }
+      const c = xPrev.getContext('2d');
       c.fillStyle = '#3a4252'; c.fillRect(0, 0, w, h);
       c.fillStyle = '#6b7488'; c.fillRect(0, h * 0.62, w, h * 0.38);
       c.imageSmoothingEnabled = false;
@@ -184,6 +220,7 @@
       try { await navigator.clipboard.writeText(xCode(xh)); $('tr-xcode-msg').textContent = 'Copied.'; } catch (e) { $('tr-xcode-out').select(); }
     });
   }
+  watchPixels(xPrev, xShow);
   xShow();
 
   // ------------------------------------------------------------------ WebGL
@@ -488,7 +525,7 @@
   function frame(now) {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - (last || now)) / 1000); last = now;
-    const w = Math.round(canvas.clientWidth * devicePixelRatio), h = Math.round(canvas.clientHeight * devicePixelRatio);
+    const [w, h] = devicePixels(canvas);
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     if (st && st.phase === 'count') {
       st.count -= dt;
@@ -583,12 +620,12 @@
       setPanel(`<div class="tr-step">Sens finder · ${m.name} · ${finder.i < m.warm ? 'warm-up' : `test ${finder.i - m.warm + 1} of ${n - m.warm}`}</div><h2>Find your sens</h2>
         <p>${m.warm === 1 ? 'One warm-up round' : 'Two warm-up rounds'} at your sens, then ${n - m.warm} rounds of ${m.secs} seconds at other sensitivities, blind and in random order.
         Each round: shoot the targets, and when the moving one comes, just stay on it. Don't think about the sens, aim like in a match.</p>
-        <p>About ${m.minutes} minutes · Esc pauses</p>
+        <p>About ${m.minutes} minutes · Esc pauses · F fullscreen</p>
         <div class="tr-btns"><button type="button" class="btn primary" data-a="go">Click to start</button><button type="button" class="btn ghost" data-a="quit">Back</button></div>`);
       return;
     }
     hud.hidden = true;
-    setPanel(`${planStep()}<h2>${esc(sc.name)}</h2><p>${esc(sc.about)}</p><p>${st.seconds} seconds · ${sc.kind === 'track' ? 'hold the left mouse button on the target' : 'left click to shoot'} · Esc pauses</p>
+    setPanel(`${planStep()}<h2>${esc(sc.name)}</h2><p>${esc(sc.about)}</p><p>${st.seconds} seconds · ${sc.kind === 'track' ? 'hold the left mouse button on the target' : 'left click to shoot'} · Esc pauses · F fullscreen</p>
       <div class="tr-btns"><button type="button" class="btn primary" data-a="go">Click to start</button><button type="button" class="btn ghost" data-a="quit">Back</button></div>`);
   }
   function showPaused(again) {
@@ -602,9 +639,32 @@
     const b = $('tr-resume'), wait = Math.max(0, 900 - (performance.now() - unlockedAt));
     setTimeout(() => { if (b.isConnected) { b.disabled = false; b.focus(); } }, wait);
   }
+  // fullscreen while playing (switch on the page, F while playing). In the Nexus app the whole window goes
+  // fullscreen through the app (WebView2 can't do it from the page alone).
+  const fsBox = $('tr-fs');
+  const wantFs = () => (fsBox ? fsBox.checked : true);
+  try { const v = localStorage.getItem('vc-trainer-fs'); if (fsBox && v !== null) fsBox.checked = v === '1'; } catch (e) {}
+  if (fsBox) fsBox.addEventListener('change', () => { try { localStorage.setItem('vc-trainer-fs', fsBox.checked ? '1' : '0'); } catch (e) {} });
+  const appApi = () => (window.pywebview && window.pywebview.api && window.pywebview.api.fullscreen ? window.pywebview.api : null);
+  let appFs = false;
+  function isFs() { return appFs || !!document.fullscreenElement; }
+  function enterFs() {
+    if (isFs()) return;
+    const api = appApi();
+    if (api) { appFs = true; api.fullscreen(true).catch(() => { appFs = false; }); return; }
+    if (stage.requestFullscreen) stage.requestFullscreen({navigationUI: 'hide'}).catch(() => {});
+  }
+  function exitFs() {
+    const api = appApi();
+    if (appFs && api) { appFs = false; api.fullscreen(false).catch(() => {}); }
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+  function toggleFs() { if (isFs()) exitFs(); else enterFs(); }
+
   async function go(resume) {
     setPanel('');
     initAudio();
+    if (wantFs()) enterFs();           // in the same click as the mouse lock
     await lock();
     if (document.pointerLockElement !== canvas) { resume ? showPaused(true) : showReady(); return; }   // the browser said no: try again
     hud.hidden = false;
@@ -727,6 +787,7 @@
     cancelAnimationFrame(raf); st = null; plan = null;
     if (document.pointerLockElement) document.exitPointerLock();
     stage.classList.remove('on'); document.body.style.overflow = '';
+    exitFs();
     finder = null;
     if (C.dirty) { if (C.goSens) location.hash = 'sens'; location.reload(); }
   }
@@ -744,6 +805,7 @@
     if (!stage.classList.contains('on')) return;
     if (e.key === 'Escape' && st && (st.phase === 'ready' || st.phase === 'done') && !document.pointerLockElement
         && performance.now() - unlockedAt > 600) close();
+    if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); toggleFs(); }
     if ((e.key === 'Enter' || e.key === ' ') && st && st.phase === 'paused' && !document.pointerLockElement) {
       const b = $('tr-resume');
       if (b && !b.disabled) { e.preventDefault(); go(true); }

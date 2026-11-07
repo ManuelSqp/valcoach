@@ -173,6 +173,9 @@ class FakeWindow:
     def load_html(self, html):
         self.html, self.url = html, None
 
+    def toggle_fullscreen(self):
+        self.full = not getattr(self, "full", False)
+
 
 def make_app(tmp_path, monkeypatch, server="https://coach.example.com"):
     from nexus_desktop import app as appmod, config
@@ -201,9 +204,14 @@ def test_the_bridge_answers_only_the_connected_server(tmp_path, monkeypatch):
         b.paired("not-a-key", "manuel")
     b.paired("vc_abc", "manuel")
     assert tokens["https://coach.example.com"] == "vc_abc" and b.status()["paired_user"] == "manuel" and calls
+    b.fullscreen(True); b.fullscreen(True)
+    assert a.window.full is True                                   # once, not toggled back
+    b.fullscreen(False)
+    assert a.window.full is False
     # another website in the window (a link that wasn't caught): no answers, and no server change
     a.window.url = "https://evil.example/page"
-    for call in (b.status, b.sync_now, b.check_updates, lambda: b.set("autostart", True), lambda: b.paired("vc_x", "x")):
+    for call in (b.status, b.sync_now, b.check_updates, lambda: b.set("autostart", True), lambda: b.paired("vc_x", "x"),
+                 lambda: b.fullscreen(True)):
         with pytest.raises(PermissionError):
             call()
     with pytest.raises(PermissionError):

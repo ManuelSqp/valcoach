@@ -99,6 +99,6 @@ Without building anything: `pip install ./desktop` then `python -m nexus_desktop
 
 The pages of the connected server (and only those: the app checks the page's address on every call) can call the
 app through pywebview's bridge (`window.pywebview.api`): `status`, `set` (the switches and the player), `pick_folder`,
-`sync_now`, `paired`, `check_updates`, `update_now`, `change_server`. The website's part is `base.html` (shows *This
+`sync_now`, `paired`, `check_updates`, `update_now`, `change_server`, `fullscreen` (the aim trainer). The website's part is `base.html` (shows *This
 PC* and pairs: `POST /account/devices/pair` with the session, the key goes straight to the app) and
 `this_pc.html`. The app itself still talks to Nexus only through `/api/companion/...` with its device key.
