@@ -4,6 +4,30 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.8.0
+- **Aim insights** (*Practice › Aim insights*, or *Aim insights* on the trainer page): every round in the aim trainer
+  now measures how you aim, and the page shows what stands out over the last 30 days:
+  - flicks per direction: slower to the left than to the right (or up than down), small corrections or big turns that
+    take long, flying past targets or stopping short;
+  - where missed shots land (above, below, left, right of the target);
+  - tracking: on target while it moves left against right, behind or ahead of it, how long it takes to be back on it
+    after a direction change;
+  - duels: reaction to peeks from the left and the right, where your crosshair waited (below or above head height), body
+    shots instead of headshots;
+  - how much your scores jump around.
+- Each finding says what was measured, gives tips for your **hand and grip** (pick right or left hand and palm, claw or
+  fingertip on the page: a slow side toward the thumb needs more forearm, flying past with a fingertip grip needs a
+  little palm contact, …) and links the scenarios to play (*Play …* opens the scenario in the trainer). What's already
+  good is listed too.
+- **Charts**: a skill profile (flick speed, accuracy, small fixes, tracking, reaction, crosshair placement,
+  consistency), a wheel of flick speed per direction coloured by flying past or stopping short, a map of where missed
+  shots land around the target, tracking left and right with a behind/ahead gauge, peeks per side with where your
+  crosshair waited, flick time by size, and scores over time per scenario.
+- **Focus training**: the scenarios for the top findings, two rounds each, on the insights page and as a third plan on
+  the trainer page. Finishing it ticks it off on the Aim page like the warm-up and training.
+- The coach (*Ask the coach*) knows the top findings, your strengths and your grip.
+- Only rounds played from this version on carry the measurements; older scores stay as they are.
+
 ## 4.7.2
 - **Availability: everyone sets only their own days**, the team owner too. And nobody has to pick who they are: Nexus
   finds your player by the in-game name you entered when signing up (or under *Account*, `Name#TAG`), or by an

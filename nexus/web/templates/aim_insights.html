@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% import "_ui.html" as vc %}
+{% block title %}Aim insights · {{ p.riot_id }} · Nexus{% endblock %}
+{% macro spark(vals) -%}
+{%- if vals|length > 1 -%}{%- set lo = vals|min -%}{%- set hi = vals|max -%}{%- set span = (hi - lo) or 1 -%}
+<svg class="ai-spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><polyline points="{% for v in vals %}{{ (loop.index0 * 100 / (vals|length - 1))|round(1) }},{{ (22 - (v - lo) * 20 / span)|round(1) }} {% endfor %}"/></svg>
+{%- endif -%}
+{%- endmacro %}
+{% block head %}<style>
+.ai-setup{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;margin-bottom:20px}
+.ai-setup label{display:grid;gap:4px;font-size:12.5px;color:var(--muted)}
+.ai-setup .ai-saved{font-size:12.5px;color:var(--muted);padding-bottom:9px}
+.ai-lead{max-width:76ch;color:var(--muted);margin:-4px 0 18px}
+.ai-work{display:grid;gap:12px;margin-bottom:26px}
+.ai-find{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 18px}
+.ai-find.hi{border-left-color:var(--red)}
+.ai-find h3{margin:0;font-size:16.5px}
+.ai-find .ai-area{font-size:12px;color:var(--muted)}
+.ai-find p{margin:0}
+.ai-find ul{margin:4px 0 0;padding-left:18px;font-size:13.5px}.ai-find li{margin:3px 0}
+.ai-find .ai-tipsh{font-size:12.5px;color:var(--muted);margin-top:6px}
+.ai-play{display:flex;flex-direction:column;gap:6px;align-items:flex-end;justify-content:flex-start;grid-row:1 / span 4;grid-column:2}
+.ai-good{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--win);border-radius:var(--radius);padding:12px 16px;margin-bottom:26px}
+.ai-good ul{margin:6px 0 0;padding-left:18px}.ai-good li{margin:3px 0}
+.ai-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:26px}
+.ai-chart{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.ai-chart h3{margin:0;font-size:15.5px}
+.ai-chart p{margin:0;font-size:12.5px;color:var(--muted)}
+.ai-chart svg{width:100%;height:auto;max-width:320px;align-self:center;overflow:visible}
+.ai-chart .ai-empty{flex:1;display:grid;place-items:center;min-height:120px;text-align:center;color:var(--muted);font-size:13px}
+.ai-svg{stroke:none;stroke-width:0}
+.ai-svg text{stroke:none;fill:var(--muted);font-size:10.5px;font-family:var(--font)}
+.ai-svg .num{fill:var(--text);font-family:var(--font-num)}
+.ai-svg .grid{fill:none;stroke:var(--line2);stroke-width:1}
+.ai-svg .axis{stroke:var(--line2);stroke-width:1}
+.ai-svg .area{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2;stroke-linejoin:round}
+.ai-svg .w-ok{fill:var(--win)}.ai-svg .w-over{fill:var(--red)}.ai-svg .w-under{fill:var(--amber)}.ai-svg .w-none{fill:var(--line)}
+.ai-svg .cell{fill:var(--red)}
+.ai-svg .tgt{fill:none;stroke:var(--text);stroke-width:1.5;opacity:.7}
+.ai-svg .bar{fill:var(--accent)}.ai-svg .bar.weak{fill:var(--red)}.ai-svg .track{fill:var(--panel3)}
+.ai-svg .mark{fill:var(--text)}
+.ai-svg .head{fill:none;stroke:var(--muted);stroke-width:1.5}
+.ai-svg .dot{fill:var(--accent);stroke:var(--panel);stroke-width:2}
+.ai-key{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.ai-key i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.ai-trends{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:24px}
+.ai-trend{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;display:grid;gap:4px}
+.ai-trend b{font-size:13.5px}.ai-trend span{font-size:12px;color:var(--muted)}
+.ai-spark{width:100%;height:26px}.ai-spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;vector-effect:non-scaling-stroke}
+.ai-focus{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;background:var(--panel2);border:1px solid var(--line2);border-radius:var(--radius);padding:12px 16px;margin-bottom:22px}
+.ai-focus ol{margin:0;padding-left:20px;font-size:13.5px;flex:1;min-width:220px}
+.ai-more summary{cursor:pointer;color:var(--muted);font-size:13.5px;margin:2px 0 10px}
+.ai-none{background:var(--panel);border:1px dashed var(--line2);border-radius:var(--radius);padding:22px;text-align:center;margin-bottom:24px}
+@media (max-width:640px){.ai-find{grid-template-columns:1fr}.ai-play{grid-row:auto;grid-column:1;flex-direction:row;flex-wrap:wrap;align-items:center}}
+</style>{% endblock %}
+{% block content %}
+{% set n = ins.numbers %}{% set ch = ins.charts %}
+{% call vc.pagehead('Aim insights', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+                    ctx='What the aim trainer shows about how you aim: last ' ~ days ~ ' days') %}
+  <a class="btn ghost" href="{{ url_for('trainer', pid=p.id) }}">Aim trainer</a>
+{% endcall %}
+
+<p class="ai-lead">Every round in the aim trainer measures how you flick in each direction, where your missed shots land,
+  how you follow moving targets and how you react to peeks. Here's what stands out, what to do about it, and what to play.
+  {% if ins.detail_runs < 5 %}The more rounds you play, the surer this gets.{% endif %}</p>
+
+{% if can_save %}
+<form class="ai-setup" id="ai-setup" data-url="{{ url_for('trainer_setup', pid=p.id) }}">
+  <label>Mouse hand<select name="hand">
+    <option value="right" {{ 'selected' if setup.get('hand', 'right') == 'right' }}>Right</option>
+    <option value="left" {{ 'selected' if setup.get('hand') == 'left' }}>Left</option></select></label>
+  <label>Grip<select name="grip">{% for k, v in grips.items() %}
+    <option value="{{ k }}" {{ 'selected' if setup.get('grip', 'unsure') == k }}>{{ v }}</option>{% endfor %}</select></label>
+  <span class="ai-saved" id="ai-saved">The tips use your hand and grip.</span>
+</form>
+{% endif %}
+
+{% if not ins.detail_runs %}
+<div class="ai-none">
+  <h2 style="margin-top:0">Nothing measured yet</h2>
+  <p class="muted" style="max-width:60ch;margin:0 auto 14px">Play a few rounds in the aim trainer: flicks, tracking and
+    Hold the angle. Every round from now on adds to this page.</p>
+  <a class="btn primary" href="{{ url_for('trainer', pid=p.id) }}">Open the aim trainer</a>
+</div>
+{% else %}
+
+{% if ins.focus %}
+<div class="ai-focus">
+  <div><b>Focus training</b><div class="small muted">about {{ ins.focus.minutes }} min · for what's below</div></div>
+  <ol>{% for it in ins.focus['items'][::2] %}<li>{{ it.name }} <span class="muted">2 × {{ it.seconds }} s</span></li>{% endfor %}</ol>
+  <a class="btn primary" href="{{ url_for('trainer', pid=p.id, plan='focus') }}">Start focus training</a>
+</div>
+{% endif %}
+
+<h2>What to work on</h2>
+{% if ins.findings %}
+<div class="ai-work">
+  {% for f in ins.findings %}{% if loop.index == 6 %}<details class="ai-more"><summary>{{ loop.length - 5 }} more</summary><div class="ai-work">{% endif %}
+  <section class="ai-find {{ 'hi' if f.weight >= 0.6 }}">
+    <div class="ai-area">{{ {'flicks': 'Flicks', 'precision': 'Precision', 'tracking': 'Tracking', 'duels': 'Duels', 'consistency': 'Consistency'}[f.area] }}</div>
+    <h3>{{ f.title }}</h3>
+    <p>{{ f.text }}</p>
+    <div><div class="ai-tipsh">Hand, grip and how to fix it</div>
+      <ul>{% for t in f.tips %}<li>{{ t }}</li>{% endfor %}</ul></div>
+    <div class="ai-play">{% for s in f.play %}<a class="btn sm" href="{{ url_for('trainer', pid=p.id, play=s) }}">Play {{ names[s] }}</a>{% endfor %}</div>
+  </section>
+  {% if loop.last and loop.length > 5 %}</div></details>{% endif %}{% endfor %}
+</div>
+{% else %}
+<p class="muted">Nothing stands out yet{% if ins.detail_runs < 10 %}: a few more rounds and it'll show what to work on{% endif %}.</p>
+{% endif %}
+
+{% if ins.good %}
+<div class="ai-good"><b>Already good</b>
+  <ul>{% for g in ins.good %}<li>{{ g }}</li>{% endfor %}</ul></div>
+{% endif %}
+
+<h2>Your aim at a glance</h2>
+<div class="ai-charts">
+  <section class="ai-chart">
+    <h3>Skill profile</h3>
+    {% if ch.radar %}
+    <svg class="ai-svg" viewBox="-40 0 320 240" role="img" aria-label="Skill profile">
+      {% for r in ch.radar.rings %}<polygon class="grid" points="{{ r }}"/>{% endfor %}
+      {% for a in ch.radar.axes %}<line class="axis" x1="120" y1="120" x2="{{ a.x2 }}" y2="{{ a.y2 }}"/>{% endfor %}
+      <polygon class="area" points="{{ ch.radar.pts }}" fill-opacity=".35"/>
+      {% for a in ch.radar.axes %}<text x="{{ a.lx }}" y="{{ a.ly }}" text-anchor="{{ a.anchor }}" dominant-baseline="middle">{{ a.name }}</text>
+      <text class="num" x="{{ a.lx }}" y="{{ a.ly + 12 }}" text-anchor="{{ a.anchor }}" dominant-baseline="middle">{{ a.v }}</text>{% endfor %}
+    </svg>
+    <p>0–100 on each, roughly against what's typical in aim trainers. Bigger is better.</p>
+    {% else %}<div class="ai-empty">Needs a few rounds of different kinds: flicks, tracking, Hold the angle.</div>{% endif %}
+  </section>
+
+  <section class="ai-chart">
+    <h3>Flicks by direction</h3>
+    {% if ch.wheel %}
+    <svg class="ai-svg" viewBox="0 0 220 220" role="img" aria-label="Flicks by direction">
+      <circle class="grid" cx="110" cy="110" r="92"/><circle class="grid" cx="110" cy="110" r="22"/>
+      {% for w in ch.wheel %}<path class="w-{{ w.cls }}" d="{{ w.d }}"><title>{{ w.label }}: {{ w.ms ~ ' ms' if w.ms else 'too few' }} ({{ w.n }})</title></path>{% endfor %}
+      <text x="214" y="110" text-anchor="start" dominant-baseline="middle">R</text>
+      <text x="6" y="110" text-anchor="end" dominant-baseline="middle">L</text>
+      <text x="110" y="10" text-anchor="middle">Up</text><text x="110" y="216" text-anchor="middle">Down</text>
+    </svg>
+    <div class="ai-key"><span><i style="background:var(--win)"></i>Clean</span><span><i style="background:var(--red)"></i>Flies past</span>
+      <span><i style="background:var(--amber)"></i>Stops short</span></div>
+    <p>Longer is faster in that direction. Left {{ n.flick.left.ms|round|int if n.flick.left.ms else '–' }} ms,
+      right {{ n.flick.right.ms|round|int if n.flick.right.ms else '–' }} ms.</p>
+    {% else %}<div class="ai-empty">Needs more flicks: Grid, Close flicks or Far flicks.</div>{% endif %}
+  </section>
+
+  <section class="ai-chart">
+    <h3>Where missed shots land</h3>
+    {% if ch.misses %}
+    <svg class="ai-svg" viewBox="0 0 198 198" role="img" aria-label="Where missed shots land">
+      <rect class="grid" x="8" y="8" width="182" height="182"/>
+      {% for c in ch.misses %}<rect class="cell" x="{{ c.x }}" y="{{ c.y }}" width="14" height="14" rx="2" fill-opacity="{{ c.o }}"><title>{{ c.n }}</title></rect>{% endfor %}
+      <line class="axis" x1="99" y1="8" x2="99" y2="190"/><line class="axis" x1="8" y1="99" x2="190" y2="99"/>
+      <circle class="tgt" cx="99" cy="99" r="7"/>
+    </svg>
+    <p>The target in the middle, each square half a degree. {{ n.miss.n }} misses near a target:
+      {{ n.miss.h }} above, {{ n.miss.lo }} below, {{ n.miss.l }} left, {{ n.miss.r }} right.</p>
+    {% else %}<div class="ai-empty">No misses close to a target yet.</div>{% endif %}
+  </section>
+
+  <section class="ai-chart">
+    <h3>Tracking</h3>
+    {% set t = n.track %}
+    {% if t.on.L is not none and t.on.R is not none %}
+    <svg class="ai-svg" viewBox="0 0 260 150" role="img" aria-label="Tracking">
+      {% for k, lab in [('L', 'Moving left'), ('R', 'Moving right')] %}{% set y = 14 + loop.index0 * 34 %}
+      <text x="0" y="{{ y + 9 }}" dominant-baseline="middle">{{ lab }}</text>
+      <rect class="track" x="84" y="{{ y }}" width="150" height="18" rx="3"/>
+      <rect class="bar {{ 'weak' if t.on[k] < t.on['R' if k == 'L' else 'L'] - 0.08 }}" x="84" y="{{ y }}" width="{{ (150 * t.on[k])|round(1) }}" height="18" rx="3"/>
+      <text class="num" x="240" y="{{ y + 9 }}" dominant-baseline="middle">{{ (t.on[k] * 100)|round|int }}%</text>{% endfor %}
+      {% if t.lead is not none %}{% set lx = 159 + ([-3, [3, t.lead]|min]|max) * 25 %}
+      <text x="0" y="104" dominant-baseline="middle">Behind / ahead</text>
+      <line class="axis" x1="84" y1="104" x2="234" y2="104"/><line class="axis" x1="159" y1="96" x2="159" y2="112"/>
+      <circle class="dot" cx="{{ lx|round(1) }}" cy="104" r="6"/>
+      <text x="84" y="126" text-anchor="start">behind</text><text x="234" y="126" text-anchor="end">ahead</text>
+      <text class="num" x="159" y="126" text-anchor="middle">{{ '%+.1f'|format(t.lead) }}°</text>{% endif %}
+    </svg>
+    <p>Time on the target while it moves; red is the weaker side.{% if t.re %} Back on it {{ t.re|round|int }} ms after a direction change.{% endif %}</p>
+    {% else %}<div class="ai-empty">Play a tracking scenario: Strafe tracking, Close, Far or Reactive tracking.</div>{% endif %}
+  </section>
+
+  <section class="ai-chart">
+    <h3>Peeks</h3>
+    {% set pk = n.peek %}
+    {% if pk.kills >= 3 %}{% set top = [pk.L.ms or 0, pk.R.ms or 0, 1]|max %}
+    <svg class="ai-svg" viewBox="0 0 260 160" role="img" aria-label="Peeks">
+      {% for k, lab in [('L', 'From the left'), ('R', 'From the right')] %}{% set y = 14 + loop.index0 * 34 %}
+      <text x="0" y="{{ y + 9 }}" dominant-baseline="middle">{{ lab }}</text>
+      <rect class="track" x="84" y="{{ y }}" width="130" height="18" rx="3"/>
+      {% if pk[k].ms %}<rect class="bar {{ 'weak' if pk[k].ms == top and pk.L.ms and pk.R.ms and (pk.L.ms - pk.R.ms)|abs > 0.12 * top }}" x="84" y="{{ y }}" width="{{ (130 * pk[k].ms / top)|round(1) }}" height="18" rx="3"/>
+      <text class="num" x="220" y="{{ y + 9 }}" dominant-baseline="middle">{{ pk[k].ms|round|int }} ms</text>{% endif %}{% endfor %}
+      {% if pk.place_dy is not none %}{% set dy = [-4, [4, pk.place_dy]|min]|max %}{% set dx = [-4, [4, pk.place_dx or 0]|min]|max %}
+      <text x="0" y="118" dominant-baseline="middle">Crosshair waited</text>
+      <circle class="head" cx="170" cy="100" r="10"/><path class="head" d="M150,148 Q150,116 170,114 Q190,116 190,148"/>
+      <line class="axis" x1="110" y1="100" x2="230" y2="100" stroke-dasharray="3 3"/>
+      <circle class="dot" cx="{{ (170 + dx * 6)|round(1) }}" cy="{{ (100 - dy * 10)|round(1) }}" r="5"/>
+      {% endif %}
+    </svg>
+    <p>Lower is faster; red is the slower side.{% if pk.place_dy is not none %} The dot is where your crosshair was, on average, when the enemy showed up
+      ({{ '%+.1f'|format(pk.place_dy) }}° from the head).{% endif %}{% if pk.body_share is not none %} Body shots: {{ (pk.body_share * 100)|round|int }}%.{% endif %}</p>
+    {% else %}<div class="ai-empty">Play Hold the angle or Peek reaction.</div>{% endif %}
+  </section>
+
+  <section class="ai-chart">
+    <h3>Flick size</h3>
+    {% set sz = n.flick.sizes %}
+    {% if sz|selectattr('ms')|list|length >= 2 %}{% set top = [sz[0].ms or 0, sz[1].ms or 0, sz[2].ms or 0]|max %}
+    <svg class="ai-svg" viewBox="0 0 260 110" role="img" aria-label="Flick size">
+      {% for s in sz %}{% set y = 8 + loop.index0 * 32 %}
+      <text x="0" y="{{ y + 9 }}" dominant-baseline="middle">{{ ['Under 10°', '10–30°', 'Over 30°'][loop.index0] }}</text>
+      <rect class="track" x="84" y="{{ y }}" width="130" height="18" rx="3"/>
+      {% if s.ms %}<rect class="bar" x="84" y="{{ y }}" width="{{ (130 * s.ms / top)|round(1) }}" height="18" rx="3"/>
+      <text class="num" x="220" y="{{ y + 9 }}" dominant-baseline="middle">{{ s.ms|round|int }} ms</text>{% endif %}{% endfor %}
+    </svg>
+    <p>Time to hit, by how far the flick was. Small ones come from the fingers, big ones from the arm.</p>
+    {% else %}<div class="ai-empty">Needs more flicks.</div>{% endif %}
+  </section>
+</div>
+{% endif %}
+
+{% if trends %}
+<h2>Scores over time</h2>
+<div class="ai-trends">
+  {% for s in trends %}
+  <div class="ai-trend"><b>{{ s.name }}</b>{{ spark(s.spark) }}
+    <span>best {{ s.best|int }} · last {{ s.last|int }} · {{ s.runs }} runs</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+<p class="small muted" style="max-width:80ch">General aim-training advice from your numbers. If something hurts (wrist, forearm),
+  take a break and change your setup; that comes before any score.</p>
+
+{% if can_save %}
+<script>
+(() => {
+  const f = document.getElementById('ai-setup'), out = document.getElementById('ai-saved');
+  f.addEventListener('change', async () => {
+    const body = {hand: f.hand.value, grip: f.grip.value};
+    try {
+      const r = await fetch(f.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+      if (!r.ok) throw new Error();
+      out.textContent = (window.vcT ? window.vcT('Saved: updating the tips…') : 'Saved: updating the tips…');
+      location.reload();
+    } catch (e) { out.textContent = window.vcT ? window.vcT('Couldn\'t save.') : 'Couldn\'t save.'; }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

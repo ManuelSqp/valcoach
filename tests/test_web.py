@@ -2806,3 +2806,116 @@ def test_trainer_scenarios_hold_the_angle_and_the_long_sens_finder(app):
     assert tr.recommend([s])["long"] == 1 and tr.MODE_WEIGHT["full"] == 3
     bad = dict(body, tests=[dict(t, parts={"fc": -5, "zz": 1}) for t in body["tests"]])
     assert all("parts" not in t or "fc" not in t["parts"] for t in tr.clean_sens_session(bad)["tests"])
+
+
+def _detail(flick_ms=(380, 380), over=0.02, under=0.02, miss=(0, 0, 0, 0), track_on=(0.6, 0.6), lead=0.0,
+            peek=(0, 0), place=0.0, body=0):
+    """One run's detail the way the aim trainer sends it (trainer.js ixNew)."""
+    d = [[0, 0, 0, 0, 0] for _ in range(8)]
+    for k in range(8):
+        ms = flick_ms[0] if k in (3, 4, 5) else flick_ms[1]
+        d[k] = [4, 4 * ms, 4 * over, 4 * under, 4]
+    lft, rgt, hi, lo = miss
+    g = {}
+    if hi:
+        g["0,2"] = hi
+    if lo:
+        g["0,-2"] = lo
+    if lft:
+        g["-2,0"] = lft
+    if rgt:
+        g["2,0"] = rgt
+    pk = {"L": [peek[0] and 3, 3 * peek[0], 3], "R": [peek[1] and 3, 3 * peek[1], 3]}
+    return {"f": {"d": d, "s": [[10, 3000], [12, 4600], [10, 5000]],
+                  "m": {"n": sum(miss), "l": lft, "r": rgt, "h": hi, "lo": lo, "g": g}},
+            "t": {"L": [10, 10 * track_on[0]], "R": [10, 10 * track_on[1]], "lead": [lead * 8, 8], "re": [0, 0]},
+            "p": {**pk, "place": [place * 6, 0, 6], "body": body}}
+
+
+def test_aim_insights_from_the_trainers_runs(app):
+    import json as _json
+    from nexus.stats import aim_insights as ai
+    from nexus.stats import trainer as tr
+    c = setup_admin(app)
+    pid = add_profile(c)
+    H = {"Origin": "http://localhost"}
+    # nothing measured yet: the page says how to start
+    page = c.get(f"/profiles/{pid}/trainer/insights").data.decode()
+    assert "Nothing measured yet" in page and "Open the aim trainer" in page
+    assert f"/profiles/{pid}/trainer/insights" in c.get(f"/profiles/{pid}/trainer").data.decode()
+    # the detail of a run is checked and stored; a broken one is dropped (the run is still kept)
+    x = _detail(flick_ms=(520, 380), over=0.15, miss=(2, 2, 1, 14), track_on=(0.42, 0.62), lead=-1.0,
+                peek=(520, 400), place=-1.2, body=1)
+    assert tr.clean_detail(x) is not None
+    assert tr.clean_detail({"f": {"d": [[1, 2]]}}) is None
+    assert tr.clean_detail(_json.loads(_json.dumps(x).replace('"0,-2"', '"99,0"')))["f"]["m"]["g"] == {"0,2": 1, "-2,0": 2, "2,0": 2}
+    for i in range(6):
+        r = c.post(f"/profiles/{pid}/trainer/runs", json={"scenario": ["grid", "track", "holdangle"][i % 3], "score": 900 + i,
+                   "seconds": 45, "hits": 30, "shots": 40, "on_target": 0.5, "detail": x}, headers=H)
+        assert r.status_code == 200
+    r = c.post(f"/profiles/{pid}/trainer/runs", json={"scenario": "grid", "score": 800, "seconds": 45, "hits": 30, "shots": 40,
+                                                       "detail": {"f": "nope"}}, headers=H)
+    assert r.status_code == 200
+    sr = app.extensions["nexus"]["stats"]
+    data = _json.loads((sr.games(pid).path.parent / "trainer.json").read_text())
+    assert "x" in data["runs"][0] and "x" not in data["runs"][-1]
+    # grip and hand are kept, nonsense isn't
+    r = c.post(f"/profiles/{pid}/trainer/setup", json={"grip": "fingertip", "hand": "right"}, headers=H)
+    assert r.get_json()["setup"]["grip"] == "fingertip"
+    assert c.post(f"/profiles/{pid}/trainer/setup", json={"grip": "fist", "hand": "both"}, headers=H).status_code == 400
+    # what stands out: slower flicks to the left (right hand: toward the thumb), flying past, misses below, tracking
+    # to the left, trailing, peeks from the left, crosshair below the head
+    res = ai.build(data["runs"], {"grip": "fingertip", "hand": "right"})
+    ids = [f["id"] for f in res["findings"]]
+    for k in ("flick-side", "overshoot", "miss-vertical", "track-side", "track-behind", "peek-side", "placement-low"):
+        assert k in ids, k
+    side = next(f for f in res["findings"] if f["id"] == "flick-side")
+    assert side["data"]["slow"] == "left" and "thumb side" in side["tips"][0]
+    assert any("fingertip" in t for t in next(f for f in res["findings"] if f["id"] == "overshoot")["tips"])
+    assert next(f for f in res["findings"] if f["id"] == "miss-vertical")["data"]["dir"] == "below"
+    assert all(s in tr.SCENARIOS for f in res["findings"] for s in f["play"])
+    assert res["findings"] == sorted(res["findings"], key=lambda f: -f["weight"])
+    # left-handed: the same slow left side is the side away from the body
+    lefty = ai.build(data["runs"], {"hand": "left"})
+    assert "away from the body" in next(f for f in lefty["findings"] if f["id"] == "flick-side")["tips"][0]
+    # even and clean -> nothing to work on there, it's listed as good
+    clean = [dict(r, x=_detail()) for r in data["runs"][:6]]
+    ok = ai.build(clean, {})
+    assert not {"flick-side", "overshoot", "undershoot", "track-side"} & {f["id"] for f in ok["findings"]}
+    assert any("even left and right" in g for g in ok["good"])
+    # too few samples: no findings
+    few = ai.findings(ai.numbers(ai.aggregate(data["runs"][:1]), data["runs"][:1]), {})[0]
+    assert "flick-side" not in [f["id"] for f in few]
+    # old runs (over 30 days) don't count
+    old = [dict(r, d="2020-01-01") for r in data["runs"]]
+    assert ai.build(old, {})["detail_runs"] == 0
+    # skill profile, charts, focus plan
+    assert {a["name"] for a in res["profile"]} >= {"Flick speed", "Tracking", "Reaction"}
+    assert all(0 <= a["v"] <= 100 for a in res["profile"])
+    assert len(res["charts"]["wheel"]) == 8 and res["charts"]["misses"] and res["charts"]["radar"]["pts"]
+    assert {w["cls"] for w in res["charts"]["wheel"]} == {"over"}
+    focus = res["focus"]
+    assert focus and len(focus["items"]) <= 6 and len({i["id"] for i in focus["items"]}) == len(focus["items"]) // 2
+    # the page: findings, tips, play links, charts; the trainer page has the focus plan and opens ?play=
+    page = c.get(f"/profiles/{pid}/trainer/insights").data.decode()
+    assert "Flicks to the left are slower" in page and "Hand, grip and how to fix it" in page
+    assert f"/profiles/{pid}/trainer?play=" in page and "Start focus training" in page and "Skill profile" in page
+    assert 'value="fingertip" selected' in page
+    tp = c.get(f"/profiles/{pid}/trainer?plan=focus&play=track").data.decode()
+    assert 'data-plan="focus"' in tp and '"start": "focus"' in tp and '"play": "track"' in tp
+    assert '"play": ""' in c.get(f"/profiles/{pid}/trainer?play=nope").data.decode()
+    # the last round of the focus training ticks it off on the Aim page
+    r = c.post(f"/profiles/{pid}/trainer/runs", json={"scenario": "grid", "score": 300, "seconds": 30, "hits": 12, "shots": 14,
+                                                       "plan_done": "focus", "plan_score": 2000}, headers=H)
+    aim = _json.loads((sr.games(pid).path.parent / "aim.json").read_text())
+    assert aim["log"][-1]["routine"] == "t-focus" and aim["log"][-1]["name"] == "Nexus trainer focus"
+    # the coach knows the findings
+    from nexus.coach import askcoach as ac
+    data = _json.loads((sr.games(pid).path.parent / "trainer.json").read_text())
+    f = ac.facts("x", [], [], data)
+    assert f["aim_trainer_insights"][0]["finding"] and f["mouse_grip"] == {"grip": "fingertip", "hand": "right"}
+    # in German
+    c.post("/account", data={"look": "1", "style": "classic", "nav": "side", "lang": "de"})
+    de = c.get(f"/profiles/{pid}/trainer/insights").data.decode()
+    assert "Aim-Analyse" in de and "Flicks nach links sind langsamer" in de and "Hand, Griff und wie du es behebst" in de
+    assert c.get("/profiles/999/trainer/insights").status_code == 404

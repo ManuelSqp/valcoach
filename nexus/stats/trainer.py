@@ -128,6 +128,9 @@ def clean_run(d: dict) -> dict | None:
         if on is None:
             return None
         out["on"] = on
+    x = clean_detail(d.get("detail"))                   # what Aim insights needs (see trainer.js ixNew)
+    if x:
+        out["x"] = x
     return out
 
 
@@ -171,6 +174,10 @@ def clean_setup(d: dict) -> dict:
                 out[k] = int(v) if digits == 0 else v
     if "raw" in d and isinstance(d["raw"], bool):
         out["raw"] = d["raw"]
+    if d.get("grip") in GRIPS:
+        out["grip"] = d["grip"]
+    if d.get("hand") in ("right", "left"):
+        out["hand"] = d["hand"]
     x = clean_crosshair(d.get("crosshair"))
     if x:
         out["crosshair"] = x
@@ -181,6 +188,44 @@ def clean_setup(d: dict) -> dict:
 CROSSHAIR_NUM = {"ot": (1, 6), "oo": (0, 1), "dt": (1, 6), "da": (0, 1), "it": (0, 10), "il": (0, 20), "iv": (0, 20),
                  "io": (0, 20), "ia": (0, 1), "ot2": (0, 10), "ol": (0, 20), "ov": (0, 20), "oo2": (0, 40), "oa": (0, 1)}
 CROSSHAIR_BOOL = ("outline", "dot", "inner", "ig", "outer", "og")
+
+
+GRIPS = {"palm": "Palm", "claw": "Claw", "fingertip": "Fingertip", "unsure": "Not sure"}
+
+
+def clean_detail(x) -> dict | None:
+    """The per-run sums for Aim insights (trainer.js ixNew): only the expected shape, only sane numbers."""
+    if not isinstance(x, dict):
+        return None
+
+    def nums(v, n, hi):
+        if not isinstance(v, list) or len(v) != n:
+            return None
+        out = [_num(a, -hi, hi, 3) for a in v]
+        return None if any(a is None for a in out) else out
+    try:
+        f, tk, p = x.get("f") or {}, x.get("t") or {}, x.get("p") or {}
+        d = [nums(a, 5, 10 ** 6) for a in f.get("d", [])]
+        s = [nums(a, 2, 10 ** 6) for a in f.get("s", [])]
+        m = f.get("m") or {}
+        if len(d) != 8 or len(s) != 3 or any(a is None for a in d + s):
+            return None
+        grid = {}
+        for k, v in (m.get("g") or {}).items():
+            parts = str(k).split(",")
+            if len(parts) == 2 and all(q.lstrip("-").isdigit() and abs(int(q)) <= 6 for q in parts):
+                n = _num(v, 0, 10000, 0)
+                if n:
+                    grid[f"{int(parts[0])},{int(parts[1])}"] = int(n)
+        miss = {k: int(_num(m.get(k), 0, 10000, 0) or 0) for k in ("n", "l", "r", "h", "lo")}
+        track = {k: nums(tk.get(k, [0, 0]), 2, 10 ** 6) for k in ("L", "R", "lead", "re")}
+        peek = {k: nums(p.get(k, [0, 0, 0]), 3, 10 ** 6) for k in ("L", "R", "place")}
+        if any(v is None for v in list(track.values()) + list(peek.values())):
+            return None
+        peek["body"] = int(_num(p.get("body"), 0, 10000, 0) or 0)
+        return {"f": {"d": d, "s": s, "m": dict(miss, g=grid)}, "t": track, "p": peek}
+    except (AttributeError, TypeError):
+        return None
 
 
 def clean_crosshair(x) -> dict | None:
