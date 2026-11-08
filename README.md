@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.7.2** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.8.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -166,6 +166,12 @@ yours, then close around the best) in 5, 15 or 30 minutes (the longer ones test 
 and reactive tracking separately, show which sens each likes, and correct for tiring), measures how you hit (overshooting, stopping short, time, tracking), fits a
 curve and recommends a sens with a range that works about as well. Tests of the last 90 days are combined; a big
 change is split into weekly steps.
+*Practice › Aim insights* shows what the trainer's rounds say about how you aim (last 30 days): flicks per direction
+(left against right, up against down, small against big, flying past or stopping short), where missed shots land,
+tracking per direction (on target, behind or ahead, catching up after a direction change), reaction to peeks from each
+side and where the crosshair waited. What stands out comes with tips for your hand and grip (set on the page) and
+scenarios to play, next to charts (skill profile, a flick wheel, a miss map) and a *Focus training* that also appears
+on the trainer page. Only rounds played since 4.8 are measured this way.
 *Practice › Mouse & monitor* measures the real DPI of your mouse (move it a known distance along a ruler), its polling
 rate, your screen's refresh rate and worn buttons that double-click, and works out eDPI and cm per 360°. A browser
 can't fully measure 2000–8000 Hz mice, and the page says so.

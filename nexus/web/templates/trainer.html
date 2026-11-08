@@ -106,6 +106,7 @@
 {% block content %}
 {% call vc.pagehead('Aim trainer', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
                     ctx='Plays like Valorant: your sensitivity, Valorant\'s field of view, raw mouse input') %}
+  <a class="btn ghost" href="{{ url_for('aim_insights', pid=p.id) }}">Aim insights</a>
   <a class="btn ghost" href="{{ url_for('gear_check', pid=p.id) }}">Check mouse & monitor</a>
 {% endcall %}
 
@@ -120,11 +121,19 @@
 <div class="tr-plans">
   {% for k, pl in plans.items() %}
   <section class="tr-plan">
+    {% if k == 'focus' %}
+    <h2>Focus training</h2>
+    <div class="small muted">about {{ pl.minutes }} min · {{ pl['items']|length }} rounds · picked from your aim insights</div>
+    <ol>{% for it in pl['items'] %}<li>{{ it.name }} <span>{{ it.seconds }} s</span></li>{% endfor %}</ol>
+    <div class="small muted"><span>Why:</span> <span>{{ pl['items'][0].why }}</span> · <a href="{{ url_for('aim_insights', pid=p.id) }}">all insights</a></div>
+    <button type="button" class="btn" data-plan="focus">Start focus training</button>
+    {% else %}
     <h2>Today's {{ 'warm-up' if k == 'warmup' else 'training' }}</h2>
     <div class="small muted">about {{ pl.minutes }} min · {{ pl['items']|length }} rounds{% if k == 'training' %} · picked from your matches{% endif %}</div>
     <ol>{% for it in pl['items'] %}<li>{{ it.name }} <span>{{ it.seconds }} s</span></li>{% endfor %}</ol>
     {% if k == 'training' %}<div class="small muted"><span>Why:</span> <span>{{ pl['items'][0].why }}</span></div>{% endif %}
     <button type="button" class="btn {{ 'primary' if k == 'warmup' }}" data-plan="{{ k }}">Start {{ 'warm-up' if k == 'warmup' else 'training' }}</button>
+    {% endif %}
   </section>
   {% endfor %}
 </div>
@@ -262,7 +271,7 @@
 
 <script>
 window.NEXUS_TRAINER = {{ {
-  'scenarios': scenarios, 'plans': plans, 'start': start, 'can_save': can_save, 'scale': setup.scale or 1,
+  'scenarios': scenarios, 'plans': plans, 'start': start, 'play': play, 'can_save': can_save, 'scale': setup.scale or 1,
   'summary': summary,
   'sens_base': setup.sens or 0.4, 'dpi': setup.get('dpi'), 'crosshair': setup.get('crosshair'), 'sens_rec': rec.sens if rec and rec.edge else None,
   'urls': {'sens': url_for('trainer_sens', pid=p.id), 'run': url_for('trainer_run', pid=p.id), 'setup': url_for('trainer_setup', pid=p.id), 'aim': url_for('aim', pid=p.id)}

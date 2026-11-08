@@ -8,6 +8,7 @@ from __future__ import annotations
 import yaml
 
 from ..stats import aim as am
+from ..stats import aim_insights as ai
 from ..stats import kovaaks as kv
 from ..stats import trainer as tr
 from ..stats.aggregate import by_agent, by_map
@@ -56,6 +57,15 @@ def facts(name: str, rows: list[dict], kovaaks_runs: list[dict] | None = None, t
                                       "best": x["best"], "last": x["last"],
                                       "accuracy": None if x["acc"] is None else f"{x['acc']:.0%}"} for x in ts]
     setup = t.get("setup", {})
+    ins = ai.build(t.get("runs", []), setup)
+    if ins["findings"]:
+        f["aim_trainer_insights"] = [{"finding": x["title"], "detail": x["text"],
+                                      "scenarios": [tr.SCENARIOS[s]["name"] for s in x["play"] if s in tr.SCENARIOS]}
+                                     for x in ins["findings"][:5]]
+    if ins["good"]:
+        f["aim_trainer_strengths"] = ins["good"][:4]
+    if setup.get("grip") or setup.get("hand"):
+        f["mouse_grip"] = {k: setup[k] for k in ("grip", "hand") if setup.get(k)}
     if setup.get("sens") or setup.get("measured_dpi"):
         f["mouse"] = {k: v for k, v in {"valorant_sens": setup.get("sens"), "dpi_set": setup.get("dpi"),
                                         "dpi_measured": setup.get("measured_dpi"), "polling_hz": setup.get("polling_hz"),

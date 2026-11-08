@@ -378,11 +378,8 @@
         let ty = yaw + side * a * Math.sqrt(1 - Math.min(0.9, up * up)), tp = clamp(pitch + up * a, (o.pmin || -6) * D2R, (o.pmax || 10) * D2R);
         if (Math.abs(ty) > 70 * D2R) ty = yaw - side * a;                  // keep it in front, not behind you
         const d = rand(o.dmin, o.dmax), c = place(ty, tp, d, o.r);
-        const realP = Math.asin((c[1] - EYE) / d);
         st.targets = [{c, r: o.r, born: st.t}];
-        pathStart(st, ty, realP, o.r, d, true);
       },
-      update(st, dt) { pathUpdate(st, dt); },
       hit(st) { pathHit(st); this.spawn(st); },
     };
   }
@@ -553,7 +550,6 @@
       far: flicks({dmin: 18, dmax: 20, r: 0.12, amin: 2, amax: 5, vert: 0.6}),
       setup(st) { st.flickN = 0; st.targets = []; this.spawn(st); },
       spawn(st) { st.flickN++; (st.flickN % 2 ? this.near : this.far).spawn(st); },
-      update(st, dt) { pathUpdate(st, dt); },
       hit(st) { pathHit(st); this.spawn(st); },
     }},
     fc: {flick: true, h: SC.flick_close}, ff: {flick: true, h: SC.flick_far},
@@ -590,6 +586,82 @@
     hit(st, tg) { st.seg.h.hit(st, tg); },
   };
   for (const [id, sc] of Object.entries(SC)) if (!byId[id]) byId[id] = {id, name: id, kind: sc.kind, seconds: 45, about: ''};
+
+  // ------------------------------------------------------------------ what Aim insights needs from each run
+  // Compact sums, no raw samples (stats/trainer.py clean_detail checks the shape):
+  //   f.d[8]: flicks by direction (0 right, 2 up, 4 left, 6 down): [count, ms, overshoot, stop-short, measured]
+  //   f.s[3]: flicks by size (under 10°, 10–30°, over 30°): [count, ms]
+  //   f.m: misses near a target: count, left/right/high/low of it, g: where (0.5° cells, ±3°, "col,row": count)
+  //   t: tracking while the target moves left / right: [seconds, seconds on it]; lead: [sum, n] (° ahead of it,
+  //      negative = behind); re: [ms, n] to be back on it after it changes direction
+  //   p: enemies peeking from the left / right: [kills, ms, headshots]; place: [° above the head, ° to the side,
+  //      n] where the crosshair was when one showed up; body: body shots
+  const angOf = c => [Math.atan2(c[0], -c[2]), Math.atan2(c[1] - EYE, Math.hypot(c[0], c[2]))];
+  const DEG = 180 / Math.PI;
+  function ixNew() {
+    return {f: {d: Array.from({length: 8}, () => [0, 0, 0, 0, 0]), s: [[0, 0], [0, 0], [0, 0]], m: {n: 0, l: 0, r: 0, h: 0, lo: 0, g: {}}},
+            t: {L: [0, 0], R: [0, 0], lead: [0, 0], re: [0, 0]}, p: {L: [0, 0, 0], R: [0, 0, 0], place: [0, 0, 0], body: 0}};
+  }
+  function headOf(tg) { return tg.agent ? [tg.c[0], tg.c[1] + HEAD_Y, tg.c[2]] : tg.c; }
+  function ixFlick(st, tg, ms) {          // a hit on a single target: direction, size, time, how the path went
+    if (tg.agent || !st.ix) return;
+    const from = st.from || {y: 0, p: 0};
+    const [ty, tp] = angOf(tg.c), vy = ty - from.y, vp = tp - from.p, len = Math.hypot(vy, vp) * DEG;
+    if (len < 2) return;
+    const k = ((Math.round(Math.atan2(vp, vy) / (Math.PI / 4)) % 8) + 8) % 8, d = st.ix.f.d[k];
+    d[0]++; d[1] += ms;
+    const p = st.path;
+    if (p && st.pathFor === tg && p.len > 4 / DEG) {
+      const tol = p.tol / p.len;
+      d[2] += Math.max(0, p.max - 1 - tol); d[3] += p.stop === null ? 0 : Math.max(0, 1 - tol - p.stop); d[4]++;
+    }
+    const s = st.ix.f.s[len < 10 ? 0 : len < 30 ? 1 : 2];
+    s[0]++; s[1] += ms;
+  }
+  function ixMiss(st) {                   // a shot that missed: where, relative to the nearest target
+    if (!st.ix || !st.targets.length) return;
+    let best = null, bd = Infinity;
+    for (const tg of st.targets) {
+      const [ty, tp] = angOf(headOf(tg)), dx = (yaw - ty) * DEG, dy = (pitch - tp) * DEG, dd = Math.hypot(dx, dy);
+      if (dd < bd) { bd = dd; best = {dx, dy, r: Math.atan((tg.agent ? HEAD_R : tg.r) / Math.hypot(...headOf(tg).map((v, i) => v - [0, EYE, 0][i]))) * DEG}; }
+    }
+    if (!best || bd > 8) return;
+    const m = st.ix.f.m;
+    m.n++;
+    if (Math.abs(best.dx) > best.r) best.dx < 0 ? m.l++ : m.r++;
+    if (Math.abs(best.dy) > best.r) best.dy > 0 ? m.h++ : m.lo++;
+    const cx = Math.round(best.dx * 2), cy = Math.round(best.dy * 2);
+    if (Math.abs(cx) <= 6 && Math.abs(cy) <= 6) { const key = cx + ',' + cy; m.g[key] = (m.g[key] || 0) + 1; }
+  }
+  function ixTrack(st, dt, on) {          // tracking: direction, on target, ahead or behind, catching up after a turn
+    const tg = st.targets[0], m = st.mv;
+    if (!st.ix || !tg || !m) return;
+    const v = m.v, side = v < 0 ? 'L' : 'R';
+    if (Math.abs(v) > 0.8) {
+      st.ix.t[side][0] += dt; if (on) st.ix.t[side][1] += dt;
+      const err = (yaw - angOf(tg.c)[0]) * DEG * Math.sign(v);
+      if (Math.abs(err) < 6) { st.ix.t.lead[0] += err * dt; st.ix.t.lead[1] += dt; }
+    }
+    const sg = Math.sign(m.goal || 0);
+    if (st.trackSign && sg && sg !== st.trackSign) { st.turnAt = st.t; }
+    if (sg) st.trackSign = sg;
+    if (st.turnAt !== undefined && on) {
+      const ms = (st.t - st.turnAt) * 1000;
+      if (ms < 1500) { st.ix.t.re[0] += ms; st.ix.t.re[1]++; }
+      st.turnAt = undefined;
+    }
+  }
+  function ixPeek(st) {                   // an enemy just showed up: where was the crosshair?
+    if (!st.ix) return;
+    for (const tg of st.targets) {
+      if (tg.placed || tg.born === Infinity || (tg.phase && tg.phase === 'out' && !tg.agent)) continue;
+      if (!(tg.agent || st.id === 'peek')) continue;
+      tg.placed = true;
+      const [hy, hp] = angOf(headOf(tg));
+      st.ix.p.place[0] += (pitch - hp) * DEG; st.ix.p.place[1] += Math.abs(yaw - hy) * DEG; st.ix.p.place[2]++;
+      tg.from = tg.agent ? (tg.side < 0 ? 'L' : 'R') : (tg.x1 < tg.x0 ? 'L' : 'R');
+    }
+  }
 
   // ------------------------------------------------------------------ one run
   let st = null, yaw = 0, pitch = 0, raf = 0, last = 0, plan = null, raw = null, firing = false, audio = null;
@@ -635,7 +707,7 @@
     const sc = byId[id], seconds = plan ? plan.items[plan.i].seconds : finder ? finder.mode.secs : sc.seconds;
     firing = false;
     st = {id, kind: SC[id].kind || sc.kind, seconds, t: 0, phase: 'ready', targets: [], covers: null, hits: 0, shots: 0,
-          points: 0, times: [], lastHit: 0, on: 0, stalls: []};
+          points: 0, times: [], lastHit: 0, on: 0, stalls: [], ix: finder ? null : ixNew(), from: {y: 0, p: 0}};
     yaw = 0; pitch = 0;
     if (finder) st.segs = finder.mode.segs;
     SC[id].setup(st);
@@ -652,11 +724,15 @@
     const part = st.seg ? st.parts[st.seg.type] : null;
     st.shots++; if (part) part.shots++;
     const h = aimedHit();
-    if (!h) return;
+    if (!h) { ixMiss(st); return; }
     const {tg, head} = h;
-    if (SC[st.id].hit(st, tg, head) === false) { tick(520); return; }        // a body shot: counted, not a kill
     const since = SC[st.id].since ? Math.max(tg.born, SC[st.id].since(st)) : tg.born;
-    const ms = Math.max(0, (st.t - since) * 1000);
+    const ms = Math.max(0, (st.t - (isFinite(since) ? since : st.t)) * 1000);
+    if (!head && tg.agent) { if (st.ix) st.ix.p.body++; }
+    else if (st.ix && tg.from) { const pk = st.ix.p[tg.from]; pk[0]++; pk[1] += ms; pk[2]++; }
+    else ixFlick(st, tg, ms);
+    if (SC[st.id].hit(st, tg, head) === false) { tick(520); return; }        // a body shot: counted, not a kill
+    st.from = {y: yaw, p: pitch};
     const pts = 100 + clamp(100 * (1 - (ms - 250) / 750), 0, 100);
     st.hits++; st.times.push(ms); st.lastHit = st.t; st.points += pts;
     if (part) { part.hits++; part.points += pts; }
@@ -682,6 +758,13 @@
       if (SC[st.id].update) SC[st.id].update(st, dt);
       if (st.kind === 'track') { onTarget = aimed(); if (firing && onTarget) st.on += dt; if (firing) st.fire = (st.fire || 0) + dt; }
       else if (st.tracking) onTarget = aimed();
+      if (st.kind === 'track' || st.tracking) ixTrack(st, dt, !!onTarget);
+      else if (st.targets.length === 1 && !st.targets[0].agent) {      // a single target: follow the flick to it
+        const tg = st.targets[0];
+        if (st.pathFor !== tg) { const [ty, tp] = angOf(tg.c); pathStart(st, ty, tp, tg.r, Math.hypot(tg.c[0], tg.c[1] - EYE, tg.c[2]), true); st.pathFor = tg; }
+        else pathUpdate(st, dt);
+      }
+      ixPeek(st);
       if (st.t >= st.seconds) finish();
       updateHud();
     }
@@ -823,6 +906,12 @@
   }
   function initAudio() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch (e) {} }
 
+  function ixRound(x) {                   // smaller numbers to send
+    const r = v => Math.round(v * 1000) / 1000;
+    return {f: {d: x.f.d.map(a => a.map(r)), s: x.f.s.map(a => a.map(r)), m: x.f.m},
+            t: {L: x.t.L.map(r), R: x.t.R.map(r), lead: x.t.lead.map(r), re: x.t.re.map(r)},
+            p: {L: x.p.L.map(r), R: x.p.R.map(r), place: x.p.place.map(r), body: x.p.body}};
+  }
   function stallNote(stalls) {
     if (!stalls || !stalls.length) return '';
     return `<p class="tr-stall">The browser stood still ${stalls.length}× (up to ${Math.max(...stalls)} ms) during this, not the trainer: usually
@@ -840,6 +929,7 @@
     if (st.kind === 'track') body.on_target = Math.round(1000 * st.on / st.seconds) / 1000;
     else Object.assign(body, {hits: st.hits, shots: st.shots, ms: avg || 0});
     if (SC[st.id].heads) Object.assign(body, {body: st.body || 0, escaped: st.escaped || 0});
+    if (st.ix) body.detail = ixRound(st.ix);
     if (plan) { plan.total += s; if (plan.i === plan.items.length - 1) Object.assign(body, {plan_done: plan.kind, plan_score: plan.total}); }
     const cells = SC[st.id].heads
       ? `<div><dt>Headshots</dt><dd>${st.hits}/${st.shots}</dd></div><div><dt>Body shots · got away</dt><dd>${st.body || 0} · ${st.escaped || 0}</dd></div><div><dt>Reaction</dt><dd>${avg !== null ? avg + ' ms' : '–'}</dd></div>`
@@ -1027,6 +1117,11 @@
     const b = document.querySelector(`[data-plan="${C.start}"]`);
     if (b) b.scrollIntoView({block: 'center'});
   }
+  if (C.play && C.scenarios.some(s => s.id === C.play)) {                 // from Aim insights: "Play …"
+    try { const u = new URL(location.href); u.searchParams.delete('play'); history.replaceState(null, '', u); } catch (e) { /* only the address bar */ }
+    open(C.play);
+  }
+
   // the sens finder's chart: hover (or tap) a dot to see which sens that round was
   const tip = $('tr-tip');
   if (tip) {

@@ -10,6 +10,7 @@ from pathlib import Path
 from flask import abort, g, jsonify, render_template, request
 
 from ..stats import aim as am
+from ..stats import aim_insights as ai
 from ..stats import trainer as tr
 from .aim import MAX_LOG, _lock, _read, _write
 
@@ -55,9 +56,13 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         return any(m["pid"] == p.id and m.get("user_id") == g.user.id
                    for t in store.teams_for_user(g.user.id) for m in t.member_list)
 
-    def plans(pid: int, runs: list[dict]) -> dict:
+    def plans(pid: int, runs: list[dict], setup: dict) -> dict:
         need = am.needs(filter_rows(sr.games(pid).rows(), "everything"))
-        return {k: tr.plan(k, need, runs) for k in tr.PLANS}
+        out = {k: tr.plan(k, need, runs) for k in tr.PLANS}
+        focus = ai.focus_plan(ai.build(runs, setup)["findings"])
+        if focus:
+            out["focus"] = focus
+        return out
 
     @app.get("/profiles/<int:pid>/trainer")
     def trainer(pid: int):
@@ -66,13 +71,27 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         runs = d.get("runs", [])
         setup = d.get("setup", {})
         start = request.args.get("plan")
+        play = request.args.get("play")
         rec = tr.recommend(d.get("sensfind", []))
+        pl = plans(pid, runs, setup)
         return render_template("trainer.html", p=p, active_pid=pid, can_save=can_save(p, can_edit),
                                groups=tr.GROUPS, part_names=tr.PARTS, rec=rec, step=tr.sens_step(setup.get("sens"), rec["sens"]) if rec else None,
                                chart=sens_chart(rec) if rec else None,
-                               scenarios=tr.scenario_list(), summary=tr.summary(runs), plans=plans(pid, runs),
-                               start=start if start in tr.PLANS else "", setup=setup, numbers=tr.numbers(setup),
+                               scenarios=tr.scenario_list(), summary=tr.summary(runs), plans=pl,
+                               start=start if start in pl else "", play=play if play in tr.SCENARIOS else "", setup=setup, numbers=tr.numbers(setup),
                                n_runs=len(runs), today=sum(1 for r in runs if r.get("d") == date.today().isoformat()))
+
+    @app.get("/profiles/<int:pid>/trainer/insights")
+    def aim_insights(pid: int):
+        p, can_edit = view_profile(pid)
+        d = _read(path(pid), {})
+        runs = d.get("runs", [])
+        setup = d.get("setup", {})
+        res = ai.build(runs, setup)
+        names = {k: v["name"] for k, v in tr.SCENARIOS.items()}
+        trends = [s for s in tr.summary(runs) if s["runs"] >= 2]
+        return render_template("aim_insights.html", p=p, active_pid=pid, can_save=can_save(p, can_edit), setup=setup,
+                               ins=res, names=names, trends=trends, grips=tr.GRIPS, days=ai.DAYS, n_runs=len(runs))
 
     @app.get("/profiles/<int:pid>/gear")
     def gear_check(pid: int):
@@ -95,14 +114,14 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
             res = tr.add_run(d, run)
             _write(path(pid), d)
             kind = b.get("plan_done")
-            if kind in tr.PLANS:                 # a whole warm-up or training: ticked off on the Aim page
+            if kind in tr.PLANS or kind == "focus":                 # a whole warm-up or training: ticked off on the Aim page
                 total = tr._num(b.get("plan_score"), 0, 10**6, 0)
                 rid = f"t-{kind}"
                 a = _read(aim_path(pid), {})
                 log = a.setdefault("log", [])
                 today = date.today().isoformat()
                 log[:] = [x for x in log if not (x.get("date") == today and x.get("routine") == rid)]
-                log.append({"date": today, "routine": rid, "name": f"Nexus trainer {tr.PLANS[kind].lower()}",
+                log.append({"date": today, "routine": rid, "name": f"Nexus trainer {tr.PLANS.get(kind, 'Focus').lower()}",
                             "score": total, "t": time.time()})
                 del log[:-MAX_LOG]
                 _write(aim_path(pid), a)
