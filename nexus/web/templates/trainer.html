@@ -78,7 +78,13 @@
 .tr-sure.high{background:var(--win-soft);color:var(--win)}.tr-sure.medium{background:var(--accent-soft);color:var(--amber)}
 .tr-chart{width:100%;height:auto;display:block}
 .tr-chart rect.tr-band{fill:var(--accent-soft);stroke:none}.tr-chart .curve{fill:none;stroke:var(--accent);stroke-width:2}
-.tr-chart .dot{fill:var(--text);opacity:.55}.tr-chart .rec{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:4 3}
+.tr-chart .dot{fill:var(--text);opacity:.55;transition:r .1s}
+.tr-chart{cursor:crosshair}
+.tr-chart .tr-dot.on .dot{opacity:1;fill:var(--accent);r:6px}
+.tr-chartbox{position:relative}
+.tr-tip{position:absolute;z-index:5;pointer-events:none;background:var(--panel3);border:1px solid var(--line2);border-radius:var(--radius-sm);padding:6px 10px;font-size:12.5px;line-height:1.45;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.35);transform:translate(-50%,calc(-100% - 12px))}
+.tr-tip b{font-family:var(--font-num);font-size:15px}
+.tr-tip.below{transform:translate(-50%,12px)}.tr-chart .rec{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:4 3}
 .tr-chart .axis{stroke:var(--line2)}.tr-chart text{fill:var(--muted);stroke:none;font-size:11px;font-family:var(--font-num)}
 .tr-steps{font-size:13px;margin:6px 0 0;padding-left:18px}
 .tr-sens-go{grid-column:1/-1}
@@ -150,13 +156,16 @@
     {% endif %}
   </div>
   {% if chart %}
-  <div>
+  <div class="tr-chartbox">
+  <div class="tr-tip" id="tr-tip" hidden></div>
   <svg class="tr-chart" viewBox="0 0 {{ chart.w }} {{ chart.h }}" role="img" aria-label="How well you aimed at each sensitivity">
     <rect class="tr-band" x="{{ chart.band[0] }}" y="10" width="{{ [chart.band[1] - chart.band[0], 2]|max }}" height="{{ chart.base - 10 }}"/>
     <line class="axis" x1="20" x2="{{ chart.w - 20 }}" y1="{{ chart.base }}" y2="{{ chart.base }}"/>
     {% for x, v in chart.ticks %}<text x="{{ x }}" y="{{ chart.base + 16 }}" text-anchor="middle">{{ '%.2f'|format(v) }}</text>{% endfor %}
     {% if chart.curve %}<polyline class="curve" points="{{ chart.curve }}"/>{% endif %}
-    {% for x, y in chart.dots %}<circle class="dot" cx="{{ x }}" cy="{{ y }}" r="3.5"/>{% endfor %}
+    {% for p in chart.dots %}<g class="tr-dot" data-sens="{{ p.sens }}" data-q="{{ p.q }}" data-d="{{ p.d }}" data-mode="{{ p.mode }}">
+      <circle class="dot" cx="{{ p.x }}" cy="{{ p.y }}" r="3.5"/>
+</g>{% endfor %}
     <line class="rec" x1="{{ chart.rec }}" x2="{{ chart.rec }}" y1="10" y2="{{ chart.base }}"/>
   </svg>
   <div class="small muted" style="margin-top:4px">Each dot is one round (higher is better), the line follows them, the band is what works about as well.</div>
@@ -255,7 +264,7 @@
 window.NEXUS_TRAINER = {{ {
   'scenarios': scenarios, 'plans': plans, 'start': start, 'can_save': can_save, 'scale': setup.scale or 1,
   'summary': summary,
-  'sens_base': setup.sens or 0.4, 'crosshair': setup.get('crosshair'), 'sens_rec': rec.sens if rec and rec.edge else None,
+  'sens_base': setup.sens or 0.4, 'dpi': setup.get('dpi'), 'crosshair': setup.get('crosshair'), 'sens_rec': rec.sens if rec and rec.edge else None,
   'urls': {'sens': url_for('trainer_sens', pid=p.id), 'run': url_for('trainer_run', pid=p.id), 'setup': url_for('trainer_setup', pid=p.id), 'aim': url_for('aim', pid=p.id)}
 }|tojson }};
 </script>

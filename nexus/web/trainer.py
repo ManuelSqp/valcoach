@@ -34,7 +34,8 @@ def sens_chart(rec: dict, w: int = 560, h: int = 200) -> dict:
     def Y(v):
         return round(h - pad - (v - y0) / (y1 - y0) * (h - 2 * pad), 1)
     ticks = sorted({round(x0, 2), round((x0 + x1) / 2, 2), round(x1, 2)})
-    return {"w": w, "h": h, "dots": [(X(p["sens"]), Y(p["y"])) for p in rec["points"]],
+    return {"w": w, "h": h, "dots": [{"x": X(p["sens"]), "y": Y(p["y"]), "sens": p["sens"], "q": p["y"], "d": p.get("d", ""),
+                                      "mode": tr.MODES.get(p.get("mode"), "")} for p in rec["points"]],
             "curve": " ".join(f"{X(a)},{Y(b)}" for a, b in rec["curve"]),
             "rec": X(rec["sens"]), "band": (X(rec["low"]), X(rec["high"])), "ticks": [(X(v), v) for v in ticks],
             "base": h - pad}

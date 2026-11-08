@@ -325,6 +325,7 @@ def recommend(sessions: list[dict], now: float | None = None) -> dict | None:
     if not recent:
         return None
     pts = [p for s in recent for p in _points(s)]
+    meta = [(s.get("d", ""), s.get("mode", "quick")) for s in recent for _ in s["tests"]]     # which test each point is from
     wts = [MODE_WEIGHT.get(s.get("mode"), 1) for s in recent for _ in s["tests"]]
     xs = [math.log(s) for s, _, _ in pts]
     lo, hi = min(xs), max(xs)
@@ -372,7 +373,8 @@ def recommend(sessions: list[dict], now: float | None = None) -> dict | None:
             "tiring": round(_tiring(recent[-1]), 4), "sure": sure, "curve": curve, "over_trend": trend,
             "parts": _part_best(recent),
             "per_session": [round(p, 3) for p in per],
-            "points": [{"sens": s, "y": round(y, 3), "over": t.get("over"), "under": t.get("under")} for s, y, t in pts]}
+            "points": [{"sens": s, "y": round(y, 3), "over": t.get("over"), "under": t.get("under"), "d": d, "mode": mode}
+                       for (s, y, t), (d, mode) in zip(pts, meta)]}
 
 
 def _part_best(sessions: list[dict]) -> dict:

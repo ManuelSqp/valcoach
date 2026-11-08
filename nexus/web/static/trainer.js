@@ -1027,5 +1027,41 @@
     const b = document.querySelector(`[data-plan="${C.start}"]`);
     if (b) b.scrollIntoView({block: 'center'});
   }
+  // the sens finder's chart: hover (or tap) a dot to see which sens that round was
+  const tip = $('tr-tip');
+  if (tip) {
+    const box = tip.parentElement, lang = document.documentElement.lang || 'en';
+    let on = null;
+    const show = g => {
+      if (on) on.classList.remove('on');
+      on = g; g.classList.add('on');
+      const s = +g.dataset.sens, q = +g.dataset.q, dpi = +C.dpi || +dpiIn.value || 0;
+      const day = g.dataset.d ? new Date(g.dataset.d + 'T12:00').toLocaleDateString(lang, {day: 'numeric', month: 'short'}) : '';
+      tip.innerHTML = `<b>${s.toFixed(3)}</b>${dpi ? ` · ${(360 / (YAW * s) / dpi * 2.54).toFixed(1)} cm per 360°` : ''}<br>`
+        + `${Math.round(q * 100)}% of that test's best${day || g.dataset.mode ? ` · ${esc(day)}${g.dataset.mode ? ` (${esc(g.dataset.mode)})` : ''}` : ''}`;
+      const c = g.querySelector('.dot').getBoundingClientRect(), b = box.getBoundingClientRect();
+      tip.style.left = clamp(c.left + c.width / 2 - b.left, 90, b.width - 90) + 'px';
+      const below = c.top - b.top < 64;                 // near the top: below the dot instead of above
+      tip.style.top = (below ? c.bottom - b.top : c.top - b.top) + 'px';
+      tip.classList.toggle('below', below);
+      tip.hidden = false;
+    };
+    const hide = () => { tip.hidden = true; if (on) on.classList.remove('on'); on = null; };
+    // the dot nearest the pointer (within 16 px): dots close together can each still be reached
+    const dots = [...box.querySelectorAll('.tr-dot')];
+    const nearest = e => {
+      let best = null, bd = 16;
+      for (const g of dots) {
+        const c = g.querySelector('.dot').getBoundingClientRect();
+        const d = Math.hypot(e.clientX - (c.left + c.width / 2), e.clientY - (c.top + c.height / 2));
+        if (d < bd) { bd = d; best = g; }
+      }
+      return best;
+    };
+    const svg = box.querySelector('svg');
+    svg.addEventListener('pointermove', e => { const g = nearest(e); if (g) { if (g !== on) show(g); } else hide(); });
+    svg.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hide(); });
+    svg.addEventListener('click', e => { const g = nearest(e); if (g) show(g); else hide(); });     // touch screens
+  }
   window.nexusTrainer = {open, startFinder, xParse, xCode, crosshair: () => xh, finder: () => finder, state: () => st, aim: (y, p) => { yaw = y; pitch = p; }, shoot, score};   // for tests
 })();

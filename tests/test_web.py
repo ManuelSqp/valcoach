@@ -2782,6 +2782,7 @@ def test_trainer_scenarios_hold_the_angle_and_the_long_sens_finder(app):
     assert 0.29 < r["sens"] < 0.35 and abs(r["parts"]["fc"] - 0.30) < 0.02 and abs(r["parts"]["tc"] - 0.36) < 0.02
     page = c.get(f"/profiles/{pid}/trainer").data.decode()
     assert "Which sens each part likes" in page and "Close tracking" in page
+    assert 'class="tr-dot" data-sens="' in page and 'data-mode="30 min"' in page and 'id="tr-tip"' in page   # hover a dot
     assert tr.recommend([s])["long"] == 1 and tr.MODE_WEIGHT["full"] == 3
     bad = dict(body, tests=[dict(t, parts={"fc": -5, "zz": 1}) for t in body["tests"]])
     assert all("parts" not in t or "fc" not in t["parts"] for t in tr.clean_sens_session(bad)["tests"])
