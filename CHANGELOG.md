@@ -4,6 +4,11 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.7.1
+- Sens finder chart: point at a dot to see that round: the sens, cm per 360° with your DPI, how good it was compared
+  with that test's best, and the day and length of the test (tap on a phone). The dot nearest the pointer is picked,
+  so dots close together can each be reached.
+
 ## 4.7.0
 - **No more pauses in the sens test**: a new flick target was placed from where you aimed, and after a few low ones it
   could land in the floor, hidden, so you searched until the round moved on. Targets now always stay between floor and
