@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.6.1** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.7.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -156,12 +156,14 @@ the coach finds more online.
 
 **Aim trainer:** *Practice › Aim trainer* is an aim trainer in the browser (and in the Nexus app) that plays like
 Valorant: your Valorant sensitivity (0.07° per mouse count × sens), Valorant's field of view and raw mouse input
-(Chrome, Edge, the Nexus app; other browsers get a warning). Five scenarios (grid flicks, head-line flicks, micro taps,
-peek reaction, strafe tracking), a short daily warm-up and a training picked from what your matches show. Scores are
+(Chrome, Edge, the Nexus app; other browsers get a warning). Eleven scenarios in three groups: flicks (grid, head-line,
+micro, close, far), duels (peek reaction, *Hold the angle* with an enemy model and headshots only) and tracking (strafe,
+close, far, reactive), a short daily warm-up and a training picked from what your matches show. Your Valorant crosshair
+(paste its code) is set inside the trainer. Scores are
 kept per player, finishing a warm-up or training ticks it off on the Aim page, and the coach knows the scores.
 The *Sens finder* plays a short mixed test at different sensitivities, blind and in random order (a wide spread around
-yours, then close around the best): *quick* in about 5 minutes, or *thorough* in about 11 (more sensitivities, longer
-rounds, the close ones twice, and corrected for tiring), measures how you hit (overshooting, stopping short, time, tracking), fits a
+yours, then close around the best) in 5, 15 or 30 minutes (the longer ones test close and far flicks and close, far
+and reactive tracking separately, show which sens each likes, and correct for tiring), measures how you hit (overshooting, stopping short, time, tracking), fits a
 curve and recommends a sens with a range that works about as well. Tests of the last 90 days are combined; a big
 change is split into weekly steps.
 *Practice › Mouse & monitor* measures the real DPI of your mouse (move it a known distance along a ruler), its polling

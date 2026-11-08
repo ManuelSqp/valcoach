@@ -2678,7 +2678,8 @@ def test_sens_finder_finds_the_best_sens(app):
         tests += [{"sens": s, "click": 2000 * q(s), "track": 0.6 * q(s)} for s in tr.round2(tests)]
         return {"base": base, "tests": tests}
 
-    assert 'data-finder="thorough"' in c.get(f"/profiles/{pid}/trainer").data.decode()
+    first = c.get(f"/profiles/{pid}/trainer").data.decode()
+    assert 'data-finder="quick"' in first and 'data-finder="standard"' in first and 'data-finder="full"' in first
     r = c.post(f"/profiles/{pid}/trainer/sens", json=session(0.32), headers=H)
     d = r.get_json()
     assert r.status_code == 200 and abs(d["sens"] - 0.32) < 0.01 and d["sessions"] == 1 and d["sure"] == "low"
@@ -2691,7 +2692,7 @@ def test_sens_finder_finds_the_best_sens(app):
     assert tr.recommend(days)["sure"] == "high"                                          # three days that agree
     c.post(f"/profiles/{pid}/trainer/setup", json={"sens": 0.4, "dpi": 800}, headers=H)
     page = c.get(f"/profiles/{pid}/trainer").data.decode()
-    assert "Thorough · about 11 min" in page and "tr-chart" in page and "Change it in steps" in page
+    assert "30 min · most exact" in page and "tr-chart" in page and "Change it in steps" in page
     # the best at the end of what was tested: said so, and the next test starts there
     rec = tr.recommend([tr.clean_sens_session(session(0.2))])
     assert rec["edge"] == "lower"
@@ -2711,9 +2712,9 @@ def test_sens_finder_finds_the_best_sens(app):
                 "tests": [{"sens": round(s, 4), "i": i, "click": 2000 * q(s) * (1 - tire * i), "track": 0.6 * q(s) * (1 - tire * i)}
                           for i, s in enumerate(order)]}
     s = tr.clean_sens_session(thorough(0.3))
-    assert s["mode"] == "thorough" and len(s["tests"]) == 21 and abs(tr._tiring(s) - 0.012) < 0.001
+    assert s["mode"] == "thorough" and len(s["tests"]) == 21 and abs(tr._tiring(s) - 0.012) < 0.002
     rec = tr.recommend([s])
-    assert abs(rec["sens"] - 0.3) < 0.01 and rec["sure"] == "medium" and rec["thorough"] == 1     # one thorough = two quick
+    assert abs(rec["sens"] - 0.3) < 0.01 and rec["sure"] == "medium" and rec["long"] == 1     # one thorough = two quick
     quick_only = tr.recommend([tr.clean_sens_session(session(0.32))])
     assert quick_only["sure"] == "low" and tr._tiring(tr.clean_sens_session(session(0.32))) == 0
     assert tr.sens_step(0.4, 0.3)["steps"][-1] == 0.3 and len(tr.sens_step(0.4, 0.3)["steps"]) == 4
@@ -2729,9 +2730,58 @@ def test_trainer_crosshair_is_kept_and_checked(app):
     r = c.post(f"/profiles/{pid}/trainer/setup", json={"crosshair": x}, headers=H)
     assert r.status_code == 200 and r.get_json()["setup"]["crosshair"]["color"] == "#00ff00"
     page = c.get(f"/profiles/{pid}/trainer").data.decode()
-    assert 'id="crosshair"' in page and '"dot": true' in page and "tr-xhair" in page
+    assert 'id="tr-xpanel"' in page and '"dot": true' in page and "tr-xhair" in page        # set inside the trainer
     assert 'id="tr-fs"' in page                                                  # the fullscreen switch
     assert tr.clean_crosshair(dict(x, color="red")) is None                       # not a colour
     assert tr.clean_crosshair(dict(x, il=500)) is None                            # out of range
     assert tr.clean_crosshair(dict(x, dot="yes"))["dot"] is False                 # switches are true or false
     assert c.post(f"/profiles/{pid}/trainer/setup", json={"crosshair": {"color": "#fff"}}, headers=H).status_code == 400
+
+
+def test_trainer_scenarios_hold_the_angle_and_the_long_sens_finder(app):
+    import math
+    from nexus.stats import trainer as tr
+    c = setup_admin(app)
+    pid = add_profile(c)
+    H = {"Origin": "http://localhost"}
+    page = c.get(f"/profiles/{pid}/trainer").data.decode()
+    for name in ("Close flicks", "Far flicks", "Close tracking", "Far tracking", "Reactive tracking", "Hold the angle"):
+        assert name in page
+    assert page.index(">Flicks<") < page.index(">Duels<") < page.index(">Tracking<")              # grouped
+    assert {s["group"] for s in tr.scenario_list()} == set(tr.GROUPS)
+    # hold the angle: headshots are hits, body shots and enemies that got away are kept
+    r = c.post(f"/profiles/{pid}/trainer/runs", json={"scenario": "holdangle", "score": 1500, "seconds": 60, "hits": 12,
+                                                       "shots": 16, "ms": 310, "body": 3, "escaped": 2}, headers=H)
+    assert r.status_code == 200
+    import json as _json
+    sr = app.extensions["nexus"]["stats"]
+    run = _json.loads((sr.games(pid).path.parent / "trainer.json").read_text())["runs"][-1]
+    assert run["s"] == "holdangle" and run["body"] == 3 and run["escaped"] == 2 and run["acc"] == 0.75
+    # the plan can pick the new ones (tracking need -> a tracking scenario first)
+    assert tr.plan("training", [{"focus": ["peeking"], "weight": 3, "why": "x"}], [])["items"][0]["id"] in ("holdangle", "peek", "track_react")
+
+    # 30 minutes: per part; tiring from start, middle and end at your own sens
+    def full(flick, track, base=0.4, tire=0.008):
+        def q(s, v):
+            return max(0.0, 1 - 2 * math.log(s / v) ** 2)
+        order = [base] + [base * f for f in (0.6, 0.7, 0.8, 0.9, 1, 1.12, 1.25, 1.4, 1.6)]
+        r2 = [0.33 * f for f in (0.86, 0.91, 0.96, 1, 1.04, 1.09, 1.14)] * 3
+        r2.insert(len(r2) // 2, base)
+        tests = []
+        for i, s in enumerate(order + r2 + [base]):
+            k = 1 - tire * i
+            p = {"fc": 1000 * q(s, flick) * k, "ff": 800 * q(s, flick) * k, "tc": 0.7 * q(s, track) * k,
+                 "tf": 0.6 * q(s, track) * k, "tr": 0.5 * q(s, track) * k}
+            tests.append({"sens": round(s, 4), "i": i, "click": p["fc"] + p["ff"], "track": (p["tc"] + p["tf"] + p["tr"]) / 3,
+                          "parts": {a: round(b, 3) for a, b in p.items()}})
+        return {"base": base, "mode": "full", "tests": tests}
+    body = full(0.30, 0.36)
+    s = tr.clean_sens_session(body)
+    assert s["mode"] == "full" and len(s["tests"]) == 33 and abs(tr._tiring(s) - 0.008) < 0.002
+    r = c.post(f"/profiles/{pid}/trainer/sens", json=body, headers=H).get_json()
+    assert 0.29 < r["sens"] < 0.35 and abs(r["parts"]["fc"] - 0.30) < 0.02 and abs(r["parts"]["tc"] - 0.36) < 0.02
+    page = c.get(f"/profiles/{pid}/trainer").data.decode()
+    assert "Which sens each part likes" in page and "Close tracking" in page
+    assert tr.recommend([s])["long"] == 1 and tr.MODE_WEIGHT["full"] == 3
+    bad = dict(body, tests=[dict(t, parts={"fc": -5, "zz": 1}) for t in body["tests"]])
+    assert all("parts" not in t or "fc" not in t["parts"] for t in tr.clean_sens_session(bad)["tests"])

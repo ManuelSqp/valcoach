@@ -28,10 +28,36 @@ SCENARIOS: dict[str, dict] = {
               "about": "Tiny targets far away, each close to the last one. Small, calm corrections."},
     "peek": {"name": "Peek reaction", "kind": "click", "seconds": 45, "focus": ["peeking", "reaction", "flicks"],
              "about": "Enemies peek out from behind cover for a moment. Hit them before they're gone."},
+    "flick_close": {"name": "Close flicks", "kind": "click", "seconds": 45, "group": "flicks",
+                    "focus": ["flicks", "reaction", "switching"],
+                    "about": "Big targets close to you, far to the side. Like an enemy right next to you: turn fast, hit, stop."},
+    "flick_far": {"name": "Far flicks", "kind": "click", "seconds": 45, "group": "flicks",
+                  "focus": ["micro", "crosshair", "flicks"],
+                  "about": "Small targets far away, a short flick each. Like a long angle: small, exact movements."},
+    "holdangle": {"name": "Hold the angle", "kind": "click", "seconds": 60, "group": "duels",
+                  "focus": ["peeking", "crosshair", "reaction"],
+                  "about": "Hold a doorway: an enemy swings wide, jiggles or runs through, from the left or the right. "
+                           "Only a headshot kills."},
     "track": {"name": "Strafe tracking", "kind": "track", "seconds": 45, "focus": ["tracking", "spray"],
               "about": "One target strafes left and right like a player. Hold the mouse button and stay on it."},
 }
 PLANS = {"warmup": "Warm-up", "training": "Training"}
+# the rest of the tracking scenarios (after "track" so the page keeps its order: flicks, duels, tracking)
+SCENARIOS.update({
+    "track_close": {"name": "Close tracking", "kind": "track", "seconds": 45, "group": "tracking",
+                    "focus": ["tracking", "spray"],
+                    "about": "An enemy 4–5 m away strafing fast: big, quick movements to stay on them."},
+    "track_far": {"name": "Far tracking", "kind": "track", "seconds": 45, "group": "tracking",
+                  "focus": ["tracking", "micro"],
+                  "about": "A small target far away, moving slowly: small, smooth corrections."},
+    "track_react": {"name": "Reactive tracking", "kind": "track", "seconds": 45, "group": "tracking",
+                    "focus": ["tracking", "peeking", "reaction"],
+                    "about": "Short left-right strafes and sudden stops, like a player dodging. React to each change."},
+})
+GROUPS = {"flicks": "Flicks", "duels": "Duels", "tracking": "Tracking"}
+for _k, _v in SCENARIOS.items():
+    _v.setdefault("group", {"grid": "flicks", "headline": "flicks", "micro": "flicks", "peek": "duels"}.get(_k, "tracking"))
+
 WARMUP = [("grid", 30), ("headline", 30), ("micro", 30)]       # short and the same every day
 
 
@@ -93,6 +119,10 @@ def clean_run(d: dict) -> dict | None:
         ms = _num(d.get("ms"), 0, 5000, 0)
         if ms is not None and hits:
             out["ms"] = int(ms)
+        for k in ("body", "escaped"):                    # hold the angle: body shots, enemies that got away
+            v = _num(d.get(k), 0, 5000, 0)
+            if v is not None and k in d:
+                out[k] = int(v)
     else:
         on = _num(d.get("on_target"), 0, 1, 3)
         if on is None:
@@ -117,7 +147,7 @@ def summary(runs: list[dict]) -> list[dict]:
     for sid, sc in SCENARIOS.items():
         x = by.get(sid)
         acc = [r["acc"] for r in runs if r["s"] == sid and "acc" in r][-10:]
-        out.append({"id": sid, "name": sc["name"], "focus": sc["focus"], "runs": x["runs"] if x else 0,
+        out.append({"id": sid, "name": sc["name"], "focus": sc["focus"], "group": sc["group"], "runs": x["runs"] if x else 0,
                     "best": x["best"] if x else None, "last": x["last"] if x else None,
                     "spark": x["spark"] if x else [], "trend": x["trend"] if x else None,
                     "steady": bool(x and x["mastered"]), "last_day": x["last_day"] if x else None,
@@ -191,7 +221,9 @@ def numbers(setup: dict) -> dict:
 # the start and the end, 7 wide + 6 close played twice, 25 s each, about 11 minutes). The thorough one measures how
 # much you tired between its first and last round at your own sens and corrects the rounds in between for it, and it
 # counts twice in the recommendation.
-MODE_WEIGHT = {"quick": 1, "thorough": 2}
+MODE_WEIGHT = {"quick": 1, "thorough": 2, "standard": 2, "full": 3}     # thorough: 4.6's 11-minute mode
+MODES = {"quick": "5 min", "standard": "15 min", "full": "30 min", "thorough": "11 min"}
+PARTS = {"fc": "Close flicks", "ff": "Far flicks", "tc": "Close tracking", "tf": "Far tracking", "tr": "Reactive tracking"}
 SENS_KEEP_DAYS = 90
 MAX_SESSIONS = 60
 
@@ -202,7 +234,7 @@ def clean_sens_session(d: dict) -> dict | None:
     base = _num(d.get("base"), 0.01, 20, 4)
     tests = d.get("tests")
     mode = d.get("mode") if d.get("mode") in MODE_WEIGHT else "quick"
-    if base is None or not isinstance(tests, list) or not 4 <= len(tests) <= 30:
+    if base is None or not isinstance(tests, list) or not 4 <= len(tests) <= 40:
         return None
     out = []
     for x in tests:
@@ -214,6 +246,16 @@ def clean_sens_session(d: dict) -> dict | None:
         if s is None or click is None or track is None:
             return None
         t = {"sens": s, "click": click, "track": track}
+        parts = x.get("parts")
+        if isinstance(parts, dict):                      # per part of the round (15 and 30 minutes)
+            pt = {}
+            for k, v in parts.items():
+                if k in PARTS:
+                    n = _num(v, 0, 1, 3) if k.startswith("t") else _num(v, 0, 100000, 1)
+                    if n is not None:
+                        pt[k] = n
+            if pt:
+                t["parts"] = pt
         order = x.get("i")
         if isinstance(order, int) and not isinstance(order, bool) and 0 <= order < 100:
             t["i"] = order
@@ -226,16 +268,20 @@ def clean_sens_session(d: dict) -> dict | None:
 
 
 def _tiring(session: dict) -> float:
-    """How much worse the last round at your own sens was than the first (thorough mode), as a share per round
-    (0.01 = 1% worse each round). 0 when there's nothing to compare or it got better."""
+    """How much worse you got per round, from the rounds at your own sens (start, end, and the middle in the
+    30-minute mode): a straight line through them, as a share per round (0.01 = 1% worse each round). 0 when
+    there's nothing to compare or it got better."""
     ts = [t for t in session["tests"] if "i" in t]
     own = sorted((t for t in ts if abs(t["sens"] - session["base"]) < 1e-3), key=lambda t: t["i"])
-    if session.get("mode") != "thorough" or len(own) < 2 or own[-1]["i"] == own[0]["i"]:
+    if session.get("mode") == "quick" or len(own) < 2 or own[-1]["i"] == own[0]["i"]:
         return 0.0
-    a, b = own[0], own[-1]
-    qa = (a["click"] / max(a["click"], b["click"], 1e-9) + a["track"] / max(a["track"], b["track"], 1e-9)) / 2
-    qb = (b["click"] / max(a["click"], b["click"], 1e-9) + b["track"] / max(a["track"], b["track"], 1e-9)) / 2
-    per = (qa - qb) / qa / (b["i"] - a["i"]) if qa else 0.0
+    cmax = max(t["click"] for t in own) or 1e-9
+    tmax = max(t["track"] for t in own) or 1e-9
+    q = [(t["i"], (t["click"] / cmax + t["track"] / tmax) / 2) for t in own]
+    mx = sum(i for i, _ in q) / len(q)
+    my = sum(v for _, v in q) / len(q)
+    slope = sum((i - mx) * (v - my) for i, v in q) / sum((i - mx) ** 2 for i, _ in q)
+    per = -slope / my if my else 0.0
     return min(max(per, 0.0), 0.02)                      # at most 2% a round: more is a bad round, not tiring
 
 
@@ -322,10 +368,33 @@ def recommend(sessions: list[dict], now: float | None = None) -> dict | None:
             cx = lo + (hi - lo) * i / 24
             curve.append((round(math.exp(cx), 4), round(fit[0] * cx * cx + fit[1] * cx + fit[2], 4)))
     return {"sens": round(sens, 3), "low": round(low, 3), "high": round(high, 3), "edge": edge,
-            "sessions": len(recent), "thorough": sum(1 for s in recent if s.get("mode") == "thorough"),
+            "sessions": len(recent), "long": sum(1 for s in recent if MODE_WEIGHT.get(s.get("mode"), 1) > 1),
             "tiring": round(_tiring(recent[-1]), 4), "sure": sure, "curve": curve, "over_trend": trend,
+            "parts": _part_best(recent),
             "per_session": [round(p, 3) for p in per],
             "points": [{"sens": s, "y": round(y, 3), "over": t.get("over"), "under": t.get("under")} for s, y, t in pts]}
+
+
+def _part_best(sessions: list[dict]) -> dict:
+    """Which sens each part of the test likes on its own (close and far flicks, close, far and reactive tracking),
+    from the sessions that have parts: each part scaled to its session's best, a curve through it, its top."""
+    out = {}
+    for k in PARTS:
+        pts = []
+        for s in sessions:
+            per = _tiring(s)                             # later rounds get back what tiring took, as in _points
+            vals = [(t["sens"], t["parts"][k] * (1 + per * t.get("i", 0))) for t in s["tests"] if k in t.get("parts", {})]
+            top = max((v for _, v in vals), default=0)
+            if top > 0:
+                w = MODE_WEIGHT.get(s.get("mode"), 1)
+                pts += [(math.log(a), v / top, w) for a, v in vals]
+        if len({round(x, 4) for x, _, _ in pts}) < 3:
+            continue
+        lo, hi = min(x for x, _, _ in pts), max(x for x, _, _ in pts)
+        fit = _fit(pts)
+        x = min(max(-fit[1] / (2 * fit[0]), lo), hi) if fit and fit[0] < 0 else max(pts, key=lambda p: p[1])[0]
+        out[k] = round(math.exp(x), 3)
+    return out
 
 
 def round2(round1: list[dict]) -> list[float]:

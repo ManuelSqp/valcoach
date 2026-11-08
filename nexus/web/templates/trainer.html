@@ -33,16 +33,21 @@
 /* the stage: full window while playing */
 #tr-stage{position:fixed;inset:0;z-index:1000;background:#0b0f15;display:none;cursor:default}
 #tr-stage.on{display:block}
-#tr-stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#tr-stage > canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .tr-hud{position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:26px;color:#e7ecf3;font:600 15px var(--font);text-shadow:0 1px 2px #000;pointer-events:none}
 .tr-hud span{color:#9aa6b8;font-weight:500;margin-right:6px}
 .tr-xhair{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .tr-cue{position:absolute;left:50%;top:30%;transform:translateX(-50%);font:700 22px var(--font);color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.7);pointer-events:none}
-.tr-xh{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px;margin-bottom:24px}
-.tr-xh summary{cursor:pointer;font-weight:650;font-size:16px}
-.tr-xh-body{display:grid;grid-template-columns:auto 1fr;gap:16px 24px;margin-top:14px;align-items:start}
-@media (max-width:720px){.tr-xh-body{grid-template-columns:1fr}}
-#tr-xprev{width:200px;height:200px;border-radius:var(--radius-sm);image-rendering:pixelated;display:block}
+.tr-xpanel{position:absolute;top:16px;right:16px;bottom:16px;width:min(560px,calc(100vw - 32px));overflow:auto;background:rgba(20,27,38,.96);border:1px solid #36445a;border-radius:14px;padding:18px 20px;color:#e7ecf3;color-scheme:dark}
+.tr-xpanel .tr-xhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.tr-xpanel h2{margin:0;font-size:20px}
+.tr-xpanel input:not([type=checkbox]):not([type=color]){background:#0f1620;color:#e7ecf3;border:1px solid #36445a}
+.tr-xpanel .muted,.tr-xpanel label{color:#9aa6b8}
+.tr-xpanel label.chk{color:#e7ecf3}
+.tr-stall{font-size:12.5px;color:#f4b740;margin:0 0 12px}
+.tr-parts{font-size:13px;color:#9aa6b8}.tr-parts b{color:#e7ecf3}
+.tr-xh-body{display:grid;grid-template-columns:1fr;gap:14px;margin-top:10px;align-items:start}
+#tr-xprev{width:160px;height:160px;border-radius:var(--radius-sm);image-rendering:pixelated;display:block}
 .tr-xgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 14px}
 .tr-xgrid label{display:grid;gap:3px;font-size:12.5px;color:var(--muted)}
 .tr-xgrid label.chk{display:flex;align-items:center;gap:8px;color:var(--text);font-size:13px}
@@ -76,8 +81,17 @@
 .tr-chart .dot{fill:var(--text);opacity:.55}.tr-chart .rec{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:4 3}
 .tr-chart .axis{stroke:var(--line2)}.tr-chart text{fill:var(--muted);stroke:none;font-size:11px;font-family:var(--font-num)}
 .tr-steps{font-size:13px;margin:6px 0 0;padding-left:18px}
-.tr-modes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-@media (max-width:560px){.tr-modes{grid-template-columns:1fr}}
+.tr-sens-go{grid-column:1/-1}
+.tr-modes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
+@media (max-width:760px){.tr-modes{grid-template-columns:1fr}}
+.tr-ptable{border-collapse:collapse;margin:12px 0 0;font-size:13px;width:100%;max-width:420px}
+.tr-ptable caption{text-align:left;padding-bottom:4px}
+.tr-ptable th{text-align:left;font-weight:500;color:var(--muted);padding:3px 10px 3px 0;white-space:nowrap}
+.tr-ptable td{padding:3px 8px 3px 0;font-family:var(--font-num)}
+.tr-pbar{display:block;position:relative;height:6px;border-radius:3px;background:var(--panel3);min-width:90px}
+.tr-pbar::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--muted)}
+.tr-pbar::after{content:"";position:absolute;left:clamp(0%,var(--p),100%);top:-2px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--accent)}
+.tr-group{margin:18px 0 8px;font-size:15px;color:var(--muted);font-weight:600}
 .tr-mode{text-align:left;font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line2);border-radius:var(--radius-sm);padding:10px 12px;cursor:pointer;display:grid;gap:4px;align-content:start}
 .tr-mode:hover{border-color:var(--accent)}.tr-mode:focus-visible{outline:none;box-shadow:var(--focus)}
 .tr-mode b{font-size:14px}.tr-mode span{font-size:12.5px;color:var(--muted)}
@@ -119,24 +133,21 @@
     <div class="small muted">Your sens by {{ rec.sessions }} test{{ 's' if rec.sessions != 1 }} (last 90 days)</div>
     <div class="tr-rec"><b>{{ '%.3f'|format(rec.sens) }}</b>
       <span>{{ '%.3f'|format(rec.low) }}–{{ '%.3f'|format(rec.high) }} works about as well{% if setup.dpi %} · {{ (360 / (0.07 * rec.sens) / setup.dpi * 2.54)|round(1) }} cm per 360°{% endif %}</span></div>
-    {% if rec.thorough %}<div class="small muted" style="margin-bottom:6px">{{ rec.thorough }} of them thorough (they count twice)</div>{% endif %}
+    {% if rec.long %}<div class="small muted" style="margin-bottom:6px">{{ rec.long }} of them 15 or 30 minutes (they count more)</div>{% endif %}
     <span class="tr-sure {{ rec.sure }}">{{ {'low': 'One test: a first hint', 'medium': 'Getting there: test again on another day', 'high': 'Steady over several days'}[rec.sure] }}</span>
     {% if rec.edge %}<p style="margin-top:10px">The best was at the {{ 'top' if rec.edge == 'higher' else 'bottom' }} of what was tested: the next test starts from {{ '%.3f'|format(rec.sens) }} and goes {{ rec.edge }}.</p>{% endif %}
-    {% if rec.tiring >= 0.004 %}<p style="margin-top:10px">In your last thorough test you got about {{ (rec.tiring * 100)|round(1) }}% worse each round towards the end: the result is corrected for that.</p>{% endif %}
+    {% if rec.parts %}<table class="tr-ptable"><caption class="small muted">Which sens each part likes</caption>
+      {% for k, v in rec.parts.items() %}<tr><th scope="row">{{ part_names[k] }}</th><td>{{ '%.3f'|format(v) }}</td>
+        <td><span class="tr-pbar" style="--p:{{ ((v / rec.sens - 0.7) / 0.6 * 100)|round|int }}%"></span></td></tr>{% endfor %}
+    </table>
+    <p class="small muted" style="margin:4px 0 0">Flicks often like a little less sens than tracking. The line in each bar is the overall result.</p>{% endif %}
+    {% if rec.tiring >= 0.004 %}<p style="margin-top:10px">In your last long test you got about {{ (rec.tiring * 100)|round(1) }}% worse each round towards the end: the result is corrected for that.</p>{% endif %}
     {% if rec.over_trend == 'up' %}<p style="margin-top:10px">The faster the sens, the more you flew past targets.</p>{% endif %}
     {% if step and step.change is defined and step.steps|length > 1 %}
     <p style="margin:10px 0 0">That's {{ '%+d'|format((step.change * 100)|round|int) }}% from your {{ setup.sens }}. Change it in steps, one a week:</p>
     <ol class="tr-steps">{% for s in step.steps %}<li>{{ '%.3f'|format(s) }}</li>{% endfor %}</ol>
     {% endif %}
     {% endif %}
-    <div class="tr-modes">
-      <button type="button" class="tr-mode" data-finder="quick"><b>Quick · about 5 min</b>
-        <span>1 warm-up, then 10 rounds of 20 s: five from 70% to 130% of your sens, five close around the best.</span></button>
-      <button type="button" class="tr-mode" data-finder="thorough"><b>Thorough · about 11 min</b>
-        <span>2 warm-ups, then 21 rounds of 25 s: seven from 65% to 150%, six close values played twice each, and your sens at the
-          start and the end to correct for tiring. Counts twice.</span></button>
-    </div>
-    <div class="small muted" style="margin-top:8px">Starts from {{ '%.3f'|format(rec.sens) if rec and rec.edge else (setup.sens or 0.4) }}{{ ' (where the last test ended)' if rec and rec.edge else ' (your Valorant sens above)' }}.</div>
   </div>
   {% if chart %}
   <div>
@@ -153,12 +164,57 @@
   {% else %}
   <div class="small muted" style="align-self:center">The chart of how you aim at each sensitivity appears here after the first test.</div>
   {% endif %}
+  <div class="tr-sens-go">
+    <div class="tr-modes">
+      <button type="button" class="tr-mode" data-finder="quick"><b>5 min · quick</b>
+        <span>1 warm-up, then 10 rounds of 20 s (flicks, then tracking): five from 70% to 130% of your sens, five close around the best.</span></button>
+      <button type="button" class="tr-mode" data-finder="standard"><b>15 min</b>
+        <span>2 warm-ups, then 21 rounds of 35 s: close and far flicks, close, far and reactive tracking. Seven from 65% to 150%,
+          six close values twice, your sens at the start and the end to correct for tiring. Shows which sens each part likes. Counts twice.</span></button>
+      <button type="button" class="tr-mode" data-finder="full"><b>30 min · most exact</b>
+        <span>The same parts in 45 s rounds: nine from 60% to 160%, seven close values three times, your sens at the start, middle and end,
+          a minute's break halfway. Counts three times.</span></button>
+    </div>
+    <div class="small muted" style="margin-top:8px">Starts from {{ '%.3f'|format(rec.sens) if rec and rec.edge else (setup.sens or 0.4) }}{{ ' (where the last test ended)' if rec and rec.edge else ' (your Valorant sens above)' }}.</div>
+  </div>
 </section>
 
-<details class="tr-xh" id="crosshair">
-  <summary>Crosshair</summary>
-  <div class="tr-xh-body" id="tr-xform">
-    <canvas id="tr-xprev" width="200" height="200" aria-label="Crosshair preview, 4× enlarged"></canvas>
+
+<h2>Scenarios</h2>
+<p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Click a scenario, then click once more to lock the mouse. Esc pauses,
+  F switches fullscreen. Your crosshair: <i>Crosshair</i> on the start screen of any scenario.
+  {% if not can_save %}You can play, but scores aren't saved for this player (only the player or their owner can).{% endif %}</p>
+{% for g, gname in groups.items() %}
+<h3 class="tr-group">{{ gname }}</h3>
+<div class="tr-grid">
+  {% for s in summary if s.group == g %}{% set sc = scenarios|selectattr('id', 'equalto', s.id)|first %}
+  <section class="tr-card">
+    <h3>{{ s.name }}</h3>
+    <p>{{ sc.about }}</p>
+    <div class="tr-stats">
+      <div>Best<b>{{ s.best|int if s.best is not none else '–' }}</b></div>
+      <div>Last<b>{{ s.last|int if s.last is not none else '–' }}</b></div>
+      <div>Runs<b>{{ s.runs }}</b></div>
+      {{ spark(s.spark) }}
+    </div>
+    <button type="button" class="btn sm" data-play="{{ s.id }}">Play · {{ sc.seconds }} s</button>
+  </section>
+  {% endfor %}
+</div>
+{% endfor %}
+
+<div id="tr-stage" aria-live="polite">
+  <canvas id="tr-canvas"></canvas>
+  <div class="tr-hud" id="tr-hud" hidden><div><span>Time</span><b id="tr-time">0</b></div><div><span>Score</span><b id="tr-score">0</b></div><div><span id="tr-l3">Accuracy</span><b id="tr-acc">–</b></div></div>
+  <canvas class="tr-xhair" id="tr-xhair" aria-hidden="true"></canvas>
+  <div class="tr-cue" id="tr-cue" hidden></div>
+  <div class="tr-count" id="tr-count" hidden></div>
+  <div class="tr-panel" id="tr-panel"></div>
+  <div class="tr-warn" id="tr-warn" hidden></div>
+  <div class="tr-xpanel" id="tr-xpanel" hidden>
+    <div class="tr-xhead"><h2>Crosshair</h2><button type="button" class="btn primary sm" data-a="xdone">Done</button></div>
+<div class="tr-xh-body" id="tr-xform">
+    <canvas id="tr-xprev" width="160" height="160" aria-label="Crosshair preview, 4× enlarged"></canvas>
     <div>
       <div class="tr-xcode">
         <input type="text" id="tr-xcode" placeholder="Paste your Valorant crosshair code (Settings › Crosshair › Import)" spellcheck="false" autocomplete="off">
@@ -191,35 +247,8 @@
       <p class="small muted" style="margin:6px 0 0">Sizes are screen pixels like in Valorant. The preview is 4× enlarged.</p>
     </div>
   </div>
-</details>
+  </div>
 
-<h2>Scenarios</h2>
-<p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Click a scenario, then click once more to lock the mouse. Esc pauses.
-  {% if not can_save %}You can play, but scores aren't saved for this player (only the player or their owner can).{% endif %}</p>
-<div class="tr-grid">
-  {% for s in summary %}{% set sc = scenarios|selectattr('id', 'equalto', s.id)|first %}
-  <section class="tr-card">
-    <h3>{{ s.name }}</h3>
-    <p>{{ sc.about }}</p>
-    <div class="tr-stats">
-      <div>Best<b>{{ s.best|int if s.best is not none else '–' }}</b></div>
-      <div>Last<b>{{ s.last|int if s.last is not none else '–' }}</b></div>
-      <div>Runs<b>{{ s.runs }}</b></div>
-      {{ spark(s.spark) }}
-    </div>
-    <button type="button" class="btn sm" data-play="{{ s.id }}">Play · {{ sc.seconds }} s</button>
-  </section>
-  {% endfor %}
-</div>
-
-<div id="tr-stage" aria-live="polite">
-  <canvas id="tr-canvas"></canvas>
-  <div class="tr-hud" id="tr-hud" hidden><div><span>Time</span><b id="tr-time">0</b></div><div><span>Score</span><b id="tr-score">0</b></div><div><span id="tr-l3">Accuracy</span><b id="tr-acc">–</b></div></div>
-  <canvas class="tr-xhair" id="tr-xhair" aria-hidden="true"></canvas>
-  <div class="tr-cue" id="tr-cue" hidden></div>
-  <div class="tr-count" id="tr-count" hidden></div>
-  <div class="tr-panel" id="tr-panel"></div>
-  <div class="tr-warn" id="tr-warn" hidden></div>
 </div>
 
 <script>
