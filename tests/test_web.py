@@ -1521,32 +1521,50 @@ def test_availability_and_subs(app):
     today = date.today().isoformat()
     page = c.get(f"/teams/{tid}/premier/availability").data.decode()
     assert "Who can play" in page and "0 ✓" in page and "P5" in page and "Nobody has answered yet" in page
-    # yes for four starters, no for P0, the sub is free
+    # without an in-game name or a link, Nexus doesn't know who you are: nothing to click
+    assert "doesn&#39;t know which player you are" in page.replace("doesn't", "doesn&#39;t") and 'class="cell' in page
+    assert ' disabled>' in page and '<tr class="av-me">' not in page
+    assert c.post(f"/api/teams/{tid}/availability", json={"day": today, "state": "yes"}).status_code == 403
+    # the owner's in-game name is P0's Riot ID: that's their row, at the top, and the only one they can change
+    owner = store.user_by_name("manuel")
+    store.update_user(owner.id, display_name=store.profile(pids[0]).riot_id.upper())
+    page = c.get(f"/teams/{tid}/premier/availability").data.decode()
+    tbl = page[page.index('id="av"'):]
+    assert '<tr class="av-me">' in tbl and tbl.index(">You<") < tbl.index(">P1<")                 # your row first
+    assert page.count('data-day="') - page.count(' disabled>') == page.count(f'data-pid="{pids[0]}" data-day=')     # only your cells
+    assert c.post(f"/api/teams/{tid}/availability", json={"pid": pids[1], "day": today, "state": "yes"}).status_code == 403
+    # yes for four starters (they set it themselves), no for P0 (the owner, through the page), the sub is free
     for p in pids[1:]:
-        r = c.post(f"/api/teams/{tid}/availability", json={"pid": p, "day": today, "state": "yes"})
-        assert r.status_code == 200, r.data
-    c.post(f"/api/teams/{tid}/availability", json={"pid": pids[0], "day": today, "state": "no", "note": "<b>away</b>"})
+        store.set_availability(tid, p, today, "yes", "", owner.id)
+    r = c.post(f"/api/teams/{tid}/availability", json={"pid": pids[0], "day": today, "state": "no", "note": "<b>away</b>"})
+    assert r.status_code == 200, r.data
     marks = store.availability(tid, [today])
     assert marks[(pids[0], today)] == {"state": "no", "note": "<b>away</b>"}
     page = c.get(f"/teams/{tid}/premier/availability").data.decode()
     assert "5 ✓" in page and "5 confirmed: you can play" in page and "P0</b> can&#39;t play" in page.replace("can't", "can&#39;t") and "&lt;b&gt;away" in page
     assert "<b>away</b>" not in page
-    # bad input: unknown player, bad day, not JSON
-    assert c.post(f"/api/teams/{tid}/availability", json={"pid": 999, "day": today, "state": "yes"}).status_code == 404
-    assert c.post(f"/api/teams/{tid}/availability", json={"pid": pids[1], "day": "soon", "state": "yes"}).status_code == 400
+    # bad input: someone else, bad day, not JSON
+    assert c.post(f"/api/teams/{tid}/availability", json={"pid": 999, "day": today, "state": "yes"}).status_code == 403
+    assert c.post(f"/api/teams/{tid}/availability", json={"day": "soon", "state": "yes"}).status_code == 400
     assert c.post(f"/api/teams/{tid}/availability", data={"pid": pids[1]}).status_code == 400
-    # empty state clears the mark
-    c.post(f"/api/teams/{tid}/availability", json={"pid": pids[1], "day": today, "state": ""})
-    assert (pids[1], today) not in store.availability(tid)
-    # a teammate with access can only change their own row (once linked)
+    # empty state clears your mark
+    c.post(f"/api/teams/{tid}/availability", json={"day": today, "state": ""})
+    assert (pids[0], today) not in store.availability(tid)
+    c.post(f"/api/teams/{tid}/availability", json={"day": today, "state": "no", "note": "<b>away</b>"})
+    # a teammate: recognised by the in-game name they signed up with, only their own row
     make_user(app, c, "mate")
     mid = store.user_by_name("mate").id
     store.add_team_access(tid, mid)
     m2 = login(app, "mate", "user-pass-123")
-    assert m2.post(f"/api/teams/{tid}/availability", json={"pid": pids[2], "day": today, "state": "no"}).status_code == 403
+    assert m2.post(f"/api/teams/{tid}/availability", json={"day": today, "state": "no"}).status_code == 403
+    store.update_user(mid, display_name=store.profile(pids[2]).riot_id)
+    assert m2.post(f"/api/teams/{tid}/availability", json={"day": today, "state": "maybe"}).status_code == 200
+    assert store.availability(tid, [today])[(pids[2], today)]["state"] == "maybe"
+    assert m2.post(f"/api/teams/{tid}/availability", json={"pid": pids[3], "day": today, "state": "no"}).status_code == 403
+    # a link to the player counts too (and comes first)
+    store.update_user(mid, display_name="")
     store.update_team(tid, members=[dict(m, user_id=mid) if m["pid"] == pids[2] else m for m in store.team(tid).member_list])
     assert m2.post(f"/api/teams/{tid}/availability", json={"pid": pids[2], "day": today, "state": "maybe"}).status_code == 200
-    assert m2.post(f"/api/teams/{tid}/availability", json={"pid": pids[3], "day": today, "state": "no"}).status_code == 403
     # brief shows who's playing
     assert "Who&#39;s playing" in c.get(f"/teams/{tid}/premier/brief?map=Bind").data.decode().replace("Who's", "Who&#39;s")
 
@@ -1736,7 +1754,9 @@ def test_strat_step_calls_and_availability_reminder(app, monkeypatch):
     info["brief"] = {"on": False, "days": list(range(7)), "time": "20:00", "before": 60}
     store.update_team(tid, sync=info)
     today = date.today().isoformat()
-    c.post(f"/api/teams/{tid}/availability", json={"pid": pids[0], "day": today, "state": "maybe", "note": "from 21:00"})
+    store.update_user(store.user_by_name("manuel").id, display_name=store.profile(pids[0]).riot_id)
+    r = c.post(f"/api/teams/{tid}/availability", json={"day": today, "state": "maybe", "note": "from 21:00"})
+    assert r.status_code == 200, r.data
     assert "from 21:00" in c.get(f"/teams/{tid}/premier/availability").data.decode()
     c.post(f"/teams/{tid}/premier/availability/discord-ids", data={f"did_{pids[1]}": "284019573925183488", f"did_{pids[2]}": "not-an-id"})
     ms = {m["pid"]: m for m in store.team(tid).member_list}

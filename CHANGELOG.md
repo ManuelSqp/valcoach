@@ -4,6 +4,12 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.7.2
+- **Availability: everyone sets only their own days**, the team owner too. And nobody has to pick who they are: Nexus
+  finds your player by the in-game name you entered when signing up (or under *Account*, `Name#TAG`), or by an
+  existing link to your player on the team page. Your row is at the top and marked *You*; the other rows can't be
+  clicked. Without an in-game name, the page says where to set it.
+
 ## 4.7.1
 - Sens finder chart: point at a dot to see that round: the sens, cm per 360° with your DPI, how good it was compared
   with that test's best, and the day and length of the test (tap on a phone). The dot nearest the pointer is picked,

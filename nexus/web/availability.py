@@ -1,7 +1,9 @@
 """Who can play on which match day (Premier tab › Availability), and who could sub in.
 
 Match days are the days set under "Brief before each match" on the Premier tab. Each player
-marks yes / maybe / no for the next two weeks (the team owner can set it for anyone). For every
+marks yes / maybe / no for the next two weeks, only for themselves (also the team owner): you are the
+team player linked to your account, or the one whose Riot ID is your in-game name (Account, or what you
+entered when signing up). For every
 day, the planned five come from the "main" draft for that day's map, else the suggested comp;
 if one of them can't play, the available players are ranked by how much they play that agent
 (and that role)."""
@@ -9,7 +11,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from flask import abort, flash, g, jsonify, redirect, render_template, request, url_for
+from flask import flash, g, jsonify, redirect, render_template, request, url_for
 
 from ..stats import roles
 
@@ -138,12 +140,27 @@ def reminder_text(sums: list[dict], ids: dict[int, str], team: str, url: str) ->
     return (f"**{team}**: who can play? No answer yet:\n" + "\n".join(lines) + f"\nMark your days: {url}", sorted(set(ping)))
 
 
+def find_me(members: list[dict], user_id: int, ingame: str) -> int | None:
+    """Which team player you are: the one linked to your account, else the one whose Riot ID (Name#TAG) is your
+    in-game name. None if neither."""
+    for m in members:
+        if m.get("user_id") == user_id:
+            return m["pid"]
+    want = (ingame or "").strip().lower()
+    if want:
+        for m in members:
+            if m.get("riot_id", "").lower() == want:
+                return m["pid"]
+    return None
+
+
 def register(app, store, get_team, h: dict):
     """h: brief_cfg(t), schedule_for(t), team_context(t), build(t). Returns summary_for(t, day) -> dict | None."""
 
     def members_of(t) -> tuple[list[dict], dict]:
         c = h["team_context"](t)
-        ms = [{"pid": m["pid"], "name": c["byid"][m["pid"]].name, "kind": m.get("kind", "sub"), "user_id": m.get("user_id"),
+        ms = [{"pid": m["pid"], "name": c["byid"][m["pid"]].name, "riot_id": c["byid"][m["pid"]].riot_id,
+               "kind": m.get("kind", "sub"), "user_id": m.get("user_id"),
                "discord_id": str(m.get("discord_id") or "")}
               for m in c["members"] if m.get("kind") in ("starter", "sub")]
         ms.sort(key=lambda m: (m["kind"] != "starter", m["name"].lower()))
@@ -201,10 +218,8 @@ def register(app, store, get_team, h: dict):
         days = match_days(h["brief_cfg"](t).get("days") or [], schedule(t))
         return summaries(t, days[:1])[0][0] if days else None
 
-    def can_edit(t, pid: int, members: list[dict]) -> bool:
-        if g.team_owner:
-            return True
-        return any(m["pid"] == pid and m.get("user_id") == g.user.id for m in members)
+    def me(members: list[dict]) -> int | None:
+        return find_me(members, g.user.id, g.user.display_name or "")
 
     @app.get("/teams/<int:tid>/premier/availability")
     def team_availability(tid: int):
@@ -212,10 +227,11 @@ def register(app, store, get_team, h: dict):
         cfg = h["brief_cfg"](t)
         days = match_days(cfg.get("days") or [], schedule(t))
         sums, members, marks = summaries(t, days)
-        editable = {m["pid"]: can_edit(t, m["pid"], members) for m in members}
+        my = me(members)
+        members = sorted(members, key=lambda m: m["pid"] != my)          # your row first
         notes = {f"{pid}|{day}": v["note"] for (pid, day), v in marks.items() if v.get("note")}
         return render_template("premier_availability.html", t=t, tab="premier", tab2="availability", premier_status=None,
-                               pi=t.premier_info, days=days, sums=sums, members=members, editable=editable, notes=notes,
+                               pi=t.premier_info, days=days, sums=sums, members=members, me=my, notes=notes,
                                days_set=bool(cfg.get("days")), weekday=WEEKDAY,
                                save_url=f"/api/teams/{tid}/availability", discord=t.discord_info)
 
@@ -267,15 +283,15 @@ def register(app, store, get_team, h: dict):
         if not isinstance(body, dict):
             return jsonify(error="expected JSON"), 400
         try:
-            pid = int(body.get("pid"))
             day = date.fromisoformat(str(body.get("day"))).isoformat()
         except (TypeError, ValueError):
-            return jsonify(error="bad player or day"), 400
+            return jsonify(error="bad day"), 400
         members, _ = members_of(t)
-        if not any(m["pid"] == pid for m in members):
-            abort(404)
-        if not can_edit(t, pid, members):
-            return jsonify(error="you can only set your own days (link yourself to your player first)"), 403
+        pid = me(members)                    # always your own row, whatever the page sends
+        if pid is None:
+            return jsonify(error="Nexus doesn't know which player you are: set your in-game name (Name#TAG) under Account"), 403
+        if body.get("pid") not in (None, pid) and str(body.get("pid")) != str(pid):
+            return jsonify(error="you can only set your own days"), 403
         state = body.get("state")
         note = str(body.get("note") or "").strip()[:80]
         store.set_availability(tid, pid, day, state if state in STATES else "", note, g.user.id)

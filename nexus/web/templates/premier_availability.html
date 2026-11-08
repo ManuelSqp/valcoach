@@ -11,6 +11,11 @@ table.av{border-collapse:separate;border-spacing:4px;min-width:100%}
 .av th.today{color:var(--red)}
 .av td.n{white-space:nowrap;font-weight:600;padding-right:10px;font-size:13.5px}
 .av td.n .k{font-size:10.5px;color:var(--muted);font-weight:500;margin-left:4px}
+.av tr.av-me td.n{color:var(--accent)}
+.av tr.av-me td{background:var(--accent-soft)}
+.av tr.av-me td:first-child{border-radius:8px 0 0 8px}.av tr.av-me td:last-child{border-radius:0 8px 8px 0}
+.you{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--accent);color:var(--bg);margin-left:6px;vertical-align:1px}
+.av .cell:disabled{opacity:.7}
 .cell{width:100%;min-width:52px;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-weight:800;font-size:15px;cursor:pointer;font-family:inherit}
 .cell:disabled{cursor:default;opacity:.85}
 .cell.yes{background:var(--win-soft);border-color:var(--win-soft);color:var(--win)}
@@ -37,13 +42,18 @@ table.av{border-collapse:separate;border-spacing:4px;min-width:100%}
   {% if not members %}<p class="muted">Add players under the team's ⚙ Settings first.</p>
   {% elif not days %}<p class="muted">No match days in the next two weeks.</p>
   {% else %}
-  <p class="small muted" style="margin:6px 0 8px">Click your own cells: ✓ yes → ? maybe → ✗ no → empty. Right-click (or long-press) to add a short note like "from 21:00".{% if not g.team_owner %} You can change your own row once you've linked yourself to your player on the team page.{% endif %}</p>
+  {% if me %}
+  <p class="small muted" style="margin:6px 0 8px">Click your cells (your row is at the top): ✓ yes → ? maybe → ✗ no → empty. Right-click (or long-press) to add a short note like "from 21:00". Everyone sets their own days.</p>
+  {% else %}
+  <div class="flash" style="margin:8px 0">Nexus doesn't know which player you are, so you can't mark days yet. Put your Riot ID as <b>in-game name</b> under
+    <a href="{{ url_for('account') }}">Account</a> (like <code translate="no">Name#TAG</code>, the same as your player here), or link yourself to your player on the team page.</div>
+  {% endif %}
   <div class="avwrap"><table class="av" id="av">
     <thead><tr><th></th>{% for d in days %}<th class="{{ 'today' if d.today }}">{{ d.label }}<span class="mp">{{ d.map or ('Playoffs' if d.playoffs else '–') }}</span></th>{% endfor %}</tr></thead>
-    <tbody>{% for m in members %}<tr><td class="n">{{ m.name }}<span class="k">{{ m.kind }}</span></td>
+    <tbody>{% for m in members %}<tr class="{{ 'av-me' if m.pid == me }}"><td class="n">{{ m.name }}{% if m.pid == me %}<span class="you">You</span>{% else %}<span class="k">{{ m.kind }}</span>{% endif %}</td>
       {% for s in sums %}{% set st = s.state[m.pid] %}{% set nt = notes.get(m.pid ~ '|' ~ s.day, '') %}
       <td><button type="button" class="cell {{ st or '' }} {{ 'has-note' if nt }}" data-pid="{{ m.pid }}" data-day="{{ s.day }}" data-state="{{ st or '' }}" data-note="{{ nt }}"
-        title="{{ m.name }} · {{ s.label }}{{ ': ' ~ nt if nt }}" aria-label="{{ m.name }} on {{ s.label }}: {{ st or 'no answer' }}" {{ '' if editable[m.pid] else 'disabled' }}>{{ {'yes': '✓', 'maybe': '?', 'no': '✗'}.get(st, '·') }}</button></td>{% endfor %}</tr>{% endfor %}</tbody>
+        title="{{ m.name }} · {{ s.label }}{{ ': ' ~ nt if nt }}" aria-label="{{ m.name }} on {{ s.label }}: {{ st or 'no answer' }}" {{ '' if m.pid == me else 'disabled' }}>{{ {'yes': '✓', 'maybe': '?', 'no': '✗'}.get(st, '·') }}</button></td>{% endfor %}</tr>{% endfor %}</tbody>
     <tfoot><tr><td class="n small muted">sure <span class="k">5 needed</span></td>{% for s in sums %}<td><div class="tot {{ s.level }}">{{ s.yes|length }} ✓{% if s.maybe %} +{{ s.maybe|length }}?{% endif %}</div></td>{% endfor %}</tr></tfoot>
   </table></div>
   <div class="row between" style="margin-top:8px;flex-wrap:wrap;gap:8px">
