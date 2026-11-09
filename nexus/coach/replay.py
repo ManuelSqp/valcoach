@@ -5,6 +5,7 @@ Coordinates are 0..1 on the map image (valorant-api.com displayIcon).
 Known positions come from the API at every kill, plant and defuse (all alive
 players, incl. where they looked), plus, with a VOD, your own path and your
 teammates' paths from the minimap, and enemies whenever they were spotted.
+With the game's replay file (4.9) all ten players' paths are measured.
 Everyone starts in their spawn. Between two known positions a player's movement
 is estimated as the shortest walkable route on the map image (see nav.py), at
 running speed: they leave spawn right away, and between two later positions
@@ -228,10 +229,12 @@ def build_replay(match: Match, rnd: Round, focus: str, mi: MapInfo | None, vm: V
         if focus in known and (focus not in deaths or t * 1000 <= deaths[focus]):
             known[focus].append((int(t * 1000), u, KNOWN))
 
-    # teammates measured on your minimap (VOD); identities checked against the kill snapshots
+    # teammates measured on your minimap (VOD); identities checked against the kill snapshots.
+    # With the game's replay file (4.9) everyone is measured: "players" holds the enemies' paths.
     others = others or {}
     measured = []
-    for puuid, pts in (others.get("allies") or {}).items():
+    tracked = {**(others.get("allies") or {}), **(others.get("players") or {})}
+    for puuid, pts in tracked.items():
         if puuid not in known:
             continue
         measured.append(pid(puuid))
@@ -269,4 +272,5 @@ def build_replay(match: Match, rnd: Round, focus: str, mi: MapInfo | None, vm: V
         }
     return {"events": events, "roster": roster, "tracks": tracks, "path": path, "end": end,
             "attack": rnd.side_of(team) == "attack", "view": vm.ok, "routes": nav is not None,
-            "measured": sorted(measured), "seen": seen}
+            "measured": sorted(measured), "seen": seen,
+            "source": "replay file" if others.get("players") else ("video" if measured else "")}

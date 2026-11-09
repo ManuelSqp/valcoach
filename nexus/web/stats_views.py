@@ -10,6 +10,7 @@ from ..maps import AgentRegistry
 from ..stats import roles
 from ..stats.aggregate import by_agent, by_map, by_role, filter_rows, local_meta, map_detail, summary
 from ..stats.comp import META_EXAMPLE, Pool, parse_meta, pick_helper, team_plan
+from ..stats.comprules import METHODS as COMP_METHODS, for_map, for_team
 from .models import picked
 from .statsjobs import StatsRunner, slug
 
@@ -395,8 +396,9 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         except Exception as e:
             meta, meta_error = {}, str(e)
         plan = None
+        rules = for_team(t, store.get("comp_rules_yaml"))
         if len(starters) == 5 and maps:
-            plan = team_plan(starters, subs, maps, local_meta(filter_rows(owner_rows(t.owner_id), t.queue)), meta)
+            plan = team_plan(starters, subs, maps, local_meta(filter_rows(owner_rows(t.owner_id), t.queue)), meta, rules)
         sel = request.args.get("map") or week_map_of(app, t)
         if plan and sel not in [m["map"] for m in plan]:
             sel = plan[0]["map"]
@@ -404,7 +406,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         if plan and sel:
             from ..stats.comp import top_comps
             alts = top_comps(starters, sel, local_meta(filter_rows(owner_rows(t.owner_id), t.queue)).get(sel),
-                             meta.get(sel.lower()))[1:]
+                             meta.get(sel.lower()), rules=for_map(rules, sel) if rules is not None else None)[1:]
         users = {u.id: u for u in store.users()}
         member_info = [{"p": byid[m["pid"]], "kind": m["kind"], "games": len(rows_by[m["pid"]]),
                         "full": sum(r.get("source") == "full" for r in rows_by[m["pid"]]),
@@ -414,7 +416,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             "team.html", t=t, premier_status=sr.status(f"premier:{tid}"), member_info=member_info, n_starters=len(starters), n_subs=len(subs),
             starters=[s.label for s in starters], plan=plan, maps=maps, sel=sel,
             detail=next((m for m in plan if m["map"] == sel), None) if plan else None,
-            meta_error=meta_error, queues=QUEUE_TABS, tab="comps", alts=alts,
+            meta_error=meta_error, queues=QUEUE_TABS, tab="comps", alts=alts, comp_method=t.comp_method,
             linked=any(m.get("user_id") == g.user.id for m in members))
 
     @app.route("/teams/<int:tid>/settings", methods=["GET", "POST"])
@@ -440,9 +442,11 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
                 flash(f"Map meta: {e}", "error")
                 return redirect(url_for("team_settings", tid=tid))
             queue = f.get("queue", "all")
+            method = f.get("comp_method", t.comp_method)
             store.update_team(tid, name=(f.get("name") or t.name).strip()[:60], members=members,
                               maps=[m for m in f.getlist("maps") if m][:12], meta=meta_text,
-                              queue=queue if queue in dict(QUEUE_TABS) else "all")
+                              queue=queue if queue in dict(QUEUE_TABS) else "all",
+                              comp_method=method if method in ("rules", "stats") else "rules")
             flash("Team saved.", "ok")
             return redirect(url_for("team", tid=tid))
         access = store.team_access(tid)
@@ -452,6 +456,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             access=access, others=others, discord=t.discord_info,
             games={pid: len(rs) for pid, rs in c["rows_by"].items()},
             map_choices=sorted(set(KNOWN_MAPS) | set(c["seen_maps"])), meta_example=META_EXAMPLE,
+            comp_methods=COMP_METHODS,
             queues=QUEUE_TABS, tab="settings")
 
     @app.route("/teams/<int:tid>/roles", methods=["GET", "POST"])
@@ -677,7 +682,7 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
     def build(t) -> dict:
         """Everything the team pages / jobs need: comps per map, roles, data, tips. Cached until the team or
         anyone's games change (a team page used to recompute all of it on every visit)."""
-        sig = (t.id, t.members, t.maps, t.meta, t.queue,
+        sig = (t.id, t.members, t.maps, t.meta, t.queue, t.comp_method, store.get("comp_rules_yaml"),
                tuple(sorted((p.id, sr.games(p.id).signature()) for p in store.profiles(t.owner_id))))
         hit = build_cache.get(t.id)
         if hit and hit[0] == sig:
@@ -700,7 +705,10 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
         except Exception:
             meta = {}
         local = local_meta(filter_rows(owner_rows(t.owner_id), t.queue))
-        comps = {mp: top_comps(pools, mp, local.get(mp), meta.get(mp.lower())) for mp in maps} if len(pools) == 5 else {}
+        rules = for_team(t, store.get("comp_rules_yaml"))
+        comps = {mp: top_comps(pools, mp, local.get(mp), meta.get(mp.lower()),
+                               rules=for_map(rules, mp) if rules is not None else None)
+                 for mp in maps} if len(pools) == 5 else {}
         rr = team_roles([{"label": byid[m["pid"]].name, "pid": m["pid"], "kind": m["kind"], "rows": rows_by[m["pid"]],
                           "assigned": m.get("roles", [])} for m in members], local, maps) if members else {"players": [], "lineup": {}}
         role_of = {}

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nexus"
-version = "4.8.0"
-description = "Local Valorant coach: HenrikDev match data + VOD sync + minimap parsing + Ollama coaching, with a web app"
+version = "4.9.0"
+description = "Local Valorant coach: HenrikDev match data + replay files + VOD sync + minimap parsing + Ollama coaching, with a web app"
 requires-python = ">=3.11"
 dependencies = [
   "requests>=2.31",
@@ -20,6 +20,7 @@ dependencies = [
   "urllib3>=1.26",                 # web search reads pages over the checked address (also comes with requests)
   "waitress>=3.0",
   "pywebpush>=2.0",                # push notifications for the installed app
+  "pyarrow>=15",                   # reads the tables vrfkit makes from the game's replay files (4.9)
 ]
 
 [project.optional-dependencies]
@@ -32,7 +33,7 @@ nexus = "nexus.cli:main"
 include = ["nexus*"]
 
 [tool.setuptools.package-data]
-nexus = ["web/templates/*.html", "web/static/*", "web/static/styles/*.css", "web/static/fonts/*", "web/static/styles/previews/*", "web/static/icons/*", "web/templates/*.js", "web/playbook_example.yaml", "replay.js", "stats/pros.yaml", "i18n/*.json"]
+nexus = ["web/templates/*.html", "web/static/*", "web/static/styles/*.css", "web/static/fonts/*", "web/static/styles/previews/*", "web/static/icons/*", "web/templates/*.js", "web/playbook_example.yaml", "replay.js", "stats/pros.yaml", "stats/comp_rules.yaml", "i18n/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

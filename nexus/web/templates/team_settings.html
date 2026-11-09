@@ -43,6 +43,10 @@
       <div class="field" style="margin-top:16px"><label>Map meta (optional)</label>
         <textarea name="meta" rows="10" placeholder="{{ meta_example }}">{{ t.meta }}</textarea>
         <div class="hint">Per map: <code>prefer</code> / <code>avoid</code> agents and a fixed role mix like <code>1D 2I 1C 1S</code>. Overrides what the stats suggest.</div></div>
+      <div class="field" style="margin-top:16px"><label>Comp suggestions</label>
+        <select name="comp_method">{% for val, label in comp_methods.items() %}<option value="{{ val }}" {{ 'selected' if t.comp_method == val }}>{{ label }}</option>{% endfor %}</select>
+        <div class="hint"><b>Map rules + your stats</b>: your players' results, plus what each map needs (Viper on Breeze, a controller, someone to flash and someone for info, the role mixes that work there). Every rule that changed a comp is shown with it.
+          <b>Your stats only</b>: comps exactly as before 4.9. {% if user.is_admin %}The map rules are under <a href="{{ url_for('settings') }}#comprules">Settings</a>.{% endif %}</div></div>
     </section>
   </div>
   <div class="row"><button class="btn primary">Save</button><a class="btn ghost" href="{{ url_for('team', tid=t.id) }}">Cancel</a></div>

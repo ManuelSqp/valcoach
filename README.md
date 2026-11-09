@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.8.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.9.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -9,8 +9,10 @@ with a web app so several players can use it.
 ```mermaid
 flowchart TD
   A["HenrikDev v4 match data"] --> B["Analysis: trades, economy, first contact,<br/>plants, clutches, isolation, positions at every kill"]
+  RF["Replay file .vrf (optional)"] --> K["vrfkit: every player's position,<br/>lined up by the kills"]
   V["Your VOD (optional)"] --> S["Kill-feed sync"] --> M["Minimap tracking:<br/>rotations, stacks, your path"]
   B --> F["Compact round facts"]
+  K --> F
   M --> F
   F --> L{"Ollama or Claude<br/>(JSON schema output)"}
   W["Web search (optional)"] -.-> L
@@ -336,6 +338,14 @@ map); click a map for the details:
 - **If someone is missing**: which sub comes in on which agent, and who should switch.
 - **Map meta** (optional, per team): `prefer` / `avoid` agents and a fixed role mix per map, e.g.
   `Lotus: {roles: 1D 1I 2C 1S}`. A role mix you set is followed whenever the players' pools allow it.
+- **Comp suggestions** (team settings, 4.9): **Map rules + your stats** (default) adds what the numbers can't know:
+  per map the role mixes that work there and the agents the map needs or rewards (a Viper wall on Breeze and
+  Icebox, recon on Ascent, …), and for every comp a controller, at most two duelists, someone to flash corners and
+  someone for information. Each rule that changed a comp is listed under it (*Map rules: no Viper: …*), and the
+  picks say why (*needed on Breeze: …*). The rules only tip the balance: a player who is much better on another
+  agent still gets it. **Your stats only** makes comps exactly as before 4.9. The rules are a YAML file
+  (`nexus/stats/comp_rules.yaml`) that admins edit under *Settings › Map rules for team comps* when the meta moves;
+  a team's own map meta still wins over them.
 
 The current patch meta isn't available from any API, so "played at your level" comes from your own matches,
 and the meta box is where you put what you know. Suggestions are only as good as the sample: check the game
@@ -391,6 +401,36 @@ The VOD is recorded on the gaming PC, but the app runs wherever. Either:
   files and pre-selects the one saved right after the match.
 
 Record as **MP4 with H.264**, because browsers can't play every MKV.
+
+### Replay files
+
+Since patch 11.06 VALORANT can download a replay of a **Competitive or Premier** match (*Career › Match history* ›
+the match › download the replay). It is saved as a `.vrf` file in `%LOCALAPPDATA%\VALORANT\Saved\Demos` and holds
+the server's own data: **every player's position all round long**, plus the round starts and every death. Nexus
+reads it with [vrfkit](https://github.com/yakisoba0728/vrfkit) (Apache-2.0), keeps a compact copy (4 positions per
+second per player) and lines it up with the HenrikDev match data by the kills. The round coaching then gets the
+real positions of both teams per 10 s (setups, stacks, rotations, timings), and the report's replay draws all ten
+players' paths instead of estimating them between kills. No recording is needed for that; a VOD is still used for
+the jump buttons.
+
+- **Getting the file to Nexus**: upload it on the match's coach page (*Replay file* card), or let the Nexus app
+  for Windows send new replay files by itself (*This PC › Replay files*). One file serves every player of that
+  match: it is stored per match, in `data/replays/<match id>.vrf` and `.json.gz`.
+- **The switch**: *Settings › Replay files › Positions*. **Replay file when there is one** (default) uses it and
+  falls back to the VOD minimap when a match has none or the file doesn't fit the match data. **VOD minimap only**
+  ignores replay files completely, so reports are made exactly as before 4.9. The report header says which one was
+  used (*positions from the replay file* / *from the VOD minimap*).
+- **vrfkit on the server**: the Docker image builds it (pinned commit, `VRFKIT_REF` in the `Dockerfile`). Without
+  Docker, install it once with Rust (1.86 or newer):
+
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh     # if you don't have Rust yet
+  cargo install --git https://github.com/yakisoba0728/vrfkit --rev b9ba3f70735c7219fef41ba61a80626a4bb88757 --locked vrfkit
+  ```
+
+  That puts it in `~/.cargo/bin/vrfkit`, where Nexus finds it by itself (or set the path in *Settings › Replay
+  files*, or `NEXUS_VRFKIT`). *Test* there checks it. After a VALORANT patch, replays of the new build may need a
+  newer vrfkit: run the same command with a newer commit (and `--force`).
 
 ### Run it permanently
 
@@ -500,11 +540,14 @@ Settings (web) or `[video]` (CLI).
 | `web/drafts.py`, `web/static/drafts.js` | roster drafts: storage (typed fields only), player numbers per agent, the drag-and-drop editor |
 | `web/abilityshapes.py` | every ability's shape and size in meters, and each agent's colour, for the strat board |
 | `coach/teamreview.py` | whole-team review of one match (facts per teammate, trades, model write-up) |
+| `replayfile.py`, `web/replays.py` | the game's replay files: vrfkit export → compact positions, lining up with the match by the kills, paths and per-10 s summaries for the coach; uploads from the coach page and the app |
+| `stats/comprules.py`, `stats/comp_rules.yaml` | map rules for team comps (role mixes, needed / key agents per map, what every comp needs) |
 | `stats/` | history import, per map / agent aggregates, findings, team comps with subs, pick helper, tips, playstyle + pro matching (`style.py`, `pros.yaml`), YouTube search, team roles (`teamroles.py`) |
 
 Data of the web app lives in `data/`: `nexus.db`, `cache/` (matches, maps,
 minimap calibrations), `profiles/<id>/` (playbook, notes), `uploads/`,
-`reports/<job>/`, `uploads/<user>/`, `profiles/<id>/stats/` (imported games, tips). Deleting a report also deletes its uploaded VOD.
+`reports/<job>/`, `uploads/<user>/`, `profiles/<id>/stats/` (imported games, tips), `replays/` (replay files per
+match). Deleting a report also deletes its uploaded VOD.
 
 ## 6. Known limits
 
@@ -515,8 +558,14 @@ minimap calibrations), `profiles/<id>/` (playbook, notes), `uploads/`,
   HUD scale, minimap settings) may still need the screen areas or `COLOR_RANGES` adjusted once.
 - The live API has no per-round utility (ability casts are `null` per round), so
   round coaching leaves utility out; match totals are still used.
-- Without a VOD, positions are only known at kills, plants and defuses; the round
+- Without a VOD or a replay file, positions are only known at kills, plants and defuses; the round
   replay estimates everything in between.
+- Replay files exist only for Competitive and Premier, only if someone downloaded the replay in the game, and
+  the game deletes them at the next patch. vrfkit reads the builds listed in its README; a brand-new build may
+  need a vrfkit update. The replay-file path is tested on vrfkit's public sample replays (builds 12.08–13.01, short
+  custom games) and on synthetic full matches; check the first real match against what you remember.
+- The map rules for comps come from the maps' layout and the agents' kits, not from live meta data; edit them
+  when a patch or map change shifts things.
 - Ally counts from the minimap are approximate, because stacked icons merge.
 - Teammate tracking is tuned on synthetic recordings (95 % coverage, ~1.7 m median error there).
   Real minimaps have agent portraits, utility icons and pings, so expect less on real recordings.

@@ -2,7 +2,7 @@
 
 One .tar.gz per night with the database (a consistent copy made with SQLite's backup API, safe
 while Nexus runs), players, teams, notes, strats and reports. Left out because they can be
-rebuilt or are huge: the match cache, uploaded VODs, clips and unfinished uploads. The newest
+rebuilt or are huge: the match cache, uploaded VODs, clips, raw replay files and unfinished uploads. The newest
 `keep` backups stay; older ones are deleted. Point the folder at your NAS so a dead disk can't
 take the backups with it.
 
@@ -21,7 +21,8 @@ from datetime import datetime
 from pathlib import Path
 
 SKIP_DIRS = {"cache", "backups", "tmp", "uploads", "clips", "__pycache__"}
-SKIP_SUFFIX = {".mp4", ".mkv", ".mov", ".webm", ".part", ".tmp"}
+# .vrf: the game's replay files (4.9) are big; their compact data (replays/*.json.gz) is backed up and is all reports use
+SKIP_SUFFIX = {".mp4", ".mkv", ".mov", ".webm", ".part", ".tmp", ".vrf"}
 PREFIX = "nexus-backup-"
 OLD_PREFIX = "valcoach-backup-"           # archives made before 4.5 still count for the list and the retention
 

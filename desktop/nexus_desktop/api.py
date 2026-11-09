@@ -74,10 +74,10 @@ class Api:
     def matches(self, pid: int) -> list[dict]:
         return self._call("GET", f"/api/companion/players/{int(pid)}/matches", timeout=90)["matches"]
 
-    def upload_clip(self, pid: int, match_id: str, path: Path, source: str, progress=lambda done, total: None) -> dict:
-        """Send the file in pieces (the server takes no big requests), then attach it to the match."""
+    def _send(self, path: Path, name: str, progress=lambda done, total: None) -> str:
+        """Send a file in pieces (the server takes no big requests) -> the upload id."""
         size = os.path.getsize(path)
-        up = self._call("POST", "/api/companion/uploads", json={"name": f"{match_id}.mp4", "size": size})
+        up = self._call("POST", "/api/companion/uploads", json={"name": name, "size": size})
         chunk, done = int(up["chunk"]), 0
         with open(path, "rb") as f:
             while done < size:
@@ -98,5 +98,22 @@ class Api:
                     raise _err(r)
                 done = int(r.json()["received"])
                 progress(done, size)
+        return up["id"]
+
+    def upload_clip(self, pid: int, match_id: str, path: Path, source: str, progress=lambda done, total: None) -> dict:
+        """Send the clip, then attach it to the match."""
+        upload_id = self._send(path, f"{match_id}.mp4", progress)
         return self._call("POST", f"/api/companion/players/{int(pid)}/clips",
-                          json={"match_id": match_id, "upload_id": up["id"], "source": source})
+                          json={"match_id": match_id, "upload_id": upload_id, "source": source})
+
+    # ---------------------------------------------------------------- replay files (4.9)
+    def replays_have(self, match_ids: list[str]) -> set[str]:
+        """Which of these matches the server has a replay file for already."""
+        if not match_ids:
+            return set()
+        return set(self._call("POST", "/api/companion/replays/check", json={"match_ids": match_ids})["have"])
+
+    def upload_replay(self, path: Path, progress=lambda done, total: None) -> dict:
+        """Send a .vrf; the server reads it and answers with match_id, players, rounds."""
+        upload_id = self._send(path, path.name if path.suffix.lower() == ".vrf" else f"{path.stem}.vrf", progress)
+        return self._call("POST", "/api/companion/replays", json={"upload_id": upload_id}, timeout=300)

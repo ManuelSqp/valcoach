@@ -30,12 +30,31 @@
         <span><b>{{ v.name }}</b><span class="muted small">{{ v.mtime|epoch }} · {{ v.size|filesize }}{% if v.rel == suggested %} · <span style="color:var(--win)">saved right after this match</span>{% endif %}</span></span></label>
       {% endfor %}
       <label class="choice"><input type="radio" name="vod" value="upload" id="vod_upload"><span style="flex:1"><b>Upload a file</b>
-        <input type="file" accept="video/*,.mkv" style="margin-top:6px" onchange="document.getElementById('vod_upload').checked=true"></span></label>
+        <input type="file" id="vod_file" accept="video/*,.mkv" style="margin-top:6px" onchange="document.getElementById('vod_upload').checked=true"></span></label>
     </div>
     {% if not vod_root %}<p class="hint">{% if user.is_admin %}Set a recordings folder for your account under <a href="{{ url_for('user_edit', uid=user.id) }}">Users</a> to pick VODs from disk instead of uploading.{% else %}No recordings folder is set for your account, so upload the file. The admin can set one for you.{% endif %}</p>
     {% else %}<p class="hint">From {{ vod_root }}</p>{% endif %}
   </section>
 </div>
+
+<section class="card" id="replaycard">
+  <h2>Replay file <span class="muted small" style="font-weight:400">(positions of all ten players)</span></h2>
+  {% if has_replay %}
+    <p style="margin:0 0 8px"><span style="color:var(--win)">✓ The server has this match's replay file.</span>
+      {% if replay_source == 'vod' %}<span class="muted">It isn't used right now: positions come from the VOD minimap (Settings › Replay files).</span>
+      {% else %}<span class="muted">The coach and the report's replay see every player's position for the whole round; a VOD is then only needed for the jump buttons.</span>{% endif %}</p>
+  {% else %}
+    <p class="hint" style="margin:0 0 8px">In the game: <b>Career › Match history</b> › this match › <b>download the replay</b>. Then upload the
+      <code>.vrf</code> file from <code>%LOCALAPPDATA%\VALORANT\Saved\Demos</code>, or let the Nexus app send it by itself.
+      Only Competitive and Premier have replays, and the game deletes them at the next patch.
+      {% if replay_source == 'vod' %}<br><span class="muted">Replay files are switched off right now (Settings › Replay files): an uploaded file is kept for later.</span>{% endif %}</p>
+  {% endif %}
+  <div class="row" style="gap:8px">
+    <input type="file" id="vrf_file" accept=".vrf">
+    <button type="button" class="btn sm" id="vrf_go">{{ 'Replace replay file' if has_replay else 'Upload replay file' }}</button>
+    <span class="muted small" id="vrf_status"></span>
+  </div>
+</section>
 
 <section class="card">
   <label class="choice" style="margin:0"><input type="checkbox" name="team_review" value="1" checked>
@@ -82,11 +101,42 @@
 {% endif %}
 
 <script>
+// Replay file (.vrf, tens of MB): same piece-wise upload, then the server reads it with vrfkit.
+document.getElementById('vrf_go').addEventListener('click', async function () {
+  const file = document.getElementById('vrf_file').files[0], st = document.getElementById('vrf_status');
+  if (!file) { st.textContent = 'Choose the .vrf file first.'; return; }
+  this.disabled = true;
+  try {
+    let r = await fetch("{{ url_for('replay_upload_begin') }}", {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                                                 body: JSON.stringify({name: file.name, size: file.size})});
+    const u = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(u.error || `Error ${r.status}`);
+    for (let offset = 0; offset < file.size;) {
+      r = await fetch(`{{ url_for('upload_begin') }}/${u.id}?offset=${offset}`, {
+        method: 'PUT', headers: {'Content-Type': 'application/octet-stream'}, body: file.slice(offset, offset + u.chunk)});
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok && !(r.status === 409 && d.received != null)) throw new Error(d.error || `Error ${r.status}`);
+      offset = d.received;
+      st.textContent = `Uploading ${Math.round(offset / file.size * 100)} %`;
+    }
+    st.textContent = 'Reading the replay ...';
+    r = await fetch("{{ url_for('replay_attach', pid=p.id, match_id=match_id) }}", {method: 'POST',
+                    headers: {'Content-Type': 'application/json'}, body: JSON.stringify({upload_id: u.id})});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `Error ${r.status}`);
+    st.textContent = `Done: ${d.players} players, ${d.rounds} rounds.`;
+    setTimeout(() => location.reload(), 900);
+  } catch (err) {
+    st.textContent = `Failed: ${err.message}`;
+    this.disabled = false;
+  }
+});
+
 // Uploads can be several GB: sent in pieces, see nexus/web/uploads.py. The server checks the limits
 // before the first piece, and a lost connection only repeats one piece.
 document.getElementById('coachform').addEventListener('submit', async function (e) {
   const up = document.getElementById('vod_upload');
-  const file = this.querySelector('input[type=file]').files[0];
+  const file = document.getElementById('vod_file').files[0];
   const go = document.getElementById('go');
   go.disabled = true;
   if (!up.checked || !file) return;            // normal submit

@@ -94,7 +94,7 @@
 <section class="card" id="detail">
   <div class="row between">
     <div class="subtabs maptabs" role="navigation" aria-label="Map">{% for x in plan %}<a class="{{ 'on' if x.map == sel }}" href="{{ url_for('team', tid=t.id, map=x.map) }}#detail">{{ x.map }}</a>{% endfor %}</div>
-    {% if m.main.ok %}<span class="muted small">{{ m.main.pattern }}{% if m.meta and m.meta.roles %} · role mix from your meta{% endif %}</span>{% endif %}
+    {% if m.main.ok %}<span class="muted small">{{ m.main.pattern }}{% if m.meta and m.meta.roles %} · role mix from your meta{% endif %} · {{ 'map rules + your stats' if comp_method != 'stats' else 'your stats only' }}</span>{% endif %}
   </div>
   {% if not m.main.ok %}
     <p class="warnc" style="margin-top:12px">{% if m.main.no_data %}No games for {{ m.main.no_data|join(', ') }} yet. Update their stats.{% else %}{{ m.main.reason }}{% endif %}</p>
@@ -112,6 +112,7 @@
     </div>
     {% endfor %}
   </div>
+  {% if m.main.notes %}<p class="warnc">Map rules: {{ m.main.notes|join(' · ') }}</p>{% endif %}
   {% if m.main.missing_roles %}<p class="warnc">Missing {{ m.main.missing_roles|join(', ') }}: nobody in the lineup plays {{ 'one' if m.main.missing_roles|length == 1 else 'them' }} yet. Worth practicing for this map.</p>{% endif %}
 
   {% if alts %}

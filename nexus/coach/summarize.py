@@ -91,7 +91,8 @@ def round_summary(team_f: TeamRoundFacts | None, player_f: PlayerRoundFacts | No
     if player_f:
         doc["you"] = player_round_block(player_f)
     if minimap:
-        doc["minimap_tracking"] = minimap
+        # exact positions of everyone from the game's replay file (4.9), or what the VOD minimap showed
+        doc["replay_positions" if minimap.get("source") == "replay file" else "minimap_tracking"] = minimap
     if own_note:
         doc["players_own_note"] = own_note
     return yaml.safe_dump(doc, sort_keys=False, allow_unicode=True, width=120)

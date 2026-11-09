@@ -1,4 +1,4 @@
-"""One round of work: playlists into KovaaK's, new scores to Nexus, matches out of Medal recordings.
+"""One round of work: playlists into KovaaK's, new scores to Nexus, matches out of Medal recordings, replay files.
 The app runs this every few minutes (and on "Sync now"); it only touches what changed since the last round."""
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import time
 from datetime import date
 from pathlib import Path
 
-from . import kovaaks, medal
+from . import demos, kovaaks, medal
 from .api import Api, ApiError
 from .config import Settings
 
@@ -84,10 +84,38 @@ def recordings(s: Settings, api: Api, ffmpeg: str, log, now: float | None = None
             state["state"] = "done"
 
 
+def replays(s: Settings, api: Api, log, now: float | None = None) -> None:
+    """New replay files from VALORANT's Demos folder to Nexus (4.9). Each file is sent once; one the server
+    can't read is not tried again until it changes."""
+    if not (s.send_replays and s.demos_dir):
+        return
+    todo = [f for f in demos.find(Path(s.demos_dir), s.since, now) if demos.key(f) not in s.replays]
+    if not todo:
+        return
+    have = api.replays_have(sorted({demos.match_id(f) for f in todo} - {""}))
+    for f in todo:
+        k, mid = demos.key(f), demos.match_id(f)
+        if mid and mid in have:
+            s.replays[k] = {"state": "done", "match_id": mid, "why": "already on the server"}
+            continue
+        mb = f.stat().st_size / 1024 ** 2
+        log(f"Replay: uploading {f.name} ({mb:.0f} MB)")
+        try:
+            info = api.upload_replay(f)
+        except ApiError as e:
+            if e.status in (400, 409, 413, 422):           # the server can't use this file: don't send it again
+                s.replays[k] = {"state": "skipped", "match_id": mid, "why": str(e)}
+                log(f"Replay: {f.name} skipped: {e}")
+                continue
+            raise
+        s.replays[k] = {"state": "done", "match_id": info.get("match_id", mid)}
+        log(f"Replay: {info.get('players', '?')} players, {info.get('rounds', '?')} rounds are on Nexus now")
+
+
 def run_once(s: Settings, api: Api, ffmpeg: str, log, workdir: Path | None = None) -> bool:
     """Everything once. -> False when the server says the device isn't logged in anymore."""
     for step in (lambda: playlists(s, api, log), lambda: scores(s, api, log),
-                 lambda: recordings(s, api, ffmpeg, log, workdir=workdir)):
+                 lambda: recordings(s, api, ffmpeg, log, workdir=workdir), lambda: replays(s, api, log)):
         try:
             step()
         except ApiError as e:

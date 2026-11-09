@@ -22,7 +22,7 @@ from collections import deque
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from . import __version__, config, kovaaks, sync, updater
+from . import __version__, config, demos, kovaaks, sync, updater
 from .api import Api, ApiError
 
 TITLE = "Nexus"
@@ -30,7 +30,7 @@ RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 OLD_RUN_VALUE = "valcoach companion"          # the autostart entry up to 4.4
 UPDATE_EVERY_S = 24 * 3600
 BG = "#0e131b"
-SWITCHES = ("put_playlists", "send_scores", "upload_matches", "autostart", "check_updates")
+SWITCHES = ("put_playlists", "send_scores", "upload_matches", "send_replays", "autostart", "check_updates")
 
 
 def ffmpeg_path() -> str:
@@ -164,6 +164,8 @@ class App:
         self.s = config.load()
         if not self.s.medal_dir:
             self.s.medal_dir = guess_medal_dir()
+        if not self.s.demos_dir:
+            self.s.demos_dir = demos.default_dir()
         if not self.s.kovaaks_dir:
             game = kovaaks.find_game()
             self.s.kovaaks_dir = str(game) if game else ""
@@ -290,8 +292,10 @@ class App:
         return {
             "version": __version__, "device": platform.node() or "This PC", "server": s.server,
             "paired_user": s.user if self.logged_in() else "", "player_id": s.player_id,
-            "kovaaks_dir": s.kovaaks_dir, "medal_dir": s.medal_dir,
+            "kovaaks_dir": s.kovaaks_dir, "medal_dir": s.medal_dir, "demos_dir": s.demos_dir,
             "kovaaks_ok": folder_ok(s.kovaaks_dir, "Saved"), "medal_ok": folder_ok(s.medal_dir),
+            "demos_ok": folder_ok(s.demos_dir),
+            "replays_sent": sum(1 for x in s.replays.values() if x.get("state") == "done"),
             **{k: bool(getattr(s, k)) for k in SWITCHES},
             "every_min": s.every_min, "last_playlists": s.last_playlists, "scores_sent": len(s.stats_sent),
             "matches_uploaded": sum(len(x.get("matches", [])) for x in s.recordings.values()),
@@ -317,13 +321,13 @@ class App:
         else:
             return {"error": "That can't be changed here."}
         config.save(s)
-        if key in ("player_id", "put_playlists", "send_scores", "upload_matches") and value:
+        if key in ("player_id", "put_playlists", "send_scores", "upload_matches", "send_replays") and value:
             self.sync_now()
         return {"ok": True}
 
     def pick_folder(self, which: str) -> dict:
         import webview
-        attr = {"kovaaks": "kovaaks_dir", "medal": "medal_dir"}.get(which)
+        attr = {"kovaaks": "kovaaks_dir", "medal": "medal_dir", "demos": "demos_dir"}.get(which)
         if not attr:
             return {"error": "Unknown folder."}
         start = getattr(self.s, attr) or str(Path.home())

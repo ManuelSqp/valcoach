@@ -4,6 +4,7 @@
   nexus history                         list your recent matches
   nexus coach latest --vod match.mp4    full coaching run
   nexus coach <match_id> --no-llm       facts-only report (no Ollama)
+  nexus coach <match_id> --replay x.vrf positions of all players from the game's replay file
   nexus sync <match> <vod>              check VOD alignment
   nexus calibrate-minimap <match> <vod> check minimap ROI / calibration
   nexus notes-template <match>          create a notes file to annotate rounds
@@ -40,6 +41,18 @@ def cmd_history(cfg: Config, args) -> None:
 
 
 def cmd_coach(cfg: Config, args) -> None:
+    if args.replay:                         # read it once into the replays folder; the run picks it up by match id
+        import shutil
+        import tempfile
+        from . import replayfile
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = Path(tmp) / Path(args.replay).name
+            shutil.copy(args.replay, copy)
+            info = replayfile.ingest(copy, pipeline.replays_dir(cfg), cfg.path(cfg.paths.cache_dir) / "vrf_work",
+                                     replayfile.vrfkit_path(cfg.replay.vrfkit))
+        log(f"· Replay file read: match {info['match_id']}, {info['players']} players, {info['rounds']} rounds")
+        if cfg.replay.source != "replay":
+            log("! [replay] source is not \"replay\" in the config: the file is kept but not used")
     req = pipeline.CoachRequest(
         match=args.match, vod=args.vod, mode=args.mode, player=args.player, queue=args.queue,
         no_llm=args.no_llm, no_minimap=args.no_minimap, recalibrate=args.recalibrate,
@@ -160,6 +173,7 @@ def main(argv: list[str] | None = None) -> None:
     c = sub.add_parser("coach", help="analyse + coach a match")
     c.add_argument("match", help="match id, 'latest', or path to a saved v4 match .json")
     c.add_argument("--vod", help="recording of the match (mp4/mkv)")
+    c.add_argument("--replay", help="the game's replay file of the match (.vrf), read with vrfkit")
     c.add_argument("--mode", choices=["team", "player", "both"])
     c.add_argument("--player", help="Name#TAG to coach (default: config player)")
     c.add_argument("--queue", help="queue filter when using 'latest'")

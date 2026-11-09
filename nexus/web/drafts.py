@@ -95,7 +95,9 @@ def register(app, store, get_team, helpers: dict, known_maps: list[str]) -> None
         pools = [Pool.from_rows(p["name"], rows_by.get(p["pid"], [])) for p in starters]
         pid_of = {p["name"]: p["pid"] for p in starters}
         out = []
-        for c in top_comps(pools, map_name, local, meta):
+        from ..stats.comprules import for_map, for_team
+        rules = for_team(t, store.get("comp_rules_yaml"))
+        for c in top_comps(pools, map_name, local, meta, rules=for_map(rules, map_name) if rules is not None else None):
             if c.get("ok"):
                 out.append({"pattern": c.get("pattern", ""),
                             "picks": [{"pid": pid_of.get(pk["player"]), "player": pk["player"], "agent": pk["agent"]}

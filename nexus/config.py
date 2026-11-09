@@ -55,6 +55,16 @@ class VideoCfg:
 
 
 @dataclass
+class ReplayCfg:
+    # where player positions come from (4.9):
+    #   "replay" = the game's replay file (.vrf) when the server has one for the match, else the VOD minimap
+    #   "vod"    = only the VOD minimap, as before 4.9 (replay files are ignored)
+    source: str = "replay"
+    vrfkit: str = ""              # path to the vrfkit program; "" = $NEXUS_VRFKIT, PATH or ~/.cargo/bin
+    dir: str = "data/replays"     # <match id>.vrf and <match id>.json.gz
+
+
+@dataclass
 class PathsCfg:
     cache_dir: str = "data/cache"
     output_dir: str = "output"
@@ -69,6 +79,7 @@ class Config:
     llm: str = ""                 # the model for this run: "" = local default, "ollama:<model>", "claude:<model>"
     coach: CoachCfg = field(default_factory=CoachCfg)
     video: VideoCfg = field(default_factory=VideoCfg)
+    replay: ReplayCfg = field(default_factory=ReplayCfg)
     paths: PathsCfg = field(default_factory=PathsCfg)
     root: Path = field(default_factory=Path.cwd)
 
@@ -96,6 +107,7 @@ def load_config(path: str | Path | None = None) -> Config:
         _fill(cfg.claude, raw.get("claude"))
         _fill(cfg.coach, raw.get("coach"))
         _fill(cfg.video, raw.get("video"))
+        _fill(cfg.replay, raw.get("replay"))
         _fill(cfg.paths, raw.get("paths"))
     if os.environ.get("HENRIK_API_KEY"):
         cfg.henrik.api_key = os.environ["HENRIK_API_KEY"]

@@ -1,4 +1,14 @@
 # nexus web app. Ollama stays on the host (it needs the GPU); see docker-compose.yml.
+
+# vrfkit reads the game's replay files (.vrf), see nexus/replayfile.py. Built from a pinned commit;
+# to update it, change VRFKIT_REF to a newer commit of https://github.com/yakisoba0728/vrfkit.
+FROM rust:1.86-slim-bookworm AS vrfkit
+ARG VRFKIT_REF=b9ba3f70735c7219fef41ba61a80626a4bb88757
+ADD https://github.com/yakisoba0728/vrfkit/archive/${VRFKIT_REF}.tar.gz /tmp/vrfkit.tar.gz
+RUN mkdir /src && tar -xzf /tmp/vrfkit.tar.gz -C /src --strip-components=1 \
+ && cd /src && cargo build --release --locked -p vrfkit \
+ && cp target/release/vrfkit /usr/local/bin/vrfkit
+
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -15,6 +25,8 @@ RUN apt-get update \
 ARG UID=1000
 ARG GID=1000
 RUN groupadd --gid ${GID} nexus && useradd --uid ${UID} --gid ${GID} --create-home nexus
+
+COPY --from=vrfkit /usr/local/bin/vrfkit /usr/local/bin/vrfkit
 
 WORKDIR /app
 COPY pyproject.toml README.md CHANGELOG.md ./

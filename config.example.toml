@@ -40,6 +40,14 @@ minimap_roi = [0.012, 0.025, 0.215, 0.382]
 killfeed_roi = [0.70, 0.08, 0.29, 0.25]
 sample_fps = 4                   # frames per second analysed for minimap tracking
 
+[replay]
+# Positions of all players from the game's replay files (.vrf), read with vrfkit (see README, Replay files).
+#   "replay" = use the match's replay file when there is one in `dir`, else the VOD minimap
+#   "vod"    = only the VOD minimap, as before 4.9
+source = "replay"
+vrfkit = ""                      # path to vrfkit; empty = $NEXUS_VRFKIT, PATH or ~/.cargo/bin/vrfkit
+dir = "data/replays"             # put <match id>.vrf here; it is read on first use
+
 [paths]
 cache_dir = "data/cache"
 output_dir = "output"

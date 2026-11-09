@@ -36,7 +36,9 @@ class Analysis:
     view: ViewModel = field(default_factory=ViewModel)
     self_paths: dict[int, list] = field(default_factory=dict)  # round index -> [(t_s, x, y)] from the VOD
     vod_others: dict[int, dict] = field(default_factory=dict)  # round index -> {"allies": {puuid: path}, "enemies": [...]}
+    # (from a replay file also "players": {enemy puuid: path}; enemies are then known all round, not only when seen)
     nav: object | None = None                                   # NavGrid for estimated routes
+    positions: str = ""                                         # where minimap/self_paths came from: "replay", "vod" or ""
 
 
 def analyse(match: Match, focus_puuid: str, map_info: MapInfo | None) -> Analysis:
@@ -280,6 +282,7 @@ def run_coach(an: Analysis, llm: Ollama | None, mode: str = "both", language: st
         "player": me.riot_id, "agent": me.agent, "team": an.team,
         "score": f"{m.team_rounds_won.get(an.team, 0)}-{m.team_rounds_won.get(m.other_team(an.team), 0)}",
         "mode": mode, "model": llm.model if llm else None, "valcoach_version": __version__,
+        "positions": an.positions or None,          # "replay" (replay file), "vod" (VOD minimap) or None
         "llm_failed_rounds": [r.number for r, fb in zip(m.rounds, feedback) if "error" in fb], "llm_gave_up": gave_up,
         "roster": [{"name": p.riot_id, "agent": p.agent, "team": p.team,
                     "k": p.kills, "d": p.deaths, "a": p.assists,

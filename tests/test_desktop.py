@@ -253,3 +253,50 @@ def test_settings_of_the_companion_app_are_taken_over(tmp_path, monkeypatch):
     (old / "config.json").write_text(json.dumps({"server": "https://coach.example.com", "player_id": 3}))
     s = config.load()
     assert s.server == "https://coach.example.com" and s.player_id == 3 and (tmp_path / "Nexus" / "config.json").exists()
+
+
+def test_replay_files_are_sent_once(tmp_path):
+    """4.9: new .vrf files from VALORANT's Demos folder go to Nexus once; one the server can't read isn't retried."""
+    import time as _t
+    from nexus_desktop import demos
+    from nexus_desktop.api import ApiError
+    d = tmp_path / "Demos"
+    d.mkdir()
+    old = _t.time() - 600
+    files = {}
+    for name in ("12b3659c-735e-432a-8f55-91425f8934df.vrf", "aaaaaaaa-0000-0000-0000-000000000000.vrf", "broken.vrf"):
+        f = d / name
+        f.write_bytes(b"x" * 100)
+        os.utime(f, (old, old))
+        files[name] = f
+    fresh = d / "bbbbbbbb-0000-0000-0000-000000000000.vrf"     # still downloading
+    fresh.write_bytes(b"x")
+    (d / "notes.txt").write_text("x")
+
+    class FakeApi:
+        sent = []
+
+        def replays_have(self, ids):
+            assert "bbbbbbbb-0000-0000-0000-000000000000" not in ids
+            return {"12b3659c-735e-432a-8f55-91425f8934df"}
+
+        def upload_replay(self, path, progress=None):
+            self.sent.append(path.name)
+            if path.name == "broken.vrf":
+                raise ApiError("bad file", 422)
+            return {"match_id": demos.match_id(path), "players": 10, "rounds": 21}
+
+    s = Settings(demos_dir=str(d), send_replays=True, since=0)
+    api, log = FakeApi(), []
+    sync.replays(s, api, log.append)
+    assert sorted(api.sent) == ["aaaaaaaa-0000-0000-0000-000000000000.vrf", "broken.vrf"]
+    assert sum(x["state"] == "done" for x in s.replays.values()) == 2
+    assert any("10 players, 21 rounds" in line for line in log) and any("skipped" in line for line in log)
+    api.sent.clear()
+    sync.replays(s, api, log.append)                    # nothing new: nothing sent, the broken one not retried
+    assert api.sent == []
+    s.send_replays = False
+    os.utime(fresh, (old, old))
+    sync.replays(s, api, log.append)
+    assert api.sent == []
+    assert demos.match_id(files["broken.vrf"]) == ""
