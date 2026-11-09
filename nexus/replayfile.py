@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import logging
 import math
 import os
 import re
@@ -42,7 +43,9 @@ SPIKE_S = 46.0                 # fuse (45 s) plus a little
 POST_ROUND_MS = 6000           # the next round's start comes after the end-of-round pause
 PARKED = 40000.0               # dead/hidden characters are parked at about -50000 world units
 UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+ID_RE = re.compile(r"[a-z0-9-]{1,64}")      # a match id as everywhere in Nexus (pipeline.MATCH_ID_RE), lower case
 MAX_VRF_BYTES = 512 * 1024 ** 2
+log_ = logging.getLogger(__name__)
 
 
 class ReplayError(Exception):
@@ -71,7 +74,9 @@ def check_vrfkit(path: str) -> str | None:
     except FileNotFoundError:
         return f"vrfkit was not found ({path}). Install it (see the README, section Replay files) or set its path."
     except (OSError, subprocess.TimeoutExpired) as e:
-        return f"vrfkit can't be run ({path}): {e}"
+        # the details only go to the server log, never to the browser
+        log_.warning("vrfkit %s can't be run: %s", path, e)
+        return f"vrfkit can't be run ({path}): check the path and that the server's user may run it."
     if "vrfkit" not in (r.stdout + r.stderr).lower():
         return f"{path} doesn't look like vrfkit."
     return None
@@ -200,12 +205,25 @@ def extract(export_dir: Path, vrf_name: str = "") -> dict:
 # ---------------------------------------------------------------------------
 # storage: data/replays/<match id>.vrf + <match id>.json.gz
 # ---------------------------------------------------------------------------
+def _inside(replays_dir: Path, match_id: str, suffix: str) -> Path:
+    """<replays_dir>/<match id><suffix>. The match id comes from requests: only letters, digits and dashes are
+    accepted, and the path must stay inside the folder (4.10)."""
+    mid = str(match_id or "").lower()
+    if not ID_RE.fullmatch(mid):
+        raise ReplayError("That isn't a match id.")
+    base = os.path.realpath(replays_dir)
+    full = os.path.realpath(os.path.join(base, mid + suffix))
+    if not full.startswith(base + os.sep):
+        raise ReplayError("That isn't a match id.")
+    return Path(full)
+
+
 def data_file(replays_dir: Path, match_id: str) -> Path:
-    return Path(replays_dir) / f"{match_id.lower()}.json.gz"
+    return _inside(replays_dir, match_id, ".json.gz")
 
 
 def vrf_file(replays_dir: Path, match_id: str) -> Path:
-    return Path(replays_dir) / f"{match_id.lower()}.vrf"
+    return _inside(replays_dir, match_id, ".vrf")
 
 
 def _write(path: Path, data: dict) -> None:
@@ -256,7 +274,10 @@ def summary(data: dict) -> dict:
 
 
 def has_replay(replays_dir: Path, match_id: str) -> bool:
-    return data_file(replays_dir, match_id).is_file() or vrf_file(replays_dir, match_id).is_file()
+    try:
+        return data_file(replays_dir, match_id).is_file() or vrf_file(replays_dir, match_id).is_file()
+    except ReplayError:
+        return False
 
 
 def load(replays_dir: Path, match_id: str, work_dir: Path | None = None, vrfkit: str = "") -> dict | None:

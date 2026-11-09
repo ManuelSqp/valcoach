@@ -592,13 +592,63 @@ def test_stats_teams_and_pick_helper(app, monkeypatch):
     assert "If someone is missing" in page and "role mix from your meta" in page
     assert "Premier squad" in c.get("/").data.decode()          # dashboard lists the team
     # 4.9: comp suggestions switch, map rules by default, "your stats only" exactly as before
-    assert "map rules + your stats" in c.get(f"/teams/{tid}?map=Ascent").data.decode()
+    page = c.get(f"/teams/{tid}?map=Ascent").data.decode()
+    assert "Map rules + your stats" in page and "Which one is you" not in page and "You are" not in page   # 4.10
     assert 'name="comp_method"' in c.get(f"/teams/{tid}/settings").data.decode()
     assert c.post(f"/teams/{tid}/settings", data=dict(form, comp_method="stats")).status_code == 302
     assert app.extensions["nexus"]["store"].team(tid).comp_method == "stats"
     page = c.get(f"/teams/{tid}?map=Ascent").data.decode()
-    assert "your stats only" in page and "Map rules:" not in page
+    assert "Your stats only" in page and "Map rules:" not in page
+    # 4.10: most comfortable
+    c.post(f"/teams/{tid}/settings", data=dict(form, comp_method="comfort"))
+    page = c.get(f"/teams/{tid}?map=Ascent").data.decode()
+    assert "Most comfortable" in page and "games on Ascent" in page
+    # 4.10: from the web: off without web search, then searched with a fake search and model
+    c.post(f"/teams/{tid}/settings", data=dict(form, comp_method="web"))
+    page = c.get(f"/teams/{tid}?map=Ascent").data.decode()
+    assert "Comps from the web" in page and "Web search is off" in page and "no comps from the web" in page
+    from nexus.coach import websearch as ws
+    import nexus.coach.ollama as oll
+    store = app.extensions["nexus"]["store"]
+    store.set("web_search", "duckduckgo")
+    searched = []
+    monkeypatch.setattr(ws, "searcher", lambda st: (lambda q, n=6: searched.append(q) or [
+        {"title": "Ascent comps tier list", "url": "https://example.org/ascent", "snippet": "Jett Sova KAY/O Omen Killjoy"}]))
+    monkeypatch.setattr(ws, "page_text", lambda url, limit=4000, session=None: "Best Ascent comp: Jett, Sova, KAY/O, Omen, Killjoy.")
+
+    class FakeModel:
+        def __init__(self, *a, **k):
+            self.model = "fake"
+
+        def check(self):
+            pass
+
+        def chat_json(self, system, user, schema):
+            assert "Ascent" in user and "[1]" in user
+            return {"comps": [{"agents": ["Jett", "Sova", "kayo", "Omen", "Killjoy"], "note": "the standard comp", "sources": [1]},
+                              {"agents": ["Jett", "Jett", "Sova", "Omen", "Killjoy"], "note": "broken", "sources": [1]},
+                              {"agents": ["Jett", "Sova", "Omen", "Killjoy", "Nobody"], "note": "made up", "sources": [9]}]}
+    monkeypatch.setattr(oll, "Ollama", FakeModel)
+    assert c.post(f"/teams/{tid}/webcomps", data={"map": "Ascent"}).status_code == 302
+    st = _wait_stats(app, f"webcomps:{tid}")
+    assert st["status"] == "done", st["log"]
+    assert any("Ascent" in q for q in searched)
+    page = c.get(f"/teams/{tid}?map=Ascent").data.decode()
+    assert "the standard comp" in page and "https://example.org/ascent" in page and "KAY/O" in page
+    assert "made up" not in page and "broken" not in page
+    data = app.extensions["nexus"]["stats"].read_webcomps(tid)
+    assert data["ascent"]["comps"][0]["agents"] == ["Jett", "Sova", "KAY/O", "Omen", "Killjoy"]
+    assert "no comps from the web" in c.get(f"/teams/{tid}?map=Haven").data.decode()   # Haven not searched yet
     c.post(f"/teams/{tid}/settings", data=dict(form, comp_method="rules"))
+    assert c.post(f"/teams/{tid}/webcomps", data={"map": "Ascent"}).status_code == 400   # only in "From the web"
+    # 4.10: no "You are" pick: you are the player whose Riot ID is your in-game name
+    admin = next(u for u in store.users() if u.username == "manuel")
+    assert not any(m.get("user_id") == admin.id for m in store.team(tid).member_list)
+    assert "Set your in-game name" in c.get(f"/teams/{tid}").data.decode()
+    store.update_user(admin.id, display_name="adv1ce#LFT")
+    page = c.get(f"/teams/{tid}").data.decode()
+    assert any(m.get("user_id") == admin.id and m["pid"] == me for m in store.team(tid).member_list)
+    assert "Set your in-game name" not in page and '>you</span>' in page
     # bad meta is refused, other users can't see the team
     r = c.post(f"/teams/{tid}/settings", data=dict(form, meta="Haven:\n  roles: 9D\n"), follow_redirects=True)
     assert "Map meta: Haven: roles must add up to 5" in r.data.decode()

@@ -10,7 +10,7 @@ from flask import abort, flash, g, jsonify, redirect, render_template, request, 
 
 from ..stats import roles
 from ..stats.aggregate import filter_rows, local_meta
-from ..stats.comp import Pool, parse_meta, rate, top_comps
+from ..stats.comp import Pool, parse_meta, rate
 
 SLOTS = 5
 STATUSES = ("idea", "try", "main")         # idea -> trying it in games -> our comp
@@ -95,9 +95,10 @@ def register(app, store, get_team, helpers: dict, known_maps: list[str]) -> None
         pools = [Pool.from_rows(p["name"], rows_by.get(p["pid"], [])) for p in starters]
         pid_of = {p["name"]: p["pid"] for p in starters}
         out = []
-        from ..stats.comprules import for_map, for_team
-        rules = for_team(t, store.get("comp_rules_yaml"))
-        for c in top_comps(pools, map_name, local, meta, rules=for_map(rules, map_name) if rules is not None else None):
+        from ..stats.compmodes import method_of, top as comp_top
+        method = method_of(t)
+        web = helpers["web_of"](t) if method == "web" and "web_of" in helpers else None
+        for c in comp_top(method, pools, map_name, local, meta, store.get("comp_rules_yaml"), web):
             if c.get("ok"):
                 out.append({"pattern": c.get("pattern", ""),
                             "picks": [{"pid": pid_of.get(pk["player"]), "player": pk["player"], "agent": pk["agent"]}

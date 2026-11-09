@@ -9,8 +9,8 @@ from flask import abort, flash, g, jsonify, redirect, render_template, request, 
 from ..maps import AgentRegistry
 from ..stats import roles
 from ..stats.aggregate import by_agent, by_map, by_role, filter_rows, local_meta, map_detail, summary
-from ..stats.comp import META_EXAMPLE, Pool, parse_meta, pick_helper, team_plan
-from ..stats.comprules import METHODS as COMP_METHODS, for_map, for_team
+from ..stats.comp import META_EXAMPLE, Pool, parse_meta, pick_helper
+from ..stats.compmodes import METHODS as COMP_METHODS, method_of, plan as comp_plan, top as comp_top
 from .models import picked
 from .statsjobs import StatsRunner, slug
 
@@ -336,7 +336,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         parts = key.split(":")
         if len(parts) < 2 or not parts[1].isdigit():
             return jsonify(error="bad key"), 400
-        if parts[0] in ("premier", "plans", "focus", "post", "scout", "review", "schedule"):
+        if parts[0] in ("premier", "plans", "focus", "post", "scout", "review", "schedule", "webcomps"):
             get_team(int(parts[1]))
         else:
             view_profile(int(parts[1]))
@@ -381,9 +381,45 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         return {"own": own, "members": members, "byid": byid, "rows_by": rows_by,
                 "seen_maps": sorted({r["map"] for rs in rows_by.values() for r in rs})}
 
+    @app.post("/teams/<int:tid>/webcomps")
+    def team_webcomps(tid: int):
+        """From the web (4.10): search comps for this map or all the team's maps, in the background."""
+        t = get_team(tid)
+        if method_of(t) != "web":
+            abort(400)
+        if not store.get("web_search"):
+            flash("Web search is off: an admin turns it on under Settings › Web search.", "error")
+            return redirect(url_for("team", tid=tid))
+        c = team_context(t)
+        maps = t.map_list or [m["map"] for m in by_map([r for rs in c["rows_by"].values() for r in rs])][:7]
+        which = request.form.get("map", "")
+        todo = maps if which == "__all" else [m for m in maps if m == which]
+        if not todo:
+            abort(400)
+        owner = store.profiles(t.owner_id)
+        sr.submit_webcomps(tid, todo, owner[0].language if owner else "English", picked(store))
+        return redirect(url_for("team", tid=tid, map=None if which == "__all" else which))
+
+    def link_me(t):
+        """You are the team player whose Riot ID (Name#TAG) is your in-game name (Account). Replaces the
+        "You are" pick on the comps page (4.10); links set before stay."""
+        u = g.user
+        if not u.display_name or any(m.get("user_id") == u.id for m in t.member_list):
+            return t
+        members, hit = t.member_list, False
+        for m in members:
+            p = store.profile(m["pid"])
+            if p and not m.get("user_id") and f"{p.name}#{p.tag}".lower() == u.display_name.strip().lower():
+                m["user_id"], hit = u.id, True
+                break
+        if hit:
+            store.update_team(t.id, members=members)
+            return store.team(t.id)
+        return t
+
     @app.get("/teams/<int:tid>")
     def team(tid: int):
-        t = get_team(tid)
+        t = link_me(get_team(tid))
         roles.load(cache_dir)
         c = team_context(t)
         members, byid, rows_by = c["members"], c["byid"], c["rows_by"]
@@ -396,17 +432,18 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         except Exception as e:
             meta, meta_error = {}, str(e)
         plan = None
-        rules = for_team(t, store.get("comp_rules_yaml"))
+        method = method_of(t)
+        web = sr.read_webcomps(tid) if method == "web" else None
+        rules_text = store.get("comp_rules_yaml")
+        local = local_meta(filter_rows(owner_rows(t.owner_id), t.queue))
         if len(starters) == 5 and maps:
-            plan = team_plan(starters, subs, maps, local_meta(filter_rows(owner_rows(t.owner_id), t.queue)), meta, rules)
+            plan = comp_plan(method, starters, subs, maps, local, meta, rules_text, web)
         sel = request.args.get("map") or week_map_of(app, t)
         if plan and sel not in [m["map"] for m in plan]:
             sel = plan[0]["map"]
         alts = []
         if plan and sel:
-            from ..stats.comp import top_comps
-            alts = top_comps(starters, sel, local_meta(filter_rows(owner_rows(t.owner_id), t.queue)).get(sel),
-                             meta.get(sel.lower()), rules=for_map(rules, sel) if rules is not None else None)[1:]
+            alts = comp_top(method, starters, sel, local.get(sel), meta.get(sel.lower()), rules_text, web)[1:]
         users = {u.id: u for u in store.users()}
         member_info = [{"p": byid[m["pid"]], "kind": m["kind"], "games": len(rows_by[m["pid"]]),
                         "full": sum(r.get("source") == "full" for r in rows_by[m["pid"]]),
@@ -416,7 +453,9 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             "team.html", t=t, premier_status=sr.status(f"premier:{tid}"), member_info=member_info, n_starters=len(starters), n_subs=len(subs),
             starters=[s.label for s in starters], plan=plan, maps=maps, sel=sel,
             detail=next((m for m in plan if m["map"] == sel), None) if plan else None,
-            meta_error=meta_error, queues=QUEUE_TABS, tab="comps", alts=alts, comp_method=t.comp_method,
+            meta_error=meta_error, queues=QUEUE_TABS, tab="comps", alts=alts, comp_method=method,
+            comp_label=COMP_METHODS[method], web_status=sr.status(f"webcomps:{tid}") if method == "web" else None,
+            web_data=web, web_search_on=bool(store.get("web_search")),
             linked=any(m.get("user_id") == g.user.id for m in members))
 
     @app.route("/teams/<int:tid>/settings", methods=["GET", "POST"])
@@ -446,7 +485,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             store.update_team(tid, name=(f.get("name") or t.name).strip()[:60], members=members,
                               maps=[m for m in f.getlist("maps") if m][:12], meta=meta_text,
                               queue=queue if queue in dict(QUEUE_TABS) else "all",
-                              comp_method=method if method in ("rules", "stats") else "rules")
+                              comp_method=method if method in COMP_METHODS else "rules")
             flash("Team saved.", "ok")
             return redirect(url_for("team", tid=tid))
         access = store.team_access(tid)
@@ -557,20 +596,6 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             flash("Removed.", "ok")
         return redirect(url_for("team_settings", tid=tid) + "#access")
 
-    @app.post("/teams/<int:tid>/me")
-    def team_me(tid: int):
-        t = get_team(tid)
-        pid = request.form.get("pid", "")
-        members = []
-        for m in t.member_list:
-            m = {k: v for k, v in m.items() if not (k == "user_id" and v == g.user.id)}
-            if pid.isdigit() and m["pid"] == int(pid) and not m.get("user_id"):
-                m["user_id"] = g.user.id
-            members.append(m)
-        store.update_team(tid, members=members)
-        flash("Saved: that's you in this team." if pid else "Unlinked.", "ok")
-        return redirect(request.form.get("next") or url_for("team", tid=tid))
-
     register_team_extras(app, store, sr, {"get_team": get_team, "team_context": team_context,
                                           "team_data": team_data, "owner_rows": owner_rows})
     from .strats import register as register_strats
@@ -591,7 +616,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     from .askcoach import register as register_ask
     register_ask(app, store, sr, view_profile, filter_rows)
     from .drafts import register as register_drafts
-    register_drafts(app, store, get_team, {"team_context": team_context, "owner_rows": owner_rows}, KNOWN_MAPS)
+    register_drafts(app, store, get_team, {"team_context": team_context, "owner_rows": owner_rows,
+                                           "web_of": lambda t: sr.read_webcomps(t.id)}, KNOWN_MAPS)
 
     def import_members(t) -> int:
         own_ids = {p.id for p in store.profiles(t.owner_id)}
@@ -664,7 +690,6 @@ DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sun
 def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
     from ..discord import DiscordError, post as dpost, valid_url
     from ..maps import MapRegistry
-    from ..stats.comp import top_comps
     from ..stats.teamdata import map_facts, teammate_tips
     from ..stats.teamroles import team_roles
     from ..stats.weekly import player_facts, week_id
@@ -682,7 +707,9 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
     def build(t) -> dict:
         """Everything the team pages / jobs need: comps per map, roles, data, tips. Cached until the team or
         anyone's games change (a team page used to recompute all of it on every visit)."""
-        sig = (t.id, t.members, t.maps, t.meta, t.queue, t.comp_method, store.get("comp_rules_yaml"),
+        web_sig = (tuple(sorted((k, v.get("at")) for k, v in sr.read_webcomps(t.id).items()))
+                   if method_of(t) == "web" else ())
+        sig = (t.id, t.members, t.maps, t.meta, t.queue, t.comp_method, store.get("comp_rules_yaml"), web_sig,
                tuple(sorted((p.id, sr.games(p.id).signature()) for p in store.profiles(t.owner_id))))
         hit = build_cache.get(t.id)
         if hit and hit[0] == sig:
@@ -705,9 +732,9 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
         except Exception:
             meta = {}
         local = local_meta(filter_rows(owner_rows(t.owner_id), t.queue))
-        rules = for_team(t, store.get("comp_rules_yaml"))
-        comps = {mp: top_comps(pools, mp, local.get(mp), meta.get(mp.lower()),
-                               rules=for_map(rules, mp) if rules is not None else None)
+        method = method_of(t)
+        web = sr.read_webcomps(t.id) if method == "web" else None
+        comps = {mp: comp_top(method, pools, mp, local.get(mp), meta.get(mp.lower()), store.get("comp_rules_yaml"), web)
                  for mp in maps} if len(pools) == 5 else {}
         rr = team_roles([{"label": byid[m["pid"]].name, "pid": m["pid"], "kind": m["kind"], "rows": rows_by[m["pid"]],
                           "assigned": m.get("roles", [])} for m in members], local, maps) if members else {"players": [], "lineup": {}}
