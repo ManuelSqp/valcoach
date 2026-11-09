@@ -43,6 +43,8 @@ class Settings:
     send_scores: bool = True
     upload_matches: bool = True
     only_coachable: bool = True
+    demos_dir: str = ""                  # VALORANT's replay files (4.9): %LOCALAPPDATA%\VALORANT\Saved\Demos
+    send_replays: bool = True
     autostart: bool = False
     check_updates: bool = True
     last_update_check: float = 0.0
@@ -51,6 +53,8 @@ class Settings:
     # what was done: recording name -> {"state": "done"|"waiting"|"skipped", "why": ..., "matches": [...]}
     recordings: dict = field(default_factory=dict)
     stats_sent: list = field(default_factory=list)                       # stats file names sent already
+    # replay files: demos.key(file) -> {"state": "done"|"skipped", "match_id": ..., "why": ...}
+    replays: dict = field(default_factory=dict)
     last_playlists: str = ""                                              # the day playlists were last written
 
 
@@ -71,6 +75,9 @@ def save(s: Settings) -> None:
         if len(s.recordings) > 500:
             for k in sorted(s.recordings)[:-500]:
                 s.recordings.pop(k)
+        if len(s.replays) > 500:
+            for k in list(s.replays)[:-500]:
+                s.replays.pop(k)
         p = folder() / "config.json"
         tmp = p.with_suffix(f".{threading.get_ident()}.tmp")
         tmp.write_text(json.dumps(asdict(s), indent=1), encoding="utf-8")

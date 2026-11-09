@@ -18,8 +18,8 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from ..config import (ClaudeCfg, CoachCfg, Config, HenrikCfg, OllamaCfg, PathsCfg, PlayerCfg, VideoCfg,
-                      load_config)
+from ..config import (ClaudeCfg, CoachCfg, Config, HenrikCfg, OllamaCfg, PathsCfg, PlayerCfg, ReplayCfg,
+                      VideoCfg, load_config)
 
 PROFILES_TABLE = """
 CREATE TABLE IF NOT EXISTS {name} (
@@ -94,7 +94,8 @@ CREATE TABLE IF NOT EXISTS teams (
   created_at TEXT NOT NULL,
   premier    TEXT NOT NULL DEFAULT '{}',
   discord    TEXT NOT NULL DEFAULT '{}',
-  sync       TEXT NOT NULL DEFAULT '{}'
+  sync       TEXT NOT NULL DEFAULT '{}',
+  comp_method TEXT NOT NULL DEFAULT 'rules'
 );
 CREATE TABLE IF NOT EXISTS team_access (
   team_id    INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
@@ -206,6 +207,11 @@ DEFAULTS: dict[str, str] = {
     "minimap_roi": "0.012, 0.025, 0.215, 0.382",
     "killfeed_roi": "0.70, 0.08, 0.29, 0.25",
     "sample_fps": "4",
+    # positions (4.9): "replay" = the game's replay file when there is one (else the VOD minimap),
+    # "vod" = only the VOD minimap, as before 4.9
+    "replay_source": "replay",
+    "vrfkit_path": "",             # empty = $NEXUS_VRFKIT, PATH or ~/.cargo/bin/vrfkit
+    "comp_rules_yaml": "",         # optional: edited map rules for team comps (empty = built-in stats/comp_rules.yaml)
     "workers": "1",
     "allow_signup": "0",
     "max_upload_gb": "20",         # per uploaded VOD
@@ -352,6 +358,7 @@ class Team:
     premier: str = "{}"   # JSON {name, tag, region, id, placement, stats, synced_at}
     discord: str = "{}"   # JSON {prep_url, focus_url, weekly_day, weekly_hour, last_focus_week}
     sync: str = "{}"      # JSON {nightly (default on), hour (default 2), last_day, last_try, last_at}
+    comp_method: str = "rules"   # comp suggestions: "rules" = map rules + stats (4.9), "stats" = stats only (before 4.9)
 
     @property
     def sync_info(self) -> dict:
@@ -452,6 +459,9 @@ class Store:
             if "sync" not in tcols:
                 # v2.15 database: nightly automatic sync
                 c.execute("ALTER TABLE teams ADD COLUMN sync TEXT NOT NULL DEFAULT '{}'")
+            if "comp_method" not in tcols:
+                # v4.9 database: comp suggestions with map rules ("rules") or from the stats only ("stats", as before)
+                c.execute("ALTER TABLE teams ADD COLUMN comp_method TEXT NOT NULL DEFAULT 'rules'")
             ucols = [r[1] for r in c.execute("PRAGMA table_info(users)")]
             if "display_name" not in ucols:
                 # v2.11 database: in-game name shown to teammates
@@ -852,7 +862,7 @@ class Store:
         return int(cur.lastrowid)
 
     def update_team(self, tid: int, **fields) -> None:
-        allowed = {"name", "members", "maps", "meta", "queue", "premier", "discord", "sync"}
+        allowed = {"name", "members", "maps", "meta", "queue", "premier", "discord", "sync", "comp_method"}
         sets = {k: (json.dumps(v) if k in ("members", "maps", "premier", "discord", "sync") and not isinstance(v, str) else v)
                 for k, v in fields.items() if k in allowed}
         if sets:
@@ -1091,6 +1101,8 @@ class Store:
                            playbook=str(pdir / "playbook.yaml"), notes_dir=str(pdir / "notes")),
             video=VideoCfg(minimap_roi=parse_roi(s["minimap_roi"]), killfeed_roi=parse_roi(s["killfeed_roi"]),
                            sample_fps=float(s["sample_fps"])),
+            replay=ReplayCfg(source=s["replay_source"] if s["replay_source"] in ("replay", "vod") else "replay",
+                             vrfkit=s["vrfkit_path"], dir=str(self.data_dir / "replays")),
             paths=PathsCfg(cache_dir=str(self.data_dir / "cache"), output_dir=str(self.data_dir / "reports")),
             root=self.data_dir,
         )

@@ -7,6 +7,10 @@ How an agent is rated for a player on a map (all win rates pulled towards 50 %):
   * meta: how often it's played on that map in your matches, plus your own preferences (meta file)
 A comp must cover the roles (by default at least one Controller, Initiator and Sentinel; a
 Duelist is a bonus). The best combination of distinct agents wins.
+
+4.9: with `rules` (a comprules.MapRules, the team's "Comp suggestions" = Map rules + your stats) the map's
+rules are added: needed / key agents per map, the role mixes that work there and what every comp needs
+(see comprules.py). Without it (Your stats only) everything works exactly as before.
 """
 from __future__ import annotations
 
@@ -93,7 +97,8 @@ def parse_meta(text: str) -> dict[str, dict]:
     return out
 
 
-def rate(pool: Pool, agent: str, map_name: str, local: dict | None = None, meta: dict | None = None) -> dict:
+def rate(pool: Pool, agent: str, map_name: str, local: dict | None = None, meta: dict | None = None,
+         rules=None) -> dict:
     """Score and the numbers behind it."""
     m = map_name.lower()
     n_a, n_am = pool.n.get(agent, 0), pool.nm.get((m, agent), 0)
@@ -116,13 +121,19 @@ def rate(pool: Pool, agent: str, map_name: str, local: dict | None = None, meta:
         if agent.lower() in meta.get("avoid", set()):
             score -= 200                  # practically excluded
             why.append("avoided in your meta")
+    if rules is not None:
+        pts, reason = rules.agent_bonus(agent)
+        if pts:
+            score += pts
+            why.append(reason)
     return {"agent": agent, "role": roles.role_of(agent), "score": round(score, 1), "n_map": n_am, "n_all": n_a,
             "wr_map": pool.wm.get((m, agent), 0) / n_am if n_am else None,
             "acs_map": pool.acsm.get((m, agent), 0) / n_am if n_am else None,
             "wr_all": pool.w.get(agent, 0) / n_a if n_a else None, "meta_share": share, "why": why}
 
 
-def _role_score(agents: list[str], pattern: dict | None) -> tuple[float, list[str]]:
+def _role_score(agents: list[str], pattern: dict | None, rules=None) -> tuple[float, list[str], list[str]]:
+    """(points, missing roles, notes). notes only come from map rules (4.9)."""
     counts = defaultdict(int)
     for a in agents:
         counts[roles.role_of(a)] += 1
@@ -130,7 +141,14 @@ def _role_score(agents: list[str], pattern: dict | None) -> tuple[float, list[st
         off = sum(abs(counts.get(r, 0) - pattern.get(r, 0)) for r in roles.ROLES) / 2
         missing = [f"{pattern[r] - counts.get(r, 0)} more {r}" for r in roles.ROLES
                    if counts.get(r, 0) < pattern.get(r, 0)]
-        return -PATTERN_PENALTY * off, missing
+        pen, notes = -PATTERN_PENALTY * off, []
+        if rules is not None:                 # your own role mix decides the roles; the other map rules still count
+            extra, notes, _ = rules.comp_score(agents, pattern)
+            pen += extra
+        return pen, missing, notes
+    if rules is not None:
+        pts, notes, missing = rules.comp_score(agents)
+        return pts, missing, notes
     pen, missing = 0.0, []
     for r, p in MISSING_ROLE.items():
         if counts.get(r, 0) == 0 and p:
@@ -138,18 +156,19 @@ def _role_score(agents: list[str], pattern: dict | None) -> tuple[float, list[st
             missing.append(r)
     if counts.get("Duelist", 0):
         pen += DUELIST_BONUS
-    return pen, missing
+    return pen, missing, []
 
 
-def best_comp(players: list[Pool], map_name: str, local: dict | None = None, meta: dict | None = None) -> dict:
-    """Best distinct-agent assignment for these players on this map."""
+def best_comp(players: list[Pool], map_name: str, local: dict | None = None, meta: dict | None = None,
+              rules=None) -> dict:
+    """Best distinct-agent assignment for these players on this map (rules: comprules.MapRules or None)."""
     cands, no_data = [], []
     for p in players:
         if not p.n:
             no_data.append(p.label)
             cands.append([])
             continue
-        rated = sorted((rate(p, a, map_name, local, meta) for a in p.n), key=lambda x: -x["score"])
+        rated = sorted((rate(p, a, map_name, local, meta, rules) for a in p.n), key=lambda x: -x["score"])
         cands.append(rated[:CANDIDATES])
     if no_data:
         return {"map": map_name, "ok": False, "no_data": no_data}
@@ -159,39 +178,43 @@ def best_comp(players: list[Pool], map_name: str, local: dict | None = None, met
         agents = [c["agent"] for c in combo]
         if len(set(agents)) < len(agents):
             continue
-        rs, missing = _role_score(agents, pattern)
+        rs, missing, notes = _role_score(agents, pattern, rules)
         total = sum(c["score"] for c in combo) + rs
         if best is None or total > best[0]:
-            best = (total, combo, missing)
+            best = (total, combo, missing, notes)
         if pattern and not missing and (exact is None or total > exact[0]):
-            exact = (total, combo, missing)
+            exact = (total, combo, missing, notes)
     if exact is not None:
         best = exact                 # a role mix you set is followed whenever the pools allow it
     if best is None:
         return {"map": map_name, "ok": False, "no_data": [], "reason": "not enough different agents in the pools"}
-    total, combo, missing = best
+    total, combo, missing, notes = best
     picks = [{"player": p.label, **c, "low_sample": c["n_map"] < 2 and c["n_all"] < 5,
               "alternatives": [x["agent"] for x in cand if x["agent"] != c["agent"]][:2]}
              for p, c, cand in zip(players, combo, cands)]
     from .aggregate import pattern as pat_str
     return {"map": map_name, "ok": True, "total": round(total, 1), "picks": picks, "missing_roles": missing,
-            "pattern": pat_str([c["agent"] for c in combo])}
+            "pattern": pat_str([c["agent"] for c in combo]), "notes": notes,
+            "method": "rules" if rules is not None else "stats"}
 
 
 def team_plan(starters: list[Pool], subs: list[Pool], maps: list[str], local: dict[str, dict],
-              meta: dict[str, dict]) -> list[dict]:
-    """Per map: the starters' comp, and for each starter the best fill-in from the subs."""
+              meta: dict[str, dict], rules: dict | None = None) -> list[dict]:
+    """Per map: the starters' comp, and for each starter the best fill-in from the subs.
+    rules: the parsed map rules (comprules.load_rules) for the "Map rules + your stats" method, None = stats only."""
+    from .comprules import for_map
     out = []
     for m in maps:
         lm, mm = local.get(m), meta.get(m.lower())
-        main = best_comp(starters, m, lm, mm)
+        mr = for_map(rules, m) if rules is not None else None
+        main = best_comp(starters, m, lm, mm, mr)
         fills = []
         if main.get("ok"):
             for i, missing in enumerate(starters):
                 best = None
                 for s in subs:
                     lineup = starters[:i] + [s] + starters[i + 1:]
-                    c = best_comp(lineup, m, lm, mm)
+                    c = best_comp(lineup, m, lm, mm, mr)
                     if c.get("ok") and (best is None or c["total"] > best[1]["total"]):
                         best = (s, c)
                 if best:
@@ -208,7 +231,7 @@ def team_plan(starters: list[Pool], subs: list[Pool], maps: list[str], local: di
 
 
 def pick_helper(pool: Pool, map_name: str, locked: list[str], local: dict | None = None,
-                meta: dict | None = None, top: int = 4) -> dict:
+                meta: dict | None = None, top: int = 4, rules=None) -> dict:
     """Solo queue: what to lock from your pool given what your teammates already locked."""
     have = defaultdict(int)
     for a in locked:
@@ -219,7 +242,7 @@ def pick_helper(pool: Pool, map_name: str, locked: list[str], local: dict | None
     for a in pool.n:
         if a in locked:
             continue
-        r = rate(pool, a, map_name, local, meta)
+        r = rate(pool, a, map_name, local, meta, rules)
         role = r["role"]
         bonus = 0.0
         tight = slots_left <= len(need)          # every remaining pick must fill a missing role
@@ -244,14 +267,14 @@ def pick_helper(pool: Pool, map_name: str, locked: list[str], local: dict | None
 
 
 def top_comps(players: list[Pool], map_name: str, local: dict | None = None, meta: dict | None = None,
-              n: int = 3, min_diff: int = 2) -> list[dict]:
+              n: int = 3, min_diff: int = 2, rules=None) -> list[dict]:
     """The n best comps that differ from each other by at least `min_diff` agents."""
-    best = best_comp(players, map_name, local, meta)
+    best = best_comp(players, map_name, local, meta, rules)
     if not best.get("ok"):
         return [best]
     cands = []
     for p in players:
-        rated = sorted((rate(p, a, map_name, local, meta) for a in p.n), key=lambda x: -x["score"])
+        rated = sorted((rate(p, a, map_name, local, meta, rules) for a in p.n), key=lambda x: -x["score"])
         cands.append(rated[:CANDIDATES])
     pattern = (meta or {}).get("roles")
     scored = []
@@ -259,20 +282,21 @@ def top_comps(players: list[Pool], map_name: str, local: dict | None = None, met
         agents = [c["agent"] for c in combo]
         if len(set(agents)) < len(agents):
             continue
-        rs, missing = _role_score(agents, pattern)
+        rs, missing, notes = _role_score(agents, pattern, rules)
         if pattern and missing:
             continue
-        scored.append((sum(c["score"] for c in combo) + rs, combo, missing))
+        scored.append((sum(c["score"] for c in combo) + rs, combo, missing, notes))
     scored.sort(key=lambda x: -x[0])
     from .aggregate import pattern as pat_str
     chosen = [best]
-    for total, combo, missing in scored:
+    for total, combo, missing, notes in scored:
         if len(chosen) >= n:
             break
         agents = {c["agent"] for c in combo}
         if all(len(agents - {p["agent"] for p in c["picks"]}) >= min_diff for c in chosen):
             chosen.append({"map": map_name, "ok": True, "total": round(total, 1), "missing_roles": missing,
-                           "pattern": pat_str([c["agent"] for c in combo]),
+                           "pattern": pat_str([c["agent"] for c in combo]), "notes": notes,
+                           "method": "rules" if rules is not None else "stats",
                            "picks": [{"player": p.label, **c, "low_sample": c["n_map"] < 2 and c["n_all"] < 5, "alternatives": []}
                                      for p, c in zip(players, combo)]})
     return chosen

@@ -1,7 +1,7 @@
 // Nexus round replay: continuous playback on the minimap.
 // Data per round (RD.rounds[n]): events (kills/plants/defuses with snapshots), tracks per player
 // ([t, u, v, kind] with kind 1 = known position, 0 = estimated route, 2 = spawn), roster, end (ms),
-// measured (ids tracked on the VOD minimap) and seen ([t, u, v] enemy icons spotted on the minimap).
+// measured (ids tracked on the VOD minimap, or every player with a replay file: source 'replay file') and seen ([t, u, v] enemy icons spotted on the minimap).
 (function () {
   const NS = 'http://www.w3.org/2000/svg', S = 1000;
   const COL = {us: '#2dd4bf', them: '#ff4655', you: '#f6d24a', better: '#f2b84b', plant: '#ff4655', defuse: '#2dd4bf'};
@@ -79,7 +79,7 @@
        <label><input type="checkbox" data-o="trails" checked> trails</label>
        ${R.view ? '<label><input type="checkbox" data-o="cones" checked> view cones</label>' : ''}
        ${(R.seen || []).length ? '<label><input type="checkbox" data-o="seen" checked> spotted enemies</label>' : ''}
-       <span class="rp-note">solid = known position (kills${(R.measured || []).length ? ', your minimap' : ''}) · faded = estimated ${R.routes ? '(walkable route at running speed)' : '(straight line)'}${(R.seen || []).length ? ' · red rings = enemies seen on your minimap' : ''} · click a player to show their route · zoom: + / − or Ctrl + wheel</span>`);
+       <span class="rp-note">solid = known position (kills${(R.measured || []).length ? (R.source === 'replay file' ? ', replay file' : ', your minimap') : ''}) · faded = estimated ${R.routes ? '(walkable route at running speed)' : '(straight line)'}${(R.seen || []).length ? ' · red rings = enemies seen on your minimap' : ''} · click a player to show their route · zoom: + / − or Ctrl + wheel</span>`);
     main.append(stage, bar, opts);
     if (B) main.appendChild(h('div', {class: 'rp-better'}, `<b>Better position ${esc(B.time)}: ${esc(B.callout)}</b> — ${esc(B.why)}`));
     const side = h('aside', {class: 'rp-side'});
@@ -126,7 +126,7 @@
     const rows = {};
     for (const id of ids) {
       const r = h('button', {class: 'rp-row', 'data-id': id, title: 'Show / hide route'},
-        `${avatar(id)}<span class="rp-nm">${esc(who(id).you ? 'You' : who(id).name)}<small>${esc(who(id).agent)}${measured.has(id) ? ' · tracked on video' : ''}</small></span><span class="rp-st"></span>`);
+        `${avatar(id)}<span class="rp-nm">${esc(who(id).you ? 'You' : who(id).name)}<small>${esc(who(id).agent)}${measured.has(id) ? (R.source === 'replay file' ? ' · from replay file' : ' · tracked on video') : ''}</small></span><span class="rp-st"></span>`);
       r.onclick = () => { selected.has(id) ? selected.delete(id) : selected.add(id); draw(); };
       rosterEl.appendChild(r); rows[id] = r;
     }

@@ -2,7 +2,8 @@
 - puts the coach's KovaaK's playlists into KovaaK's Playlists folder (if the player turns that on),
 - sends new KovaaK's scores from the stats folder,
 - cuts the matches out of Medal session recordings and uploads them, so the VOD is ready on the match's
-  report page ("Recording (VOD)": the clip from the companion app is picked already).
+  report page ("Recording (VOD)": the clip from the companion app is picked already),
+- sends the game's replay files (.vrf) from VALORANT's Demos folder (4.9, see replays.py).
 
 The app logs in once with username and password and gets a key for this one device (Account › Devices lists
 and removes them; changing the password logs every device out). Every call sends that key as
@@ -182,8 +183,11 @@ def register(app, store, uploads, check_login) -> None:
         if not isinstance(data, dict) or type(data.get("size")) is not int or data["size"] <= 0:
             raise UploadError("expected {\"name\": file name, \"size\": bytes}")
         name = os.path.basename(str(data.get("name") or "match.mp4"))
+        if Path(name).suffix.lower() == ".vrf":                 # a replay file (4.9)
+            from .replays import begin_upload
+            return jsonify(**begin_upload(store, uploads, g.user.id, data))
         if Path(name).suffix.lower() != ".mp4":
-            raise UploadError("The Nexus app uploads mp4 files.")
+            raise UploadError("The Nexus app uploads mp4 and vrf files.")
         if data["size"] > float(store.get("max_upload_gb") or 20) * 1024 ** 3:
             raise UploadError(f"The clip is too big (limit {store.get('max_upload_gb')} GB, set by the admin).", 413)
         return jsonify(id=uploads.begin(g.user.id, name, data["size"]).id, chunk=CHUNK_BYTES)
@@ -194,6 +198,23 @@ def register(app, store, uploads, check_login) -> None:
         if not offset.isdigit():
             raise UploadError("offset missing")
         return jsonify(received=uploads.write(g.user.id, upload_id, int(offset), request.stream, request.content_length))
+
+    @app.post("/api/companion/replays/check")
+    def companion_replays_check():
+        """Which of these match ids (from the replay file names) the server has already: {"have": [...]}."""
+        from .. import replayfile
+        from .replays import replays_dir
+        b = request.get_json(silent=True) or {}
+        ids = [str(i).lower() for i in (b.get("match_ids") or [])[:200] if replayfile.UUID_RE.fullmatch(str(i))]
+        return jsonify(have=[i for i in ids if replayfile.has_replay(replays_dir(store), i)])
+
+    @app.post("/api/companion/replays")
+    def companion_replay():
+        """A finished .vrf upload: read it and keep it for its match."""
+        from .replays import ingest_upload
+        b = request.get_json(silent=True) or {}
+        info = ingest_upload(store, uploads, g.user.id, str(b.get("upload_id") or ""))
+        return jsonify(ok=True, **info)
 
     @app.post("/api/companion/players/<int:pid>/clips")
     def companion_clip(pid: int):

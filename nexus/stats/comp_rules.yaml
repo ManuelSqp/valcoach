@@ -1,0 +1,111 @@
+# Map rules for team comps (Nexus 4.9). Used when a team's "Comp suggestions" are set to "Map rules + your stats".
+# Your players' own results still decide who plays what; these rules add what the stats can't know.
+# Edit them in Settings › Map rules for team comps; a team's own map meta (team settings) still wins.
+#
+# general: rules for every comp
+#   need:  {role: n}   at least n of that role (a comp without them is only suggested if the pools allow nothing else)
+#   max:   {role: n}   more than n of that role costs points
+#   want:  utility a comp should have: at least one of `agents`, else `points` off, `why` is shown
+# maps: per map (name as in the game)
+#   roles: role mixes that work on the map (D = Duelist, I = Initiator, C = Controller, S = Sentinel, adding up to 5)
+#   need:  at least one of these agents (the map is much harder without), with the reason
+#   key:   agents the map rewards, with the reason
+#   good:  agents that fit the map well
+#
+# These are based on the maps' layout and the agents' kits. The meta also moves with patches and map changes:
+# adjust the agents here when it does. A map that isn't listed only gets the general rules.
+
+general:
+  need: {Controller: 1}
+  max: {Duelist: 2, Controller: 2, Sentinel: 2, Initiator: 3}
+  roles: ["1D 2I 1C 1S", "1D 1I 2C 1S", "2D 1I 1C 1S"]
+  want:
+    flash:
+      agents: [Breach, Skye, KAY/O, Gekko, Phoenix, Yoru, Tejo]
+      points: 10
+      why: nobody can flash or stun close corners for the entry
+    info:
+      agents: [Sova, Fade, Skye, Gekko, KAY/O, Tejo, Cypher]
+      points: 10
+      why: nobody can gather information before a take or a retake
+
+maps:
+  Ascent:
+    roles: ["1D 2I 1C 1S"]
+    key:
+      Sova: recon and shock lineups cover the open mid and both sites
+      KAY/O: suppression breaks the sites' set-ups on a take
+      Killjoy: her set-up locks a site down on her own
+    good: [Omen, Astra, Jett, Fade, Gekko, Breach, Cypher, Vyse]
+  Bind:
+    roles: ["1D 1I 2C 1S", "1D 2I 1C 1S"]
+    key:
+      Brimstone: three fast smokes and stim for Bind's short executes
+      Viper: a wall that cuts A short or B long
+      Raze: satchels and nades clear Bind's tight corners and Hookah
+    good: [Skye, Fade, Gekko, Cypher, Astra, Sage, Harbor]
+  Haven:
+    roles: ["1D 2I 1C 1S"]
+    key:
+      Breach: stuns through walls into Garage and the site entries
+      Sova: recon reaches all three sites
+      Killjoy: holds a site alone while the others cover the other two
+    good: [Omen, Astra, Jett, Fade, KAY/O, Gekko, Cypher, Vyse]
+  Split:
+    roles: ["1D 2I 1C 1S", "1D 1I 2C 1S"]
+    key:
+      Raze: blast packs reach Split's heights and her nades clear tight corners
+      Omen: one-way smokes and teleports for Mid and Heaven
+      Cypher: tripwires shut the narrow mid and site entries
+    good: [Viper, Astra, Skye, Breach, Fade, Sage, Killjoy, Jett]
+  Icebox:
+    roles: ["1D 2I 1C 1S", "1D 1I 2C 1S"]
+    need:
+      Viper: her wall splits A and B sites; without it the long sightlines can't be crossed safely
+    key:
+      Sova: recon and shock darts reach the long site lines
+      Killjoy: holds B or A alone
+    good: [Jett, KAY/O, Gekko, Sage, Harbor, Fade]
+  Breeze:
+    roles: ["1D 2I 1C 1S", "1D 1I 2C 1S"]
+    need:
+      Viper: her wall is the only way to split Breeze's huge sites
+    key:
+      Sova: recon covers the wide open spaces
+      Cypher: tripwires shut the long, narrow entries (B main, A hall)
+    good: [Jett, Harbor, KAY/O, Skye, Chamber, Yoru]
+  Fracture:
+    roles: ["1D 2I 1C 1S", "1D 1I 2C 1S"]
+    key:
+      Breach: stuns through Fracture's thin walls and narrow chokes
+      Brimstone: fast smokes for split pushes from both sides
+      Fade: reveals the many corners of the sites
+    good: [Raze, Neon, Killjoy, Cypher, Astra, Chamber]
+  Pearl:
+    roles: ["1D 2I 1C 1S"]
+    key:
+      Astra: global smokes and walls for the long mid and both sites at once
+      Fade: prowlers clear Pearl's many corners
+      Killjoy: holds B long alone
+    good: [Harbor, Viper, Sova, Jett, Neon, KAY/O, Cypher]
+  Lotus:
+    roles: ["1D 2I 1C 1S", "1D 1I 2C 1S"]
+    key:
+      Omen: one-way smokes and teleports across three sites
+      Fade: clears the tight sites and stairs
+      Killjoy: holds a site alone so the others can cover two
+    good: [Astra, Viper, Raze, Neon, Gekko, Skye, Breach, Cypher]
+  Sunset:
+    roles: ["1D 2I 1C 1S"]
+    key:
+      Omen: controls Mid with one-ways and teleports
+      Cypher: shuts Mid and B main with trips
+      Breach: stuns through the walls into Mid and A main
+    good: [Raze, Neon, Fade, Gekko, KAY/O, Killjoy]
+  Abyss:
+    roles: ["1D 2I 1C 1S"]
+    key:
+      Astra: global smokes and stars across the open map
+      Sova: recon covers the long sightlines
+      Cypher: holds the edges and flanks
+    good: [Omen, Jett, Harbor, Fade, Killjoy, Vyse]

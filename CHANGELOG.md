@@ -4,6 +4,29 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.9.0
+- **Replay files**: VALORANT's own replay of a match (`.vrf`, downloaded in the game's match history, Competitive and
+  Premier) has every player's position for the whole round. Upload it on the match's coach page (*Replay file* card)
+  or let the Nexus app send new ones by itself (*This PC › Replay files*). Nexus reads it with
+  [vrfkit](https://github.com/yakisoba0728/vrfkit) and lines it up with the match data by the kills, so:
+  - the round coaching gets where **both teams** really were, per 10 s (setups, stacks, rotations, timings), not only
+    what your minimap showed;
+  - the report's replay draws **all ten players' real paths** instead of estimating them between kills;
+  - no recording is needed for that; a VOD still gives the jump buttons.
+- **Switch back**: *Settings › Replay files › Positions* = *VOD minimap only* makes reports exactly as before.
+  With *Replay file when there is one* (default), a match without a replay file, or with one that doesn't fit the
+  match data, uses the VOD minimap as before. The report header says which positions were used.
+- **vrfkit**: the Docker image builds it. Without Docker install it once (README, *Replay files*); *Settings › Replay
+  files › Test* checks it. New dependency: `pyarrow` (`pip install -e .` installs it).
+- **Team comps with map rules**: *Comp suggestions* in the team settings. *Map rules + your stats* (default) adds what
+  the stats can't know: the role mixes that work on each map, the agents a map needs or rewards (a Viper wall on Breeze
+  and Icebox, recon on Ascent, …), and for every comp a controller, at most two duelists, someone to flash corners and
+  someone for information. Every rule that changed a comp is shown under it, and the picks say why. *Your stats only*
+  makes comps exactly as before. Admins edit the rules under *Settings › Map rules for team comps*; a team's own map
+  meta still wins.
+- Nexus app for Windows 4.9.0: sends replay files from VALORANT's Demos folder (on by default; each file once, one the
+  server can't read is not sent again).
+
 ## 4.8.0
 - **Aim insights** (*Practice › Aim insights*, or *Aim insights* on the trainer page): every round in the aim trainer
   now measures how you aim, and the page shows what stands out over the last 30 days:

@@ -279,6 +279,25 @@ def do_minimap(cfg: Config, match: Match, map_info: MapInfo, vod: str, sync, puu
 
 
 # ---------------------------------------------------------------------------
+# replay files (4.9)
+# ---------------------------------------------------------------------------
+def replays_dir(cfg: Config) -> Path:
+    return cfg.path(cfg.replay.dir)
+
+
+def replay_positions(cfg: Config, match: Match, puuid: str, map_info: MapInfo | None,
+                     log: Log = _noop) -> dict | None:
+    """Positions of all players from the match's replay file, or None (then the VOD minimap is used)."""
+    from . import replayfile
+    try:
+        return replayfile.for_match(replays_dir(cfg), cfg.path(cfg.paths.cache_dir) / "vrf_work",
+                                    replayfile.vrfkit_path(cfg.replay.vrfkit), match, puuid, map_info, log)
+    except Exception as e:              # a broken file must never stop the report: fall back to the VOD
+        log(f"! Replay file not used ({e})")
+        return None
+
+
+# ---------------------------------------------------------------------------
 # notes
 # ---------------------------------------------------------------------------
 def notes_rounds(match: Match, puuid: str) -> list[dict]:
@@ -379,12 +398,26 @@ def run(cfg: Config, req: CoachRequest, log: Log = _noop) -> CoachResult:
 
     an = analyse(match, puuid, map_info)
 
+    # positions: the game's replay file (4.9) or, as before, the VOD minimap. Settings › Replay files › Positions.
+    rep = None
+    if cfg.replay.source == "replay" and not req.no_minimap:
+        rep = replay_positions(cfg, match, puuid, map_info, log)
+    elif cfg.replay.source == "vod":
+        log("· Positions: VOD minimap (replay files are switched off in Settings)")
+
     sync = None
     if req.vod:
         sync = do_sync(cfg, match, req.vod, req.anchor, log)
-        if map_info and not req.no_minimap:
+        if map_info and not req.no_minimap and rep is None:
             an.minimap, _ = do_minimap(cfg, match, map_info, req.vod, sync, puuid, req.recalibrate, log=log,
                                        paths=an.self_paths, others=an.vod_others)
+            if an.minimap or an.self_paths:
+                an.positions = "vod"
+        elif rep is not None:
+            log("· VOD used for the jump buttons only: the replay file has the positions")
+    if rep is not None:
+        an.minimap, an.self_paths, an.vod_others = rep["minimap"], rep["self_paths"], rep["others"]
+        an.positions = "replay"
 
     from .coach.replay import nav_grid
     an.nav = nav_grid(map_info, MapRegistry(cfg.path(cfg.paths.cache_dir)))

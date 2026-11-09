@@ -591,6 +591,14 @@ def test_stats_teams_and_pick_helper(app, monkeypatch):
     page = c.get(f"/teams/{tid}?map=Haven").data.decode()
     assert "If someone is missing" in page and "role mix from your meta" in page
     assert "Premier squad" in c.get("/").data.decode()          # dashboard lists the team
+    # 4.9: comp suggestions switch, map rules by default, "your stats only" exactly as before
+    assert "map rules + your stats" in c.get(f"/teams/{tid}?map=Ascent").data.decode()
+    assert 'name="comp_method"' in c.get(f"/teams/{tid}/settings").data.decode()
+    assert c.post(f"/teams/{tid}/settings", data=dict(form, comp_method="stats")).status_code == 302
+    assert app.extensions["nexus"]["store"].team(tid).comp_method == "stats"
+    page = c.get(f"/teams/{tid}?map=Ascent").data.decode()
+    assert "your stats only" in page and "Map rules:" not in page
+    c.post(f"/teams/{tid}/settings", data=dict(form, comp_method="rules"))
     # bad meta is refused, other users can't see the team
     r = c.post(f"/teams/{tid}/settings", data=dict(form, meta="Haven:\n  roles: 9D\n"), follow_redirects=True)
     assert "Map meta: Haven: roles must add up to 5" in r.data.decode()
@@ -2919,3 +2927,71 @@ def test_aim_insights_from_the_trainers_runs(app):
     de = c.get(f"/profiles/{pid}/trainer/insights").data.decode()
     assert "Aim-Analyse" in de and "Flicks nach links sind langsamer" in de and "Hand, Griff und wie du es behebst" in de
     assert c.get("/profiles/999/trainer/insights").status_code == 404
+
+
+def test_replay_files_settings_upload_and_app(app, monkeypatch):
+    """4.9: the positions switch, vrfkit test, the coach page's replay card and uploads from the page and the app."""
+    from nexus import replayfile
+    c = setup_admin(app)
+    pid = add_profile(c)
+    store = app.extensions["nexus"]["store"]
+    page = c.get("/settings").data.decode()
+    assert 'name="replay_source"' in page and 'name="comp_rules_yaml"' in page and "Viper" in page
+    form = {"ollama_temperature": "0.3", "ollama_num_ctx": "16384", "ollama_parallel": "4", "ollama_timeout_s": "300",
+            "sample_fps": "2", "workers": "1", "max_upload_gb": "20", "max_jobs_per_user": "3",
+            "minimap_roi": store.get("minimap_roi"), "killfeed_roi": store.get("killfeed_roi")}
+    assert c.post("/settings", data=dict(form, replay_source="vod", vrfkit_path="/opt/nope/vrfkit")).status_code == 302
+    assert store.get("replay_source") == "vod" and store.get("vrfkit_path") == "/opt/nope/vrfkit"
+    assert store.build_config(store.profile(pid)).replay.source == "vod"
+    r = c.post("/settings/test/vrfkit").get_json()
+    assert not r["ok"] and "not found" in r["msg"]
+    r = c.post("/settings", data=dict(form, comp_rules_yaml="maps:\n  Ascent:\n    roles: ['9D']\n"), follow_redirects=True)
+    assert "Map rules for comps" in r.data.decode() and store.get("comp_rules_yaml") == ""
+    c.post("/settings", data=dict(form, replay_source="replay"))
+    assert store.build_config(store.profile(pid)).replay.source == "replay"
+
+    page = c.get(f"/profiles/{pid}/coach/{MATCH_ID}").data.decode()
+    assert 'id="replaycard"' in page and "Upload replay file" in page
+
+    # upload from the coach page (vrfkit itself is tested in test_replayfile.py)
+    def fake_ingest(vrf, rdir, work, vrfkit, keep_vrf=True):
+        mid = vrf.read_bytes().decode().strip()
+        Path(rdir).mkdir(parents=True, exist_ok=True)
+        (Path(rdir) / f"{mid}.vrf").write_bytes(b"x")
+        return {"match_id": mid, "players": 10, "rounds": 6, "deaths": 40, "build": "t", "map_url": ""}
+    monkeypatch.setattr(replayfile, "ingest", fake_ingest)
+    assert c.post("/api/replays", json={"name": "x.mp4", "size": 10}).status_code == 400
+    body = MATCH_ID.encode()
+    up = c.post("/api/replays", json={"name": "replay.vrf", "size": len(body)}).get_json()
+    assert c.put(f"/api/uploads/{up['id']}?offset=0", data=body).get_json()["received"] == len(body)
+    r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}/replay", json={"upload_id": up["id"]})
+    assert r.status_code == 200 and r.get_json()["players"] == 10, r.data
+    assert "The server has this match" in c.get(f"/profiles/{pid}/coach/{MATCH_ID}").data.decode()
+    assert not list((store.data_dir / "cache" / "vrf_work").glob("*"))          # the upload was cleaned up
+    # a replay of another match is kept for that match, and said so
+    other = b"12b3659c-735e-432a-8f55-91425f8934df"
+    up = c.post("/api/replays", json={"name": "r.vrf", "size": len(other)}).get_json()
+    c.put(f"/api/uploads/{up['id']}?offset=0", data=other)
+    r = c.post(f"/profiles/{pid}/coach/{MATCH_ID}/replay", json={"upload_id": up["id"]})
+    assert r.status_code == 409 and "another match" in r.get_json()["error"]
+
+    # from the Nexus app: check what's there, upload the rest
+    token = app.test_client().post("/api/companion/login", json={"username": "manuel", "password": ADMIN_PW}).get_json()["token"]
+    H = {"Authorization": f"Bearer {token}"}
+    anon = app.test_client()
+    have = anon.post("/api/companion/replays/check", headers=H,
+                     json={"match_ids": ["12b3659c-735e-432a-8f55-91425f8934df", "aaaaaaaa-0000-0000-0000-000000000000",
+                                         "../../etc"]}).get_json()["have"]
+    assert have == ["12b3659c-735e-432a-8f55-91425f8934df"]
+    new = b"aaaaaaaa-0000-0000-0000-000000000000"
+    up = anon.post("/api/companion/uploads", headers=H, json={"name": "aaaaaaaa-0000-0000-0000-000000000000.vrf",
+                                                              "size": len(new)}).get_json()
+    anon.put(f"/api/companion/uploads/{up['id']}?offset=0", headers=H, data=new)
+    r = anon.post("/api/companion/replays", headers=H, json={"upload_id": up["id"]})
+    assert r.status_code == 200 and r.get_json()["match_id"] == new.decode()
+    # an unreadable replay is refused with a reason (the app then doesn't send it again)
+    monkeypatch.setattr(replayfile, "ingest", lambda *a, **k: (_ for _ in ()).throw(replayfile.ReplayError("bad file")))
+    up = anon.post("/api/companion/uploads", headers=H, json={"name": "b.vrf", "size": 3}).get_json()
+    anon.put(f"/api/companion/uploads/{up['id']}?offset=0", headers=H, data=b"abc")
+    r = anon.post("/api/companion/replays", headers=H, json={"upload_id": up["id"]})
+    assert r.status_code == 422 and r.get_json()["error"] == "bad file"

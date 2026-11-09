@@ -948,7 +948,10 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         if companion_clip:
             suggested = "companion"
         notes = pipeline.read_notes(cfg, match.match_id)
+        from .. import replayfile
         return render_template("coach.html", p=p, match_id=match.match_id, s=summary, vods=vods, companion_clip=companion_clip,
+                               has_replay=replayfile.has_replay(pipeline.replays_dir(cfg), match.match_id),
+                               replay_source=cfg.replay.source,
                                suggested=suggested, vod_root=vod_root(g.user), notes_count=len(notes),
                                jobs=store.jobs_for_match(pid, match.match_id), active_pid=pid)
 
@@ -1384,6 +1387,25 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 store.set("youtube_api_key", f["youtube_api_key"].strip())
             if f.get("clear_youtube_key"):
                 store.set("youtube_api_key", "")
+            if f.get("replay_source") in ("replay", "vod"):          # Replay files (4.9)
+                store.set("replay_source", f["replay_source"])
+            if "vrfkit_path" in f:
+                vp = f.get("vrfkit_path", "").strip()
+                if vp and ("\n" in vp or len(vp) > 400):
+                    errors.append("vrfkit: the full path of the program, e.g. /home/user/.cargo/bin/vrfkit")
+                else:
+                    store.set("vrfkit_path", vp)
+            if "comp_rules_yaml" in f:                                # map rules for team comps (4.9)
+                from ..stats.comprules import DEFAULT_RULES, parse_rules
+                text = f.get("comp_rules_yaml", "").replace("\r\n", "\n")
+                if f.get("reset_comp_rules") or text.strip() == DEFAULT_RULES.read_text().strip():
+                    store.set("comp_rules_yaml", "")
+                else:
+                    try:
+                        parse_rules(text)
+                        store.set("comp_rules_yaml", text)
+                    except Exception as e:
+                        errors.append(f"Map rules for comps: {e}")
             if "pros_yaml" in f:
                 from ..stats.style import DEFAULT_PROS, load_pros
                 text = f.get("pros_yaml", "").replace("\r\n", "\n")
@@ -1406,8 +1428,13 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         models, ollama_error = ollama_models()
         s = store.settings()
         from ..stats.style import DEFAULT_PROS
+        from ..stats.comprules import DEFAULT_RULES
         from ..coach.websearch import PROVIDERS as search_providers
+        from .. import replayfile
         return render_template("settings.html", s=s, key_set=bool(s["henrik_api_key"]), search_providers=search_providers,
+                               rules_text=s["comp_rules_yaml"] or DEFAULT_RULES.read_text(), rules_custom=bool(s["comp_rules_yaml"]),
+                               vrfkit_found=replayfile.vrfkit_path(s["vrfkit_path"]),
+                               replays_n=len(replayfile.stored(store.data_dir / "replays")),
                                yt_hint=("…" + s["youtube_api_key"][-4:]) if s["youtube_api_key"] else "",
                                pros_text=s["pros_yaml"] or DEFAULT_PROS.read_text(), pros_custom=bool(s["pros_yaml"]),
                                key_hint=("…" + s["henrik_api_key"][-4:]) if s["henrik_api_key"] else "",
@@ -1447,6 +1474,14 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                     m = str(e)
                     hint = " The key was refused." if " 401 " in m or " 403 " in m else ""
                     return jsonify(ok=False, msg=m[:200] + hint)
+            if what == "vrfkit":
+                from .. import replayfile
+                path = replayfile.vrfkit_path(store.get("vrfkit_path"))
+                err = replayfile.check_vrfkit(path)
+                if err:
+                    return jsonify(ok=False, msg=err)
+                n = len(replayfile.stored(store.data_dir / "replays"))
+                return jsonify(ok=True, msg=f"Works: {path}. Replay files on the server: {n}.")
             if what == "claude":
                 key = store.get("claude_api_key")
                 if not key:
@@ -1510,6 +1545,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
     register_stats(app, store, stats_runner, get_profile)
     from .companion import register as register_companion
     register_companion(app, store, uploads, check_login)
+    from .replays import register as register_replays
+    register_replays(app, store, uploads, get_profile)
     from .overview import register as register_overview
     register_overview(app, store, started_at)
     if start_workers:

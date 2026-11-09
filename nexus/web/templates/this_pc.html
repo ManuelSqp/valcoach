@@ -66,6 +66,7 @@
     <button type="button" class="pc-tile" data-go="pc-kovaaks"><span>Playlists</span><b id="t-playlists">–</b><span id="t-playlists-sub"></span></button>
     <button type="button" class="pc-tile" data-go="pc-kovaaks"><span>Scores</span><b id="t-scores">–</b><span id="t-scores-sub"></span></button>
     <button type="button" class="pc-tile" data-go="pc-medal"><span>Medal</span><b id="t-medal">–</b><span id="t-medal-sub"></span></button>
+    <button type="button" class="pc-tile" data-go="pc-demos"><span>Replays</span><b id="t-replays">–</b><span id="t-replays-sub"></span></button>
   </div>
 
   <div class="pc-cols">
@@ -89,6 +90,17 @@
       <div class="pc-folder"><code id="f-medal" translate="no"></code><button type="button" class="btn sm ghost" data-pick="medal">Change</button></div>
       <div class="pc-switches">
         <label class="switch"><input type="checkbox" data-key="upload_matches"><span class="tr" aria-hidden="true"></span><span>Cut my matches out and upload them</span></label>
+      </div>
+    </section>
+
+    <section class="panel" id="pc-demos">
+      <header><h2>Replay files</h2></header>
+      <p class="small muted" style="margin-top:0">When you download a replay in VALORANT (match history), the file is sent to Nexus.
+        It has every player's position, so the coach sees all ten players. Only Competitive and Premier; the game deletes replays at the next patch.</p>
+      <div class="small muted">Replay folder (VALORANT › Saved › Demos)</div>
+      <div class="pc-folder"><code id="f-demos" translate="no"></code><button type="button" class="btn sm ghost" data-pick="demos">Change</button></div>
+      <div class="pc-switches">
+        <label class="switch"><input type="checkbox" data-key="send_replays"><span class="tr" aria-hidden="true"></span><span>Send new replay files to Nexus</span></label>
       </div>
     </section>
   </div>
@@ -133,7 +145,7 @@
     $('pc-version').textContent = s.version; $('pc-device').textContent = s.device;
     const sel = $('pc-player');
     if (sel && s.player_id && document.activeElement !== sel) sel.value = String(s.player_id);
-    for (const k of ['kovaaks', 'medal']) {
+    for (const k of ['kovaaks', 'medal', 'demos']) {
       const c = $('f-' + k), path = s[k + '_dir'];
       c.textContent = path || 'Not set'; c.title = path || '';
       c.classList.toggle('missing', !s[k + '_ok']);
@@ -142,6 +154,8 @@
     tile('t-playlists', s.put_playlists, s.kovaaks_ok, !s.kovaaks_ok ? 'Folder not found' : (s.last_playlists ? 'Last written ' + s.last_playlists : 'Not written yet'));
     tile('t-scores', s.send_scores, s.kovaaks_ok, !s.kovaaks_ok ? 'Folder not found' : `${s.scores_sent} file${s.scores_sent === 1 ? '' : 's'} sent`);
     tile('t-medal', s.upload_matches, s.medal_ok, !s.medal_ok ? 'Folder not found' : `${s.matches_uploaded} match${s.matches_uploaded === 1 ? '' : 'es'} uploaded`);
+    if (s.send_replays !== undefined)        // apps before 4.9 don't know replay files
+      tile('t-replays', s.send_replays, s.demos_ok, !s.demos_ok ? 'Folder not found' : `${s.replays_sent} sent`);
     if (s.log.length !== logLen) {
       const l = $('pc-log'), atEnd = l.scrollTop + l.clientHeight >= l.scrollHeight - 4;
       l.textContent = s.log.length ? s.log.join('\n') : 'Nothing yet.'; logLen = s.log.length;
