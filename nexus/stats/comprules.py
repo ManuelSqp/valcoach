@@ -8,7 +8,7 @@ in Settings › Map rules for team comps):
 Each rule that changes a comp is listed with its reason, so the suggestion explains itself. The players'
 own results (comp.rate) still count as before; a team's own map meta (prefer / avoid / roles) wins.
 
-Switch per team in the team settings: "Comp suggestions" = Map rules + your stats / Your stats only.
+Switch per team in the team settings: "Comp suggestions" (all modes: compmodes.py).
 """
 from __future__ import annotations
 
@@ -20,7 +20,6 @@ import yaml
 from . import roles
 
 DEFAULT_RULES = Path(__file__).with_name("comp_rules.yaml")
-METHODS = {"rules": "Map rules + your stats", "stats": "Your stats only (as before 4.9)"}
 
 NEED_ROLE = 60          # per missing required role (no controller)
 OVER_ROLE = 18          # per agent above a role's maximum
@@ -191,7 +190,7 @@ def for_map(rules: dict, map_name: str) -> MapRules:
 
 
 def for_team(team, rules_text: str = "") -> dict | None:
-    """The parsed rules if this team uses "Map rules + your stats", None if it uses "Your stats only"."""
-    if getattr(team, "comp_method", "rules") == "stats":
+    """The parsed rules if this team uses "Map rules + your stats", else None."""
+    if (getattr(team, "comp_method", "rules") or "rules") != "rules":
         return None
     return load_rules(rules_text)

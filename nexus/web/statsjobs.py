@@ -501,6 +501,66 @@ class StatsRunner:
             self._log(key, "✗ " + str(e))
             self._set(key, status="error", error=str(e) or e.__class__.__name__)
 
+    # ---- team comps from the web (4.10) ---------------------------------------------------
+    def read_webcomps(self, tid: int) -> dict:
+        """{map lower: {map, comps, sources, errors, at, model}} found for this team so far."""
+        try:
+            return json.loads((self.team_dir(tid) / "webcomps.json").read_text())
+        except (OSError, ValueError):
+            return {}
+
+    def save_webcomps(self, tid: int, data: dict) -> None:
+        p = self.team_dir(tid) / "webcomps.json"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False))
+        tmp.replace(p)
+
+    def submit_webcomps(self, tid: int, maps: list[str], language: str, llm_choice: str = "") -> str:
+        key = f"webcomps:{tid}"
+        if not self.busy(key):
+            with self._lock:
+                self._state[key] = {"status": "queued", "log": [], "error": "", "t": time.time()}
+            self.ex.submit(self._webcomps, key, tid, maps, language, llm_choice)
+        return key
+
+    def _webcomps(self, key, tid, maps, language, llm_choice: str = "") -> None:
+        from ..coach.websearch import searcher
+        from ..stats.webcomps import fetch
+        self._set(key, status="running")
+        try:
+            team = self.store.team(tid)
+            prof = self.store.profile(team.member_list[0]["pid"]) if team and team.member_list else None
+            if prof is None:
+                raise RuntimeError("Team has no players")
+            search = searcher(self.store)
+            if search is None:
+                raise RuntimeError("Web search is off: an admin turns it on under Settings › Web search.")
+            llm, cfg = self._llm(prof, llm_choice)
+            found = 0
+            for i, m in enumerate(maps, 1):
+                self._log(key, f"· {m} ({i}/{len(maps)}): searching, reading with {llm.model} ...")
+                try:
+                    out = fetch(search, llm, m, language)
+                except Exception as e:
+                    self._log(key, f"  ! {m}: {e}")
+                    continue
+                for err in out["errors"]:
+                    self._log(key, f"  ! {err}")
+                data = self.read_webcomps(tid)              # read again: never drop what another run saved
+                if out["comps"] or m.lower() not in data:
+                    data[m.lower()] = out
+                    self.save_webcomps(tid, data)
+                found += len(out["comps"])
+                self._log(key, f"  {len(out['comps'])} comp(s) from {len(out['sources'])} source(s)"
+                          if out["comps"] else "  no full comp in the sources (kept what was there before)")
+            if not found:
+                raise RuntimeError("The sources named no full comp. Try again later or with another model.")
+            self._set(key, status="done")
+        except Exception as e:
+            self._log(key, "✗ " + str(e))
+            self._set(key, status="error", error=str(e) or e.__class__.__name__)
+
     # ---- game plans -----------------------------------------------------------------
     def submit_plans(self, tid: int, items: list[dict], language: str, post: dict | None = None, llm_choice: str = "") -> str:
         """items: [{map, facts, lineup, callouts, notes, tips}]"""

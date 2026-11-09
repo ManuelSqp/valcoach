@@ -4,6 +4,20 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.10.0
+- **Comp suggestions, four modes** (team settings): *Map rules + your stats* (default, as in 4.9), *Most comfortable*
+  (every player on what he plays most, on that map first; win rates don't count), *From the web* (comps that web
+  sources name for the map, handed to your players by their numbers, with the sources linked; *Search comps for
+  <map>* / *All maps* on the comps page, needs Settings › Web search) and *Your stats only* (as before 4.9).
+  Drafts and the Discord prep use the team's mode too.
+- **"You are" is gone** from the comps page: you are the team player whose Riot ID is your in-game name (Account),
+  linked by itself. Links set before stay.
+- **Dropdowns readable in every style**: the open list of a select (e.g. the model picker) was see-through in the
+  Neon and HUD styles, especially in the Windows app.
+- Security (CodeQL): replay file paths only take a match id and must stay inside the replays folder; the vrfkit
+  test no longer shows the system's error text (it goes to the server log).
+- README: installing vrfkit without Docker needs a C compiler and linker (`build-essential`).
+
 ## 4.9.0
 - **Replay files**: VALORANT's own replay of a match (`.vrf`, downloaded in the game's match history, Competitive and
   Premier) has every player's position for the whole round. Upload it on the match's coach page (*Replay file* card)

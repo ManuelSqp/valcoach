@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.9.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.10.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -338,7 +338,7 @@ map); click a map for the details:
 - **If someone is missing**: which sub comes in on which agent, and who should switch.
 - **Map meta** (optional, per team): `prefer` / `avoid` agents and a fixed role mix per map, e.g.
   `Lotus: {roles: 1D 1I 2C 1S}`. A role mix you set is followed whenever the players' pools allow it.
-- **Comp suggestions** (team settings, 4.9): **Map rules + your stats** (default) adds what the numbers can't know:
+- **Comp suggestions** (team settings, 4.9; four modes since 4.10). **Map rules + your stats** (default) adds what the numbers can't know:
   per map the role mixes that work there and the agents the map needs or rewards (a Viper wall on Breeze and
   Icebox, recon on Ascent, …), and for every comp a controller, at most two duelists, someone to flash corners and
   someone for information. Each rule that changed a comp is listed under it (*Map rules: no Viper: …*), and the
@@ -346,6 +346,14 @@ map); click a map for the details:
   agent still gets it. **Your stats only** makes comps exactly as before 4.9. The rules are a YAML file
   (`nexus/stats/comp_rules.yaml`) that admins edit under *Settings › Map rules for team comps* when the meta moves;
   a team's own map meta still wins over them.
+  **Most comfortable** puts every player on the agents he plays most: games on that map count most, then games
+  overall; win rates and ACS don't count (the basic roles still do). **From the web** uses comps that web sources
+  name for each map: on the comps page, *Search comps for <map>* (or *All maps*) searches with the search set up
+  under *Settings › Web search*, reads the best pages, and the model lists the full 5-agent comps they name, with
+  the sources (comps of 5 real, different agents only). Each one is handed to your players, every agent to the
+  player who does best on it, and the comp that fits your players best comes first; an agent a player has never
+  played is marked *new agent*. A map nobody has searched yet uses the map rules + your stats. The found comps stay
+  until they are searched again.
 
 The current patch meta isn't available from any API, so "played at your level" comes from your own matches,
 and the meta box is where you put what you know. Suggestions are only as good as the sample: check the game
@@ -421,10 +429,12 @@ the jump buttons.
   ignores replay files completely, so reports are made exactly as before 4.9. The report header says which one was
   used (*positions from the replay file* / *from the VOD minimap*).
 - **vrfkit on the server**: the Docker image builds it (pinned commit, `VRFKIT_REF` in the `Dockerfile`). Without
-  Docker, install it once with Rust (1.86 or newer):
+  Docker, install it once with Rust (1.86 or newer). Rust needs a C compiler and linker (`build-essential`):
 
   ```bash
+  sudo apt install -y build-essential pkg-config                     # Debian/Ubuntu: C compiler and linker
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh     # if you don't have Rust yet
+  source ~/.cargo/env
   cargo install --git https://github.com/yakisoba0728/vrfkit --rev b9ba3f70735c7219fef41ba61a80626a4bb88757 --locked vrfkit
   ```
 
