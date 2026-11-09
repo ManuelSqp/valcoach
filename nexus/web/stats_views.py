@@ -381,6 +381,22 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         return {"own": own, "members": members, "byid": byid, "rows_by": rows_by,
                 "seen_maps": sorted({r["map"] for rs in rows_by.values() for r in rs})}
 
+    @app.post("/teams/<int:tid>/comps/method")
+    def team_comp_method(tid: int):
+        """The comp mode picker on the comps page (4.10.1): same setting as team settings › Comp suggestions."""
+        t = get_team(tid, manage=True)
+        method = request.form.get("comp_method", "")
+        if method not in COMP_METHODS:
+            abort(400)
+        sel = request.form.get("map", "")
+        store.update_team(tid, comp_method=method)
+        if method == "web" and sel and store.get("web_search") and sel.lower() not in sr.read_webcomps(tid) \
+                and sel in (t.map_list or [sel]):
+            owner = store.profiles(t.owner_id)
+            sr.submit_webcomps(tid, [sel], owner[0].language if owner else "English", picked(store))
+        flash(f"Comps are now made with: {COMP_METHODS[method]}", "ok")
+        return redirect(url_for("team", tid=tid, map=sel or None) + "#detail")
+
     @app.post("/teams/<int:tid>/webcomps")
     def team_webcomps(tid: int):
         """From the web (4.10): search comps for this map or all the team's maps, in the background."""
@@ -454,7 +470,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             starters=[s.label for s in starters], plan=plan, maps=maps, sel=sel,
             detail=next((m for m in plan if m["map"] == sel), None) if plan else None,
             meta_error=meta_error, queues=QUEUE_TABS, tab="comps", alts=alts, comp_method=method,
-            comp_label=COMP_METHODS[method], web_status=sr.status(f"webcomps:{tid}") if method == "web" else None,
+            comp_label=COMP_METHODS[method], comp_methods=COMP_METHODS, is_owner=g.team_owner,
+            web_status=sr.status(f"webcomps:{tid}") if method == "web" else None,
             web_data=web, web_search_on=bool(store.get("web_search")),
             linked=any(m.get("user_id") == g.user.id for m in members))
 
