@@ -254,3 +254,45 @@ def test_team_plan_and_top_comps_use_rules_per_map():
     assert for_team(T()) is None
     T.comp_method = "rules"
     assert for_team(T())["maps"]
+
+
+def test_replay_metrics_per_player(tmp_path, data, match):
+    """4.15: untradeable deaths, retake arrival and setups from a replay file, cached per match."""
+    from nexus.stats import replaystats as rs
+    rdir = tmp_path / "replays"
+    replayfile._write(replayfile.data_file(rdir, match.match_id), fake_replay(match))
+    cache = tmp_path / "cache"
+    shutil.copytree(data["cache"], cache)
+    (cache / "matches").mkdir(exist_ok=True)
+    shutil.copy(data["match"], cache / "matches" / f"{match.match_id}.json")
+    me = match.find_player("adv1ce", "LFT").puuid
+    rows = [{"match_id": match.match_id, "source": "full", "map": match.map_name}]
+    p = rs.player(rdir, cache, rows, me)
+    deaths = sum(1 for k in match.kills if k.victim == me)
+    assert p["games"] == 1 and p["deaths"] == deaths and 0 <= p["untradeable"] <= deaths
+    assert p["setups"] and all(s["map"] == match.map_name and s["rounds"] >= 1 for s in p["setups"])
+    assert rs.metrics_file(rdir, match.match_id).exists()
+    f = rs.facts(p)
+    assert f["games_with_replay"] == 1 and ("untradeable_deaths" in f or not deaths)
+    # a defender alive at a plant gets a retake entry (seconds or None)
+    planted = [r for r in match.rounds if r.plant]
+    if planted:
+        all_retakes = sum(len(v["retakes"]) for v in rs.for_match(rdir, cache, match.match_id)["players"].values())
+        assert all_retakes >= 1
+    # no replay file: nothing
+    assert rs.player(tmp_path / "none", cache, rows, me) is None
+    assert rs.player(rdir, cache, [dict(rows[0], source="stored")], me) is None
+
+
+def test_replay_metrics_counts_untradeable():
+    """A death with every teammate far away is untradeable; one with a teammate next to it isn't."""
+    from types import SimpleNamespace as NS
+    from nexus.stats import replaystats as rs
+    kill = lambda v, t: NS(victim=v, t_round_ms=t, victim_x=0.0, victim_y=0.0)          # noqa: E731
+    r = NS(index=0, kills=[kill("a", 10000), kill("c", 20000)], plant=None, winning_team="T",
+           side_of=lambda team: "attack")
+    m = NS(players={"a": 0, "b": 0, "c": 0, "d": 0}, rounds=[r], team_of=lambda p: "T" if p in "ab" else "U")
+    paths = {0: {"a": [(9.5, 0, 0), (10.0, 0, 0)], "b": [(t / 2, 5000, 0) for t in range(0, 40)],
+                 "c": [(t / 2, 0, 0) for t in range(0, 41)], "d": [(t / 2, 300, 0) for t in range(0, 60)]}}
+    out = rs.match_metrics(m, paths, None)
+    assert out["a"]["untradeable"] == 1 and out["c"]["untradeable"] == 0

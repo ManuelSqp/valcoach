@@ -114,11 +114,12 @@ class Catalog:
 
     def _sentences(self, s: str) -> str | None:
         """Several sentences in one piece of text (messages): translated one by one, only if all are known."""
-        parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", s)
-        if len(parts) < 2:
+        # 4.15: "text · early sign, 84 rounds": the parts around a middle dot are translated one by one too
+        parts = re.split(r"((?<=[.!?])\s+(?=[A-Z0-9])|\s+·\s+)", s)
+        if len(parts) < 3:
             return None
-        out = [self.lookup(p) for p in parts]
-        return " ".join(out) if all(x is not None for x in out) else None
+        out = [self.lookup(p) if i % 2 == 0 else p for i, p in enumerate(parts)]
+        return "".join(out) if all(x is not None for x in out) else None
 
     def text(self, s: str) -> str:
         """One piece of text, keeping its leading and trailing white space."""

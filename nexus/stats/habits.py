@@ -42,6 +42,10 @@ HABITS: dict[str, dict] = {
             "dir": "low", "bad": 0.17, "fmt": "pct",
             "drill": "10 min crosshair placement at head height (Range, bots on hard), then deathmatch aiming only at the head.",
             "words": r"crosshair|headshot|aim|spray|leg ?shot|head height"},
+    "no_util": {"title": "Dying with utility unused", "what": "share of your deaths in rounds where you used no ability",
+                "dir": "high", "bad": 0.45, "fmt": "pct",
+                "drill": "Plan one ability per round before you peek: a flash, a smoke, a scan or a wall, then the fight.",
+                "words": r"utility|abilit|didn.t use|unused|save(d)? (your )?(util|abilit)"},
     "spot": {"title": "Dying at the same spot", "what": "share of your deaths at your most common death spot",
              "dir": "high", "bad": 0.30, "fmt": "pct",
              "drill": "Change how you play your death spot: a different angle, utility first, or play it with a teammate.",
@@ -72,6 +76,11 @@ def _sum(rows: list[dict], key: str) -> tuple[float, float] | None:
         elif key == "kast":
             num += r["rounds"] - r.get("kast", 0)
             den += r["rounds"]
+        elif key == "no_util":
+            nu = r.get("no_util")
+            if nu:
+                num += nu[0]
+                den += nu[1]
         elif key == "aim":
             h, b, lg = (r.get("shots") or [0, 0, 0])[:3]
             num += h

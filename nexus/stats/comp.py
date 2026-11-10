@@ -82,18 +82,34 @@ class Pool:
         return bool(self.n) or bool(self.pref and self.pref["rank"])
 
     @classmethod
-    def from_rows(cls, label: str, rows: list[dict]) -> "Pool":
+    def from_rows(cls, label: str, rows: list[dict], weighted: bool = True) -> "Pool":
+        """weighted (4.15): win rate and ACS per agent count recent games, the current patch and stronger
+        lobbies more (evidence.weight); the game counts stay real counts (comfort, "7 games")."""
+        from .evidence import weights
         p = cls(label)
+        ws = weights(rows) if weighted else [1.0] * len(rows)
+        sw: dict = defaultdict(float)                           # weight per agent / (map, agent)
         tot = 0.0
-        for r in rows:
+        for r, f in zip(rows, ws):
             a, m = r["agent"], r["map"].lower()
             p.n[a] += 1
-            p.w[a] += r["won"]
-            p.acs[a] += r["acs"]
+            p.w[a] += f * r["won"]
+            p.acs[a] += f * r["acs"]
+            sw[a] += f
             p.nm[(m, a)] += 1
-            p.wm[(m, a)] += r["won"]
-            p.acsm[(m, a)] += r["acs"]
+            p.wm[(m, a)] += f * r["won"]
+            p.acsm[(m, a)] += f * r["acs"]
+            sw[(m, a)] += f
             tot += r["acs"]
+        # weighted averages, scaled back to the real number of games (w / n = the weighted win rate)
+        for a in list(p.n):
+            k = p.n[a] / sw[a] if sw[a] else 1.0
+            p.w[a] *= k
+            p.acs[a] *= k
+        for ma in list(p.nm):
+            k = p.nm[ma] / sw[ma] if sw[ma] else 1.0
+            p.wm[ma] *= k
+            p.acsm[ma] *= k
         p.games = len(rows)
         p.mean_acs = tot / len(rows) if rows else 200.0
         return p

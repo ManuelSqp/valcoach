@@ -93,7 +93,9 @@ SYSTEM = """You are the coach of a Valorant team, reviewing one player of the te
 Use ONLY the facts given; refer to round numbers. Be direct and specific, no generic advice.
 Missing data means unknown. No aim data here: judge positioning, timing, trading and roles.
 {roles}Also say what TEAMMATES can do to help this player (e.g. play closer to him on a site
-where he keeps dying outnumbered), because the whole team reads this. Write in {language}."""
+where he keeps dying outnumbered), because the whole team reads this. Write in {language}.
+Quote the number or round each point rests on. "team_check_in", if given, is what the players said after the
+match (who called, comms and mood 1-5, notes): use it for comms and calling, which the data can't show."""
 
 
 def schema() -> dict:
@@ -111,8 +113,10 @@ def schema() -> dict:
 
 
 def review(match: Match, team: str, mi: MapInfo | None, llm=None, language: str = "English",
-           roles: dict[str, list[str]] | None = None, parallel: int = 4, progress=None) -> dict:
-    """roles: lower-case 'name#tag' -> assigned team roles (from the team page)."""
+           roles: dict[str, list[str]] | None = None, parallel: int = 4, progress=None,
+           check_in: dict | None = None) -> dict:
+    """roles: lower-case 'name#tag' -> assigned team roles (from the team page). check_in (4.15): the team's
+    post-match check-ins for this match (stats/checkins.match_facts), if any were given before the review."""
     f = facts(match, team, mi)
     roles = roles or {}
     out = {"players": [], "trade_pairs": f["trade_pairs"]}
@@ -130,6 +134,8 @@ def review(match: Match, team: str, mi: MapInfo | None, llm=None, language: str 
             team_view = [{"name": x["name"], "agent": x["agent"], "kd": f"{x['kills']}/{x['deaths']}"} for _, x in order]
             payload = {"player": {k: v for k, v in d.items() if k not in ("kast_rounds",)}, "team_roles": r,
                        "teammates": team_view, "who_traded_whom": f["trade_pairs"], "map": match.map_name}
+            if check_in:
+                payload["team_check_in"] = check_in
             role_line = (f"This player's team role(s): {', '.join(r)}. Judge them against what that role needs.\n"
                          if r else "")
             try:

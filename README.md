@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.14.1** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.15.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -385,6 +385,39 @@ map); click a map for the details:
 The current patch meta isn't available from any API, so "played at your level" comes from your own matches,
 and the meta box is where you put what you know. Suggestions are only as good as the sample: check the game
 counts shown next to each pick.
+
+### How reliable the coaching is (4.15)
+
+Nexus doesn't count every number the same any more:
+
+- **Recent games and the current patch count more.** A game counts half as much every 45 days, a game from an
+  older patch 60 %, and a game against a stronger lobby a bit more (a weaker one a bit less). The comp maker and
+  the coach use these weighted numbers; *Stats & maps › How much the numbers tell* shows them next to the plain
+  ones. Games keep their real count ("7 games on Jett").
+- **Buy state and lobby strength.** Rounds are split into full buys on both sides, rounds against a saving enemy
+  (anti-eco) and your own eco / force rounds, each with round win rate and K/D. If a K/D mostly comes from anti-ecos,
+  it says so. Games are also split into stronger / similar / weaker lobbies. The *Thrives in / Struggles in* lists
+  include the buy states.
+- **How sure.** Every playstyle label and every "thrives / struggles" line says *solid* or *early sign* (few
+  rounds so far, marked *). The coach gets the same marks and is told to quote the number behind each point and to
+  call an early sign an early sign.
+- **Replay files** (when uploaded): *Habits › From your replay files* shows *untradeable deaths* (no teammate within
+  15 m when you died or in the next 3 s), how often and how fast you get to the spike on retakes, and where you
+  stand 20 s into the round per map and side, with the win rate of each spot. Worked out once per match (stored
+  as `<match id>.metrics.json` next to the replay). Utility timing isn't in the replay data; *Dying with utility
+  unused* comes from the match data instead.
+- **Goals** (*Habits › Goals*): one number, a target and the next 5–20 games. The weekly focus sets one for each
+  player from its "number to watch", *Make it a goal* on a habit sets one, or you set one by hand. Nexus checks it
+  after every game: *reached* as soon as the number over the games since meets the target, *missed* when the games
+  are over. The coach sees open goals and the results of the last 60 days, so it builds on what worked and changes
+  approach where a goal was missed.
+- **Check-in** (*Match day › Check-in*): after a match the team played together (3+ players), each player answers
+  in about 20 seconds: who made most of the calls, comms 1–5, mood 1–5, one optional line. The team owner can
+  answer for players without an account. From 3 votes for the same player, the IGL suggestion uses the check-ins
+  instead of a guess from the stats. Premier reviews, the weekly focus and *Ask the coach* get the answers.
+
+The new numbers come from the match data Nexus already has: the next stats update (or the nightly sync) rebuilds
+the rows from the cached matches, without extra API requests.
 
 ### Older matches
 

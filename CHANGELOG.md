@@ -4,6 +4,29 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.15.0
+More accurate coaching: the coach knows how reliable each number is, sees more than the kill moments, and learns
+whether its advice worked.
+- **Replay-file numbers** (*Habits › From your replay files*): untradeable deaths (no teammate within 15 m then
+  or in the next 3 s), retake arrival (got to the spike, after how many seconds), and setups: where each player
+  stands 20 s into the round per map and side, with the win rate of each spot. Also given to the coach.
+- **Recent games and the current patch count more**: half the weight every 45 days, older patches 60 %, stronger
+  lobbies a bit more. Used by the comp maker (all modes) and the coach; shown on *Stats & maps › How much the
+  numbers tell*.
+- **Buy state and lobby strength**: rounds split into full buys, anti-eco and your own eco / force (round win
+  rate, K/D), with a note when the K/D mostly comes from anti-ecos; games against stronger / similar / weaker
+  lobbies. The buy states are part of *Thrives in / Struggles in*.
+- **"Solid" or "early sign"** on every playstyle label and situation (*), and in the coach's data; the coach must
+  quote the number behind each point and call early signs early signs.
+- **Goals** (*Habits › Goals*): a number, a target and the next games, checked automatically after every game
+  (reached / missed). Set by the weekly focus, by *Make it a goal* on a habit, or by hand. The coach sees the
+  results and changes approach where a goal was missed.
+- **Post-match check-in** (*Match day › Check-in*): who called, comms and mood (1–5), one line, in about 20
+  seconds. From 3 votes, the IGL suggestion follows the team's answers instead of a guess. Used in Premier reviews,
+  the weekly focus and *Ask the coach*.
+- New habit: **Dying with utility unused** (deaths in rounds without any ability, from the match data).
+- Rows are rebuilt from the cached matches at the next stats update (patch, lobby ranks, kills per round).
+
 ## 4.14.1
 - **Comp sheet uses the space better.**
   - *Ideal composition*: a map with a comp is now one full-width row: the map with its source and buttons on the

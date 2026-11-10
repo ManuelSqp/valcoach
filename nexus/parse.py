@@ -223,6 +223,7 @@ def parse_match(raw: dict) -> Match:
         raw_premier=meta.get("premier"),
         has_utility=_utility_present(data),
         mode_type=_g(meta, "queue", "mode_type", default="") or "",
+        game_version=str(meta.get("game_version") or ""),
     )
 
 

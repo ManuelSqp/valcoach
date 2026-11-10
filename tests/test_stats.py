@@ -716,7 +716,9 @@ def test_rows_v5_utility_economy_teammates(imported):
     full = [r for r in rows if r["source"] == "full"]
     r = full[0]
     assert r["v"] >= 5 and set(r["casts"]) == {"grenade", "ability1", "ability2", "ultimate"}
-    assert len(r["econ"]) == r["rounds"] and len(r["econ"][0]) == 6
+    assert len(r["econ"]) == r["rounds"] and len(r["econ"][0]) == 8          # 4.15: + kills, died
+    assert r["v"] >= 6 and "patch" in r and r["no_util"] is not None and r["no_util"][1] == r["deaths"]
+    assert r["own_tier"] is None or 3 <= r["own_tier"] <= 27
     assert len(r["mates"]) == 4 and all("#" in m["name"] for m in r["mates"])
     assert len(r["lobby_agents"]) == 9 and isinstance(r["lobby_agents"][0][0], str)
     e = economy(rows)
