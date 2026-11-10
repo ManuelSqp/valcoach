@@ -67,7 +67,7 @@ jobs:
           & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item dist\nexus-setup.exe dist\valcoach-companion-setup.exe
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: nexus-setup
           path: desktop/dist/nexus-setup.exe
