@@ -4,6 +4,20 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.13.0
+- **Comp sheet** (*Strategy › Comp sheet*): the team's agent pool and ideal comps on one page.
+  - *Agent pool*: a column per player, best agent first and coloured green to red, made from the stats (most played,
+    then win rate). Each player can reorder his own list, add agents and mark agents he won't play; the team owner
+    can edit every list. *Back to the stats* resets a list.
+  - *Ideal composition*: per map the comp web sources name most (searched with one click, also when the comps page
+    uses another mode) or 5 agents set by hand. Under every agent: who has it in his pool and at which rank,
+    "nobody" if no one does.
+- **Fix: "From the web" said web search was off** although it is on (DuckDuckGo by default). The check looked at a
+  setting that doesn't exist; it now uses *Settings › Web search*.
+- **Explanations that open**: the labels in the player overview (playstyle, thrives / struggles, suggested role,
+  IGL / Operator, table cells) show their explanation in a popup on hover, on keyboard focus and on tap (phones).
+  Before, only a "?" cursor appeared and nothing came up.
+
 ## 4.12.0
 - **Playstyle labels** in the player overview, independent of the team role: up to three of *Aggressive*,
   *Patient*, *Clutch player*, *Trader*, *Lone wolf*, *Survivor*, *Fragger*, *Playmaker*, *Brawler*,

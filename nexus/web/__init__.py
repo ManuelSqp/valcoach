@@ -614,7 +614,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                             ("quiz", "quiz"), ("pros", "pros & videos"), ("profile", "matches & reports")):
                 add("player", f"{p.name} · {lbl}", url_for(ep, pid=p.id))
         for t in store.teams_for_user(g.user.id):
-            tabs = [("team", "comps"), ("team_premier", "this week"), ("team_availability", "availability"), ("team_brief", "match-day brief"),
+            tabs = [("team", "comps"), ("team_sheet", "comp sheet"), ("team_premier", "this week"), ("team_availability", "availability"), ("team_brief", "match-day brief"),
                     ("team_division", "opponents"), ("team_match", "match screen"), ("team_practice", "practice plan"), ("team_evening", "review evening"), ("team_drafts", "drafts"),
                     ("team_plans", "game plans"), ("team_strats", "strat book"), ("team_lineups", "lineups"),
                     ("team_focus", "weekly focus"), ("team_overview", "player overview"), ("team_roles_page", "roles"),

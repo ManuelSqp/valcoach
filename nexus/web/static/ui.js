@@ -162,3 +162,38 @@
   new MutationObserver(() => { clearTimeout(t); t = setTimeout(fit, 80); }).observe(nav, {childList: true, subtree: true, characterData: true});
   fit();
 })();
+
+
+// Explanations (4.13): any element with data-tip="..." shows it in a popup right away on hover or keyboard
+// focus, and on tap / click on touch screens (the browser's own title tooltips are slow and don't show
+// everywhere, e.g. in the Windows app).
+(function () {
+  let tip = null, owner = null;
+  function hide() { if (tip) tip.remove(); tip = null; owner = null; }
+  function show(el) {
+    if (owner === el) return;
+    hide();
+    const text = el.getAttribute('data-tip');
+    if (!text) return;
+    owner = el;
+    tip = document.createElement('div');
+    tip.className = 'tip-pop';
+    tip.setAttribute('role', 'tooltip');
+    tip.textContent = text;
+    document.body.appendChild(tip);
+    const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    let left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8);
+    let top = r.top - h - 8;
+    if (top < 8) top = r.bottom + 8;
+    tip.style.left = (left + window.scrollX) + 'px';
+    tip.style.top = (top + window.scrollY) + 'px';
+  }
+  const find = e => e.target.closest && e.target.closest('[data-tip]');
+  document.addEventListener('mouseover', e => { const el = find(e); if (el) show(el); });
+  document.addEventListener('mouseout', e => { const el = find(e); if (el && !el.contains(e.relatedTarget)) hide(); });
+  document.addEventListener('focusin', e => { const el = find(e); if (el) show(el); });
+  document.addEventListener('focusout', hide);
+  document.addEventListener('click', e => { const el = find(e); if (el) { if (owner === el && e.pointerType !== 'mouse') hide(); else show(el); } else hide(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+  window.addEventListener('scroll', hide, {passive: true});
+})();

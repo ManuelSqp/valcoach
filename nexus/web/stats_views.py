@@ -381,6 +381,12 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         return {"own": own, "members": members, "byid": byid, "rows_by": rows_by,
                 "seen_maps": sorted({r["map"] for rs in rows_by.values() for r in rs})}
 
+    def web_search_on() -> bool:
+        """A web search is set up (Settings › Web search, DuckDuckGo by default). 4.13: before, a setting that
+        doesn't exist was checked, so "From the web" always looked switched off."""
+        from ..coach.websearch import searcher
+        return searcher(store) is not None
+
     @app.post("/teams/<int:tid>/comps/method")
     def team_comp_method(tid: int):
         """The comp mode picker on the comps page (4.10.1): same setting as team settings › Comp suggestions."""
@@ -390,7 +396,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             abort(400)
         sel = request.form.get("map", "")
         store.update_team(tid, comp_method=method)
-        if method == "web" and sel and store.get("web_search") and sel.lower() not in sr.read_webcomps(tid) \
+        if method == "web" and sel and web_search_on() and sel.lower() not in sr.read_webcomps(tid) \
                 and sel in (t.map_list or [sel]):
             owner = store.profiles(t.owner_id)
             sr.submit_webcomps(tid, [sel], owner[0].language if owner else "English", picked(store))
@@ -401,11 +407,12 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     def team_webcomps(tid: int):
         """From the web (4.10): search comps for this map or all the team's maps, in the background."""
         t = get_team(tid)
-        if method_of(t) != "web":
+        sheet = request.form.get("back") == "sheet"         # the comp sheet's ideal compositions (4.13)
+        if method_of(t) != "web" and not sheet:
             abort(400)
-        if not store.get("web_search"):
+        if not web_search_on():
             flash("Web search is off: an admin turns it on under Settings › Web search.", "error")
-            return redirect(url_for("team", tid=tid))
+            return redirect(url_for("team_sheet", tid=tid) if sheet else url_for("team", tid=tid))
         c = team_context(t)
         maps = t.map_list or [m["map"] for m in by_map([r for rs in c["rows_by"].values() for r in rs])][:7]
         which = request.form.get("map", "")
@@ -414,7 +421,83 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             abort(400)
         owner = store.profiles(t.owner_id)
         sr.submit_webcomps(tid, todo, owner[0].language if owner else "English", picked(store))
+        if sheet:
+            return redirect(url_for("team_sheet", tid=tid) + "#ideal")
         return redirect(url_for("team", tid=tid, map=None if which == "__all" else which))
+
+    # ---- comp sheet (4.13): agent pools + ideal composition per map -----------------------------
+    def sheet_can_edit(t, pid: int) -> bool:
+        """The team owner edits every pool, a player his own (linked by in-game name, see link_me)."""
+        return g.team_owner or any(m["pid"] == pid and m.get("user_id") == g.user.id for m in t.member_list)
+
+    @app.get("/teams/<int:tid>/sheet")
+    def team_sheet(tid: int):
+        from ..stats import compsheet
+        t = link_me(get_team(tid))
+        roles.load(cache_dir)
+        c = team_context(t)
+        saved = compsheet.load(sr.team_dir(tid))
+        players = []
+        for m in sorted(c["members"], key=lambda m: m["kind"] != "starter"):
+            p = c["byid"][m["pid"]]
+            players.append({"pid": p.id, "label": p.name, "kind": m["kind"], "can_edit": sheet_can_edit(t, p.id),
+                            **compsheet.pool(c["rows_by"][p.id], saved["pools"].get(str(p.id)))})
+        pools = {pl["label"]: pl for pl in players}
+        maps = t.map_list or [m["map"] for m in by_map([r for rs in c["rows_by"].values() for r in rs])][:7]
+        web = sr.read_webcomps(tid)
+        ideals = []
+        for mp in maps:
+            idl = compsheet.ideal(mp, saved["ideal"].get(mp.lower()), web.get(mp.lower()))
+            agents = [{"agent": a, "role": roles.role_of(a), "who": compsheet.who_plays(a, pools)}
+                      for a in (idl or {}).get("agents", [])]
+            ideals.append({"map": mp, "ideal": idl, "agents": agents, "searched": mp.lower() in web})
+        return render_template("team_sheet.html", t=t, tab="sheet", players=players, ideals=ideals,
+                               hue=compsheet.hue, all_agents=sorted(roles.all_agents()), is_owner=g.team_owner,
+                               edit=request.args.get("edit", type=int), web_search_on=web_search_on(),
+                               web_status=sr.status(f"webcomps:{tid}"), queues=QUEUE_TABS,
+                               premier_status=sr.status(f"premier:{tid}"))
+
+    @app.post("/teams/<int:tid>/sheet/pool/<int:pid>")
+    def team_sheet_pool(tid: int, pid: int):
+        from ..stats import compsheet
+        t = get_team(tid)
+        if pid not in [m["pid"] for m in t.member_list]:
+            abort(404)
+        if not sheet_can_edit(t, pid):
+            abort(403)
+        data = compsheet.load(sr.team_dir(tid))
+        if request.form.get("reset"):
+            data["pools"].pop(str(pid), None)
+            flash("Agent pool back to the stats.", "ok")
+        else:
+            no = compsheet.clean_agents(request.form.get("no", "").split(","))
+            order = [a for a in compsheet.clean_agents(request.form.get("order", "").split(",")) if a not in no]
+            data["pools"][str(pid)] = {"order": order, "no": no}
+            flash("Agent pool saved.", "ok")
+        compsheet.save(sr.team_dir(tid), data)
+        return redirect(url_for("team_sheet", tid=tid) + "#pool")
+
+    @app.post("/teams/<int:tid>/sheet/ideal")
+    def team_sheet_ideal(tid: int):
+        from ..stats import compsheet
+        t = get_team(tid, manage=True)
+        mp = request.form.get("map", "")
+        maps = t.map_list or [mp]
+        if mp not in maps:
+            abort(400)
+        data = compsheet.load(sr.team_dir(tid))
+        if request.form.get("reset"):
+            data["ideal"].pop(mp.lower(), None)
+            flash(f"{mp}: back to the comp from the web.", "ok")
+        else:
+            agents = compsheet.clean_agents(request.form.getlist("agent"))
+            if len(agents) != 5:
+                flash("An ideal composition needs 5 different agents.", "error")
+                return redirect(url_for("team_sheet", tid=tid) + "#ideal")
+            data["ideal"][mp.lower()] = agents
+            flash(f"{mp}: ideal composition saved.", "ok")
+        compsheet.save(sr.team_dir(tid), data)
+        return redirect(url_for("team_sheet", tid=tid) + "#ideal")
 
     def link_me(t):
         """You are the team player whose Riot ID (Name#TAG) is your in-game name (Account). Replaces the
@@ -472,7 +555,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             meta_error=meta_error, queues=QUEUE_TABS, tab="comps", alts=alts, comp_method=method,
             comp_label=COMP_METHODS[method], comp_methods=COMP_METHODS, is_owner=g.team_owner,
             web_status=sr.status(f"webcomps:{tid}") if method == "web" else None,
-            web_data=web, web_search_on=bool(store.get("web_search")),
+            web_data=web, web_search_on=bool(web_search_on()),
             linked=any(m.get("user_id") == g.user.id for m in members))
 
     @app.route("/teams/<int:tid>/settings", methods=["GET", "POST"])
