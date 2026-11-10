@@ -540,6 +540,29 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         return render_template("team_roles.html", t=t, tab="roles", res=res, team_roles=TEAM_ROLES, is_owner=g.team_owner,
                                desc=DESCRIPTION, queues=QUEUE_TABS, premier_status=sr.status(f"premier:{tid}"))
 
+    @app.get("/teams/<int:tid>/overview")
+    def team_overview(tid: int):
+        """Player overview (4.11): agents, agent roles, team role, playstyle and maps per player.
+        ?view=all shows every agent and map instead of the top 5."""
+        from ..stats.overview import team as overview_team
+        from ..stats.style import load_pros
+        from ..stats.teamroles import team_roles
+        t = get_team(tid)
+        roles.load(cache_dir)
+        c = team_context(t)
+        view = "all" if request.args.get("view") == "all" else "top"
+        members = [{"label": c["byid"][m["pid"]].name, "pid": m["pid"], "kind": m["kind"],
+                    "rows": c["rows_by"][m["pid"]], "assigned": m.get("roles", [])} for m in c["members"]]
+        maps = t.map_list or [m["map"] for m in by_map([r for rs in c["rows_by"].values() for r in rs])][:7]
+        try:
+            pros = load_pros(store.get("pros_yaml"))
+        except Exception:
+            pros = load_pros()
+        ov = overview_team(team_roles(members, local_meta(filter_rows(owner_rows(t.owner_id), t.queue)), maps),
+                           pros) if members else None
+        return render_template("team_overview.html", t=t, tab="overview", ov=ov, view=view, queues=QUEUE_TABS,
+                               premier_status=sr.status(f"premier:{tid}"))
+
     team_cache: dict[tuple, object] = {}
 
     def team_data(t) -> dict:

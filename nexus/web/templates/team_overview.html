@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Player overview · {{ t.name }} · Nexus{% endblock %}
+{% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% macro pct(x) %}{{ (x * 100)|round|int }} %{% endmacro %}
+{% macro wrc(x) %}{{ 'wr-good' if x >= 0.55 else ('wr-bad' if x < 0.45 else '') }}{% endmacro %}
+{% block head %}
+<style>
+.ai{border-radius:50%;vertical-align:middle;background:var(--ink);object-fit:cover;flex:none}
+.ogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.ocard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.ocard h3{margin:0;font-size:17px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.osec{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.alist{display:flex;flex-direction:column;gap:4px}
+.arow{display:grid;grid-template-columns:24px 1fr auto auto;gap:8px;align-items:center;font-size:13px}
+.arow .n{font-variant-numeric:tabular-nums;color:var(--muted);text-align:right;min-width:52px}
+.arow .w{font-variant-numeric:tabular-nums;text-align:right;min-width:42px}
+.split{display:flex;height:10px;border-radius:99px;overflow:hidden;background:var(--line)}
+.split i{display:block;height:100%}
+.r-Duelist{background:#ff4655}.r-Initiator{background:#f5a524}.r-Controller{background:#6c8cff}.r-Sentinel{background:#2ec4a6}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:5px}
+.legend b{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.dims{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;font-size:12.5px}
+.dbar{height:7px;border-radius:99px;background:var(--line);position:relative;overflow:hidden}
+.dbar i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:99px}
+.chip{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:99px;background:var(--win-soft);color:var(--win)}
+.chip.sug{background:transparent;border:1px dashed var(--line2);color:var(--muted)}
+.chip.hat{background:var(--accent-soft);color:var(--amber)}
+.wr-good{color:var(--win)}.wr-bad{color:var(--red)}
+.mx{width:100%;border-collapse:collapse}
+.mx th{font-size:11.5px;text-align:center;padding:6px 4px;white-space:nowrap}
+.mx th:first-child,.mx td:first-child{text-align:left;position:sticky;left:0;background:var(--panel)}
+.mx td{text-align:center;padding:4px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums;font-size:13px}
+.mx .c{display:inline-block;min-width:54px;padding:3px 6px;border-radius:6px}
+.mx .c small{display:block;font-size:11px;font-weight:700}
+.mx tr.rolehead td{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding-top:12px}
+.notes li{margin:2px 0}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+{% if not ov %}
+<section class="card"><p class="muted">No members yet: add players under <a href="{{ url_for('team_settings', tid=t.id) }}">Members &amp; maps</a>.</p></section>
+{% else %}
+<div class="subtabs" role="navigation" aria-label="View" style="margin:4px 0 12px">
+  <a class="{{ 'on' if view == 'top' }}" href="{{ url_for('team_overview', tid=t.id) }}">Top 5 agents</a>
+  <a class="{{ 'on' if view == 'all' }}" href="{{ url_for('team_overview', tid=t.id, view='all') }}">All agents</a>
+</div>
+
+<section class="card">
+  <div class="row between"><h2 style="margin:0">The team at a glance</h2>
+    <span class="muted small">from {{ dict(queues)[t.queue] }} games · <a href="{{ url_for('team_roles_page', tid=t.id) }}">assign roles</a></span></div>
+  <div class="tablewrap" style="margin-top:8px"><table class="mx">
+    <thead><tr><th>Agent role</th>{% for r in ov.cover %}<th>{{ r }}</th>{% endfor %}</tr></thead>
+    <tbody><tr><td class="muted small">plays it regularly</td>
+      {% for r, who in ov.cover.items() %}<td>{% if who %}{{ who|join(', ') }}{% else %}<span class="warnc">nobody</span>{% endif %}</td>{% endfor %}</tr></tbody>
+  </table></div>
+  {% if ov.notes %}<ul class="notes small warnc" style="margin:10px 0 0">{% for n in ov.notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}
+  <p class="muted small" style="margin:8px 0 0">"Regularly" = at least a quarter of a player's games{% if ov.starters %} (starters){% endif %}.</p>
+</section>
+
+{% if view == 'top' %}
+{% for group, plist in (('Lineup', ov.starters), ('Subs', ov.subs)) if plist %}
+<section class="card">
+  <h2>{{ group }}</h2>
+  <div class="ogrid">
+    {% for p in plist %}
+    <div class="ocard">
+      <h3>{{ p.label }}
+        {% if p.games %}<span class="muted small" style="font-weight:400">{{ p.games }} games · <span class="{{ wrc(p.wr) }}">{{ pct(p.wr) }}</span> won · ACS {{ p.acs|round|int }}</span>{% endif %}</h3>
+      {% if not p.games %}<p class="muted small" style="margin:0">No games yet: "Update everyone's stats" on the comps page.</p>{% else %}
+      <div>
+        <div class="osec">Role</div>
+        {% set tr = p.team_role %}
+        {% if tr.role %}<span class="chip {{ 'sug' if tr.suggested }}" title="{{ 'suggested from the data' if tr.suggested else 'assigned on the Roles page' }}">{{ tr.role }}{% if tr.suggested %}<span translate="no"> ?</span>{% endif %}</span>{% if tr.score is not none %} <span class="muted small">fit {{ tr.score }}/100</span>{% endif %}{% else %}<span class="muted small">not enough round data yet</span>{% endif %}
+        {% for h in tr.hats %}<span class="chip hat {{ 'sug' if h.suggested }}" title="{{ 'suggested from the data' if h.suggested else 'assigned' }}">{{ h.hat }}{% if h.suggested %}<span translate="no"> ?</span>{% endif %}</span>{% endfor %}
+      </div>
+      <div>
+        <div class="osec">Most played agents</div>
+        <div class="alist">{% for a in p.top %}
+          <div class="arow">{{ ai(a.agent, 24) }}<span>{{ a.agent }} <span class="muted small">{{ a.role }}</span></span>
+            <span class="n">{{ a.games }} · {{ pct(a.share) }}</span><span class="w {{ wrc(a.wr) }}" title="won">{{ pct(a.wr) }}</span></div>{% endfor %}
+        </div>
+        {% if p.agents|length > 5 %}<a class="small" href="{{ url_for('team_overview', tid=t.id, view='all') }}">+ {{ p.agents|length - 5 }} more agents</a>{% endif %}
+      </div>
+      <div>
+        <div class="osec">Agent roles</div>
+        <div class="split">{% for s in p.role_split if s.share %}<i class="r-{{ s.role }}" style="width:{{ (s.share * 100)|round(1) }}%" title="{{ s.role }} {{ pct(s.share) }}"></i>{% endfor %}</div>
+        <div class="legend">{% for s in p.role_split if s.share %}<span><b class="r-{{ s.role }}"></b>{{ s.role }} {{ pct(s.share) }}</span>{% endfor %}</div>
+      </div>
+      <div>
+        <div class="osec">Playstyle</div>
+        <div class="dims">
+          {% for k, lbl in (('opening', 'Opening duels'), ('kills', 'Kills'), ('assists', 'Assists'), ('survive', 'Survival')) %}
+          <span>{{ lbl }}</span><span class="dbar"><i style="width:{{ ((p.style.dims[k] or 0) * 100)|round(1) }}%"></i></span><span class="muted small">{{ pct(p.style.dims[k] or 0) }}</span>
+          {% endfor %}
+        </div>
+        {% if p.style.traits %}<div class="small" style="margin-top:6px">{% for tr_ in p.style.traits %}<span>{{ tr_ }}</span>{{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
+        {% if p.pro %}<div class="small muted" style="margin-top:2px">Plays most like {{ p.pro }}</div>{% endif %}
+      </div>
+      {% if p.best_maps %}<div>
+        <div class="osec">Best maps</div>
+        <div class="small">{% for m in p.best_maps %}<b>{{ m.map }}</b> <span class="{{ wrc(m.wr) }}">{{ pct(m.wr) }}</span> <span class="muted">({{ m.games }})</span>{{ ' · ' if not loop.last }}{% endfor %}</div>
+      </div>{% endif %}
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+<p class="muted small">Playstyle bars: where a player stands among the players in your matches (50 % = average). A role with "?" is a suggestion from the data; assign roles on the <a href="{{ url_for('team_roles_page', tid=t.id) }}">Roles</a> page.</p>
+
+{% else %}
+{% set players = ov.starters + ov.subs %}
+<section class="card">
+  <div class="row between"><h2 style="margin:0">Every agent</h2><span class="muted small">games · win rate; the stronger the color, the bigger the share of that player's games</span></div>
+  <div class="tablewrap" style="margin-top:8px"><table class="mx">
+    <thead><tr><th>Agent</th>{% for p in players %}<th>{{ p.label }}{% if p.kind != 'starter' %} <span class="muted">(sub)</span>{% endif %}</th>{% endfor %}<th>Team</th></tr></thead>
+    <tbody>
+    {% for role in ['Duelist', 'Initiator', 'Controller', 'Sentinel'] %}{% set ags = ov.all_agents|selectattr('role', 'equalto', role)|list %}{% if ags %}
+      <tr class="rolehead"><td colspan="{{ players|length + 2 }}">{{ role }}s</td></tr>
+      {% for a in ags %}<tr>
+        <td>{{ ai(a.agent, 22) }} {{ a.agent }}</td>
+        {% for p in players %}{% set c = ov.cells[p.label].get(a.agent) %}
+        <td>{% if c %}<span class="c" style="background:color-mix(in srgb, var(--accent) {{ [6 + c.share * 60, 32]|min|round|int }}%, transparent)" title="{{ p.label }} on {{ a.agent }}: {{ c.games }} games, {{ pct(c.wr) }} won, ACS {{ c.acs|round|int }}, K/D {{ '%.2f'|format(c.kd) }}">{{ c.games }}<small class="{{ wrc(c.wr) }}">{{ pct(c.wr) }}</small></span>{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}
+        <td class="muted">{{ a.games }}</td>
+      </tr>{% endfor %}
+    {% endif %}{% endfor %}
+    {% set other = ov.all_agents|rejectattr('role', 'in', ['Duelist', 'Initiator', 'Controller', 'Sentinel'])|list %}
+    {% for a in other %}<tr><td>{{ ai(a.agent, 22) }} {{ a.agent }}</td>{% for p in players %}{% set c = ov.cells[p.label].get(a.agent) %}<td>{% if c %}{{ c.games }}{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}<td class="muted">{{ a.games }}</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>Every map</h2>
+  <div class="tablewrap"><table class="mx">
+    <thead><tr><th>Map</th>{% for p in players %}<th>{{ p.label }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for m in ov.all_maps %}<tr><td>{{ m }}</td>
+      {% for p in players %}{% set c = ov.map_cells[p.label].get(m) %}
+      <td>{% if c %}<span class="c" title="{{ p.label }} on {{ m }}: {{ c.games }} games, {{ pct(c.wr) }} won, ACS {{ c.acs|round|int }}">{{ c.games }}<small class="{{ wrc(c.wr) }}">{{ pct(c.wr) }}</small></span>{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>Roles and playstyle</h2>
+  <div class="tablewrap"><table class="mx">
+    <thead><tr><th></th>{% for p in players %}<th>{{ p.label }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      <tr><td>Role</td>{% for p in players %}<td>{% if p.team_role and p.team_role.role %}<span class="chip {{ 'sug' if p.team_role.suggested }}">{{ p.team_role.role }}{% if p.team_role.suggested %}<span translate="no"> ?</span>{% endif %}</span>{% for h in p.team_role.hats %} <span class="chip hat {{ 'sug' if h.suggested }}">{{ h.hat }}{% if h.suggested %}<span translate="no"> ?</span>{% endif %}</span>{% endfor %}{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}</tr>
+      {% for r in ['Duelist', 'Initiator', 'Controller', 'Sentinel'] %}
+      <tr><td>{{ r }}</td>{% for p in players %}{% set s = (p.role_split or [])|selectattr('role', 'equalto', r)|first %}<td>{% if s and s.share %}{{ pct(s.share) }}{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}
+      {% for k, lbl in (('opening', 'Opening duels'), ('kills', 'Kills'), ('assists', 'Assists'), ('survive', 'Survival')) %}
+      <tr><td>{{ lbl }}</td>{% for p in players %}<td>{% if p.style %}{{ pct(p.style.dims[k] or 0) }}{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}
+      <tr><td>Plays most like</td>{% for p in players %}<td class="small">{{ p.pro or '–' }}</td>{% endfor %}</tr>
+    </tbody>
+  </table></div>
+  <p class="muted small" style="margin:8px 0 0">Playstyle: where a player stands among the players in your matches (50 % = average).</p>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

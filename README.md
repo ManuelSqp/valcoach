@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.10.1** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.11.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -272,8 +272,15 @@ deaths while outnumbered for everyone, and who traded whom. CLI: `nexus coach <m
 **Sharing a team.** Teammates get their own login (admin: *Users*, or turn on sign-up) with their in-game name.
 Under *Members, maps & Discord → Teammates with access* you add them; they then see the team and their teammates'
 stats (view only) and can write notes. Tabs on a team: **Comps**, **Game plans** (3 detailed plays per map with a
-step per player), **Weekly focus** (one focus per player), **Roles**, **Notes** (yours + tips from your matches
-together) and, for the owner, **Members, maps & Discord**.
+step per player), **Weekly focus** (one focus per player), **Player overview**, **Roles**, **Notes** (yours + tips
+from your matches together) and, for the owner, **Members, maps & Discord**.
+
+**Player overview** (*Roster & setup*, 4.11) shows who plays what, calculated from the stored games: per player the
+role (assigned on *Roles*, else the suggestion, marked "?") with IGL / Operator, the most played agents with games and
+win rate, the split over the agent roles, the playstyle (opening duels, kills, assists, survival compared with your
+lobbies, in words, and the closest pro) and the best maps. On top, which agent roles each starter plays regularly,
+roles nobody covers and mains that collide. Two views: **Top 5 agents** (a card per player) and **All agents** (every
+agent and map as a table, players side by side, plus roles and playstyle in one table).
 
 **Look & feel.** Every user picks a style (ten, from Classic to Retro arcade) and switches the animations on or
 off under *Account › Look & feel*. **Ctrl+K** (or `/`) opens a quick search for players, team tabs, maps, drafts
@@ -552,7 +559,7 @@ Settings (web) or `[video]` (CLI).
 | `coach/teamreview.py` | whole-team review of one match (facts per teammate, trades, model write-up) |
 | `replayfile.py`, `web/replays.py` | the game's replay files: vrfkit export → compact positions, lining up with the match by the kills, paths and per-10 s summaries for the coach; uploads from the coach page and the app |
 | `stats/comprules.py`, `stats/comp_rules.yaml` | map rules for team comps (role mixes, needed / key agents per map, what every comp needs) |
-| `stats/` | history import, per map / agent aggregates, findings, team comps with subs, pick helper, tips, playstyle + pro matching (`style.py`, `pros.yaml`), YouTube search, team roles (`teamroles.py`) |
+| `stats/` | history import, per map / agent aggregates, findings, team comps with subs, pick helper, tips, playstyle + pro matching (`style.py`, `pros.yaml`), YouTube search, team roles (`teamroles.py`), player overview (`overview.py`) |
 
 Data of the web app lives in `data/`: `nexus.db`, `cache/` (matches, maps,
 minimap calibrations), `profiles/<id>/` (playbook, notes), `uploads/`,
