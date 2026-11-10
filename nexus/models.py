@@ -139,6 +139,7 @@ class Match:
     # Riot's match data often has no ability casts (all null). Then utility can't be judged.
     has_utility: bool = True
     mode_type: str = ""             # "Standard", "Swiftplay", "Deathmatch", ...
+    game_version: str = ""          # 4.15: e.g. "release-09.10-shipping-..." (the patch the match was played on)
 
     # ---- helpers -------------------------------------------------------
     def team_of(self, puuid: str) -> str:

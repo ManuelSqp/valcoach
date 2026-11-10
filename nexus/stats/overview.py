@@ -65,7 +65,8 @@ def player(p: dict, lineup: dict, pros: list[dict]) -> dict:
     hats = [{"hat": h, "suggested": False} for h in assigned if h in HATS]
     for h, who in (lineup.get("hats") or {}).items():
         if who == p["label"] and h not in [x["hat"] for x in hats]:
-            hats.append({"hat": h, "suggested": True})
+            hats.append({"hat": h, "suggested": True,
+                         "votes": lineup.get("igl_votes") if h == "IGL" else None})   # 4.15: from check-ins
     sc = p.get("scores") or {}
     out["team_role"] = {"role": role, "suggested": suggested, "hats": hats,
                         "score": sc.get(role, {}).get("score") if role else None}

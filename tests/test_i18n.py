@@ -71,3 +71,17 @@ def test_pick_language_from_browser():
     assert i18n.pick("de-CH,de;q=0.9,en;q=0.8") == "de"
     assert i18n.pick("fr-FR,fr") == "en"
     assert i18n.pick(None) == "en"
+
+
+def test_middle_dot_parts_and_long_white_space():
+    """4.15: "text · early sign, 84 rounds" is translated part by part; no slow regex on long white space."""
+    import time
+    c = Catalog({"Clutch player": "Clutch-Spieler", "early sign, # rounds": "erstes Anzeichen, # Runden",
+                 "Save.": "Speichern.", "Go.": "Los."})
+    assert c.text("Clutch player · early sign, 84 rounds") == "Clutch-Spieler · erstes Anzeichen, 84 Runden"
+    assert c.text("Save. Go. · early sign, 9 rounds") == "Speichern. Los. · erstes Anzeichen, 9 Runden"
+    assert c.text("Clutch player · something unknown") == "Clutch player · something unknown"
+    t = time.time()
+    c.text("a" + " " * 50000 + "·" + " " * 50000 + "b")
+    c.text("x." + " " * 50000 + "y")
+    assert time.time() - t < 1.0

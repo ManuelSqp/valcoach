@@ -13,6 +13,9 @@
 .alist{display:flex;flex-direction:column;gap:4px}
 .arow{display:grid;grid-template-columns:24px 1fr auto auto;gap:8px;align-items:center;font-size:13px}
 .arow .n{font-variant-numeric:tabular-nums;color:var(--muted);text-align:right;min-width:52px}
+.conf{font-size:11px;padding:0 7px;border-radius:99px;background:var(--win-soft);color:var(--win);white-space:nowrap}
+.conf.early{background:var(--accent-soft);color:var(--amber)}
+.early{color:var(--amber);margin-left:2px;font-weight:700}
 .arow .w{font-variant-numeric:tabular-nums;text-align:right;min-width:42px}
 .split{display:flex;height:10px;border-radius:99px;overflow:hidden;background:var(--line)}
 .split i{display:block;height:100%}
@@ -76,7 +79,7 @@
         <div class="osec">Role</div>
         {% set tr = p.team_role %}
         {% if tr.role %}<span class="chip {{ 'sug' if tr.suggested }}" tabindex="0" data-tip="{{ 'Suggested from the data: the role this player fits best in the lineup. Set it for good on the Roles page.' if tr.suggested else 'Assigned on the Roles page.' }}">{{ tr.role }}{% if tr.suggested %}<span translate="no"> ?</span>{% endif %}</span>{% if tr.score is not none %} <span class="muted small">fit {{ tr.score }}/100</span>{% endif %}{% else %}<span class="muted small">not enough round data yet</span>{% endif %}
-        {% for h in tr.hats %}<span class="chip hat {{ 'sug' if h.suggested }}" tabindex="0" data-tip="{% if not h.suggested %}Assigned on the Roles page.{% elif h.hat == 'IGL' %}Suggested from the data. Calling can't be measured (no voice comms): it's a guess from who stays alive late in rounds and plays controller or initiator.{% else %}Suggested from the data: buys and gets kills with the Operator.{% endif %}">{{ h.hat }}{% if h.suggested %}<span translate="no"> ?</span>{% endif %}</span>{% endfor %}
+        {% for h in tr.hats %}<span class="chip hat {{ 'sug' if h.suggested }}" tabindex="0" data-tip="{% if not h.suggested %}Assigned on the Roles page.{% elif h.hat == 'IGL' and h.votes %}Named as the caller in {{ h.votes.votes }} of {{ h.votes.total }} post-match check-ins (Match day › Check-in).{% elif h.hat == 'IGL' %}Suggested from the data. Calling can't be measured (no voice comms): it's a guess from who stays alive late in rounds and plays controller or initiator.{% else %}Suggested from the data: buys and gets kills with the Operator.{% endif %}">{{ h.hat }}{% if h.suggested %}<span translate="no"> ?</span>{% endif %}</span>{% endfor %}
       </div>
       <div>
         <div class="osec">Most played agents</div>
@@ -93,7 +96,7 @@
       </div>
       <div>
         <div class="osec">Playstyle</div>
-        {% if p.style.labels %}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">{% for l in p.style.labels %}<span class="chip style" tabindex="0" data-tip="{{ l.why }}">{{ l.label }}</span>{% endfor %}</div>
+        {% if p.style.labels %}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">{% for l in p.style.labels %}<span class="chip style" tabindex="0" data-tip="{{ l.why }} · {{ l.confidence }}, {{ l.rounds }} rounds">{{ l.label }}{% if l.confidence == 'early sign' %}<span class="early" aria-label="early sign">*</span>{% endif %}</span>{% endfor %}</div>
         {% elif not p.style.full_games %}<div class="muted small" style="margin-bottom:6px">Needs games with round data for the playstyle.</div>{% endif %}
         <div class="dims">
           {% for k, lbl in (('opening', 'Opening duels'), ('kills', 'Kills'), ('assists', 'Assists'), ('survive', 'Survival')) %}
@@ -104,9 +107,9 @@
       </div>
       {% if p.thrives or p.struggles %}<div>
         <div class="osec">Thrives in</div>
-        <div class="sit">{% for s in p.thrives %}<div><span class="up">▲</span> <b>{{ s.label|capitalize }}</b> <span class="t">{{ s.text }}</span></div>{% else %}<div class="muted small">nothing stands out yet</div>{% endfor %}</div>
+        <div class="sit">{% for s in p.thrives %}<div><span class="up">▲</span> <b>{{ s.label|capitalize }}</b> <span class="t">{{ s.text }}</span> <span class="conf {{ 'early' if s.confidence == 'early sign' }}">{{ s.confidence }}</span></div>{% else %}<div class="muted small">nothing stands out yet</div>{% endfor %}</div>
         {% if p.struggles %}<div class="osec" style="margin-top:8px">Struggles in</div>
-        <div class="sit">{% for s in p.struggles %}<div><span class="down">▼</span> <b>{{ s.label|capitalize }}</b> <span class="t">{{ s.text }}</span></div>{% endfor %}</div>{% endif %}
+        <div class="sit">{% for s in p.struggles %}<div><span class="down">▼</span> <b>{{ s.label|capitalize }}</b> <span class="t">{{ s.text }}</span> <span class="conf {{ 'early' if s.confidence == 'early sign' }}">{{ s.confidence }}</span></div>{% endfor %}</div>{% endif %}
       </div>{% endif %}
       {% if p.best_maps %}<div>
         <div class="osec">Best maps</div>
@@ -118,7 +121,7 @@
   </div>
 </section>
 {% endfor %}
-<p class="muted small">Playstyle labels: hover or tap one to see what it's based on. Bars: where a player stands among the players in your matches (50 % = average). Thrives / struggles: compared with typical ranked values, and only with enough rounds. A role with "?" is a suggestion from the data; assign roles on the <a href="{{ url_for('team_roles_page', tid=t.id) }}">Roles</a> page.</p>
+<p class="muted small">Playstyle labels: hover or tap one to see what it's based on. Bars: where a player stands among the players in your matches (50 % = average). Thrives / struggles: compared with typical ranked values, and only with enough rounds; "early sign" (*) = few rounds so far, "solid" = enough to rely on. A role with "?" is a suggestion from the data; assign roles on the <a href="{{ url_for('team_roles_page', tid=t.id) }}">Roles</a> page.</p>
 
 {% else %}
 {% set players = ov.starters + ov.subs %}
@@ -163,9 +166,9 @@
       <tr><td>{{ r }}</td>{% for p in players %}{% set s = (p.role_split or [])|selectattr('role', 'equalto', r)|first %}<td>{% if s and s.share %}{{ pct(s.share) }}{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}
       {% for k, lbl in (('opening', 'Opening duels'), ('kills', 'Kills'), ('assists', 'Assists'), ('survive', 'Survival')) %}
       <tr><td>{{ lbl }}</td>{% for p in players %}<td>{% if p.style %}{{ pct(p.style.dims[k] or 0) }}{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}
-      <tr><td>Playstyle</td>{% for p in players %}<td>{% for l in (p.style.labels if p.style else []) %}<span class="chip style" tabindex="0" data-tip="{{ l.why }}">{{ l.label }}</span> {% else %}<span class="muted">–</span>{% endfor %}</td>{% endfor %}</tr>
-      <tr><td>Thrives in</td>{% for p in players %}<td class="small">{% for s in p.thrives or [] %}<div class="wr-good" tabindex="0" data-tip="{{ s.text }}">{{ s.label }}</div>{% else %}<span class="muted">–</span>{% endfor %}</td>{% endfor %}</tr>
-      <tr><td>Struggles in</td>{% for p in players %}<td class="small">{% for s in p.struggles or [] %}<div class="wr-bad" tabindex="0" data-tip="{{ s.text }}">{{ s.label }}</div>{% else %}<span class="muted">–</span>{% endfor %}</td>{% endfor %}</tr>
+      <tr><td>Playstyle</td>{% for p in players %}<td>{% for l in (p.style.labels if p.style else []) %}<span class="chip style" tabindex="0" data-tip="{{ l.why }} · {{ l.confidence }}, {{ l.rounds }} rounds">{{ l.label }}{% if l.confidence == 'early sign' %}<span class="early" aria-label="early sign">*</span>{% endif %}</span> {% else %}<span class="muted">–</span>{% endfor %}</td>{% endfor %}</tr>
+      <tr><td>Thrives in</td>{% for p in players %}<td class="small">{% for s in p.thrives or [] %}<div class="wr-good" tabindex="0" data-tip="{{ s.text }} · {{ s.confidence }}">{{ s.label }}{% if s.confidence == 'early sign' %}<span class="early">*</span>{% endif %}</div>{% else %}<span class="muted">–</span>{% endfor %}</td>{% endfor %}</tr>
+      <tr><td>Struggles in</td>{% for p in players %}<td class="small">{% for s in p.struggles or [] %}<div class="wr-bad" tabindex="0" data-tip="{{ s.text }} · {{ s.confidence }}">{{ s.label }}{% if s.confidence == 'early sign' %}<span class="early">*</span>{% endif %}</div>{% else %}<span class="muted">–</span>{% endfor %}</td>{% endfor %}</tr>
       <tr><td>Plays most like</td>{% for p in players %}<td class="small">{{ p.pro or '–' }}</td>{% endfor %}</tr>
     </tbody>
   </table></div>

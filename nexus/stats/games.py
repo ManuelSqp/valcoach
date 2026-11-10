@@ -20,7 +20,7 @@ from ..parse import parse_match
 from . import roles
 
 QUEUES = ("competitive", "premier", "unrated")
-ROW_VERSION = 5            # bump when rows from full matches gain fields; old rows are rebuilt from the cache
+ROW_VERSION = 6            # bump when rows from full matches gain fields; old rows are rebuilt from the cache
 ISOLATED_UNITS = 2000      # ~20 m to the nearest living teammate
 TRADE_MS = 3000
 Log = Callable[[str], None]
@@ -76,6 +76,10 @@ def row_from_match(match: Match, puuid: str, mi: MapInfo | None) -> dict | None:
         "retake": [0, 0],     # defense rounds they planted while you were alive: [rounds, won]
         "postplant": [0, 0],  # attack rounds your team planted while you were alive: [rounds, won]
         "tier": me.tier or "",   # v4: rank shown in the match (Progress › rank over time)
+        # 4.15 (row v6): the patch, how strong both lobbies were (mean rank id, 3 = Iron 1 ... 27 = Radiant)
+        "patch": patch_of(match.game_version),
+        "own_tier": _mean_tier(match.players_on(team)), "opp_tier": _mean_tier(match.players_on(opp)),
+        "no_util": [0, 0] if match.has_utility else None,   # [deaths in rounds you cast nothing, deaths]
         # v5: utility, economy per round, teammates, everyone's numbers by agent
         "casts": casts(me.ability_casts) if match.has_utility else None,
         "econ": [],           # per round: [round number, side, won, your loadout, team average, enemy average]
@@ -146,6 +150,12 @@ def row_from_match(match: Match, puuid: str, mi: MapInfo | None) -> dict | None:
                                          int(di.traded), int(di.first_death)])
                 row["traded_deaths"] += int(di.traded)
                 break
+        # 4.15: per round also your kills and whether you died (buy-adjusted numbers, evidence.py)
+        row["econ"][-1] += [sum(1 for k in rnd.kills if k.killer == puuid), int(died)]
+        if died and row["no_util"] is not None and st is not None:
+            row["no_util"][1] += 1
+            if not any(casts(st.ability_casts).values()):
+                row["no_util"][0] += 1
         if got_kill or assisted or not died or traded:
             row["kast"] += 1
         if not died:
@@ -157,6 +167,19 @@ def row_from_match(match: Match, puuid: str, mi: MapInfo | None) -> dict | None:
 
 
 SLOTS = ("grenade", "ability1", "ability2", "ultimate")
+PATCH_RE = __import__("re").compile(r"(\d{1,2})\.(\d{2})")
+
+
+def patch_of(version: str) -> str:
+    """"release-09.10-shipping-12-2843215" -> "9.10" ("" if unknown)."""
+    m = PATCH_RE.search(version or "")
+    return f"{int(m.group(1))}.{m.group(2)}" if m else ""
+
+
+def _mean_tier(players) -> float | None:
+    from .rank import tier_id
+    ids = [t for t in (tier_id(p.tier) for p in players) if t and t >= 3]
+    return round(sum(ids) / len(ids), 1) if ids else None
 
 
 def casts(ac: dict) -> dict[str, int]:

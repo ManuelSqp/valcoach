@@ -11,10 +11,13 @@ samples. Each label needs its own evidence and says what it is based on.
 """
 from __future__ import annotations
 
+from .evidence import BUY_STATES, buy_state, confidence
 from .style import profile
 
 PRIOR = 10                 # samples of "typical" mixed into every rate
 SHOW_DIFF = 0.07           # a situation counts as good / bad from 7 points above / below typical
+SOLID_X = 3               # 4.15: "solid" from 3× a situation's minimum sample, "early sign" below
+BUY_BASE = {"full": 0.5, "anti_eco": 0.75, "own_eco": 0.3}     # typical round win rates by buy state
 CLUTCH_BASE = {1: 0.45, 2: 0.18, 3: 0.07, 4: 0.025, 5: 0.01}   # typical 1vX win rates in ranked
 RANGES = (("close", 0, 10, "close-range duels (under 10 m)"), ("mid", 10, 25, "mid-range duels (10–25 m)"),
           ("long", 25, 999, "long-range duels (25 m+)"))
@@ -41,7 +44,9 @@ def situations(rows: list[dict]) -> list[dict]:
         if n < min_n:
             return
         v = _rate(won, n, base) if value is None else value
-        out.append({"key": key, "label": label, "n": n, "value": v, "base": base, "diff": v - base, "text": text})
+        conf = confidence(n, SOLID_X * min_n)
+        out.append({"key": key, "label": label, "n": n, "value": v, "base": base, "diff": v - base,
+                    "confidence": conf, "text": text})
 
     fk, fd = sum(r.get("fk", 0) for r in full), sum(r.get("fd", 0) for r in full)
     add("opening", "opening duels", fk, fk + fd, 0.5, 12, f"won {fk} of {fk + fd} first duels of the round")
@@ -64,6 +69,19 @@ def situations(rows: list[dict]) -> list[dict]:
         w = sum((r.get(key) or [0, 0])[1] for r in full)
         what = "defense rounds still alive at the enemy plant" if key == "retake" else "attack rounds still alive after the plant"
         add(key, label, w, n, base, 10, f"won {w} of {n} {what}")
+
+    # 4.15: rounds by buy state (full buys on both sides, anti-eco, your own eco / force)
+    buy = {k: [0, 0] for k in BUY_BASE}
+    for r in full:
+        for e in r.get("econ") or []:
+            if len(e) >= 6:
+                st = buy_state(e[4], e[5])
+                if st in buy:
+                    buy[st][0] += 1
+                    buy[st][1] += int(e[2])
+    for key, label in BUY_STATES:
+        n, w = buy[key]
+        add(f"buy_{key}", label.lower(), w, n, BUY_BASE[key], 20, f"won {w} of {n} rounds")
 
     duels = [d for r in full for d in (r.get("duels") or [])]
     for key, lo, hi, label in RANGES:
@@ -93,8 +111,9 @@ def situations(rows: list[dict]) -> list[dict]:
     trades = sum(r.get("trade_kills", 0) for r in full)
     if kills >= 40:
         share = trades / kills
+        conf = confidence(kills, 120)
         out.append({"key": "trades", "label": "trading teammates", "n": kills, "value": share, "base": 0.2,
-                    "diff": share - 0.2, "text": f"{trades} of {kills} kills were trades"})
+                    "diff": share - 0.2, "confidence": conf, "text": f"{trades} of {kills} kills were trades"})
     return out
 
 
@@ -157,7 +176,8 @@ def labels(rows: list[dict], prof: dict | None = None, sit: list[dict] | None = 
         add(0.65 + op_r / rounds, "Operator player", f"Operator in {_pct(op_r / rounds)} of rounds, "
             f"{op_k / op_r:.2f} kills per Operator round")
     out.sort(key=lambda x: -x[0])
-    return [x[1] for x in out[:3]]
+    conf = confidence(rounds, 250)          # 4.15: every label says how much it rests on
+    return [dict(x[1], confidence=conf, rounds=rounds) for x in out[:3]]
 
 
 def analyse(rows: list[dict], prof: dict | None = None) -> dict:

@@ -157,7 +157,14 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             all_agents=roles.all_agents(), map_names=sorted({m["map"] for m in maps} | set(KNOWN_MAPS)), tab="stats",
             can_edit=can_edit,
             pick=pick, pick_map=pick_map, locked=locked + [""] * (4 - len(locked)),
-            recent=rows[:12])
+            recent=rows[:12], ctx=stats_context(rows))
+
+    def stats_context(rows: list[dict]) -> dict:
+        """4.15: weighted numbers, rounds by buy state and games by lobby strength."""
+        from ..stats import evidence as ev
+        buy = ev.buy_split(rows)
+        return {"w": ev.weighted_summary(rows), "buy": buy, "note": ev.buy_note(buy), "opp": ev.opponent_split(rows),
+                "half_life": int(ev.HALF_LIFE_DAYS), "patch_old": ev.PATCH_OLD}
 
     @app.get("/profiles/<int:pid>/agents")
     def agents_roles(pid: int):
@@ -252,8 +259,62 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         queue = queue_arg("everything")
         rows = filter_rows(sr.games(pid).rows(), queue)
         h = track(rows, coach_said(p))
+        from ..stats import goals as gl, replaystats
+        from ..stats.progress import METRICS, ORDER
+        all_rows = sr.games(pid).rows()
+        goals = sr.goals(pid).refresh(all_rows)
+        replay = replaystats.player(store.data_dir / "replays", cache_dir, all_rows, sr.games(pid).load().get("puuid", ""))
         return render_template("habits.html", p=p, active_pid=pid, queue=queue, queues=QUEUE_TABS, tab="habits",
-                               can_edit=can_edit, h=h, fmt_date=fmt_date, own=sr.read_own_focus(pid))
+                               can_edit=can_edit, h=h, fmt_date=fmt_date, own=sr.read_own_focus(pid),
+                               goals=goals, goal_edit=own_player(pid, can_edit), metrics=[(k, METRICS[k][0], METRICS[k][2]) for k in ORDER],
+                               habit_goal=HABIT_GOAL, goal_games=gl.GOAL_GAMES, replay=replay,
+                               setup_s=int(replaystats.SETUP_S), trade_m=int(replaystats.TRADE_M), trade_s=int(replaystats.TRADE_S),
+                               retake_m=int(replaystats.RETAKE_M))
+
+    # habit -> (progress metric, target): "Make it a goal" aims for the habit's line
+    HABIT_GOAL = {"alone": ("alone", None), "untraded": ("traded", "inv"), "opening": ("first_duels", "inv"),
+                  "kast": ("kast", "inv"), "aim": ("hs", None), "no_util": ("no_util", None)}
+
+    def own_player(pid: int, can_edit: bool) -> bool:
+        """You can set goals for your own players and for the team player linked to your account."""
+        if can_edit:
+            return True
+        return any(m.get("pid") == pid and m.get("user_id") == g.user.id
+                   for t in store.teams_for_user(g.user.id) for m in t.member_list)
+
+    @app.post("/profiles/<int:pid>/goals")
+    def goal_add(pid: int):
+        """A measurable goal (4.15): a metric, a target and the games it has to happen in."""
+        from ..stats import goals as gl
+        from ..stats.habits import HABITS
+        from ..stats.progress import METRICS
+        p, can_edit = view_profile(pid)
+        if not own_player(pid, can_edit):
+            abort(403)
+        f = request.form
+        metric, target, text = f.get("metric", ""), None, f.get("text", "")
+        if f.get("habit") in HABIT_GOAL:
+            metric, how = HABIT_GOAL[f["habit"]]
+            line = HABITS[f["habit"]]["bad"]
+            target = round(1 - line, 2) if how == "inv" else line
+            text = text or HABITS[f["habit"]]["title"]
+        elif metric in METRICS:
+            target = gl.parse_target(metric, f.get("target"))
+        if metric not in METRICS or target is None:
+            flash("Pick a number and a target.", "error")
+            return redirect(url_for("habits", pid=pid) + "#goals")
+        games = f.get("games", type=int) or gl.GOAL_GAMES
+        sr.goals(pid).add(metric, target, sr.games(pid).rows(), text=text, source="you", games=games)
+        flash(f"Goal set: {METRICS[metric][0]} in the next {max(3, min(30, games))} games.", "ok")
+        return redirect(url_for("habits", pid=pid) + "#goals")
+
+    @app.post("/profiles/<int:pid>/goals/<gid>/drop")
+    def goal_drop(pid: int, gid: str):
+        p, can_edit = view_profile(pid)
+        if not own_player(pid, can_edit):
+            abort(403)
+        sr.goals(pid).drop(gid)
+        return redirect(url_for("habits", pid=pid) + "#goals")
 
     def pro_context(p, queue: str, pro: str | None = None) -> dict:
         from ..stats.style import load_pros, match_pros, profile, video_queries
@@ -656,7 +717,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         members = [{"label": c["byid"][m["pid"]].name, "pid": m["pid"], "kind": m["kind"],
                     "rows": c["rows_by"][m["pid"]], "assigned": m.get("roles", [])} for m in c["members"]]
         maps = t.map_list or [m["map"] for m in by_map([r for rs in c["rows_by"].values() for r in rs])][:7]
-        res = team_roles(members, local_meta(filter_rows(owner_rows(t.owner_id), t.queue)), maps) if members else None
+        res = checkin_igl(t, team_roles(members, local_meta(filter_rows(owner_rows(t.owner_id), t.queue)), maps)) if members else None
         return render_template("team_roles.html", t=t, tab="roles", res=res, team_roles=TEAM_ROLES, is_owner=g.team_owner,
                                desc=DESCRIPTION, queues=QUEUE_TABS, premier_status=sr.status(f"premier:{tid}"))
 
@@ -678,7 +739,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             pros = load_pros(store.get("pros_yaml"))
         except Exception:
             pros = load_pros()
-        ov = overview_team(team_roles(members, local_meta(filter_rows(owner_rows(t.owner_id), t.queue)), maps),
+        ov = overview_team(checkin_igl(t, team_roles(members, local_meta(filter_rows(owner_rows(t.owner_id), t.queue)), maps)),
                            pros) if members else None
         return render_template("team_overview.html", t=t, tab="overview", ov=ov, view=view, queues=QUEUE_TABS,
                                premier_status=sr.status(f"premier:{tid}"))
@@ -702,6 +763,73 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             team_cache.clear() if len(team_cache) > 20 else None
             team_cache[key] = team_matches(cache_dir, rows_by_pu)
         return {**c, "matches": team_cache[key], "names": names}
+
+    # ------------------------------------------------------------------ post-match check-in (4.15)
+    def checkin_igl(t, res: dict | None) -> dict | None:
+        """The team's check-ins name the caller: that replaces the IGL guess from the stats (not an assigned IGL)."""
+        from ..stats import checkins as ck
+        if not res:
+            return res
+        lu = res.setdefault("lineup", {})
+        if any("IGL" in (p.get("assigned") or []) for p in res.get("players") or []):
+            return res
+        names = {}
+        for m in t.member_list:
+            pr = store.profile(m["pid"])
+            if pr:
+                names[m["pid"]] = pr.name
+        c = ck.igl(ck.load(sr.team_dir(t.id)), names)
+        if c and any(p.get("label") == c["label"] for p in res.get("players") or []):
+            lu.setdefault("hats", {})["IGL"] = c["label"]
+            lu["igl_votes"] = c
+        return res
+
+    def my_pid(t) -> int | None:
+        return next((m["pid"] for m in t.member_list if m.get("user_id") == g.user.id), None)
+
+    @app.get("/teams/<int:tid>/checkin")
+    def team_checkin(tid: int):
+        """After a match the team played together: who called, comms and mood (1-5), one line. 20 seconds."""
+        from ..stats import checkins as ck
+        t = link_me(get_team(tid))
+        d = team_data(t)
+        names = {m["pid"]: d["byid"][m["pid"]].name for m in d["members"]}
+        data = ck.load(sr.team_dir(tid))
+        me = my_pid(t)
+        as_pid = request.args.get("as", type=int) if g.team_owner else None
+        if as_pid not in names:
+            as_pid = None
+        who = as_pid or me
+        matches = []
+        for m, side in d["matches"][:12]:
+            ans = data.get(m.match_id) or {}
+            own, opp = m.team_rounds_won.get(side, 0), m.team_rounds_won.get(m.other_team(side), 0)
+            matches.append({"id": m.match_id, "map": m.map_name, "when": m.started_at, "score": f"{own}–{opp}",
+                            "won": own > opp, "queue": m.queue, "mine": ans.get(str(who)) if who else None,
+                            "sum": ck.summary(ans) if ans else None})
+        igl = ck.igl(data, names)
+        return render_template("team_checkin.html", t=t, tab="checkin", matches=matches, names=names, me=me, who=who,
+                               as_pid=as_pid, igl=igl, min_votes=ck.MIN_VOTES, scale=ck.SCALE, queues=QUEUE_TABS,
+                               open_id=request.args.get("m", ""), premier_status=sr.status(f"premier:{tid}"))
+
+    @app.post("/teams/<int:tid>/checkin")
+    def team_checkin_save(tid: int):
+        from ..stats import checkins as ck
+        t = link_me(get_team(tid))
+        f = request.form
+        members = {m["pid"] for m in t.member_list}
+        who = f.get("as", type=int) if g.team_owner and f.get("as", type=int) in members else my_pid(t)
+        if who is None:
+            flash("Set your in-game name under Account first, so Nexus knows which player you are.", "error")
+            return redirect(url_for("team_checkin", tid=tid))
+        mid = f.get("match_id", "")
+        d = team_data(t)
+        if not any(m.match_id == mid for m, _ in d["matches"]):
+            abort(404)
+        ck.record(sr.team_dir(tid), mid, who, f.get("caller", type=int), f.get("comms"), f.get("mood"), f.get("note", ""),
+                  members)
+        flash("Check-in saved. Thanks!", "ok")
+        return redirect(url_for("team_checkin", tid=tid, **({"as": who} if who != my_pid(t) else {})))
 
     @app.route("/teams/<int:tid>/notes", methods=["GET", "POST"])
     def team_notes(tid: int):
@@ -934,16 +1062,20 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
         return items
 
     def focus_items(t, b) -> list[dict]:
+        from ..stats import checkins as ck
         notes = store.team_notes(t.id)
+        team_ci = ck.team_facts(ck.load(sr.team_dir(t.id)), {m["pid"]: b["byid"][m["pid"]].name for m in b["members"]})
         scores = {p["label"]: p["scores"] for p in b["roles"]["players"]}
         items = []
         for m in b["members"]:
             name = b["byid"][m["pid"]].name
             tips = [x["text"] for x in b["tips"] if x.get("about") == name]
             about = [n["text"] for n in notes if n["about_pid"] == m["pid"]]
-            items.append({"pid": m["pid"], "name": name, "roles": b["role_of"].get(name, []),
-                          "facts": player_facts(name, b["rows_by"][m["pid"]], b["role_of"].get(name, []),
-                                                scores.get(name) or {}, tips, about)})
+            facts = player_facts(name, b["rows_by"][m["pid"]], b["role_of"].get(name, []), scores.get(name) or {}, tips, about)
+            facts.update(sr.coach_extras(m["pid"], b["rows_by"][m["pid"]], cache_dir))      # 4.15
+            if team_ci:
+                facts["team_check_ins"] = team_ci
+            items.append({"pid": m["pid"], "name": name, "roles": b["role_of"].get(name, []), "facts": facts})
         return items
 
     def prep_post(b, maps: list[str]) -> dict:

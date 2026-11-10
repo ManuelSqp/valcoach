@@ -653,6 +653,7 @@ class StatsRunner:
                     self._log(key, f"  ! {it['name']}: {e}")
                     f = {"error": str(e)}
                 out["players"][str(it["pid"])] = {"name": it["name"], "roles": it["roles"], **f}
+                self._focus_goal(it["pid"], f)
             d = self.team_dir(tid) / "focus"
             d.mkdir(parents=True, exist_ok=True)
             (d / f"{week}.json").write_text(json.dumps(out, ensure_ascii=False))
@@ -662,6 +663,61 @@ class StatsRunner:
         except Exception as e:
             self._log(key, "✗ " + str(e))
             self._set(key, status="error", error=str(e) or e.__class__.__name__)
+
+    def coach_extras(self, pid: int, rows: list[dict], cache_dir) -> dict:
+        """4.15: what makes the coach's picture of a player more reliable: weighted / buy / opponent numbers,
+        replay-file numbers, goals and their results, and the player's post-match check-ins."""
+        from ..stats import evidence, goals as gl, replaystats
+        out: dict = {}
+        try:
+            ev = evidence.facts(rows)
+            if ev:
+                out["context"] = ev
+        except Exception:
+            pass
+        try:
+            gs = gl.facts(self.goals(pid).refresh(rows))
+            if gs:
+                out["goals"] = gs
+        except Exception:
+            pass
+        try:
+            puuid = self.games(pid).load().get("puuid", "")
+            rp = replaystats.facts(replaystats.player(self.store.data_dir / "replays", cache_dir, rows, puuid))
+            if rp:
+                out["replay_files"] = rp
+        except Exception:
+            pass
+        ci = self.checkin_facts(pid)
+        if ci:
+            out["check_ins"] = ci
+        return out
+
+    def checkin_facts(self, pid: int) -> dict | None:
+        """The player's own check-ins over his teams (last 10 matches)."""
+        from ..stats import checkins as ck
+        items = []
+        for t in self.store.all_teams():
+            if any(m.get("pid") == pid for m in t.member_list):
+                items += ck.of_player(ck.load(self.team_dir(t.id)), pid)
+        return ck.player_facts(items) if items else None
+
+    def goals(self, pid: int):
+        from ..stats.goals import GoalStore
+        return GoalStore(self.store.profile_dir(pid) / "stats" / "goals.json")
+
+    def _focus_goal(self, pid: int, f: dict) -> None:
+        """4.15: the focus' number to watch becomes a measurable goal for the next 10 games."""
+        from ..stats.goals import parse_target
+        from ..stats.progress import METRICS, metric_for
+        n = (f or {}).get("number_to_watch") or {}
+        key = n.get("metric_key") if n.get("metric_key") in METRICS else metric_for(n.get("metric", ""))
+        target = parse_target(key, n.get("goal")) if key else None
+        if key and target is not None:
+            try:
+                self.goals(pid).add(key, target, self.games(pid).rows(), text=f.get("focus", ""), source="weekly focus")
+            except OSError:
+                pass
 
     def post_focus(self, tid: int, key: str | None = None) -> None:
         from ..discord import focus_embeds, post as dpost

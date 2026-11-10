@@ -78,6 +78,20 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--panel3)}tr.sel td{bac
   <div class="tile"><b>{{ total.opening_wr|pct }}</b><span>Opening duels won{% if total.fk is defined %}, {{ total.fk }}–{{ total.fd }}{% endif %}</span></div>
 </div>
 
+{% if ctx and (ctx.buy or ctx.opp or ctx.w) %}
+<section class="card" id="context">
+  <div class="row between"><h2 style="margin:0">How much the numbers tell</h2>
+    <span class="small muted" tabindex="0" data-tip="Weighted: recent games and the current patch count more (half the weight every {{ ctx.half_life }} days, older patches {{ (ctx.patch_old * 100)|round|int }} %), games against stronger lobbies a bit more. The comp maker and the coach use the weighted numbers.">what is weighted?</span></div>
+  <div class="tiles" style="margin-top:10px">
+    {% if ctx.w %}<div class="tile"><b>{{ wr(ctx.w.win_rate) }}</b><span>Win rate weighted{% if ctx.w.patch %} (patch {{ ctx.w.patch }}){% endif %}, about {{ ctx.w.effective_games|round|int }} games' worth</span></div>
+    <div class="tile"><b>{{ ctx.w.acs|num }}</b><span>ACS weighted</span></div>{% endif %}
+    {% for b in ctx.buy %}<div class="tile" tabindex="0" data-tip="{{ b.label }}: {{ b.rounds }} rounds ({{ b.confidence }})"><b>{{ wr(b.wr) }}</b><span>Rounds won: {{ b.label|lower }}{% if b.kd is not none %} · K/D {{ b.kd|num(2) }}{% endif %}</span></div>{% endfor %}
+  </div>
+  {% if ctx.note %}<p class="small" style="margin:8px 0 0;color:var(--amber)">{{ ctx.note }}.</p>{% endif %}
+  {% if ctx.opp %}<div class="row small muted" style="margin-top:10px;gap:14px;flex-wrap:wrap">{% for o in ctx.opp %}<span>{{ o.label }}: {{ o.games }} games, {{ o.wr|pct }} won, ACS {{ o.acs|num }}{% if o.kd is not none %}, K/D {{ o.kd|num(2) }}{% endif %} <i>({{ o.confidence }})</i></span>{% endfor %}</div>{% endif %}
+</section>
+{% endif %}
+
 <div class="grid2">
   <section class="card">
     <h2>Maps</h2>

@@ -88,6 +88,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                 llm, _cfg = sr._llm(p, choice)
                 rows = filter_rows(sr.games(pid).rows(), "everything")
                 data = ac.facts(p.riot_id, rows, player_runs(sr, pid), trainer_data(sr, pid))
+                data.update(sr.coach_extras(pid, rows, store.data_dir / "cache"))     # 4.15
                 f = path(pid, uid)
                 hist = _read(f).get("items", [])
                 out = ac.answer(llm, p.name, p.language or "English", q, hist, data, search=search, step=step)

@@ -8,11 +8,18 @@ import yaml
 from ..coach.prompts import field_guide
 
 from .aggregate import by_map, map_detail, summary
+from .evidence import confidence
+from .progress import METRICS
 
 SYSTEM = """You are a Valorant coach giving one player ONE focus for this week of matches.
 Pick the thing that would help the team most, judged against the player's team role(s).
 Use only the numbers given and cite them. The focus must be something they can do in normal
-matches (no aim-trainer homework). Write in {language}."""
+matches (no aim-trainer homework). Write in {language}.
+- Numbers marked "early sign" rest on few games or rounds: don't build the focus on one alone.
+- "goals" are earlier goals and whether they were met. A goal that was missed needs a different
+  approach, not the same advice again; a goal that was reached can move on to the next weakness.
+- The number to watch must be one of the listed metric keys, with a target the player can reach
+  in about 10 games."""
 
 
 def schema() -> dict:
@@ -22,8 +29,11 @@ def schema() -> dict:
         "in_game": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 3,
                     "description": "what to do differently in matches, concrete"},
         "number_to_watch": {"type": "object", "properties": {
-            "metric": {"type": "string"}, "now": {"type": "string"}, "goal": {"type": "string"}},
-            "required": ["metric", "now", "goal"]},
+            "metric": {"type": "string"},
+            "metric_key": {"type": "string", "enum": list(METRICS),
+                           "description": "which tracked number: " + ", ".join(f"{k} = {v[0]}" for k, v in METRICS.items())},
+            "now": {"type": "string"}, "goal": {"type": "string"}},
+            "required": ["metric", "metric_key", "now", "goal"]},
     }, "required": ["focus", "why", "in_game", "number_to_watch"]}
 
 
@@ -48,7 +58,7 @@ def player_facts(name: str, rows: list[dict], roles: list[str], role_scores: dic
             return None
         fr = [r for r in rs if r.get("source") == "full"]
         deaths = sum(r["deaths"] for r in fr)
-        return {"games": s["games"], "win_rate": f"{s['wr']:.0%}", "acs": round(s["acs"]), "kd": round(s["kd"], 2),
+        return {"games": s["games"], "confidence": confidence(s["games"], 10), "win_rate": f"{s['wr']:.0%}", "acs": round(s["acs"]), "kd": round(s["kd"], 2),
                 "kast": None if s.get("kast") is None else f"{s['kast']:.0%}",
                 "opening_duels_won": None if s.get("opening_wr") is None else f"{s['opening_wr']:.0%}",
                 "deaths_traded": None if not deaths else f"{sum(r.get('traded_deaths', 0) for r in fr) / deaths:.0%}"}

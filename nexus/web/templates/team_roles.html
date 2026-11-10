@@ -44,7 +44,7 @@
     <div class="slot">
       <div class="r">{{ r }}</div>
       <div class="who">{{ p.label }}</div>
-      {% for h, who in lu.hats.items() if who == p.label %}<span class="hat {{ 'set' if h in p.assigned }}">{{ h if h in p.assigned or h != 'IGL' else 'could call' }}</span>{% endfor %}
+      {% for h, who in lu.hats.items() if who == p.label %}<span class="hat {{ 'set' if h in p.assigned }}">{{ h if h in p.assigned or h != 'IGL' else ('caller (' ~ lu.igl_votes.votes ~ ' check-in votes)' if lu.igl_votes else 'could call') }}</span>{% endfor %}
       {% if r in p.assigned %}<div class="muted small">you set this</div>
       {% elif p.scores[r].score < 30 %}<div class="small warnc">fit {{ p.scores[r].score }}/100: nobody fits this well, talk about who takes it</div>
       {% else %}<div class="muted small">fit {{ p.scores[r].score }}/100</div>{% endif %}

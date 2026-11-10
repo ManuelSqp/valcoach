@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Check-in · {{ t.name }} · Nexus{% endblock %}
+{% block head %}
+<style>
+.cilist{display:flex;flex-direction:column;gap:10px}
+.ci{background:var(--panel2);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.ci > summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:110px 1fr auto auto;gap:12px;align-items:center;padding:10px 14px}
+.ci > summary::-webkit-details-marker{display:none}
+.ci .map{font-weight:700;font-size:15px;color:var(--text)}
+.ci .sc{font-family:var(--font-num);font-weight:800;font-size:17px}
+.ci .sc.w{color:var(--win)}.ci .sc.l{color:var(--red)}
+.ci .st{font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;white-space:nowrap}
+.ci .st.done{background:var(--win-soft);color:var(--win)}.ci .st.todo{background:var(--accent-soft);color:var(--amber)}
+.ci .body{padding:4px 14px 14px;border-top:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media(max-width:860px){.ci .body{grid-template-columns:1fr}.ci > summary{grid-template-columns:1fr auto}}
+.ciform{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.ciform .q{font-size:13px;font-weight:600}
+.scale{display:flex;gap:6px;flex-wrap:wrap}
+.scale label{display:flex;align-items:center;justify-content:center;min-width:44px;padding:6px 8px;border-radius:8px;border:1px solid var(--line2);cursor:pointer;font-size:13px;flex-direction:column;line-height:1.15}
+.scale label small{font-size:10.5px;color:var(--muted)}
+.scale input{position:absolute;opacity:0;pointer-events:none}
+.scale label:has(input:checked){background:var(--accent-soft);border-color:var(--accent)}
+.scale label:has(input:focus-visible){outline:2px solid var(--accent)}
+.ciform select,.ciform input[type=text]{padding:6px 8px;font-size:13px}
+.team{font-size:13px;margin-top:10px}
+.team .big{font-size:22px;font-weight:800;font-family:var(--font-num)}
+.team ul{list-style:none;margin:6px 0 0;padding:0}.team li{padding:5px 0;border-top:1px solid var(--line);font-size:13px}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+<section class="card">
+  <div class="row between" style="gap:10px;flex-wrap:wrap">
+    <p class="muted" style="margin:0;max-width:760px">After a match you played together: who made most of the calls, how the comms and the mood were, and one line if you like. About 20 seconds. The data can't see any of this; the coach uses your answers in the reviews and the weekly focus, and the team's votes decide the IGL suggestion.</p>
+    {% if g.team_owner %}<form method="get" class="row" style="gap:6px"><label class="small muted" for="as">Answer as</label>
+      <select id="as" name="as" onchange="this.form.submit()" style="width:auto;padding:4px 8px"><option value="">{{ names[me] if me else '–' }}{{ ' (you)' if me }}</option>
+        {% for pid, n in names.items() if pid != me %}<option value="{{ pid }}" {{ 'selected' if pid == as_pid }}>{{ n }}</option>{% endfor %}</select></form>{% endif %}
+  </div>
+  {% if igl %}<p class="small" style="margin:10px 0 0">Caller according to the check-ins: <b>{{ igl.label }}</b> ({{ igl.votes }} of {{ igl.total }} votes). The Player overview uses this for the IGL suggestion.</p>
+  {% else %}<p class="small muted" style="margin:10px 0 0">From {{ min_votes }} votes for the same player, the IGL suggestion uses the check-ins instead of a guess from the stats.</p>{% endif %}
+  {% if not who %}<p class="small" style="margin:10px 0 0;color:var(--amber)">Nexus doesn't know which player you are: set your in-game name (Name#TAG) under <a href="{{ url_for('account') }}">Account</a>.</p>{% endif %}
+</section>
+
+<section class="card">
+  {% if not matches %}<p class="muted" style="margin:0">No matches with at least 3 of the team yet. They show up here after the next stats update.</p>
+  {% else %}
+  {% set first_open = (matches|rejectattr('mine')|first or {}).get('id') if who else none %}
+  <div class="cilist">
+    {% for m in matches %}
+    <details class="ci" {{ 'open' if (open_id and open_id == m.id) or (not open_id and m.id == first_open) }}>
+      <summary>
+        <span class="map">{{ m.map }}</span>
+        <span class="small muted">{{ m.when|localtime }}{% if m.sum %} · {{ m.sum.n }} {{ 'answer' if m.sum.n == 1 else 'answers' }}{% endif %}</span>
+        <span class="sc {{ 'w' if m.won else 'l' }}">{{ m.score }}</span>
+        <span class="st {{ 'done' if m.mine else 'todo' }}">{{ 'done' if m.mine else 'open' }}</span>
+      </summary>
+      <div class="body">
+        <div>
+          {% if who %}
+          <form method="post" action="{{ url_for('team_checkin_save', tid=t.id) }}" class="ciform">
+            <input type="hidden" name="match_id" value="{{ m.id }}">{% if as_pid %}<input type="hidden" name="as" value="{{ as_pid }}">{% endif %}
+            {% set mine = m.mine or {} %}
+            <div><div class="q">Who made most of the calls?</div>
+              <select name="caller" style="width:auto"><option value="">Nobody / mixed</option>
+                {% for pid, n in names.items() %}<option value="{{ pid }}" {{ 'selected' if mine.caller == pid }}>{{ n }}</option>{% endfor %}</select></div>
+            <div><div class="q">Comms</div><div class="scale">{% for v in range(1, 6) %}<label><input type="radio" name="comms" value="{{ v }}" {{ 'checked' if mine.comms == v }}>{{ v }}<small>{{ scale[v] }}</small></label>{% endfor %}</div></div>
+            <div><div class="q">Mood in the team</div><div class="scale">{% for v in range(1, 6) %}<label><input type="radio" name="mood" value="{{ v }}" {{ 'checked' if mine.mood == v }}>{{ v }}<small>{{ scale[v] }}</small></label>{% endfor %}</div></div>
+            <div><div class="q">One line (optional)</div><input type="text" name="note" maxlength="300" value="{{ mine.note or '' }}" placeholder="e.g. we never fell back on B after the first death" style="width:100%"></div>
+            <div><button class="btn sm primary">{{ 'Update' if m.mine else 'Save' }}</button></div>
+          </form>
+          {% endif %}
+        </div>
+        <div class="team">
+          {% if m.sum %}
+          <div class="row" style="gap:22px">
+            <div><span class="small muted">Comms</span><br><span class="big">{{ '%.1f'|format(m.sum.comms) if m.sum.comms is not none else '–' }}</span></div>
+            <div><span class="small muted">Mood</span><br><span class="big">{{ '%.1f'|format(m.sum.mood) if m.sum.mood is not none else '–' }}</span></div>
+            <div><span class="small muted">Caller</span><br><span class="big" style="font-size:16px">{{ names.get(m.sum.caller, '–') if m.sum.caller else '–' }}</span></div>
+          </div>
+          {% if m.sum.notes %}<ul>{% for pid, text in m.sum.notes %}<li><b>{{ names.get(pid, '?') }}</b>: {{ text }}</li>{% endfor %}</ul>{% endif %}
+          {% else %}<p class="muted small">No answers for this match yet.</p>{% endif %}
+        </div>
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

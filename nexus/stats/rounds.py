@@ -50,7 +50,7 @@ def economy(rows: list[dict]) -> dict:
     total = 0
     for r in full:
         by_no = {e[0]: e for e in r["econ"]}
-        for no, side, won, mine, team, them in r["econ"]:
+        for no, side, won, mine, team, them, *_ in r["econ"]:
             total += 1
             kk, ok = kind(no, team), kind(no, them)
             k[kk][0] += won

@@ -300,7 +300,12 @@ class PremierJobs:
             p = self.store.profile(mm["pid"])
             if p and mm.get("roles"):
                 roles_by[f"{p.name}#{p.tag}".lower()] = mm["roles"]
-        rv = review(m, side, mi, llm, language, roles_by)
+        from ..stats import checkins as ck
+        names = {mm["pid"]: (self.store.profile(mm["pid"]).name if self.store.profile(mm["pid"]) else "?")
+                 for mm in team.member_list}
+        ci = ck.match_facts(ck.load(self.sr.team_dir(team.id)).get(str(m.match_id).lower()) or
+                            ck.load(self.sr.team_dir(team.id)).get(str(m.match_id)) or {}, names)
+        rv = review(m, side, mi, llm, language, roles_by, check_in=ci)
         other = m.other_team(side)
         d = raw.get("data", raw)
         opp = next(((t.get("premier_roster") or {}) for t in d.get("teams") or [] if t.get("team_id") == other), {}) or {}

@@ -967,6 +967,11 @@ def test_shared_team_notes_plans_focus_discord(app, monkeypatch):
     assert "Fall back after the first kill" in friend.get(f"/teams/{tid}/focus").data.decode()
     assert "Your focus this week" in friend.get("/").data.decode()
     assert sent[-1][0].endswith("/222/bbb") and "KAST: 61% → 70%" in sent[-1][1]["embeds"][0]["description"]
+    # 4.15: the focus' number to watch became a goal for every player
+    sr_ = app.extensions["nexus"]["stats"]
+    for m in store.team(tid).member_list:
+        gs = sr_.goals(m["pid"]).load()
+        assert gs and gs[-1]["metric"] == "kast" and gs[-1]["target"] == 0.7 and gs[-1]["source"] == "weekly focus"
 
     # --- the schedule: due on its day/hour once a week, not again after posting
     from datetime import datetime
@@ -3193,3 +3198,71 @@ def test_compsheet_helpers():
     pools = {"a": {"agents": [{"agent": "Jett", "rank": 2, "games": 4}]}, "b": {"agents": [{"agent": "Jett", "rank": 1, "games": 9}]}}
     assert [w["label"] for w in compsheet.who_plays("Jett", pools)] == ["b", "a"]
     assert compsheet.who_plays("Viper", pools) == []
+
+
+def test_goals_checkins_and_context(app, monkeypatch):
+    """4.15: goals on the Habits page, post-match check-ins (and the IGL from them), how much the numbers tell."""
+    c = setup_admin(app)
+    store = app.extensions["nexus"]["store"]
+    sr = app.extensions["nexus"]["stats"]
+    tid = _premier_team(app, c, monkeypatch)
+    members = store.team(tid).member_list
+    names = {store.profile(m["pid"]).name: m["pid"] for m in members}
+    me = names["adv1ce"]
+
+    # stats page: weighted numbers, rounds by buy state, lobbies
+    page = c.get(f"/profiles/{me}/stats").data.decode()
+    assert "How much the numbers tell" in page and "Win rate weighted" in page and "Rounds won: " in page
+
+    # habits page: set a goal by hand, from a habit, drop it
+    page = c.get(f"/profiles/{me}/habits").data.decode()
+    assert 'id="goals"' in page and "No goals yet" in page and "Set goal" in page
+    r = c.post(f"/profiles/{me}/goals", data={"metric": "traded", "target": "45 %", "games": "10", "text": "trade the entry"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#goals")
+    gs = sr.goals(me).load()
+    assert gs[0]["metric"] == "traded" and gs[0]["target"] == 0.45 and gs[0]["source"] == "you"
+    assert c.post(f"/profiles/{me}/goals", data={"metric": "kd", "target": ""}).status_code == 302
+    assert len(sr.goals(me).load()) == 1                                     # no target: nothing saved
+    c.post(f"/profiles/{me}/goals", data={"habit": "kast"})
+    gs = sr.goals(me).load()
+    assert gs[-1]["metric"] == "kast" and gs[-1]["target"] == 0.65
+    page = c.get(f"/profiles/{me}/habits").data.decode()
+    assert "trade the entry" in page and "Deaths traded" in page and "Drop" in page
+    c.post(f"/profiles/{me}/goals/{gs[-1]['id']}/drop")
+    assert sr.goals(me).load()[-1]["state"] == "dropped"
+
+    # a teammate sets goals for his own player only
+    friend = make_user(app, c, "burn", display_name="red-0#T")
+    c.post(f"/teams/{tid}/access", data={"add": str(store.user_by_name("burn").id)})
+    assert friend.post(f"/profiles/{names['red-0']}/goals", data={"metric": "hs", "target": "20%"}).status_code == 302
+    assert sr.goals(names["red-0"]).load()[0]["metric"] == "hs"
+    assert friend.post(f"/profiles/{me}/goals", data={"metric": "hs", "target": "20%"}).status_code == 403
+
+    # check-in: the team's matches, one answer per player, the IGL from the votes
+    page = c.get(f"/teams/{tid}/checkin").data.decode()
+    assert "Who made most of the calls?" not in page and "Nexus doesn't know which player you are" in page
+    page = c.get(f"/teams/{tid}/checkin?as={me}").data.decode()            # the owner answers as a player
+    assert "Who made most of the calls?" in page and "Answer as" in page
+    import re
+    mids = re.findall(r'name="match_id" value="([^"]+)"', page)
+    assert mids
+    caller = names["red-2"]
+    for who in ("adv1ce", "red-0", "red-3"):
+        cl = friend if who == "red-0" else None
+        data = {"match_id": mids[0], "caller": str(caller), "comms": "4", "mood": "3", "note": f"{who} note"}
+        if cl is None:                                       # the owner answers for players without an account
+            data["as"] = str(names[who])
+            cl = c
+        assert cl.post(f"/teams/{tid}/checkin", data=data).status_code == 302
+    assert friend.post(f"/teams/{tid}/checkin", data={"match_id": "not-a-team-match", "comms": "3"}).status_code == 404
+    page = c.get(f"/teams/{tid}/checkin?m={mids[0]}").data.decode()
+    assert "3 answers" in page and "red-3 note" in page and "Caller according to the check-ins: <b>red-2</b>" in page
+    ov = c.get(f"/teams/{tid}/overview").data.decode()
+    assert "Named as the caller in 3 of 3 post-match check-ins" in ov
+    assert "caller (3 check-in votes)" in c.get(f"/teams/{tid}/roles").data.decode()
+
+    # what the coach gets for a player
+    rows = sr.games(me).rows()
+    ex = sr.coach_extras(me, rows, store.data_dir / "cache")
+    assert ex["context"]["weighted"]["effective_games"] > 0 and ex["goals"] and ex["check_ins"]["comms_avg"] == 4.0
+    sr.shutdown()

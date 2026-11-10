@@ -114,11 +114,22 @@ class Catalog:
 
     def _sentences(self, s: str) -> str | None:
         """Several sentences in one piece of text (messages): translated one by one, only if all are known."""
-        parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", s)
-        if len(parts) < 2:
-            return None
-        out = [self.lookup(p) for p in parts]
-        return " ".join(out) if all(x is not None for x in out) else None
+        # 4.15: "text · early sign, 84 rounds": the parts around a middle dot are translated one by one too.
+        # Plain string splits, no regex with repeated white space (s is already normalised to single spaces).
+        chunks = s.split(" · ")
+        out = []
+        for chunk in chunks:
+            t = self.lookup(chunk)
+            if t is None:
+                parts = re.split(r"(?<=[.!?]) (?=[A-Z0-9])", chunk)
+                if len(parts) < 2:
+                    return None
+                tr = [self.lookup(p) for p in parts]
+                if any(x is None for x in tr):
+                    return None
+                t = " ".join(tr)
+            out.append(t)
+        return " · ".join(out)
 
     def text(self, s: str) -> str:
         """One piece of text, keeping its leading and trailing white space."""

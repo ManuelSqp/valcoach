@@ -60,13 +60,17 @@ METRICS = {
     "survival": ("Rounds survived", lambda rs: _ratio(sum(sum((r.get("survived") or {}).values()) for r in _full(rs)), _sum(_full(rs), "rounds")), "pct", True, True, 2),
     "hs": ("Headshots", lambda rs: (lambda h, b, l: _ratio(h, h + b + l))(*_shots(rs)), "pct", True, True, 2),
     "clutch": ("Clutches won", lambda rs: (lambda a, w: _ratio(w, a) if a >= 2 else None)(*_clutch(rs)), "pct", True, True, 2),
+    "no_util": ("Deaths without using utility", lambda rs: (lambda a, b: _ratio(a, b) if b >= 5 else None)(
+        *[sum((r.get("no_util") or [0, 0])[i] for r in _full(rs)) for i in (0, 1)]), "pct", False, True, 2),
     "retake": ("Retakes won", lambda rs: (lambda n, w: _ratio(w, n) if n >= 3 else None)(*_pair(rs, "retake")), "pct", True, True, 2),
 }
-ORDER = ["win_rate", "acs", "kd", "kast", "first_duels", "traded", "alone", "survival", "hs", "clutch", "retake", "adr"]
+ORDER = ["win_rate", "acs", "kd", "kast", "first_duels", "traded", "alone", "survival", "hs", "clutch", "retake", "adr",
+         "no_util"]
 
 # words in a weekly focus' "number to watch" -> metric
 ALIASES = [
     (r"kast", "kast"), (r"first (duel|blood|kill|fight)|opening|entry", "first_duels"), (r"trad", "traded"),
+    (r"utilit|abilit", "no_util"),
     (r"alone|isolat|far from|without (a )?team", "alone"), (r"surviv|stay alive|death", "survival"),
     (r"head ?shot|hs%|\bhs\b|crosshair", "hs"), (r"clutch", "clutch"), (r"retake", "retake"),
     (r"\bacs\b|combat score", "acs"), (r"\badr\b|damage", "adr"), (r"k/?d|kill.?death", "kd"), (r"win", "win_rate"),

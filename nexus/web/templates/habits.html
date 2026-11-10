@@ -36,6 +36,22 @@
 .cs li .src{font-size:12px;color:var(--muted)}.cs .vd{font-size:12px;font-weight:650;margin-left:6px}
 .cs .vd.good{color:var(--win)}.cs .vd.bad{color:var(--red)}.cs .vd.same{color:var(--amber)}.cs .vd.wait{color:var(--muted)}
 .hfoot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.goals{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;margin-top:10px}
+.goal{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.goal header{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.goal header b{font-size:14.5px}
+.goal .gbar{height:6px;border-radius:99px;background:var(--panel3);overflow:hidden}
+.goal .gbar i{display:block;height:100%;background:var(--blue)}
+.goal.reached .gbar i{background:var(--win)}.goal.missed .gbar i{background:var(--red)}
+.goal .gnums{display:flex;gap:14px;font-size:12.5px;color:var(--muted)}.goal .gnums b{color:var(--text);font-size:14px}
+.gst{font-size:12px;font-weight:700;padding:1px 9px;border-radius:99px;white-space:nowrap}
+.gst.open{background:rgba(106,168,247,.14);color:var(--blue)}.gst.reached{background:var(--win-soft);color:var(--win)}
+.gst.missed{background:var(--red-soft);color:var(--red)}.gst.dropped{background:var(--panel3);color:var(--muted)}
+.gform{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:12px}
+.gform label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.gform select,.gform input{padding:5px 8px;font-size:13px;width:auto}
+.rtab{width:100%;border-collapse:collapse;font-size:13px}.rtab td,.rtab th{padding:5px 8px;border-top:1px solid var(--line);text-align:left}
+.rtab th{font-size:12px;color:var(--muted);font-weight:600}
 .fine-list{display:flex;flex-wrap:wrap;gap:8px}.fine-list span{font-size:13px;padding:4px 10px;border-radius:99px;background:var(--panel2);border:1px solid var(--line)}
 </style>
 {% endblock %}
@@ -54,6 +70,35 @@
   {% if own %}<span>Your focus this week: <b style="font-size:14px">{{ own.focus }}</b></span>{% endif %}
 </div>
 
+<section class="card" id="goals">
+  <div class="row between"><h2 style="margin:0">Goals</h2>
+    <span class="small muted" tabindex="0" data-tip="A goal is one number and a target for the next games. Nexus checks it after every game: reached as soon as the number over the games since meets the target, missed when the games are over. The coach sees your goals and how they went, so it doesn't repeat advice that didn't work.">checked after every game</span></div>
+  {% set open_g = goals|selectattr('state', 'equalto', 'open')|list %}
+  {% set done_g = goals|rejectattr('state', 'equalto', 'open')|list %}
+  {% if goals %}
+  <div class="goals">
+    {% for gg in open_g + done_g[:6] %}
+    <div class="goal {{ gg.state }}">
+      <header><b>{{ gg.text or gg.label }}</b><span class="gst {{ gg.state }}">{{ {'open': 'open', 'reached': 'reached', 'missed': 'missed', 'dropped': 'dropped'}[gg.state] }}</span></header>
+      <span class="small muted">{{ gg.label }} · {{ gg.verdict }}{% if gg.source %} · {{ gg.source }}{% endif %}</span>
+      <div class="gnums"><span>Before <b>{{ gg.baseline_text }}</b></span><span>Now <b>{{ gg.now_text }}</b></span><span>Target <b>{{ gg.target_text }}</b></span></div>
+      <div class="gbar"><i style="width:{{ (gg.progress * 100)|round|int }}%"></i></div>
+      {% if goal_edit and gg.state == 'open' %}<form method="post" action="{{ url_for('goal_drop', pid=p.id, gid=gg.id) }}" style="margin:0"><button class="btn sm ghost">Drop</button></form>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<p class="muted small" style="margin:8px 0 0">No goals yet. The weekly focus sets one, "Make it a goal" on a habit below sets one, or set one here.</p>{% endif %}
+  {% if goal_edit %}
+  <form method="post" action="{{ url_for('goal_add', pid=p.id) }}" class="gform">
+    <label>Number<select name="metric">{% for k, label, f in metrics %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
+    <label>Target<input name="target" placeholder="e.g. 45 % or 1.1" size="10" required></label>
+    <label>In the next<select name="games">{% for n in (5, 10, 15, 20) %}<option value="{{ n }}" {{ 'selected' if n == goal_games }}>{{ n }} games</option>{% endfor %}</select></label>
+    <label>Note (optional)<input name="text" maxlength="200" size="28" placeholder="e.g. trade the entry on B"></label>
+    <button class="btn sm primary">Set goal</button>
+  </form>
+  {% endif %}
+</section>
+
 <div class="hgrid">
 {% for x in h.habits if x.status not in ('fine', 'few') or x.coach %}
   <section class="card hc" id="h-{{ x.key }}">
@@ -69,11 +114,29 @@
       <span class="src"><a href="{{ c.url }}">{{ c.source }}</a>{% if fmt_date(c.date) %}, {{ fmt_date(c.date) }}{% endif %}</span></li>{% endfor %}
       {% if x.coach|length > 3 %}<li class="src">and {{ x.coach|length - 3 }} more {{ 'time' if x.coach|length == 4 else 'times' }}</li>{% endif %}</ul>{% endif %}
     {% if x.status not in ('gone', 'fine') %}<p class="drill"><b>Try:</b> {{ x.drill }}</p>{% endif %}
-    {% if can_edit and x.status not in ('gone', 'fine') %}<div class="hfoot"><span class="small muted">Work on it this week:</span>
-      <button type="button" class="btn sm" data-focus="{{ x.title }}" data-why="{{ x.drill }}">Make it my focus</button></div>{% endif %}
+    {% if (can_edit or goal_edit) and x.status not in ('gone', 'fine') %}<div class="hfoot"><span class="small muted">Work on it this week:</span>
+      <span class="row" style="gap:6px">{% if goal_edit and x.key in habit_goal %}<form method="post" action="{{ url_for('goal_add', pid=p.id) }}" style="margin:0"><input type="hidden" name="habit" value="{{ x.key }}"><button class="btn sm ghost" data-tip="Goal: back under the line ({{ pct(x.bad_at) }}) within {{ goal_games }} games">Make it a goal</button></form>{% endif %}
+      {% if can_edit %}<button type="button" class="btn sm" data-focus="{{ x.title }}" data-why="{{ x.drill }}">Make it my focus</button>{% endif %}</span></div>{% endif %}
   </section>
 {% endfor %}
 </div>
+
+{% if replay %}
+<section class="card" id="replay" style="margin-top:16px">
+  <div class="row between"><h2 style="margin:0">From your replay files</h2><span class="small muted">{{ replay.games }} {{ 'game' if replay.games == 1 else 'games' }} with a replay file</span></div>
+  <p class="small muted" style="margin:4px 0 10px">Positions of all ten players through the whole round, not only at kills. Upload replay files on the coach page or from the Nexus app.</p>
+  <div class="nums" style="grid-template-columns:repeat(2,auto) 1fr">
+    <div tabindex="0" data-tip="When you died, no living teammate was within {{ trade_m }} m, and none got there in the next {{ trade_s }} s: nobody could have traded you."><span>Untradeable deaths</span><b class="{{ 'bad' if replay.untradeable_share is not none and replay.untradeable_share > 0.35 else 'ok' if replay.untradeable_share is not none }}">{{ pct(replay.untradeable_share) }}</b> <span>{{ replay.untradeable }} of {{ replay.deaths }}</span></div>
+    <div tabindex="0" data-tip="Defense rounds where the enemy planted while you were alive: how often you got within {{ retake_m }} m of the spike, and after how many seconds."><span>Retakes: got to the spike</span><b>{{ replay.retake_arrived }}/{{ replay.retakes }}</b> <span>{% if replay.retake_s is not none %}after {{ replay.retake_s }} s on average{% else %}–{% endif %}</span></div>
+  </div>
+  {% if replay.setups %}
+  <h3 style="margin:12px 0 4px;font-size:15px">Where you stand {{ setup_s }} s into the round</h3>
+  <table class="rtab"><thead><tr><th>Map</th><th>Side</th><th>Zone</th><th>Spot</th><th>Rounds</th><th>Won</th></tr></thead><tbody>
+    {% for s in replay.setups %}<tr><td>{{ s.map }}</td><td>{{ s.side }}</td><td>{{ s.zone }}</td><td>{{ s.area }}</td><td>{{ s.rounds }}</td>
+      <td class="{{ 'bad' if s.rounds >= 6 and s.wr <= 0.35 else '' }}" style="{{ 'color:var(--red)' if s.rounds >= 6 and s.wr <= 0.35 }}">{{ pct(s.wr) }}</td></tr>{% endfor %}
+  </tbody></table>{% endif %}
+</section>
+{% endif %}
 
 {% set fine = h.habits|selectattr('status', 'in', ['fine'])|rejectattr('coach')|list %}
 {% if fine %}<section class="card" style="margin-top:16px"><h2>Fine right now</h2>
