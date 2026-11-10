@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.16.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.16.1** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -506,6 +506,9 @@ the jump buttons.
   That puts it in `~/.cargo/bin/vrfkit`, where Nexus finds it by itself (or set the path in *Settings › Replay
   files*, or `NEXUS_VRFKIT`). *Test* there checks it. After a VALORANT patch, replays of the new build may need a
   newer vrfkit: run the same command with a newer commit (and `--force`).
+- **How many are there**: the *Server* page (admins) lists the stored replay files: count, size, uploads in the
+  last 7 / 30 days, the last upload, how many were lined up with the match data and have ability casts, per map,
+  and whether vrfkit works.
 
 ### Run it permanently
 

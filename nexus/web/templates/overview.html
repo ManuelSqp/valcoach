@@ -31,6 +31,7 @@
   <div class="kpi {{ 'warn' if h.limited_hour else '' }}"><span>Rate-limited (hour)</span><b>{{ h.limited_hour }}</b></div>
   <div class="kpi {{ 'ok' if model.reachable else 'bad' }}"><span>Model</span><b>{{ 'online' if model.reachable else 'offline' }}</b></div>
   <div class="kpi"><span>Jobs running</span><b>{{ active|length + coach.running }}</b></div>
+  <div class="kpi"><span>Replay files</span><b>{{ replays.count }}</b></div>
   <div class="kpi {{ 'bad' if disk.free_pct is not none and disk.free_pct < 0.1 else ('warn' if disk.free_pct is not none and disk.free_pct < 0.2 else '') }}"><span>Disk free</span><b>{{ disk.free }}</b></div>
 </div>
 <div class="ogrid">
@@ -97,6 +98,21 @@
     {% for p in disk.parts %}<div class="drow"><span>{{ p.label }} <span class="muted small">{{ p.files }} files</span></span><b>{{ p.size }}</b>
       <div class="bar" style="grid-column:1/-1"><i style="width:{{ ((p.bytes / (big or 1)) * 100)|round|int }}%"></i></div></div>{% endfor %}
     <p class="small muted" style="margin:8px 0 0">Measured every 5 minutes. The match cache can be deleted when space is short: matches are loaded again when needed.</p>
+  </section>
+
+  <section class="card" id="replays">
+    <h2>Replay files</h2>
+    {% set r = replays %}
+    <dl class="kv" style="margin-bottom:8px">
+      <dt>Stored</dt><dd><b>{{ r.count }}</b> {{ 'match' if r.count == 1 else 'matches' }}{% if r.count %} · {{ r.size }}{% endif %}</dd>
+      <dt>Uploaded</dt><dd>{{ r.week }} in the last 7 days · {{ r.month }} in 30 days</dd>
+      <dt>Last upload</dt><dd>{{ r.newest|epoch if r.newest else '–' }}</dd>
+      <dt>.vrf kept</dt><dd>{{ r.vrf }} of {{ r.count }}<span class="muted small"> (needed to read a replay again, e.g. for ability casts)</span></dd>
+      <dt>Used so far</dt><dd>{{ r.lined_up }} lined up with the match data{% if r.lined_up %} · {{ r.casts }} with ability casts{% endif %}</dd>
+      <dt>vrfkit</dt><dd>{% if r.vrfkit_error %}<span style="color:var(--red)">{{ r.vrfkit_error }}</span>{% else %}<span style="color:var(--win)">✓ works</span>{% endif %}</dd>
+    </dl>
+    {% if r.maps %}<div class="row small muted" style="gap:12px;flex-wrap:wrap">{% for m, n in r.maps %}<span>{{ m }}: {{ n }}</span>{% endfor %}</div>{% endif %}
+    <p class="small muted" style="margin:8px 0 0">One file per match serves every player in it. "Used so far" counts the replays a stats page or coaching run has already lined up; the rest are read the first time they're needed.</p>
   </section>
 
   <section class="card">

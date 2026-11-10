@@ -1742,6 +1742,23 @@ def test_server_overview_permission(app, monkeypatch):
     assert "Server overview" in page and "HenrikDev API" in page and "Rate-limited" in page and "offline" in page
     assert "HDEV-secret-key" not in page and "Match cache" not in page or "Database" in page
     assert 'id="uptime"' in c.get("/").data.decode()                          # the uptime clock in the menu
+    # 4.16.1: replay files on the server
+    import json as _json
+    assert 'id="replays"' in page and "Replay files" in page
+    rd = store.data_dir / "replays"
+    rd.mkdir(exist_ok=True)
+    ids = ["11111111-2222-3333-4444-555555555555", "66666666-7777-8888-9999-000000000000"]
+    for i in ids:
+        (rd / f"{i}.json.gz").write_bytes(b"x" * 1000)
+    (rd / f"{ids[0]}.vrf").write_bytes(b"y" * 5000)
+    (rd / f"{ids[0]}.metrics.json").write_text(_json.dumps({"v": 2, "ok": True, "casts": True, "map": "Ascent"}))
+    (rd / "not-a-match.json.gz").write_bytes(b"z")
+    monkeypatch.setattr(ov, "_cache", {})
+    r = ov.replays(store.data_dir, "/nowhere/vrfkit")
+    assert r["count"] == 2 and r["vrf"] == 1 and r["week"] == 2 and r["lined_up"] == 1 and r["casts"] == 1
+    assert r["maps"] == [("Ascent", 1)] and r["vrfkit_error"] and r["bytes"] == 7000
+    page = c.get("/admin/overview").data.decode()
+    assert "<b>2</b> matches" in page and "1 of 2" in page and "Ascent: 1" in page
     c2 = make_user(app, c, "darki")
     assert c2.get("/admin/overview").status_code == 403 and 'id="uptime"' not in c2.get("/").data.decode()
     uid = store.user_by_name("darki").id

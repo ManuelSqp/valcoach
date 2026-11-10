@@ -4,6 +4,12 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.16.1
+- **Replay files on the Server page** (*Server*, admins): how many matches have a replay file, their size, how many
+  were uploaded in the last 7 and 30 days, the last upload, how many still have the .vrf, how many were lined up
+  with the match data and how many have ability casts, replays per map, and whether vrfkit works. Their size is
+  also listed under *Disk*.
+
 ## 4.16.0
 - **Utility timing from replay files**: the ability casts in the replay (vrfkit's *AbilityCastsThisRound*) give
   *Utility before the first fight*, *Died without using utility* and *First ability* (median, attack / defense)
