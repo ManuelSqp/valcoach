@@ -64,6 +64,22 @@
 </section>
 {% elif plan %}
 
+<section class="card" id="compmaker" style="padding-top:14px;padding-bottom:14px">
+  {% if is_owner %}
+  <form method="post" action="{{ url_for('team_comp_method', tid=t.id) }}" class="row" style="gap:10px;flex-wrap:wrap;align-items:center">
+    <input type="hidden" name="map" value="{{ sel }}">
+    <label for="comp_method" style="margin:0"><b>Make comps with</b></label>
+    <select id="comp_method" name="comp_method" style="width:auto">
+      {% for val, label in comp_methods.items() %}<option value="{{ val }}" {{ 'selected' if comp_method == val }}>{{ label }}</option>{% endfor %}
+    </select>
+    <button class="btn sm primary">Make comps</button>
+    <span class="muted small">Changes how this team's comps are made (also for drafts and the Discord prep).{% if web_search_on %} <span>"From the web" searches {{ sel }} right away if it hasn't been searched yet.</span>{% endif %}</span>
+  </form>
+  {% else %}
+  <p class="muted small" style="margin:0">Comps made with: <b>{{ comp_label }}</b>. The team owner changes it here.</p>
+  {% endif %}
+</section>
+
 {% if comp_method == 'web' %}
 <section class="card" id="webcomps">
   <div class="row between" style="gap:10px">

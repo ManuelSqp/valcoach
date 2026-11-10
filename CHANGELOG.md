@@ -4,6 +4,12 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.10.1
+- **Make comps right on the comps page** (Strategy › Comps): pick how the comps are made (Map rules + your stats,
+  Most comfortable, From the web, Your stats only) and click *Make comps*; no trip to the team settings. With
+  *From the web*, the selected map is searched right away if it hasn't been yet. Teammates see which mode is used;
+  the team owner changes it.
+
 ## 4.10.0
 - **Comp suggestions, four modes** (team settings): *Map rules + your stats* (default, as in 4.9), *Most comfortable*
   (every player on what he plays most, on that map first; win rates don't count), *From the web* (comps that web

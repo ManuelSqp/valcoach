@@ -649,6 +649,16 @@ def test_stats_teams_and_pick_helper(app, monkeypatch):
     page = c.get(f"/teams/{tid}").data.decode()
     assert any(m.get("user_id") == admin.id and m["pid"] == me for m in store.team(tid).member_list)
     assert "Set your in-game name" not in page and '>you</span>' in page
+    # 4.10.1: the mode picker right on the comps page
+    assert 'id="compmaker"' in page and "Make comps" in page
+    r = c.post(f"/teams/{tid}/comps/method", data={"comp_method": "comfort", "map": "Haven"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("map=Haven#detail")
+    assert store.team(tid).comp_method == "comfort"
+    assert c.post(f"/teams/{tid}/comps/method", data={"comp_method": "nope"}).status_code == 400
+    c.post(f"/teams/{tid}/comps/method", data={"comp_method": "web", "map": "Haven"})    # Haven not searched yet
+    assert _wait_stats(app, f"webcomps:{tid}")["status"] == "done"
+    assert "haven" in app.extensions["nexus"]["stats"].read_webcomps(tid)
+    c.post(f"/teams/{tid}/comps/method", data={"comp_method": "rules", "map": "Ascent"})
     # bad meta is refused, other users can't see the team
     r = c.post(f"/teams/{tid}/settings", data=dict(form, meta="Haven:\n  roles: 9D\n"), follow_redirects=True)
     assert "Map meta: Haven: roles must add up to 5" in r.data.decode()

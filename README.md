@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.10.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.10.1** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -338,7 +338,7 @@ map); click a map for the details:
 - **If someone is missing**: which sub comes in on which agent, and who should switch.
 - **Map meta** (optional, per team): `prefer` / `avoid` agents and a fixed role mix per map, e.g.
   `Lotus: {roles: 1D 1I 2C 1S}`. A role mix you set is followed whenever the players' pools allow it.
-- **Comp suggestions** (team settings, 4.9; four modes since 4.10). **Map rules + your stats** (default) adds what the numbers can't know:
+- **Comp suggestions** (on the comps page: *Make comps with* … *Make comps*, or team settings; four modes since 4.10). **Map rules + your stats** (default) adds what the numbers can't know:
   per map the role mixes that work there and the agents the map needs or rewards (a Viper wall on Breeze and
   Icebox, recon on Ascent, …), and for every comp a controller, at most two duelists, someone to flash corners and
   someone for information. Each rule that changed a comp is listed under it (*Map rules: no Viper: …*), and the
