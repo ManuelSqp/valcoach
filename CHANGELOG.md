@@ -4,6 +4,15 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.12.0
+- **Playstyle labels** in the player overview, independent of the team role: up to three of *Aggressive*,
+  *Patient*, *Clutch player*, *Trader*, *Lone wolf*, *Survivor*, *Fragger*, *Playmaker*, *Brawler*,
+  *Long-range duelist*, *Operator player*. Hover a label to see the numbers behind it.
+- **Thrives in / struggles in** per player: opening duels, clutches, retakes, post-plants, close / mid / long-range
+  duels, attack vs defense, fighting away from vs next to the team, trading teammates; compared with typical ranked
+  values, with a minimum number of rounds and small samples pulled towards typical. In the full view too.
+- Both come from the round data of the stored games; no model needed.
+
 ## 4.11.0
 - **Player overview** (*Roster & setup › Player overview*): who plays what, at a glance. Per player the role (yours
   from *Roles*, else the suggestion) and IGL / Operator, the most played agents, the split over Duelist / Initiator /

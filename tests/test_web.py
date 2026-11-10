@@ -653,9 +653,10 @@ def test_stats_teams_and_pick_helper(app, monkeypatch):
     ovp = c.get(f"/teams/{tid}/overview").data.decode()
     assert "Player overview" in ovp and "Most played agents" in ovp and "Agent roles" in ovp
     assert "Playstyle" in ovp and "The team at a glance" in ovp and "plays it regularly" in ovp
+    assert "Thrives in" in ovp and 'class="chip style"' in ovp          # 4.12: playstyle labels, situations
     full = c.get(f"/teams/{tid}/overview?view=all").data.decode()
     assert "Every agent" in full and "Every map" in full and "Roles and playstyle" in full
-    assert "Most played agents" not in full
+    assert "Most played agents" not in full and "Struggles in" in full
     from nexus.stats import overview as ovmod
     from nexus.stats.teamroles import team_roles as _tr
     ctx_rows = [{"label": "a", "pid": 1, "kind": "starter", "rows": [], "assigned": []}]

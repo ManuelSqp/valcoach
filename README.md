@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.11.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.12.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -277,8 +277,14 @@ from your matches together) and, for the owner, **Members, maps & Discord**.
 
 **Player overview** (*Roster & setup*, 4.11) shows who plays what, calculated from the stored games: per player the
 role (assigned on *Roles*, else the suggestion, marked "?") with IGL / Operator, the most played agents with games and
-win rate, the split over the agent roles, the playstyle (opening duels, kills, assists, survival compared with your
-lobbies, in words, and the closest pro) and the best maps. On top, which agent roles each starter plays regularly,
+win rate, the split over the agent roles, the playstyle and the best maps. Playstyle (4.12): up to three labels
+such as *Aggressive*, *Patient*, *Clutch player*, *Trader*, *Lone wolf*, *Survivor*, *Fragger*, *Playmaker*,
+*Brawler*, *Long-range duelist* or *Operator player*, each with the numbers it rests on (hover it), plus four bars
+(opening duels, kills, assists, survival compared with your lobbies) and the closest pro. **Thrives in / struggles
+in** compares a player's results in opening duels, clutches, retakes, post-plants, close / mid / long-range duels,
+attack and defense, fights away from and next to the team, and trades with typical ranked values; small samples are
+pulled towards typical and need a minimum count before they show (`stats/archetypes.py`). Few trades are never
+listed as a weakness: they mostly come with the role. On top, which agent roles each starter plays regularly,
 roles nobody covers and mains that collide. Two views: **Top 5 agents** (a card per player) and **All agents** (every
 agent and map as a table, players side by side, plus roles and playstyle in one table).
 

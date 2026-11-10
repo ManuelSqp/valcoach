@@ -5,7 +5,10 @@ Everything is calculated from the stored games, nothing is written by the model:
   agent roles share of games as Duelist / Initiator / Controller / Sentinel
   team role   the role you assigned on the Roles page, else the suggested lineup's (marked as a suggestion),
               plus the hats (IGL, Operator) and the fit score from the data
-  playstyle   the four style numbers (opening duels, kills, assists, survival), in words, and the closest pro
+  playstyle   labels like Aggressive or Clutch player with the numbers behind them (archetypes.py), the four
+              style numbers (opening duels, kills, assists, survival) and the closest pro
+  situations  where a player thrives and struggles: opening duels, clutches, retakes, post-plants, duel
+              range, attack / defense, alone / with the team, trades (archetypes.py)
   maps        the maps a player does best on (3+ games), all maps in the full view
 and for the team: which agent roles each player covers, roles nobody covers, mains that collide.
 """
@@ -13,6 +16,7 @@ from __future__ import annotations
 
 from . import roles
 from .aggregate import by_agent, by_map, summary
+from .archetypes import analyse
 from .style import match_pros, profile
 from .teamroles import HATS, PRIMARY
 
@@ -42,9 +46,12 @@ def player(p: dict, lineup: dict, pros: list[dict]) -> dict:
     prof = profile(rows)
     out["role_split"] = [{"role": r, "share": prof["roles"].get(r, 0.0)} for r in roles.ROLES]
     out["main_role"] = prof.get("main_role")
+    arch = analyse(rows, prof)
     out["style"] = {"dims": prof.get("dims") or {}, "traits": [_trait(t) for t in prof.get("traits") or []],
                     "opening_wr": prof.get("opening_wr"), "reference": prof.get("reference", ""),
-                    "no_openings": prof.get("no_openings", False)}
+                    "no_openings": prof.get("no_openings", False), "labels": arch["labels"],
+                    "full_games": arch["full_games"]}
+    out["thrives"], out["struggles"] = arch["thrives"], arch["struggles"]
     pro = match_pros(prof, pros, top=1) if pros else []
     out["pro"] = pro[0]["name"] if pro else None
     # team role: yours first, else the suggestion

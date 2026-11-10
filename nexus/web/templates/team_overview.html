@@ -34,6 +34,10 @@
 .mx .c small{display:block;font-size:11px;font-weight:700}
 .mx tr.rolehead td{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding-top:12px}
 .notes li{margin:2px 0}
+.chip.style{background:rgba(108,140,255,.16);color:#9db2ff;cursor:help}
+.sit{display:flex;flex-direction:column;gap:3px;font-size:13px}
+.sit .up{color:var(--win)}.sit .down{color:var(--red)}
+.sit .t{color:var(--muted);font-size:12px}
 </style>
 {% endblock %}
 {% block content %}
@@ -89,14 +93,21 @@
       </div>
       <div>
         <div class="osec">Playstyle</div>
+        {% if p.style.labels %}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">{% for l in p.style.labels %}<span class="chip style" title="{{ l.why }}">{{ l.label }}</span>{% endfor %}</div>
+        {% elif not p.style.full_games %}<div class="muted small" style="margin-bottom:6px">Needs games with round data for the playstyle.</div>{% endif %}
         <div class="dims">
           {% for k, lbl in (('opening', 'Opening duels'), ('kills', 'Kills'), ('assists', 'Assists'), ('survive', 'Survival')) %}
           <span>{{ lbl }}</span><span class="dbar"><i style="width:{{ ((p.style.dims[k] or 0) * 100)|round(1) }}%"></i></span><span class="muted small">{{ pct(p.style.dims[k] or 0) }}</span>
           {% endfor %}
         </div>
-        {% if p.style.traits %}<div class="small" style="margin-top:6px">{% for tr_ in p.style.traits %}<span>{{ tr_ }}</span>{{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
         {% if p.pro %}<div class="small muted" style="margin-top:2px">Plays most like {{ p.pro }}</div>{% endif %}
       </div>
+      {% if p.thrives or p.struggles %}<div>
+        <div class="osec">Thrives in</div>
+        <div class="sit">{% for s in p.thrives %}<div><span class="up">▲</span> <b>{{ s.label|capitalize }}</b> <span class="t">{{ s.text }}</span></div>{% else %}<div class="muted small">nothing stands out yet</div>{% endfor %}</div>
+        {% if p.struggles %}<div class="osec" style="margin-top:8px">Struggles in</div>
+        <div class="sit">{% for s in p.struggles %}<div><span class="down">▼</span> <b>{{ s.label|capitalize }}</b> <span class="t">{{ s.text }}</span></div>{% endfor %}</div>{% endif %}
+      </div>{% endif %}
       {% if p.best_maps %}<div>
         <div class="osec">Best maps</div>
         <div class="small">{% for m in p.best_maps %}<b>{{ m.map }}</b> <span class="{{ wrc(m.wr) }}">{{ pct(m.wr) }}</span> <span class="muted">({{ m.games }})</span>{{ ' · ' if not loop.last }}{% endfor %}</div>
@@ -107,7 +118,7 @@
   </div>
 </section>
 {% endfor %}
-<p class="muted small">Playstyle bars: where a player stands among the players in your matches (50 % = average). A role with "?" is a suggestion from the data; assign roles on the <a href="{{ url_for('team_roles_page', tid=t.id) }}">Roles</a> page.</p>
+<p class="muted small">Playstyle labels: hover one to see what it's based on. Bars: where a player stands among the players in your matches (50 % = average). Thrives / struggles: compared with typical ranked values, and only with enough rounds. A role with "?" is a suggestion from the data; assign roles on the <a href="{{ url_for('team_roles_page', tid=t.id) }}">Roles</a> page.</p>
 
 {% else %}
 {% set players = ov.starters + ov.subs %}
@@ -152,6 +163,9 @@
       <tr><td>{{ r }}</td>{% for p in players %}{% set s = (p.role_split or [])|selectattr('role', 'equalto', r)|first %}<td>{% if s and s.share %}{{ pct(s.share) }}{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}
       {% for k, lbl in (('opening', 'Opening duels'), ('kills', 'Kills'), ('assists', 'Assists'), ('survive', 'Survival')) %}
       <tr><td>{{ lbl }}</td>{% for p in players %}<td>{% if p.style %}{{ pct(p.style.dims[k] or 0) }}{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}
+      <tr><td>Playstyle</td>{% for p in players %}<td>{% for l in (p.style.labels if p.style else []) %}<span class="chip style" title="{{ l.why }}">{{ l.label }}</span> {% else %}<span class="muted">–</span>{% endfor %}</td>{% endfor %}</tr>
+      <tr><td>Thrives in</td>{% for p in players %}<td class="small">{% for s in p.thrives or [] %}<div class="wr-good" title="{{ s.text }}">{{ s.label }}</div>{% else %}<span class="muted">–</span>{% endfor %}</td>{% endfor %}</tr>
+      <tr><td>Struggles in</td>{% for p in players %}<td class="small">{% for s in p.struggles or [] %}<div class="wr-bad" title="{{ s.text }}">{{ s.label }}</div>{% else %}<span class="muted">–</span>{% endfor %}</td>{% endfor %}</tr>
       <tr><td>Plays most like</td>{% for p in players %}<td class="small">{{ p.pro or '–' }}</td>{% endfor %}</tr>
     </tbody>
   </table></div>
