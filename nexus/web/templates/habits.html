@@ -129,6 +129,14 @@
     <div tabindex="0" data-tip="When you died, no living teammate was within {{ trade_m }} m, and none got there in the next {{ trade_s }} s: nobody could have traded you."><span>Untradeable deaths</span><b class="{{ 'bad' if replay.untradeable_share is not none and replay.untradeable_share > 0.35 else 'ok' if replay.untradeable_share is not none }}">{{ pct(replay.untradeable_share) }}</b> <span>{{ replay.untradeable }} of {{ replay.deaths }}</span></div>
     <div tabindex="0" data-tip="Defense rounds where the enemy planted while you were alive: how often you got within {{ retake_m }} m of the spike, and after how many seconds."><span>Retakes: got to the spike</span><b>{{ replay.retake_arrived }}/{{ replay.retakes }}</b> <span>{% if replay.retake_s is not none %}after {{ replay.retake_s }} s on average{% else %}–{% endif %}</span></div>
   </div>
+  {% set u = replay.util %}
+  {% if u and u.fights %}
+  <div class="nums" style="grid-template-columns:repeat(3,auto) 1fr;margin-top:6px">
+    <div tabindex="0" data-tip="Your first fight of a round (your first kill or death): had you used an ability before it in that round? From the ability casts in the replay files."><span>Utility before the first fight</span><b class="{{ 'bad' if u.first_share < 0.4 else 'ok' }}">{{ pct(u.first_share) }}</b> <span>{{ u.util_first }} of {{ u.fights }}</span></div>
+    <div tabindex="0" data-tip="Deaths in rounds where you hadn't used any ability before you died."><span>Died without using utility</span><b class="{{ 'bad' if u.dry_share is not none and u.dry_share > 0.45 else 'ok' if u.dry_share is not none }}">{{ pct(u.dry_share) }}</b> <span>{{ u.dry_deaths }} of {{ u.deaths }}</span></div>
+    <div tabindex="0" data-tip="When your first ability of a round comes, median over the rounds you used one. Negative = during the buy phase."><span>First ability (median)</span><b style="font-size:20px">{% for s, v in u.first_cast.items() if v is not none %}{{ 'Att' if s == 'attack' else 'Def' }} {{ 'buy' if v < 0 else (v|round|int ~ ' s') }}{{ ' · ' if not loop.last }}{% endfor %}</b></div>
+  </div>
+  {% elif replay.games %}<p class="small muted" style="margin:6px 0 0">Utility timing: none of these replays has ability casts (vrfkit couldn't read them, or the server has no vrfkit to read older replays again).</p>{% endif %}
   {% if replay.setups %}
   <h3 style="margin:12px 0 4px;font-size:15px">Where you stand {{ setup_s }} s into the round</h3>
   <table class="rtab"><thead><tr><th>Map</th><th>Side</th><th>Zone</th><th>Spot</th><th>Rounds</th><th>Won</th></tr></thead><tbody>

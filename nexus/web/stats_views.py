@@ -787,6 +787,21 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     def my_pid(t) -> int | None:
         return next((m["pid"] for m in t.member_list if m.get("user_id") == g.user.id), None)
 
+    def checkin_matches(t, d) -> list[dict]:
+        """The team's matches together, plus reviewed Premier matches not imported yet (4.16: the Discord
+        reminder links to a match right after its review), newest first."""
+        out = {}
+        for m, side in d["matches"]:
+            own, opp = m.team_rounds_won.get(side, 0), m.team_rounds_won.get(m.other_team(side), 0)
+            out[m.match_id] = {"id": m.match_id, "map": m.map_name, "when": m.started_at, "score": f"{own}–{opp}",
+                               "won": own > opp, "queue": m.queue}
+        pj = app.extensions["nexus"].get("premier")
+        for r in (pj.reviews(t.id)[:12] if pj else []):
+            if r.get("match_id") and r["match_id"] not in out:
+                out[r["match_id"]] = {"id": r["match_id"], "map": r.get("map", "?"), "when": r.get("started_at", ""),
+                                      "score": r.get("score", ""), "won": bool(r.get("won")), "queue": "premier"}
+        return sorted(out.values(), key=lambda x: x["when"] or "", reverse=True)
+
     @app.get("/teams/<int:tid>/checkin")
     def team_checkin(tid: int):
         """After a match the team played together: who called, comms and mood (1-5), one line. 20 seconds."""
@@ -801,12 +816,9 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             as_pid = None
         who = as_pid or me
         matches = []
-        for m, side in d["matches"][:12]:
-            ans = data.get(m.match_id) or {}
-            own, opp = m.team_rounds_won.get(side, 0), m.team_rounds_won.get(m.other_team(side), 0)
-            matches.append({"id": m.match_id, "map": m.map_name, "when": m.started_at, "score": f"{own}–{opp}",
-                            "won": own > opp, "queue": m.queue, "mine": ans.get(str(who)) if who else None,
-                            "sum": ck.summary(ans) if ans else None})
+        for mm in checkin_matches(t, d)[:12]:
+            ans = data.get(mm["id"]) or {}
+            matches.append({**mm, "mine": ans.get(str(who)) if who else None, "sum": ck.summary(ans) if ans else None})
         igl = ck.igl(data, names)
         return render_template("team_checkin.html", t=t, tab="checkin", matches=matches, names=names, me=me, who=who,
                                as_pid=as_pid, igl=igl, min_votes=ck.MIN_VOTES, scale=ck.SCALE, queues=QUEUE_TABS,
@@ -823,8 +835,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             flash("Set your in-game name under Account first, so Nexus knows which player you are.", "error")
             return redirect(url_for("team_checkin", tid=tid))
         mid = f.get("match_id", "")
-        d = team_data(t)
-        if not any(m.match_id == mid for m, _ in d["matches"]):
+        if not any(m["id"] == mid for m in checkin_matches(t, team_data(t))):
             abort(404)
         ck.record(sr.team_dir(tid), mid, who, f.get("caller", type=int), f.get("comms"), f.get("mood"), f.get("note", ""),
                   members)

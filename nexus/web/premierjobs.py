@@ -273,7 +273,7 @@ class PremierJobs:
                     if url:
                         from ..discord import post as dpost
                         try:
-                            dpost(url, "", embeds=[review_embed(r)])
+                            dpost(url, checkin_line(self.store.get("site_url"), tid, r), embeds=[review_embed(r)])
                         except Exception as e:
                             self.sr._log(key, f"  ! Discord: {e}")
             self.sr._set(key, status="done")
@@ -321,6 +321,16 @@ class PremierJobs:
                 "opponent_id": str(opp.get("id") or ""), "tournament": bool(h.get("tournament")),
                 "key_rounds": key_rounds(m, side), "players": rv["players"], "trade_pairs": rv["trade_pairs"],
                 "model": getattr(llm, "model", "") if llm else "", "created": time.time()}
+
+
+def checkin_line(site: str, tid: int, r: dict) -> str:
+    """4.16: the line above the review in Discord: a 20-second check-in for this match (who called, comms, mood).
+    Empty until Nexus knows its own address (someone opened it in a browser)."""
+    if not site:
+        return ""
+    from urllib.parse import quote
+    return (f"How did it go? Check-in for {r.get('map', '')} {r.get('score', '')} (20 seconds): "
+            f"{site.rstrip('/')}/teams/{tid}/checkin?m={quote(str(r.get('match_id', '')))}")
 
 
 def key_of(team) -> str:

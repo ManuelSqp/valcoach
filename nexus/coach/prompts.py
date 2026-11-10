@@ -24,6 +24,9 @@ Glossary for the data:
   average player count per zone in each 10 s window; "enemies" is where the enemies really were (they were not
   necessarily seen by your team). Use it for setups, stacks, rotations and timings, but don't fault a player for
   not reacting to an enemy position they had no way of knowing.
+- your_ability_casts (if present, inside replay_positions): the round times at which the player used an ability,
+  from the replay file ("buy phase" = before the barriers dropped). No entry before a death = died without using
+  utility in that round.
 - Duel facts come from where players looked at the moment of the kill: "looking at your killer" + damage done
   = a lost aim duel (crosshair placement / first-shot accuracy); killer "off to your side" or "behind" = a
   positioning or awareness problem (crossfire, flank, peeking into multiple angles), not an aim problem.

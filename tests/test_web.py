@@ -1468,6 +1468,14 @@ def test_premier_scouting_veto_reviews_and_brief(app, monkeypatch):
     c.post(f"/teams/{tid}/premier/reviews", data={})
     _wait_stats(app, f"review:{tid}")
     assert len(pj.reviews(tid)) == len(revs)
+    # 4.16: the reviewed match can be checked in right away, and the Discord post links there
+    page = c.get(f"/teams/{tid}/checkin?m={rv['match_id']}").data.decode()
+    assert f'value="{rv["match_id"]}"' in page or "Nexus doesn't know which player you are" in page
+    assert store.get("site_url") == "http://localhost"
+    from nexus.web.premierjobs import checkin_line
+    line = checkin_line(store.get("site_url"), tid, rv)
+    assert line.startswith("How did it go?") and f"http://localhost/teams/{tid}/checkin?m=" in line
+    assert checkin_line("", tid, rv) == ""
 
     # match-day brief on Discord: settings, then the scheduler posts it once inside the window
     t = store.team(tid)

@@ -4,6 +4,18 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.16.0
+- **Utility timing from replay files**: the ability casts in the replay (vrfkit's *AbilityCastsThisRound*) give
+  *Utility before the first fight*, *Died without using utility* and *First ability* (median, attack / defense)
+  on *Habits › From your replay files*, and the coaching run sees each round's casts. Replays stored before are
+  read again once (needs the kept .vrf and vrfkit).
+- **Check-in reminder on Discord**: a Premier review posted to Discord starts with "How did it go?" and a link to
+  that match's check-in. Reviewed Premier matches show on the check-in page right away, before the next stats
+  update.
+- **Releases tag themselves**: merging a PR that raises the version tags exactly that commit and starts the
+  Windows app build (`.github/workflows/release-tag.yml`); it refuses when the three version numbers differ. No
+  more `git tag` by hand.
+
 ## 4.15.0
 More accurate coaching: the coach knows how reliable each number is, sees more than the kill moments, and learns
 whether its advice worked.

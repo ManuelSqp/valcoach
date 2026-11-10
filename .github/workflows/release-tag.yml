@@ -1,0 +1,78 @@
+# Tags a release by itself (4.16): when a merge to main brings a new version, this creates the tag vX.Y.Z on
+# exactly that commit and starts the Windows app build for it (desktop.yml), which creates the GitHub release
+# and attaches nexus-setup.exe. No more tagging by hand, so a tag can't land on the wrong commit.
+#
+# - The version comes from pyproject.toml; nexus/__init__.py and desktop/nexus_desktop/__init__.py must say the
+#   same, or the run fails and nothing is tagged.
+# - A version that already has a tag is left alone (e.g. a merge that doesn't change the version).
+# - A tag pushed with the workflow's own token doesn't start other workflows, so the desktop build is started
+#   explicitly with "Run workflow" (workflow_dispatch, which is allowed) and the new tag as its release.
+# - Tagging by hand still works as before (git push origin vX.Y.Z starts desktop.yml directly).
+name: release tag
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - pyproject.toml
+      - nexus/__init__.py
+      - desktop/nexus_desktop/__init__.py
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: release-tag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Versions agree
+        id: v
+        shell: bash
+        run: |
+          py=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)
+          app=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' nexus/__init__.py | head -1)
+          desk=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' desktop/nexus_desktop/__init__.py | head -1)
+          echo "pyproject.toml: $py, nexus: $app, desktop: $desk"
+          if [ -z "$py" ] || [ "$py" != "$app" ] || [ "$py" != "$desk" ]; then
+            echo "::error::The three version numbers differ; nothing is tagged."
+            exit 1
+          fi
+          if ! echo "$py" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version $py isn't X.Y.Z; nothing is tagged."
+            exit 1
+          fi
+          echo "tag=v$py" >> "$GITHUB_OUTPUT"
+      - name: Tag (if new)
+        id: t
+        shell: bash
+        env:
+          TAG: ${{ steps.v.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists: nothing to do."
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Nexus ${TAG#v}" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+          echo "Tagged $GITHUB_SHA as $TAG."
+          echo "new=true" >> "$GITHUB_OUTPUT"
+      - name: Build the Windows app for it
+        if: steps.t.outputs.new == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
+        run: gh workflow run desktop.yml --ref "$TAG" -f release="$TAG"
