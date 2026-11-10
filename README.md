@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.13.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.14.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -294,7 +294,13 @@ win rate). Each player edits his own column (linked by the in-game name; the tea
 up or down, add agents he wants to play, mark agents he won't play. Agents played later are added at the end;
 *Back to the stats* drops the changes. **Ideal composition:** per map the comp the web sources name most (the team
 owner clicks *Search the web*, needs web search under *Settings*), or 5 agents set by hand. Under every agent: who on
-the team has it in his pool and how high. The comps on the comps page stay as they are (`stats/compsheet.py`).
+the team has it in his pool and how high (`stats/compsheet.py`).
+
+**Follow our agent pools** (4.14, a switch next to *Make comps with* on the comps page, on the comp sheet and in the
+team settings; off by default): the comps then use these pools in every mode, also for drafts and the Discord
+prep. Agents a player won't play are left out, agents he ranked high get a bonus (in *Most comfortable* his own
+order replaces the games-played count), and agents he added by hand can be picked even without games. The reason
+shows with every pick, e.g. "#1 in Sam's agent pool". The team owner switches it.
 
 **Look & feel.** Every user picks a style (ten, from Classic to Retro arcade) and switches the animations on or
 off under *Account › Look & feel*. **Ctrl+K** (or `/`) opens a quick search for players, team tabs, maps, drafts

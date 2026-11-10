@@ -381,11 +381,44 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         return {"own": own, "members": members, "byid": byid, "rows_by": rows_by,
                 "seen_maps": sorted({r["map"] for rs in rows_by.values() for r in rs})}
 
+    def comp_pools(t, entries) -> list:
+        """[(name, pid, rows)] -> comp Pools. With "Follow our agent pools" on (Comp sheet, 4.14) each one carries
+        the player's own agent pool, so every comp mode leaves out agents he won't play and prefers his top ones."""
+        from ..stats import compsheet
+        sheet = compsheet.load(sr.team_dir(t.id))
+        out = []
+        for name, pid, rows in entries:
+            p = Pool.from_rows(name, rows)
+            if sheet["follow"]:
+                p.pref = compsheet.prefs(rows, sheet["pools"].get(str(pid)))
+            out.append(p)
+        return out
+
+    def pools_followed(t) -> bool:
+        from ..stats import compsheet
+        return compsheet.load(sr.team_dir(t.id))["follow"]
+
+    def set_follow(tid: int, on: bool) -> None:
+        from ..stats import compsheet
+        data = compsheet.load(sr.team_dir(tid))
+        if data["follow"] != on:
+            data["follow"] = on
+            compsheet.save(sr.team_dir(tid), data)
+
     def web_search_on() -> bool:
         """A web search is set up (Settings › Web search, DuckDuckGo by default). 4.13: before, a setting that
         doesn't exist was checked, so "From the web" always looked switched off."""
         from ..coach.websearch import searcher
         return searcher(store) is not None
+
+    @app.post("/teams/<int:tid>/sheet/follow")
+    def team_sheet_follow(tid: int):
+        """The "Follow our agent pools" switch on the comp sheet (4.14); the same one as on the comps page."""
+        get_team(tid, manage=True)
+        on = request.form.get("follow_pools") == "1"
+        set_follow(tid, on)
+        flash("The comps now follow your agent pools." if on else "The comps no longer follow your agent pools.", "ok")
+        return redirect(url_for("team_sheet", tid=tid) + "#pool")
 
     @app.post("/teams/<int:tid>/comps/method")
     def team_comp_method(tid: int):
@@ -396,11 +429,14 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             abort(400)
         sel = request.form.get("map", "")
         store.update_team(tid, comp_method=method)
+        set_follow(tid, request.form.get("follow_pools") == "1")
         if method == "web" and sel and web_search_on() and sel.lower() not in sr.read_webcomps(tid) \
                 and sel in (t.map_list or [sel]):
             owner = store.profiles(t.owner_id)
             sr.submit_webcomps(tid, [sel], owner[0].language if owner else "English", picked(store))
         flash(f"Comps are now made with: {COMP_METHODS[method]}", "ok")
+        if pools_followed(t):
+            flash("Following your agent pools from the comp sheet.", "ok")
         return redirect(url_for("team", tid=tid, map=sel or None) + "#detail")
 
     @app.post("/teams/<int:tid>/webcomps")
@@ -454,7 +490,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         return render_template("team_sheet.html", t=t, tab="sheet", players=players, ideals=ideals,
                                hue=compsheet.hue, all_agents=sorted(roles.all_agents()), is_owner=g.team_owner,
                                edit=request.args.get("edit", type=int), web_search_on=web_search_on(),
-                               web_status=sr.status(f"webcomps:{tid}"), queues=QUEUE_TABS,
+                               web_status=sr.status(f"webcomps:{tid}"), queues=QUEUE_TABS, follow_pools=saved["follow"],
                                premier_status=sr.status(f"premier:{tid}"))
 
     @app.post("/teams/<int:tid>/sheet/pool/<int:pid>")
@@ -522,8 +558,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         roles.load(cache_dir)
         c = team_context(t)
         members, byid, rows_by = c["members"], c["byid"], c["rows_by"]
-        starters = [Pool.from_rows(byid[m["pid"]].name, rows_by[m["pid"]]) for m in members if m["kind"] == "starter"]
-        subs = [Pool.from_rows(byid[m["pid"]].name, rows_by[m["pid"]]) for m in members if m["kind"] == "sub"]
+        starters = comp_pools(t, [(byid[m["pid"]].name, m["pid"], rows_by[m["pid"]]) for m in members if m["kind"] == "starter"])
+        subs = comp_pools(t, [(byid[m["pid"]].name, m["pid"], rows_by[m["pid"]]) for m in members if m["kind"] == "sub"])
         maps = t.map_list or [m["map"] for m in by_map([r for rs in rows_by.values() for r in rs])][:7]
         try:
             meta = parse_meta(t.meta)
@@ -555,7 +591,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             meta_error=meta_error, queues=QUEUE_TABS, tab="comps", alts=alts, comp_method=method,
             comp_label=COMP_METHODS[method], comp_methods=COMP_METHODS, is_owner=g.team_owner,
             web_status=sr.status(f"webcomps:{tid}") if method == "web" else None,
-            web_data=web, web_search_on=bool(web_search_on()),
+            web_data=web, web_search_on=bool(web_search_on()), follow_pools=pools_followed(t),
             linked=any(m.get("user_id") == g.user.id for m in members))
 
     @app.route("/teams/<int:tid>/settings", methods=["GET", "POST"])
@@ -586,6 +622,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
                               maps=[m for m in f.getlist("maps") if m][:12], meta=meta_text,
                               queue=queue if queue in dict(QUEUE_TABS) else "all",
                               comp_method=method if method in COMP_METHODS else "rules")
+            set_follow(tid, f.get("follow_pools") == "1")
             flash("Team saved.", "ok")
             return redirect(url_for("team", tid=tid))
         access = store.team_access(tid)
@@ -595,7 +632,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             access=access, others=others, discord=t.discord_info,
             games={pid: len(rs) for pid, rs in c["rows_by"].items()},
             map_choices=sorted(set(KNOWN_MAPS) | set(c["seen_maps"])), meta_example=META_EXAMPLE,
-            comp_methods=COMP_METHODS,
+            comp_methods=COMP_METHODS, follow_pools=pools_followed(t),
             queues=QUEUE_TABS, tab="settings")
 
     @app.route("/teams/<int:tid>/roles", methods=["GET", "POST"])
@@ -720,7 +757,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         return redirect(url_for("team_settings", tid=tid) + "#access")
 
     register_team_extras(app, store, sr, {"get_team": get_team, "team_context": team_context,
-                                          "team_data": team_data, "owner_rows": owner_rows})
+                                          "team_data": team_data, "owner_rows": owner_rows, "comp_pools": comp_pools})
     from .strats import register as register_strats
     register_strats(app, store, sr, get_team, KNOWN_MAPS)
     from .player_views import register as register_player
@@ -740,7 +777,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     register_ask(app, store, sr, view_profile, filter_rows)
     from .drafts import register as register_drafts
     register_drafts(app, store, get_team, {"team_context": team_context, "owner_rows": owner_rows,
-                                           "web_of": lambda t: sr.read_webcomps(t.id)}, KNOWN_MAPS)
+                                           "web_of": lambda t: sr.read_webcomps(t.id), "comp_pools": comp_pools}, KNOWN_MAPS)
 
     def import_members(t) -> int:
         own_ids = {p.id for p in store.profiles(t.owner_id)}
@@ -819,6 +856,7 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
 
     get_team, team_context, team_data, owner_rows = (helpers["get_team"], helpers["team_context"],
                                                      helpers["team_data"], helpers["owner_rows"])
+    comp_pools = helpers["comp_pools"]
     cache_dir = store.data_dir / "cache"
 
     def language(t) -> str:
@@ -827,13 +865,20 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
 
     build_cache: dict = {}
 
+    def sheet_sig(t) -> str:
+        """The comp sheet (agent pools, "follow" switch, 4.14): the comps change with it."""
+        try:
+            return (sr.team_dir(t.id) / "compsheet.json").read_text()
+        except OSError:
+            return ""
+
     def build(t) -> dict:
         """Everything the team pages / jobs need: comps per map, roles, data, tips. Cached until the team or
         anyone's games change (a team page used to recompute all of it on every visit)."""
         web_sig = (tuple(sorted((k, v.get("at")) for k, v in sr.read_webcomps(t.id).items()))
                    if method_of(t) == "web" else ())
         sig = (t.id, t.members, t.maps, t.meta, t.queue, t.comp_method, store.get("comp_rules_yaml"), web_sig,
-               tuple(sorted((p.id, sr.games(p.id).signature()) for p in store.profiles(t.owner_id))))
+               tuple(sorted((p.id, sr.games(p.id).signature()) for p in store.profiles(t.owner_id))), sheet_sig(t))
         hit = build_cache.get(t.id)
         if hit and hit[0] == sig:
             return hit[1]
@@ -848,7 +893,7 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
         d = team_data(t)
         members, byid, rows_by = d["members"], d["byid"], d["rows_by"]
         starters = [m for m in members if m["kind"] == "starter"]
-        pools = [Pool.from_rows(byid[m["pid"]].name, rows_by[m["pid"]]) for m in starters]
+        pools = comp_pools(t, [(byid[m["pid"]].name, m["pid"], rows_by[m["pid"]]) for m in starters])
         maps = t.map_list or [m["map"] for m in by_map([r for rs in rows_by.values() for r in rs])][:7]
         try:
             meta = parse_meta(t.meta)

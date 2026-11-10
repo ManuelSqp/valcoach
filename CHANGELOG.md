@@ -4,6 +4,15 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.14.0
+- **Follow our agent pools**: a new switch next to *Make comps with* (comps page), on the comp sheet and in the
+  team settings. When it's on, the comps use each player's agent pool from the comp sheet in every mode (Map
+  rules + your stats, Most comfortable, From the web, Your stats only), for drafts and the Discord prep too:
+  - agents a player marked *won't play* are left out;
+  - agents he ranked high get a bonus; in *Most comfortable* his own order counts instead of games played;
+  - agents he added by hand can be picked even without games (no "new agent" penalty in *From the web*).
+  Each pick says why, e.g. "#1 in Sam's agent pool". Off by default; the team owner switches it.
+
 ## 4.13.0
 - **Comp sheet** (*Strategy › Comp sheet*): the team's agent pool and ideal comps on one page.
   - *Agent pool*: a column per player, best agent first and coloured green to red, made from the stats (most played,

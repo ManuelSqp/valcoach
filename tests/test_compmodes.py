@@ -121,3 +121,49 @@ def test_replay_paths_stay_inside_the_folder(tmp_path):
         with pytest.raises(replayfile.ReplayError):
             replayfile.vrf_file(tmp_path, bad)
         assert replayfile.has_replay(tmp_path, bad) is False
+
+
+def _follow(pools, edits):
+    """4.14: "Follow our agent pools" as the web app sets it: each Pool gets its player's pool."""
+    from nexus.stats import compsheet
+    for p in pools:
+        rows = [{"agent": a, "won": int(p.w[a] * 2 > p.n[a]), "kills": 1, "deaths": 1, "rounds": 1, "acs": 1}
+                for a in p.n for _ in range(p.n[a])]
+        p.pref = compsheet.prefs(rows, edits.get(p.label))
+    return pools
+
+
+@pytest.mark.parametrize("mode", ["rules", "comfort", "stats"])
+def test_followed_pools_count_in_every_mode(mode):
+    plain = compmodes.top(mode, _pools(), "Ascent")[0]
+    assert picks(plain)["ctrl"] in ("Omen", "Viper") and picks(plain)["duel"] == "Jett"
+    # ctrl won't play Omen or Viper but added Astra; duel put Raze first
+    pools = _follow(_pools(), {"ctrl": {"order": ["Astra"], "no": ["Omen", "Viper"]},
+                               "duel": {"order": ["Raze", "Jett"], "no": []}})
+    comp = compmodes.top(mode, pools, "Ascent")[0]
+    assert picks(comp)["ctrl"] == "Astra"                          # added by hand, no games: still picked
+    assert any("agent pool" in w for p in comp["picks"] for w in p["why"])
+    plan = compmodes.plan(mode, pools, [], ["Ascent"], {}, {})
+    assert "Omen" not in picks(plan[0]["main"]).values() and "Viper" not in picks(plan[0]["main"]).values()
+    if mode == "comfort":                    # most comfortable: the player's own order beats the games played
+        assert picks(comp)["duel"] == "Raze" and "#1 in duel's agent pool" in comp["picks"][1]["why"]
+
+
+def test_followed_pools_with_web_comps():
+    data = {"comps": [{"agents": ["Jett", "Sova", "Astra", "Killjoy", "Skye"], "note": "", "sources": []}]}
+    plain = webcomps.comps_for(_pools(), "Ascent", data)[0]
+    assert next(p for p in plain["picks"] if p["agent"] == "Astra")["new"]
+    pools = _follow(_pools(), {"ctrl": {"order": ["Astra", "Omen"], "no": []}})
+    comp = webcomps.comps_for(pools, "Ascent", data)[0]
+    astra = next(p for p in comp["picks"] if p["agent"] == "Astra")
+    assert astra["player"] == "ctrl" and not astra["new"] and comp["total"] > plain["total"]
+    # nobody gets an agent he won't play when there's another way
+    pools = _follow(_pools(), {"flex": {"order": None, "no": ["Skye"]}})
+    comp = webcomps.comps_for(pools, "Ascent", data)[0]
+    assert picks(comp)["flex"] != "Skye"
+
+
+def test_pools_not_followed_change_nothing():
+    a = compmodes.top("rules", _pools(), "Ascent")
+    b = compmodes.top("rules", _pools(), "Ascent")
+    assert [picks(c) for c in a] == [picks(c) for c in b] and all(p.pref is None for p in _pools())

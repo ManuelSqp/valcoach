@@ -15,6 +15,11 @@ rules are added: needed / key agents per map, the role mixes that work there and
 4.10: with `comfort` (Most comfortable) an agent is rated only by how much the player plays it: games on
 this map count most, then games overall. Win rate and ACS don't count. The basic roles still do.
 From the web: see webcomps.py; all modes are picked in compmodes.py.
+
+4.14: with the team's "Follow our agent pools" switch (Comp sheet) a Pool carries the player's own pool
+(`pref`): agents he won't play are left out, agents he ranked high get up to POOL_BONUS points, and agents he
+added by hand are picked from too, even without games. This works in every mode; in Most comfortable the
+player's own order replaces the games-played count (on this map still adds a little).
 """
 from __future__ import annotations
 
@@ -35,6 +40,9 @@ PICK_NEED = {"Controller": 30, "Initiator": 18, "Sentinel": 18, "Duelist": 12}
 COMFORT_MAP = 6            # Most comfortable (4.10): points per game on this map ...
 COMFORT_ALL = 1.5          # ... and per game overall
 COMFORT_CAP = 40           # games counted at most (so one main doesn't drown out the roles)
+POOL_BONUS = 15            # 4.14: #1 in the player's agent pool, down to 0 for the last one
+POOL_NO = -200             # 4.14: "won't play" in the agent pool: practically excluded
+POOL_COMFORT = 60          # 4.14, Most comfortable + pools followed: the player's own order is his comfort
 
 META_EXAMPLE = """# Optional: your own map meta. Agents and role patterns here override what the stats suggest.
 # roles: D = Duelist, I = Initiator, C = Controller, S = Sentinel (must add up to 5)
@@ -59,6 +67,19 @@ class Pool:
     acsm: dict[tuple, float] = field(default_factory=lambda: defaultdict(float))
     mean_acs: float = 200.0
     games: int = 0
+    pref: dict | None = None   # 4.14: {"rank": {agent: rank}, "size": n, "no": set, "added": set} (compsheet.prefs)
+
+    def agents(self) -> list[str]:
+        """The agents a comp may give this player: the ones he played, plus the ones he added to his pool,
+        minus the ones he won't play (only with his pool followed)."""
+        if not self.pref:
+            return list(self.n)
+        out = [a for a in self.n if a not in self.pref["no"]]
+        out += [a for a in self.pref["rank"] if a not in self.n and a not in self.pref["no"]]
+        return out or list(self.n)
+
+    def has_data(self) -> bool:
+        return bool(self.n) or bool(self.pref and self.pref["rank"])
 
     @classmethod
     def from_rows(cls, label: str, rows: list[dict]) -> "Pool":
@@ -136,6 +157,18 @@ def rate(pool: Pool, agent: str, map_name: str, local: dict | None = None, meta:
         if pts:
             score += pts
             why.append(reason)
+    if pool.pref:
+        if agent in pool.pref["no"]:
+            score += POOL_NO
+            why.append(f"{pool.label} won't play it (agent pool)")
+        elif agent in pool.pref["rank"]:
+            rank, size = pool.pref["rank"][agent], pool.pref["size"]
+            top = 1 - (rank - 1) / (size - 1) if size > 1 else 1.0
+            if comfort_only:              # how comfortable he is on it: his own order first, games on the map after
+                score = POOL_COMFORT * top + 0.5 * min(n_am, COMFORT_CAP)
+            else:
+                score += POOL_BONUS * top
+            why.append(f"#{rank} in {pool.label}'s agent pool" + (" (added by hand)" if agent in pool.pref["added"] else ""))
     return {"agent": agent, "role": roles.role_of(agent), "score": round(score, 1), "n_map": n_am, "n_all": n_a,
             "wr_map": pool.wm.get((m, agent), 0) / n_am if n_am else None,
             "acs_map": pool.acsm.get((m, agent), 0) / n_am if n_am else None,
@@ -175,11 +208,11 @@ def best_comp(players: list[Pool], map_name: str, local: dict | None = None, met
     comfort_only: rate by games played only)."""
     cands, no_data = [], []
     for p in players:
-        if not p.n:
+        if not p.has_data():
             no_data.append(p.label)
             cands.append([])
             continue
-        rated = sorted((rate(p, a, map_name, local, meta, rules, comfort_only) for a in p.n), key=lambda x: -x["score"])
+        rated = sorted((rate(p, a, map_name, local, meta, rules, comfort_only) for a in p.agents()), key=lambda x: -x["score"])
         cands.append(rated[:CANDIDATES])
     if no_data:
         return {"map": map_name, "ok": False, "no_data": no_data}
@@ -292,7 +325,7 @@ def top_comps(players: list[Pool], map_name: str, local: dict | None = None, met
         return [best]
     cands = []
     for p in players:
-        rated = sorted((rate(p, a, map_name, local, meta, rules, comfort_only) for a in p.n), key=lambda x: -x["score"])
+        rated = sorted((rate(p, a, map_name, local, meta, rules, comfort_only) for a in p.agents()), key=lambda x: -x["score"])
         cands.append(rated[:CANDIDATES])
     pattern = (meta or {}).get("roles")
     scored = []

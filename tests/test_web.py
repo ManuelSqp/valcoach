@@ -3145,6 +3145,22 @@ def test_comp_sheet(app, monkeypatch):
     assert "from the web" in page and "the standard comp" in page and "https://example.org/comps" in page
     assert "Search again" in page
 
+    # 4.14: "Follow our agent pools": off by default, switched on the comp sheet, the comps page or the settings
+    comps = c.get(f"/teams/{tid}?map={mp}").data.decode()
+    assert 'name="follow_pools"' in comps and "agent pool)" not in comps and "in adv1ce&#39;s agent pool" not in comps
+    assert friend.post(f"/teams/{tid}/sheet/follow", data={"follow_pools": "1"}).status_code in (403, 404)
+    c.post(f"/teams/{tid}/sheet/pool/{me}", data={"order": "Raze,Sova", "no": "Jett"})
+    r = c.post(f"/teams/{tid}/sheet/follow", data={"follow_pools": "1"}, follow_redirects=True)
+    assert "The comps now follow your agent pools." in r.data.decode() and "Comps follow these pools" in r.data.decode()
+    comps = c.get(f"/teams/{tid}?map={mp}").data.decode()
+    assert "in adv1ce&#39;s agent pool" in comps and "won't play it (agent pool)" not in comps
+    assert "following your agent pools" in friend.get(f"/teams/{tid}?map={mp}").data.decode()
+    r = c.post(f"/teams/{tid}/comps/method", data={"comp_method": "rules", "map": mp}, follow_redirects=True)
+    assert "in adv1ce&#39;s agent pool" not in r.data.decode()                 # box not ticked: switched off
+    c.post(f"/teams/{tid}/comps/method", data={"comp_method": "comfort", "map": mp, "follow_pools": "1"})
+    assert "#1 in adv1ce&#39;s agent pool" in c.get(f"/teams/{tid}?map={mp}").data.decode()
+    assert "checked> Follow our agent pools" in c.get(f"/teams/{tid}/settings").data.decode()
+
     # the overview explains its labels with popups, not a bare "?" cursor
     ovp = c.get(f"/teams/{tid}/overview").data.decode()
     assert "data-tip=" in ovp and 'class="chip style" title=' not in ovp
