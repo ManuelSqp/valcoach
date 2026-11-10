@@ -9,7 +9,7 @@
   const MARK = '\ue000', MARK_G = /\ue000/g;      // a number in the catalog ("#" there; "#TAG" stays literal)
   const toMark = x => String(x).replace(/#(?![A-Za-z])/g, MARK);
   const SKIP = new Set(['SCRIPT', 'STYLE', 'PRE', 'CODE', 'TEXTAREA', 'KBD']);
-  const ATTRS = ['title', 'placeholder', 'aria-label', 'data-q', 'alt'];
+  const ATTRS = ['title', 'placeholder', 'aria-label', 'data-q', 'data-tip', 'alt'];
   let exact = null, patterns = [];
 
   function build(data) {

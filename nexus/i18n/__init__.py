@@ -28,7 +28,7 @@ _DIR = Path(__file__).resolve().parent
 NUM_RE = re.compile(r"(?<![\w#])[-+]?\d+(?:[.,'’]\d+)*(?![\w])")
 WS_RE = re.compile(r"\s+")
 TAG_RE = re.compile(r"(<!--.*?-->|<[^>]+>)", re.S)
-ATTR_RE = re.compile(r'(\s(?:title|placeholder|aria-label|data-q|data-confirm|alt)=")([^"]*)(")')
+ATTR_RE = re.compile(r'(\s(?:title|placeholder|aria-label|data-q|data-confirm|data-tip|alt)=")([^"]*)(")')
 VALUE_RE = re.compile(r'(\svalue=")([^"]*)(")')
 SKIP_TAGS = {"script", "style", "pre", "code", "textarea", "kbd"}
 LETTER_RE = re.compile(r"[A-Za-z]")

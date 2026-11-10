@@ -605,12 +605,16 @@ def test_stats_teams_and_pick_helper(app, monkeypatch):
     assert "Most comfortable" in page and "games on Ascent" in page
     # 4.10: from the web: off without web search, then searched with a fake search and model
     c.post(f"/teams/{tid}/settings", data=dict(form, comp_method="web"))
+    store = app.extensions["nexus"]["store"]
+    store.set("search_provider", "duckduckgo")                       # the default (the test app turns it off)
+    page = c.get(f"/teams/{tid}?map=Ascent").data.decode()          # 4.13: no "web_search" switch needed
+    assert "Comps from the web" in page and "Web search is off" not in page and "Search comps for Ascent" in page
+    store.set("search_provider", "")                                  # Settings › Web search › off
     page = c.get(f"/teams/{tid}?map=Ascent").data.decode()
-    assert "Comps from the web" in page and "Web search is off" in page and "no comps from the web" in page
+    assert "Web search is off" in page and "no comps from the web" in page and "Search comps for" not in page
     from nexus.coach import websearch as ws
     import nexus.coach.ollama as oll
-    store = app.extensions["nexus"]["store"]
-    store.set("web_search", "duckduckgo")
+    store.set("search_provider", "duckduckgo")
     searched = []
     monkeypatch.setattr(ws, "searcher", lambda st: (lambda q, n=6: searched.append(q) or [
         {"title": "Ascent comps tier list", "url": "https://example.org/ascent", "snippet": "Jett Sova KAY/O Omen Killjoy"}]))
@@ -3067,3 +3071,105 @@ def test_replay_files_settings_upload_and_app(app, monkeypatch):
     anon.put(f"/api/companion/uploads/{up['id']}?offset=0", headers=H, data=b"abc")
     r = anon.post("/api/companion/replays", headers=H, json={"upload_id": up["id"]})
     assert r.status_code == 422 and r.get_json()["error"] == "bad file"
+
+
+def test_comp_sheet(app, monkeypatch):
+    """4.13: comp sheet: agent pools from the stats (editable), ideal comp per map (web or typed)."""
+    import nexus.coach.ollama as oll
+    from nexus.coach import websearch as ws
+    c = setup_admin(app)
+    store = app.extensions["nexus"]["store"]
+    tid = _premier_team(app, c, monkeypatch)
+    names = {store.profile(m["pid"]).name: m["pid"] for m in store.team(tid).member_list}
+    off = c.get(f"/teams/{tid}/sheet").data.decode()
+    assert "Web search is off" in off and "Search the web" not in off and "Set by hand" in off
+    store.set("search_provider", "duckduckgo")
+    page = c.get(f"/teams/{tid}/sheet").data.decode()
+    assert "Agent pool" in page and "Ideal composition" in page and "Not searched yet" in page
+    assert "hsla(120," in page and "Search the web for all maps" in page and "Comp sheet" in page
+    me = names["adv1ce"]
+    edit = c.get(f"/teams/{tid}/sheet?edit={me}").data.decode()
+    assert 'class="poolform"' in edit and "+ add agent" in edit
+
+    # the owner saves a pool: own order, an added agent, one he won't play
+    r = c.post(f"/teams/{tid}/sheet/pool/{me}", data={"order": "Viper,Jett,nobody", "no": "Sova"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#pool")
+    from nexus.stats import compsheet
+    saved = compsheet.load(app.extensions["nexus"]["stats"].team_dir(tid))
+    assert saved["pools"][str(me)]["order"][:2] == ["Viper", "Jett"] and saved["pools"][str(me)]["no"] == ["Sova"]
+    page = c.get(f"/teams/{tid}/sheet").data.decode()
+    assert "Won't play: Sova" in page and "Added by hand" in page and "edited" in page
+    c.post(f"/teams/{tid}/sheet/pool/{me}", data={"reset": "1"})
+    assert str(me) not in compsheet.load(app.extensions["nexus"]["stats"].team_dir(tid))["pools"]
+    assert c.post(f"/teams/{tid}/sheet/pool/999999", data={"order": "Jett"}).status_code == 404
+
+    # a teammate edits his own pool only
+    friend = make_user(app, c, "burn", display_name="red-0#T")
+    c.post(f"/teams/{tid}/access", data={"add": str(store.user_by_name("burn").id)})
+    assert friend.get(f"/teams/{tid}/sheet").status_code == 200
+    assert friend.post(f"/teams/{tid}/sheet/pool/{names['red-0']}", data={"order": "Omen", "no": ""}).status_code == 302
+    assert friend.post(f"/teams/{tid}/sheet/pool/{me}", data={"order": "Omen", "no": ""}).status_code == 403
+    assert friend.post(f"/teams/{tid}/sheet/ideal", data={"map": "Ascent", "agent": ["Jett"] * 5}).status_code in (403, 404)
+
+    # ideal composition: typed by the owner
+    mp = (store.team(tid).map_list or ["Ascent"])[0]
+    r = c.post(f"/teams/{tid}/sheet/ideal", data={"map": mp, "agent": ["Jett", "Sova", "KAY/O", "Omen", "Killjoy"]})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#ideal")
+    page = c.get(f"/teams/{tid}/sheet").data.decode()
+    assert "set by you" in page and "Use the web comp" in page
+    r = c.post(f"/teams/{tid}/sheet/ideal", data={"map": mp, "agent": ["Jett", "Jett", "Sova", "Omen", ""]}, follow_redirects=True)
+    assert "5 different agents" in r.data.decode()
+    c.post(f"/teams/{tid}/sheet/ideal", data={"map": mp, "reset": "1"})
+    assert "set by you" not in c.get(f"/teams/{tid}/sheet").data.decode()
+
+    # from the web, even when the comps page uses another mode
+    assert store.team(tid).comp_method != "web"
+    monkeypatch.setattr(ws, "searcher", lambda st: (lambda q, n=6: [
+        {"title": "Comps", "url": "https://example.org/comps", "snippet": "Jett Sova KAY/O Omen Killjoy"}]))
+    monkeypatch.setattr(ws, "page_text", lambda url, limit=4000, session=None: "Best comp: Jett, Sova, KAY/O, Omen, Killjoy.")
+
+    class FakeModel:
+        def __init__(self, *a, **k):
+            self.model = "fake"
+
+        def check(self):
+            pass
+
+        def chat_json(self, system, user, schema):
+            return {"comps": [{"agents": ["Jett", "Sova", "KAY/O", "Omen", "Killjoy"], "note": "the standard comp", "sources": [1]}]}
+    monkeypatch.setattr(oll, "Ollama", FakeModel)
+    r = c.post(f"/teams/{tid}/webcomps", data={"map": mp, "back": "sheet"})
+    assert r.status_code == 302 and "/sheet" in r.headers["Location"]
+    assert _wait_stats(app, f"webcomps:{tid}")["status"] == "done"
+    page = c.get(f"/teams/{tid}/sheet").data.decode()
+    assert "from the web" in page and "the standard comp" in page and "https://example.org/comps" in page
+    assert "Search again" in page
+
+    # the overview explains its labels with popups, not a bare "?" cursor
+    ovp = c.get(f"/teams/{tid}/overview").data.decode()
+    assert "data-tip=" in ovp and 'class="chip style" title=' not in ovp
+    app.extensions["nexus"]["stats"].shutdown()
+
+
+def test_compsheet_helpers():
+    from nexus.stats import compsheet
+    def r(agent, won):
+        return {"agent": agent, "won": won, "kills": 15, "deaths": 14, "rounds": 22, "acs": 220, "queue": "competitive"}
+    rows = [r("Jett", 1)] * 5 + [r("Jett", 0)] * 2 + [r("Sova", 1)] * 3 + [r("Omen", 0)] * 3
+    p = compsheet.pool(rows, None)
+    assert [a["agent"] for a in p["agents"]] == ["Jett", "Sova", "Omen"] and not p["edited"]   # games, then win rate
+    assert p["agents"][0]["rank"] == 1 and p["agents"][0]["games"] == 7
+    p = compsheet.pool(rows, {"order": ["Omen", "Viper"], "no": ["Sova"]})
+    assert [a["agent"] for a in p["agents"]] == ["Omen", "Viper", "Jett"] and p["no"] == ["Sova"] and p["edited"]
+    assert next(a for a in p["agents"] if a["agent"] == "Viper")["added"]
+    assert compsheet.hue(1, 5) == 120 and compsheet.hue(5, 5) == 0 and compsheet.hue(1, 1) == 120
+    assert compsheet.clean_agents(["jett", "Nobody", "Jett", "kayo"]) == ["Jett", "KAY/O"]
+    web = {"comps": [{"agents": ["Jett", "Sova", "KAY/O", "Omen", "Killjoy"], "note": "n", "sources": [1]},
+                     {"agents": ["Raze", "Sova", "KAY/O", "Omen", "Killjoy"]}], "sources": [{"url": "u", "title": "t"}], "at": 1}
+    assert compsheet.ideal("Ascent", None, web)["source"] == "web" and compsheet.ideal("Ascent", None, web)["others"] == 1
+    assert compsheet.ideal("Ascent", ["Raze", "Fade", "Omen", "Viper", "Cypher"], web)["source"] == "typed"
+    assert compsheet.ideal("Ascent", ["Raze"] * 5, web)["source"] == "web"          # not 5 different: ignored
+    assert compsheet.ideal("Ascent", None, None) is None
+    pools = {"a": {"agents": [{"agent": "Jett", "rank": 2, "games": 4}]}, "b": {"agents": [{"agent": "Jett", "rank": 1, "games": 9}]}}
+    assert [w["label"] for w in compsheet.who_plays("Jett", pools)] == ["b", "a"]
+    assert compsheet.who_plays("Viper", pools) == []

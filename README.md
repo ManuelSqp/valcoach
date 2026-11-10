@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.12.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.13.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -279,7 +279,7 @@ from your matches together) and, for the owner, **Members, maps & Discord**.
 role (assigned on *Roles*, else the suggestion, marked "?") with IGL / Operator, the most played agents with games and
 win rate, the split over the agent roles, the playstyle and the best maps. Playstyle (4.12): up to three labels
 such as *Aggressive*, *Patient*, *Clutch player*, *Trader*, *Lone wolf*, *Survivor*, *Fragger*, *Playmaker*,
-*Brawler*, *Long-range duelist* or *Operator player*, each with the numbers it rests on (hover it), plus four bars
+*Brawler*, *Long-range duelist* or *Operator player*, each with the numbers it rests on (hover or tap it), plus four bars
 (opening duels, kills, assists, survival compared with your lobbies) and the closest pro. **Thrives in / struggles
 in** compares a player's results in opening duels, clutches, retakes, post-plants, close / mid / long-range duels,
 attack and defense, fights away from and next to the team, and trades with typical ranked values; small samples are
@@ -287,6 +287,14 @@ pulled towards typical and need a minimum count before they show (`stats/archety
 listed as a weakness: they mostly come with the role. On top, which agent roles each starter plays regularly,
 roles nobody covers and mains that collide. Two views: **Top 5 agents** (a card per player) and **All agents** (every
 agent and map as a table, players side by side, plus roles and playstyle in one table).
+
+**Comp sheet** (*Strategy › Comp sheet*, 4.13) is the team's agent pool and ideal comps on one page. **Agent pool:**
+a column per player with his agents from best to worst (green to red), starting from the stats (most played, then
+win rate). Each player edits his own column (linked by the in-game name; the team owner can edit all): move agents
+up or down, add agents he wants to play, mark agents he won't play. Agents played later are added at the end;
+*Back to the stats* drops the changes. **Ideal composition:** per map the comp the web sources name most (the team
+owner clicks *Search the web*, needs web search under *Settings*), or 5 agents set by hand. Under every agent: who on
+the team has it in his pool and how high. The comps on the comps page stay as they are (`stats/compsheet.py`).
 
 **Look & feel.** Every user picks a style (ten, from Classic to Retro arcade) and switches the animations on or
 off under *Account › Look & feel*. **Ctrl+K** (or `/`) opens a quick search for players, team tabs, maps, drafts
