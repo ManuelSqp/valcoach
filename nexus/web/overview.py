@@ -129,7 +129,7 @@ def disk(data_dir: Path) -> dict:
         parts = []
         for name, label in (("cache", "Match cache (HenrikDev)"), ("profiles", "Players (games, tips, quizzes)"),
                             ("teams", "Teams (plans, focus, scouting, reviews)"), ("reports", "Coaching reports"),
-                            ("uploads", "Uploaded VODs"), ("tmp", "Uploads in progress")):
+                            ("uploads", "Uploaded VODs"), ("replays", "Replay files"), ("tmp", "Uploads in progress")):
             p = data_dir / name
             if p.exists():
                 size, n = dir_size(p)
@@ -143,6 +143,53 @@ def disk(data_dir: Path) -> dict:
                 "free": human(du.free), "disk": human(du.total), "free_pct": du.free / du.total if du.total else None,
                 "measured": time.time()}
     return _cached(f"disk:{data_dir}", 300, measure)
+
+
+def replays(data_dir: Path, vrfkit: str = "") -> dict:
+    """Replay files on the server (4.16.1): how many, how big, how recent, how many could be used."""
+    def measure():
+        import json
+        from .. import replayfile
+        d = Path(data_dir) / "replays"
+        ids = replayfile.stored(d)
+        now = time.time()
+        vrf = data = size = 0
+        newest = None
+        week = month = 0
+        lined_up = casts = 0
+        maps: Counter = Counter()
+        for mid in ids:
+            when = None
+            for suffix in (".json.gz", ".vrf"):
+                f = d / f"{mid}{suffix}"
+                if f.is_file():
+                    st = f.stat()
+                    size += st.st_size
+                    when = max(when or 0, st.st_mtime)
+                    vrf += suffix == ".vrf"
+                    data += suffix == ".json.gz"
+            if when:
+                newest = max(newest or 0, when)
+                week += now - when < 7 * 86400
+                month += now - when < 30 * 86400
+            m = d / f"{mid}.metrics.json"            # written the first time a stats page used this replay
+            if m.is_file():
+                try:
+                    mm = json.loads(m.read_text())
+                    lined_up += bool(mm.get("ok"))
+                    casts += bool(mm.get("casts"))
+                    if mm.get("map"):
+                        maps[mm["map"]] += 1
+                except (OSError, ValueError):
+                    pass
+        return {"count": len(ids), "vrf": vrf, "data": data, "size": human(size), "bytes": size, "newest": newest,
+                "week": week, "month": month, "lined_up": lined_up, "casts": casts, "maps": maps.most_common(8)}
+    out = dict(_cached(f"replays:{data_dir}", 120, measure))
+    def probe():
+        from .. import replayfile
+        return replayfile.check_vrfkit(replayfile.vrfkit_path(vrfkit))
+    out["vrfkit_error"] = _cached(f"vrfkit:{vrfkit}", 600, probe)
+    return out
 
 
 def register(app, store, started_at: float) -> None:
@@ -177,6 +224,6 @@ def register(app, store, started_at: float) -> None:
             henrik=henrik_usage(now), model=model_usage(store.get("ollama_url"), now), model_name=store.get("ollama_model"),
             claude=claude_usage(store),
             backup=__import__("nexus.web.backup", fromlist=["last"]).last(store),
-            disk=disk(store.data_dir), active=sorted(active, key=lambda a: -a["age_s"]), failed=sorted(failed, key=lambda f: f["age_s"])[:10],
+            disk=disk(store.data_dir), replays=replays(store.data_dir, store.get("vrfkit_path") or ""), active=sorted(active, key=lambda a: -a["age_s"]), failed=sorted(failed, key=lambda f: f["age_s"])[:10],
             done_day=done_day.most_common(), coach=coach, counts=counts,
             tick_age_s=int(now - sr.last_tick) if sr.last_tick else None, has_key=bool(store.get("henrik_api_key")))

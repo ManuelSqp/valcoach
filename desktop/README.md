@@ -44,7 +44,10 @@ Nexus release on GitHub that has the installer attached. *Update now* downloads 
 against the SHA-256 GitHub lists for the file, and runs it silently: it closes the app, replaces the files and
 starts the app again. Running from Python source instead, *Open download* opens the release page.
 
-**Publishing a release:** after merging, push the version as a tag:
+**Publishing a release** (4.16): merge the PR that raises the version. `.github/workflows/release-tag.yml`
+sees the new version on main, checks that `pyproject.toml`, `nexus/__init__.py` and `desktop/nexus_desktop/
+__init__.py` agree, tags exactly the merged commit (`vX.Y.Z`) and starts the desktop build for it. A version that
+already has a tag is left alone. Tagging by hand still works:
 
 ```
 git switch main && git pull

@@ -392,6 +392,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                     store.touch_user(u.id)             # "last active" on the Users page
             else:
                 session.clear()
+        if g.user is not None and request.method == "GET":
+            _remember_site()
         if g.user is not None and not store.get(f"seen_version:{g.user.id}"):
             # first visit of this account since the changelog exists: nothing to announce yet
             store.set(f"seen_version:{g.user.id}", __version__)
@@ -406,6 +408,21 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
                 return jsonify(error="login required"), 401
             return redirect(url_for("login", next=request.path))
         return None
+
+    _site: dict = {}
+
+    def _remember_site() -> None:
+        """The address people open Nexus at (4.16), for links in Discord posts sent from background jobs
+        (check-in reminder). Behind a reverse proxy on this machine or the LAN: the forwarded host."""
+        host, scheme = request.host, request.scheme
+        if _from_proxy(request.remote_addr) and request.headers.get("X-Forwarded-Host"):
+            host = request.headers["X-Forwarded-Host"].split(",")[0].strip()
+            scheme = (request.headers.get("X-Forwarded-Proto") or "https").split(",")[0].strip()
+        url = f"{scheme}://{host}"
+        if scheme in ("http", "https") and host and _site.get("url") != url:
+            _site["url"] = url
+            if store.get("site_url") != url:
+                store.set("site_url", url)
 
     def _discord_lang(url: str) -> str | None:
         for t in store.all_teams():

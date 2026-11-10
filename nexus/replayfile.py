@@ -45,6 +45,10 @@ PARKED = 40000.0               # dead/hidden characters are parked at about -500
 UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 ID_RE = re.compile(r"[a-z0-9-]{1,64}")      # a match id as everywhere in Nexus (pipeline.MATCH_ID_RE), lower case
 MAX_VRF_BYTES = 512 * 1024 ** 2
+# 4.16: ability casts. vrfkit types Comp_AbilityStatisticsReplicator.AbilityCastsThisRound[] (docs/DATA.md,
+# "Ability cast observations"): one array element per cast, re-sent with every later replication of the array.
+CAST_GROUP = "Comp_AbilityStatisticsReplicator"
+CAST_FIELD_RE = re.compile(r"AbilityCastsThisRound\[(\d{1,4})\]\.(Player|Slot|Round|CastTime)_\d{1,4}_[0-9A-Fa-f]{32}")
 log_ = logging.getLogger(__name__)
 
 
@@ -188,8 +192,10 @@ def extract(export_dir: Path, vrf_name: str = "") -> dict:
             continue
         last_bucket[sub] = b
         pos.setdefault(sub, []).append([t, round(x, 1), round(y, 1), round(z or 0.0, 1), round(mv["yaw"][i] or 0.0, 1)])
+    casts = _casts(export_dir, set(players))
     return {
         "format": FORMAT,
+        "casts": casts,
         "match_id": _match_id(manifest, vrf_name),
         "build": str(manifest.get("replay_build") or ""),
         "duration_ms": int(manifest.get("duration_ms") or 0),
@@ -200,6 +206,60 @@ def extract(export_dir: Path, vrf_name: str = "") -> dict:
         "spike": spike,
         "pos": pos,
     }
+
+
+def _casts(export_dir: Path, subjects: set[str]) -> list[list]:
+    """Ability casts as [time_ms, subject, slot] (replay time, deduplicated), from fields.parquet.
+
+    A cast's CastTime counts from the round's barrier drop (vrfkit docs/DATA.md). The array is re-sent on
+    every later replication, so each cast is kept once (player, round, slot, CastTime) and its time is the
+    barrier drop of its round + CastTime, the barrier drop being the median of (first send - CastTime) over
+    the round's casts. [] if the export has no such rows (older vrfkit, other builds)."""
+    f = Path(export_dir) / "fields.parquet"
+    if not f.is_file():
+        return []
+    try:
+        import pyarrow.compute as pc
+        import pyarrow.parquet as pq
+        cols = [c for c in ("time_ms", "group_path", "actor_net_guid", "packet_id", "field_name",
+                            "value_i64", "value_f64", "value_str") if c in pq.read_schema(f).names]
+        if not {"time_ms", "group_path", "field_name"} <= set(cols):
+            return []
+        t = pq.read_table(f, columns=cols)
+        t = t.filter(pc.match_substring(t["group_path"], CAST_GROUP))
+        t = t.filter(pc.starts_with(t["field_name"], "AbilityCastsThisRound["))
+        rows = t.to_pylist()
+    except Exception as e:                      # the casts are extra: never fail the import over them
+        log_.warning("ability casts not read: %s", e)
+        return []
+    # one array snapshot = the rows of one replication (actor, packet); element i = one cast
+    elems: dict[tuple, dict] = {}
+    for r in rows:
+        m = CAST_FIELD_RE.fullmatch(str(r.get("field_name") or ""))
+        if not m:
+            continue
+        key = (r.get("actor_net_guid"), r.get("packet_id"), int(r["time_ms"] or 0), int(m.group(1)))
+        e = elems.setdefault(key, {"t": int(r["time_ms"] or 0)})
+        name = m.group(2)
+        if name == "Player":
+            e["player"] = str(r.get("value_str") or "").lower()
+        elif name == "CastTime":
+            e["cast"] = r.get("value_f64")
+        else:
+            e[name.lower()] = r.get("value_i64")
+    first: dict[tuple, dict] = {}
+    for e in elems.values():
+        if e.get("player") not in subjects or e.get("cast") is None or e.get("round") is None:
+            continue
+        ident = (e["player"], int(e["round"]), int(e.get("slot") or 0), round(float(e["cast"]), 2))
+        if ident not in first or e["t"] < first[ident]["t"]:
+            first[ident] = e
+    by_round: dict[int, list[float]] = {}
+    for (_, rnd, _, cast), e in first.items():
+        by_round.setdefault(rnd, []).append(e["t"] - cast * 1000)
+    drop = {rnd: statistics.median(v) for rnd, v in by_round.items()}
+    out = [[int(drop[rnd] + cast * 1000), player, slot] for (player, rnd, slot, cast) in first]
+    return sorted(out)
 
 
 # ---------------------------------------------------------------------------
@@ -400,6 +460,24 @@ def round_paths(data: dict, match: Match, offsets: dict[int, int]) -> dict[int, 
     return out
 
 
+def round_casts(data: dict, match: Match, offsets: dict[int, int]) -> dict[int, dict[str, list[float]]]:
+    """Round index -> {puuid: [round time (s) of each ability cast]} (negative = during the buy phase).
+    A cast belongs to the round whose start (buy phase) is the last one before it."""
+    casts = data.get("casts") or []
+    if not casts:
+        return {}
+    starts = sorted((int(n), int(t)) for n, t in data.get("rounds") or [])
+    known = {p.lower(): p for p in match.players}
+    out: dict[int, dict[str, list[float]]] = {}
+    for t_ms, sub, _slot in casts:
+        puuid = known.get(str(sub).lower())
+        rnd = next((n for n, t in reversed(starts) if t <= t_ms), None)
+        if puuid is None or rnd is None or rnd not in offsets:
+            continue
+        out.setdefault(rnd, {}).setdefault(puuid, []).append(round((t_ms - offsets[rnd]) / 1000, 1))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # what the coach reads
 # ---------------------------------------------------------------------------
@@ -448,7 +526,7 @@ def _rotations(timeline: list[dict], key: str, label: str) -> list[str]:
 
 
 def describe(paths: dict[str, list], match: Match, round_index: int, focus: str, mi: MapInfo,
-             bucket_s: float = 10.0) -> dict:
+             bucket_s: float = 10.0, casts: list[float] | None = None) -> dict:
     """Compact, LLM-friendly movement of both teams in one round (exact positions from the replay file)."""
     if not paths:
         return {}
@@ -483,7 +561,9 @@ def describe(paths: dict[str, list], match: Match, round_index: int, focus: str,
                     "player count per zone in each window",
             "timeline": timeline,
             "rotations": _rotations(timeline, "allies", "allies") + _rotations(timeline, "enemies", "enemies"),
-            "your_path": your_path[:25]}
+            "your_path": your_path[:25],
+            **({"your_ability_casts": [("buy phase" if t < 0 else f"{int(t)}s") for t in sorted(casts)][:12]}
+               if casts else {})}
 
 
 def for_match(replays_dir: Path, work_dir: Path, vrfkit: str, match: Match, focus: str, mi: MapInfo | None,
@@ -512,6 +592,7 @@ def for_match(replays_dir: Path, work_dir: Path, vrfkit: str, match: Match, focu
         log("! The replay file has no rounds that could be lined up with the match data; not used")
         return None
     paths = round_paths(data, match, offsets)
+    rcasts = round_casts(data, match, offsets)
     team = match.team_of(focus)
     out: dict = {"minimap": {}, "self_paths": {}, "others": {}}
     for idx, ps in paths.items():
@@ -523,7 +604,7 @@ def for_match(replays_dir: Path, work_dir: Path, vrfkit: str, match: Match, focu
             "enemies": [],
         }
         if mi is not None:
-            d = describe(ps, match, idx, focus, mi)
+            d = describe(ps, match, idx, focus, mi, casts=(rcasts.get(idx) or {}).get(focus))
             if d:
                 out["minimap"][idx] = d
     log(f"· Replay file ({data.get('build') or 'unknown build'}): {len(paths)}/{len(match.rounds)} rounds, "

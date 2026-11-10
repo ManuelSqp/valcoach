@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.15.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.16.1** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -404,8 +404,11 @@ Nexus doesn't count every number the same any more:
 - **Replay files** (when uploaded): *Habits › From your replay files* shows *untradeable deaths* (no teammate within
   15 m when you died or in the next 3 s), how often and how fast you get to the spike on retakes, and where you
   stand 20 s into the round per map and side, with the win rate of each spot. Worked out once per match (stored
-  as `<match id>.metrics.json` next to the replay). Utility timing isn't in the replay data; *Dying with utility
-  unused* comes from the match data instead.
+  as `<match id>.metrics.json` next to the replay). Since 4.16 also **utility timing** from the ability casts
+  in the replay: how often you used an ability before your first fight of a round, how often you died without
+  using one, and when your first ability comes (median, attack and defense); the coaching run sees each round's
+  casts too. Replays stored before 4.16 are read again once for this (needs the kept `.vrf` and vrfkit on the
+  server). *Dying with utility unused* on the habits list still comes from the match data (works without replays).
 - **Goals** (*Habits › Goals*): one number, a target and the next 5–20 games. The weekly focus sets one for each
   player from its "number to watch", *Make it a goal* on a habit sets one, or you set one by hand. Nexus checks it
   after every game: *reached* as soon as the number over the games since meets the target, *missed* when the games
@@ -415,6 +418,8 @@ Nexus doesn't count every number the same any more:
   in about 20 seconds: who made most of the calls, comms 1–5, mood 1–5, one optional line. The team owner can
   answer for players without an account. From 3 votes for the same player, the IGL suggestion uses the check-ins
   instead of a guess from the stats. Premier reviews, the weekly focus and *Ask the coach* get the answers.
+  When Nexus posts a Premier review to Discord, the post starts with a link to that match's check-in (4.16; the
+  link uses the address Nexus was last opened at, so open it once in a browser after an update).
 
 The new numbers come from the match data Nexus already has: the next stats update (or the nightly sync) rebuilds
 the rows from the cached matches, without extra API requests.
@@ -501,6 +506,9 @@ the jump buttons.
   That puts it in `~/.cargo/bin/vrfkit`, where Nexus finds it by itself (or set the path in *Settings › Replay
   files*, or `NEXUS_VRFKIT`). *Test* there checks it. After a VALORANT patch, replays of the new build may need a
   newer vrfkit: run the same command with a newer commit (and `--force`).
+- **How many are there**: the *Server* page (admins) lists the stored replay files: count, size, uploads in the
+  last 7 / 30 days, the last upload, how many were lined up with the match data and have ability casts, per map,
+  and whether vrfkit works.
 
 ### Run it permanently
 

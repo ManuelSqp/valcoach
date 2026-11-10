@@ -296,3 +296,84 @@ def test_replay_metrics_counts_untradeable():
                  "c": [(t / 2, 0, 0) for t in range(0, 41)], "d": [(t / 2, 300, 0) for t in range(0, 60)]}}
     out = rs.match_metrics(m, paths, None)
     assert out["a"]["untradeable"] == 1 and out["c"]["untradeable"] == 0
+
+
+def _cast_rows(subject, rnd, slot, cast_s, drop_ms, sends=3, idx=0, actor=7):
+    """fields.parquet rows of one cast as vrfkit writes them: re-sent with every later replication."""
+    g = "/Game/Characters/_Core/Comp_AbilityStatisticsReplicator.Comp_AbilityStatisticsReplicator_C"
+    rows = []
+    for k in range(sends):
+        t = int(drop_ms + cast_s * 1000 + 40 + k * 900)
+        pre = f"AbilityCastsThisRound[{idx}]."
+        for name, col, val in (("Player_11_0963330440D68BDF1A8E34B035420342", "value_str", subject),
+                               ("Slot_12_22D571914FAFD5F0EBD400B7E2F28B36", "value_i64", slot),
+                               ("Round_22_905E6CC0448D2C6270A94C9690101E49", "value_i64", rnd),
+                               ("CastTime_4_5AE288704801A9B74D6D159DFC2BD147", "value_f64", cast_s)):
+            r = {"time_ms": t, "group_path": g, "actor_net_guid": actor, "packet_id": t, "field_name": pre + name,
+                 "value_i64": None, "value_f64": None, "value_str": None}
+            r[col] = val
+            rows.append(r)
+        rows.append({"time_ms": t, "group_path": g, "actor_net_guid": actor, "packet_id": t,
+                     "field_name": pre + "Effects[0].Value_5_203891704B7EF064EDB5528BFECC4807",
+                     "value_i64": None, "value_f64": 3.0, "value_str": None})
+    return rows
+
+
+def test_ability_casts_from_the_export(tmp_path):
+    """4.16: casts are read once each (deduplicated), timed from their round's barrier drop."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    rows = (_cast_rows("aaa", 0, 1, 3.5, 40000) + _cast_rows("aaa", 0, 2, 20.0, 40000, idx=1) +
+            _cast_rows("bbb", 1, 1, 7.25, 160000, idx=0, actor=8) + _cast_rows("zzz", 1, 1, 2.0, 160000, idx=1, actor=8))
+    rows.append({"time_ms": 5, "group_path": "/Game/Other.Other_C", "actor_net_guid": 1, "packet_id": 5,
+                 "field_name": "AbilityCastsThisRound[0].Player_11_0963330440D68BDF1A8E34B035420342",
+                 "value_i64": None, "value_f64": None, "value_str": "aaa"})
+    pq.write_table(pa.Table.from_pylist(rows), tmp_path / "fields.parquet")
+    casts = replayfile._casts(tmp_path, {"aaa", "bbb"})
+    # barrier drop = median(first send - CastTime): the constant 40 ms send lag stays in
+    assert casts == [[43540, "aaa", 1], [60040, "aaa", 2], [167290, "bbb", 1]]     # "zzz" is no player
+    assert replayfile._casts(tmp_path / "missing", {"aaa"}) == []
+
+
+def test_utility_timing_per_player(tmp_path, match):
+    from nexus.stats import replaystats as rs
+    rep = fake_replay(match)
+    offsets, _ = replayfile.align(rep, match)
+    r = match.rounds[1]
+    k = r.kills[0]
+    p_first = k.killer if k.killer in match.players else k.victim
+    # one cast in the buy phase of round 2 for that player, one late cast for the first victim
+    rep["casts"] = [[offsets[1] - 5000, p_first, 1], [offsets[1] + k.t_round_ms + 20000, k.victim, 2]]
+    rc = replayfile.round_casts(rep, match, offsets)
+    assert rc[1][p_first][0] == -5.0
+    out = rs.match_metrics(match, replayfile.round_paths(rep, match, offsets), None, rc)
+    u = out[p_first]["util"]
+    assert u["fights"] >= 1 and u["util_first"] >= 1 and u["first_cast"][0][1] == -5.0
+    v = out[k.victim]["util"]
+    assert v["deaths"] >= 1 and v["dry_deaths"] >= 1          # its cast came after the death
+    # no cast data: no utility numbers at all
+    assert rs.match_metrics(match, {}, None, None)[p_first]["util"] is None
+    # the coach sees the round's own casts
+    d = replayfile.describe(replayfile.round_paths(rep, match, offsets)[1], match, 1, p_first,
+                            MapRegistry(synth.write_all(tmp_path / "s", with_vod=False, n_rounds=6)["cache"]).get(match.map_id),
+                            casts=rc[1][p_first])
+    assert d["your_ability_casts"] == ["buy phase"]
+
+
+def test_utility_numbers_reach_the_page_and_coach(tmp_path, data, match):
+    from nexus.stats import replaystats as rs
+    rdir = tmp_path / "replays"
+    rep = fake_replay(match)
+    offsets, _ = replayfile.align(rep, match)
+    me = match.find_player("adv1ce", "LFT").puuid
+    rep["casts"] = sorted([offsets[r.index] + 2000, me, 1] for r in match.rounds)     # 2 s into every round
+    replayfile._write(replayfile.data_file(rdir, match.match_id), rep)
+    cache = tmp_path / "cache"
+    shutil.copytree(data["cache"], cache)
+    (cache / "matches").mkdir(exist_ok=True)
+    shutil.copy(data["match"], cache / "matches" / f"{match.match_id}.json")
+    p = rs.player(rdir, cache, [{"match_id": match.match_id, "source": "full", "map": match.map_name}], me)
+    u = p["util"]
+    assert u["games"] == 1 and u["first_cast"]["attack"] in (2.0, None) and u["first_cast"]["defense"] in (2.0, None)
+    if u["fights"]:
+        assert "used an ability before" in rs.facts(p)["utility"]
