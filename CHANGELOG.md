@@ -4,6 +4,15 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.14.1
+- **Comp sheet uses the space better.**
+  - *Ideal composition*: a map with a comp is now one full-width row: the map with its source and buttons on the
+    left, then a wide column per agent with the players who have it in their pool (green = high in the pool, red =
+    low; long names are shortened, hover for the full name). Maps without a comp are small cards below and no longer
+    stretch to the height of the others.
+  - *Agent pool*: each column shows the top 8 agents, "+ N more" / *Show all agents* opens every list at once so
+    the columns stay comparable. Long player names no longer push the column header out.
+
 ## 4.14.0
 - **Follow our agent pools**: a new switch next to *Make comps with* (comps page), on the comp sheet and in the
   team settings. When it's on, the comps use each player's agent pool from the comp sheet in every mode (Map

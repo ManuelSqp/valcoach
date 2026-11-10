@@ -3099,6 +3099,10 @@ def test_comp_sheet(app, monkeypatch):
     assert saved["pools"][str(me)]["order"][:2] == ["Viper", "Jett"] and saved["pools"][str(me)]["no"] == ["Sova"]
     page = c.get(f"/teams/{tid}/sheet").data.decode()
     assert "Won't play: Sova" in page and "Added by hand" in page and "edited" in page
+    assert ">Show all agents<" not in page and "more</button>" not in page              # 3 agents: nothing to fold
+    c.post(f"/teams/{tid}/sheet/pool/{me}", data={"order": "Viper,Jett,Omen,Fade,Skye,Sage,Neon,Yoru,Iso,Clove", "no": "Sova"})
+    page = c.get(f"/teams/{tid}/sheet").data.decode()
+    assert ">Show all agents<" in page and "+ 3 more</button>" in page and page.count('class=" more"') + page.count('class="added more"') == 3
     c.post(f"/teams/{tid}/sheet/pool/{me}", data={"reset": "1"})
     assert str(me) not in compsheet.load(app.extensions["nexus"]["stats"].team_dir(tid))["pools"]
     assert c.post(f"/teams/{tid}/sheet/pool/999999", data={"order": "Jett"}).status_code == 404
