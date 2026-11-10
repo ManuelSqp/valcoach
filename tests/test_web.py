@@ -649,6 +649,17 @@ def test_stats_teams_and_pick_helper(app, monkeypatch):
     page = c.get(f"/teams/{tid}").data.decode()
     assert any(m.get("user_id") == admin.id and m["pid"] == me for m in store.team(tid).member_list)
     assert "Set your in-game name" not in page and '>you</span>' in page
+    # 4.11: player overview, short and full view
+    ovp = c.get(f"/teams/{tid}/overview").data.decode()
+    assert "Player overview" in ovp and "Most played agents" in ovp and "Agent roles" in ovp
+    assert "Playstyle" in ovp and "The team at a glance" in ovp and "plays it regularly" in ovp
+    full = c.get(f"/teams/{tid}/overview?view=all").data.decode()
+    assert "Every agent" in full and "Every map" in full and "Roles and playstyle" in full
+    assert "Most played agents" not in full
+    from nexus.stats import overview as ovmod
+    from nexus.stats.teamroles import team_roles as _tr
+    ctx_rows = [{"label": "a", "pid": 1, "kind": "starter", "rows": [], "assigned": []}]
+    assert ovmod.team(_tr(ctx_rows, {}, []), [])["players"][0]["games"] == 0
     # 4.10.1: the mode picker right on the comps page
     assert 'id="compmaker"' in page and "Make comps" in page
     r = c.post(f"/teams/{tid}/comps/method", data={"comp_method": "comfort", "map": "Haven"})

@@ -4,6 +4,14 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.11.0
+- **Player overview** (*Roster & setup › Player overview*): who plays what, at a glance. Per player the role (yours
+  from *Roles*, else the suggestion) and IGL / Operator, the most played agents, the split over Duelist / Initiator /
+  Controller / Sentinel, the playstyle (four bars, in words, closest pro) and the best maps. On top: which agent roles
+  every starter plays regularly, roles nobody covers, two players with the same main. Two views: **Top 5 agents**
+  (cards) and **All agents** (every agent and every map in a table, players side by side). Calculated from the games,
+  no model needed.
+
 ## 4.10.1
 - **Make comps right on the comps page** (Strategy › Comps): pick how the comps are made (Map rules + your stats,
   Most comfortable, From the web, Your stats only) and click *Make comps*; no trip to the team settings. With
