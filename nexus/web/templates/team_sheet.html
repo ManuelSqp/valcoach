@@ -45,6 +45,14 @@
 <section class="card" id="pool">
   <div class="row between"><h2 style="margin:0">Agent pool</h2>
     <span class="muted small" tabindex="0" data-tip="Starts from the stats: most played first, then win rate. A player can reorder his list, add agents he wants to play and mark agents he won't play. Agents played later are added at the end.">best first · green to red · how is it made?</span></div>
+  {% if is_owner %}
+  <form method="post" action="{{ url_for('team_sheet_follow', tid=t.id) }}" class="row" style="gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
+    <input type="hidden" name="follow_pools" value="{{ '0' if follow_pools else '1' }}">
+    <span class="pill {{ 'done' if follow_pools else '' }}">{{ 'Comps follow these pools' if follow_pools else "Comps don't use these pools" }}</span>
+    <button class="btn sm {{ 'ghost' if follow_pools else 'primary' }}">{{ 'Stop following' if follow_pools else 'Follow our agent pools' }}</button>
+    <span class="muted small">When on, the comps page (every mode, drafts, Discord prep) leaves out agents a player won't play, prefers agents he ranked high and also picks agents he added.</span>
+  </form>
+  {% elif follow_pools %}<p class="small" style="margin:10px 0 0"><span class="pill done">Comps follow these pools</span></p>{% endif %}
   <div class="pools" style="margin-top:12px">
     {% for pl in players %}{% set n = pl.agents|length %}
     <div class="pcol">

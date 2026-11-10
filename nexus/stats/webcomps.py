@@ -84,6 +84,11 @@ def fetch(search, llm, map_name: str, language: str = "English", reader=None) ->
             "errors": errors, "at": time.time(), "model": getattr(llm, "model", "")}
 
 
+def _added(p: Pool, agent: str) -> bool:
+    """4.14: the player put this agent in his pool himself (Comp sheet, pools followed): no "new agent" penalty."""
+    return bool(p.pref) and agent in p.pref["rank"]
+
+
 def assign(players: list[Pool], agents: list[str], map_name: str, local: dict | None = None,
            meta: dict | None = None) -> dict:
     """The best way to hand these 5 agents to these 5 players. -> a comp like comp.best_comp's."""
@@ -94,16 +99,17 @@ def assign(players: list[Pool], agents: list[str], map_name: str, local: dict | 
         total = 0.0
         for i, a in enumerate(perm):
             r = rated[i][a]
-            total += r["score"] - (NEW_AGENT if r["n_all"] == 0 else 0)
+            total += r["score"] - (NEW_AGENT if r["n_all"] == 0 and not _added(players[i], a) else 0)
         if best is None or total > best[0]:
             best = (total, perm)
     total, perm = best
     picks = []
     for p, a, rr in zip(players, perm, rated):
         r = dict(rr[a])
-        if r["n_all"] == 0:
+        if r["n_all"] == 0 and not _added(p, a):
             r["why"] = r["why"] + [f"{p.label} hasn't played {a} yet"]
-        picks.append({"player": p.label, **r, "low_sample": r["n_map"] < 2 and r["n_all"] < 5, "new": r["n_all"] == 0,
+        picks.append({"player": p.label, **r, "low_sample": r["n_map"] < 2 and r["n_all"] < 5,
+                      "new": r["n_all"] == 0 and not _added(p, a),
                       "alternatives": []})
     return {"map": map_name, "ok": True, "total": round(total, 1), "picks": picks, "missing_roles": [],
             "pattern": pat_str(list(perm)), "notes": [], "method": "web"}
@@ -112,7 +118,7 @@ def assign(players: list[Pool], agents: list[str], map_name: str, local: dict | 
 def comps_for(players: list[Pool], map_name: str, data: dict | None, local: dict | None = None,
               meta: dict | None = None) -> list[dict]:
     """Every comp found for this map, given to these players, best fit first. [] if none were found yet."""
-    if not data or not data.get("comps") or any(not p.n for p in players):
+    if not data or not data.get("comps") or any(not p.has_data() for p in players):
         return []
     out = []
     for i, c in enumerate(data["comps"]):

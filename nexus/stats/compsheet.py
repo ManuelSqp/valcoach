@@ -4,7 +4,11 @@ Agent pool: each player's agents in order, best first, colored from green to red
 (most played, then win rate) and the player can change it: reorder, add agents he wants to play, and mark
 agents he won't play. Agents played later that aren't in the edited list are added at the end, so the list
 never goes stale. Saved per team in data/teams/<tid>/compsheet.json:
-  {"pools": {"<pid>": {"order": [agents], "no": [agents]}}, "ideal": {"<map lower>": [5 agents]}}
+  {"pools": {"<pid>": {"order": [agents], "no": [agents]}}, "ideal": {"<map lower>": [5 agents]},
+   "follow": true}
+
+Follow our agent pools (4.14, "follow"): the comps on the comps page (every mode, drafts, Discord prep) use
+each player's pool: no agents he won't play, a bonus for agents he ranked high (comp.py, Pool.pref).
 
 Ideal composition: per map, the comp web sources name most (webcomps.py, the same search as "From the
 web"), or 5 agents the team owner typed. Under every agent: who on the team has it in their pool.
@@ -25,16 +29,18 @@ FILE = "compsheet.json"
 def load(team_dir: Path) -> dict:
     try:
         d = json.loads((Path(team_dir) / FILE).read_text())
-        return {"pools": dict(d.get("pools") or {}), "ideal": dict(d.get("ideal") or {})}
-    except (OSError, ValueError):
-        return {"pools": {}, "ideal": {}}
+        return {"pools": dict(d.get("pools") or {}), "ideal": dict(d.get("ideal") or {}),
+                "follow": bool(d.get("follow"))}
+    except (OSError, ValueError, AttributeError):
+        return {"pools": {}, "ideal": {}, "follow": False}
 
 
 def save(team_dir: Path, data: dict) -> None:
     p = Path(team_dir) / FILE
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"pools": data.get("pools") or {}, "ideal": data.get("ideal") or {}}, ensure_ascii=False))
+    tmp.write_text(json.dumps({"pools": data.get("pools") or {}, "ideal": data.get("ideal") or {},
+                               "follow": bool(data.get("follow"))}, ensure_ascii=False))
     tmp.replace(p)
 
 
@@ -69,6 +75,13 @@ def pool(rows: list[dict], saved: dict | None = None) -> dict:
         agents.append({"agent": a, "role": roles.role_of(a), "games": s["games"] if s else 0,
                        "wr": s["wr"] if s else None, "rank": i, "added": s is None})
     return {"agents": agents, "no": no, "edited": bool(saved)}
+
+
+def prefs(rows: list[dict], saved: dict | None) -> dict:
+    """A player's pool as comp.Pool.pref: {"rank": {agent: rank}, "size": n, "no": set, "added": set}."""
+    pl = pool(rows, saved)
+    return {"rank": {a["agent"]: a["rank"] for a in pl["agents"]}, "size": len(pl["agents"]),
+            "no": set(pl["no"]), "added": {a["agent"] for a in pl["agents"] if a["added"]}}
 
 
 def hue(rank: int, n: int) -> int:

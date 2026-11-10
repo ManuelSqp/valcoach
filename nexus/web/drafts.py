@@ -92,7 +92,8 @@ def register(app, store, get_team, helpers: dict, known_maps: list[str]) -> None
         starters = [p for p in players if p["kind"] == "starter"]
         if len(starters) != SLOTS:
             return []
-        pools = [Pool.from_rows(p["name"], rows_by.get(p["pid"], [])) for p in starters]
+        pools = helpers["comp_pools"](t, [(p["name"], p["pid"], rows_by.get(p["pid"], [])) for p in starters]) \
+            if "comp_pools" in helpers else [Pool.from_rows(p["name"], rows_by.get(p["pid"], [])) for p in starters]
         pid_of = {p["name"]: p["pid"] for p in starters}
         out = []
         from ..stats.compmodes import method_of, top as comp_top

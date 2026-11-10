@@ -72,11 +72,12 @@
     <select id="comp_method" name="comp_method" style="width:auto">
       {% for val, label in comp_methods.items() %}<option value="{{ val }}" {{ 'selected' if comp_method == val }}>{{ label }}</option>{% endfor %}
     </select>
+    <label class="small" style="display:flex;gap:5px;align-items:center;margin:0" tabindex="0" data-tip="Uses every player's agent pool from the comp sheet: agents he won't play are left out, agents he ranked high get a bonus, agents he added are picked from too. Works with every mode."><input type="checkbox" name="follow_pools" value="1" {{ 'checked' if follow_pools }}> Follow our agent pools</label>
     <button class="btn sm primary">Make comps</button>
     <span class="muted small">Changes how this team's comps are made (also for drafts and the Discord prep).{% if web_search_on %} <span>"From the web" searches {{ sel }} right away if it hasn't been searched yet.</span>{% endif %}</span>
   </form>
   {% else %}
-  <p class="muted small" style="margin:0">Comps made with: <b>{{ comp_label }}</b>. The team owner changes it here.</p>
+  <p class="muted small" style="margin:0">Comps made with: <b>{{ comp_label }}</b>{% if follow_pools %} · <span>following your agent pools</span> (<a href="{{ url_for('team_sheet', tid=t.id) }}#pool">comp sheet</a>){% endif %}. The team owner changes it here.</p>
   {% endif %}
 </section>
 

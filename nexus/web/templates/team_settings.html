@@ -48,7 +48,9 @@
         <div class="hint"><b>Map rules + your stats</b>: your players' results, plus what each map needs (Viper on Breeze, a controller, someone to flash and someone for info, the role mixes that work there). Every rule that changed a comp is shown with it.
           <b>Most comfortable</b>: every player on the agents he plays most, on the map first; win rates don't count.
           <b>From the web</b>: comps that web sources name for each map (search them on the comps page), each agent given to the player who does best on it.
-          <b>Your stats only</b>: comps exactly as before 4.9. {% if user.is_admin %}The map rules are under <a href="{{ url_for('settings') }}#comprules">Settings</a>.{% endif %}</div></div>
+          <b>Your stats only</b>: comps exactly as before 4.9. {% if user.is_admin %}The map rules are under <a href="{{ url_for('settings') }}#comprules">Settings</a>.{% endif %}</div>
+        <label style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" name="follow_pools" value="1" {{ 'checked' if follow_pools }}> Follow our agent pools</label>
+        <div class="hint">With every mode: each player's agent pool from the <a href="{{ url_for('team_sheet', tid=t.id) }}#pool">comp sheet</a> counts. Agents he won't play are left out, agents he ranked high get a bonus, agents he added are picked from too.</div></div>
     </section>
   </div>
   <div class="row"><button class="btn primary">Save</button><a class="btn ghost" href="{{ url_for('team', tid=t.id) }}">Cancel</a></div>
