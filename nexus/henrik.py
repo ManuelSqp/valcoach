@@ -22,9 +22,10 @@ LIMITS: dict = {}            # the last rate-limit headers HenrikDev sent
 
 
 def _kind(path: str) -> str:
-    for k in ("stored-mmr-history", "stored-matches", "premier", "by-puuid/account", "matches", "match"):
+    for k in ("stored-mmr-history", "mmr-history", "stored-matches", "premier", "by-puuid/account", "matches", "match"):
         if f"/{k}/" in path:
-            return {"by-puuid/account": "account", "stored-mmr-history": "rank history"}.get(k, k)
+            return {"by-puuid/account": "account", "stored-mmr-history": "rank history",
+                    "mmr-history": "recent rank"}.get(k, k)
     return "other"
 
 
@@ -132,6 +133,14 @@ class HenrikClient:
 def mmr_history(client: "HenrikClient", region: str, name: str, tag: str, size: int = 50) -> list[dict]:
     """Rank and RR per competitive game (HenrikDev's stored MMR history, newest first)."""
     data = client._get(f"/valorant/v1/stored-mmr-history/{region}/{name}/{tag}", {"page": 1, "size": size})
+    return data.get("data", []) or []
+
+
+def mmr_history_recent(client: "HenrikClient", region: str, name: str, tag: str) -> list[dict]:
+    """The last ranked games straight from Riot (HenrikDev's live MMR history, newest first). 4.16.4: the
+    stored history above is only filled when HenrikDev looks the account up, so it can lag days behind;
+    this one is current."""
+    data = client._get(f"/valorant/v1/mmr-history/{region}/{name}/{tag}")
     return data.get("data", []) or []
 
 

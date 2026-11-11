@@ -1525,6 +1525,13 @@ def test_progress_and_training_pages(app, monkeypatch):
     assert "Rank over time" in page and "<svg class=\"rkc\"" in page and " RR</div>" in page
     entries = app.extensions["nexus"]["stats"].rank_path(me)
     assert entries.exists() and len(json.loads(entries.read_text())["entries"]) >= 5
+    # 4.16.4: the newest game comes from the live history (the stored one lags behind) and isn't doubled
+    ents = json.loads(entries.read_text())["entries"]
+    newest = max((r for r in app.extensions["nexus"]["stats"].games(me).rows() if r.get("queue") == "competitive"),
+                 key=lambda r: r["started_at"])
+    assert ents[-1]["match_id"] == newest["match_id"] and len({e["match_id"] for e in ents}) == len(ents)
+    log = "\n".join(app.extensions["nexus"]["stats"].status(f"import:{me}")["log"])
+    assert "· recent rank: " in log and "· rank history: " in log
     entries.unlink()                                       # without it: the rank shown in each match
     page = c.get(f"/profiles/{me}/progress").data.decode()
     assert "Rank over time" in page and "Platinum 1" in page and "no RR yet" in page
