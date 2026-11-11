@@ -289,9 +289,15 @@ def replay_positions(cfg: Config, match: Match, puuid: str, map_info: MapInfo | 
                      log: Log = _noop) -> dict | None:
     """Positions of all players from the match's replay file, or None (then the VOD minimap is used)."""
     from . import replayfile
+    from .maps import AgentRegistry
+    try:
+        names = {a["dev"]: a["name"] for a in AgentRegistry(cfg.path(cfg.paths.cache_dir)).load() if a.get("dev")}
+    except Exception:
+        names = {}                      # offline: utility is drawn without an owner (grey)
     try:
         return replayfile.for_match(replays_dir(cfg), cfg.path(cfg.paths.cache_dir) / "vrf_work",
-                                    replayfile.vrfkit_path(cfg.replay.vrfkit), match, puuid, map_info, log)
+                                    replayfile.vrfkit_path(cfg.replay.vrfkit), match, puuid, map_info, log,
+                                    agent_names=names)
     except Exception as e:              # a broken file must never stop the report: fall back to the VOD
         log(f"! Replay file not used ({e})")
         return None
@@ -460,6 +466,11 @@ def run(cfg: Config, req: CoachRequest, log: Log = _noop) -> CoachResult:
     from .maps import AgentRegistry
     report.map = map_meta(map_info, MapRegistry(cfg.path(cfg.paths.cache_dir)))
     report.agents = agent_icons(match, AgentRegistry(cfg.path(cfg.paths.cache_dir)))
+    if an.positions == "replay":                  # 4.16.3: icons of the abilities placed in the playback
+        from .coach.replay import ability_icons
+        used = {(e["agent"], e["slot"]) for o in (an.vod_others or {}).values() for e in (o.get("effects") or [])
+                if e.get("agent") and e.get("slot")}
+        report.agents.update(ability_icons(used, AgentRegistry(cfg.path(cfg.paths.cache_dir))))
     if not match.has_utility:
         log("· This match's data has no per-round ability casts; round coaching leaves utility out "
             "(match totals are still used)")

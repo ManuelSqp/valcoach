@@ -4,6 +4,13 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.16.3
+- **Placed utility in the round playback** (reports with a replay file): smokes (grey areas), slows and mollies /
+  damage zones (coloured areas), walls, traps, recon bolts and drones (pulsing ring), orbs and flashes (ability
+  icon), each at its spot for as long as it lasted, outlined in the owner's team colour; hover for who and which
+  ability. From vrfkit's effect actors (class, spawn spot, open / close); a thrown projectile is placed where it
+  last moved. Replays stored before are read again once; run the coaching again for older reports.
+
 ## 4.16.2
 - **Utility in the round playback** (reports with a replay file): a ⚡ pulse where a player used an ability, small
   ticks under the time bar (your casts taller), "⚡ N" abilities so far next to each player, your own casts in

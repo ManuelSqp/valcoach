@@ -378,3 +378,56 @@ def test_utility_numbers_reach_the_page_and_coach(tmp_path, data, match):
     assert u["games"] == 1 and u["first_cast"]["attack"] in (2.0, None) and u["first_cast"]["defense"] in (2.0, None)
     if u["fights"]:
         assert "used an ability before" in rs.facts(p)["utility"]
+
+
+def test_placed_utility_from_the_export(tmp_path):
+    """4.16.3: effect actors with their lifetime; a projectile is placed where it last moved."""
+    import json as _j
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    W = "/Game/Characters/Wraith/Ability_4/Zone_Wraith_4_Smoke.Zone_Wraith_4_Smoke_C"
+    H = "/Game/Characters/Hunter/Q/Projectile_Hunter_Q_RevealBolt.Projectile_Hunter_Q_RevealBolt_C"
+    A = "/Game/Characters/Wraith/Ability_4_Smoke.Ability_Wraith_4_Smoke_C"          # controller: not an effect
+    G = "/Game/Characters/Wushu/Gun_Wushu_X.Gun_Wushu_X_C"
+    rows = [
+        {"actor_net_guid": 1, "event": "open", "time_ms": 50000, "class_path": W, "spawn_x": 100.0, "spawn_y": 200.0},
+        {"actor_net_guid": 1, "event": "close", "time_ms": 65000, "class_path": W, "spawn_x": None, "spawn_y": None},
+        {"actor_net_guid": 2, "event": "open", "time_ms": 52000, "class_path": H, "spawn_x": 0.0, "spawn_y": 0.0},
+        {"actor_net_guid": 3, "event": "open", "time_ms": 1000, "class_path": A, "spawn_x": 0.0, "spawn_y": 0.0},
+        {"actor_net_guid": 4, "event": "open", "time_ms": 1000, "class_path": G, "spawn_x": 0.0, "spawn_y": 0.0},
+    ]
+    pq.write_table(pa.Table.from_pylist(rows), tmp_path / "actors.parquet")
+    mv = [{"actor_net_guid": 2, "field_name": "ReplicatedMovement", "time_ms": t,
+           "value_str": _j.dumps({"location": {"x": 10.0 * t / 1000, "y": -5.0, "z": 0}})} for t in (52100, 52600, 53100)]
+    pq.write_table(pa.Table.from_pylist(mv), tmp_path / "fields.parquet")
+    eff = replayfile._effects(tmp_path)
+    assert eff == [[50000, 65000, "Wraith", "E", "smoke", "zone", 100, 200],
+                   [52000, None, "Hunter", "Q", "recon", "projectile", 531, -5]]
+    assert replayfile._effects(tmp_path / "missing") == []
+
+
+def test_placed_utility_in_the_playback(tmp_path, match, map_info):
+    from nexus.coach.engine import analyse
+    from nexus.coach.replay import build_replay
+    rep = fake_replay(match)
+    offsets, _ = replayfile.align(rep, match)
+    rnd = match.rounds[1]
+    p = next(iter(match.players.values()))
+    code = "Codename"
+    rep["effects"] = [[offsets[1] + 3000, offsets[1] + 18000, code, "E", "smoke", "zone", 0, 0],
+                      [offsets[1] - 2000, None, code, "C", "trap", "game_object", 0, 0]]
+    rep["casts"] = []
+    re_ = replayfile.round_effects(rep, match, offsets, {code: p.agent})
+    owners = {e["owner"] for e in re_[1]}
+    same = [q for q in match.players.values() if q.agent == p.agent]
+    assert owners == ({p.puuid} if len(same) == 1 else {None})
+    by = {e["type"]: e for e in re_[1]}
+    assert by["trap"]["t0"] == -2000 and by["trap"]["t1"] is None and by["smoke"]["t1"] == 18000
+    an = analyse(match, p.puuid, map_info)
+    rp = build_replay(match, rnd, p.puuid, map_info, an.view, None, None, {"effects": re_[1]})
+    smoke = next(e for e in rp["effects"] if e["type"] == "smoke")
+    assert smoke["t0"] == 3000 and smoke["t1"] == 18000 and smoke["r"] > 0 and len(smoke["p"]) == 2
+    trap = next(e for e in rp["effects"] if e["type"] == "trap")
+    assert trap["t0"] == 0 and trap["r"] == 0 and trap["slot"] == "C"
+    assert replayfile.effect_type("Projectile_Phoenix_Q_FlameWall_ThroughWall_C") == "wall"
+    assert not replayfile.is_effect("/Game/Characters/Wushu/Gun_Wushu_X.Gun_Wushu_X_C")

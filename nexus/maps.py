@@ -162,7 +162,7 @@ class AgentRegistry:
             self.list_file.write_text(r.text)
         data = json.loads(self.list_file.read_text()).get("data", []) or []
         self._agents = [{
-            "uuid": a.get("uuid", ""), "name": a.get("displayName", ""),
+            "uuid": a.get("uuid", ""), "name": a.get("displayName", ""), "dev": a.get("developerName", ""),
             "icon": a.get("displayIconSmall") or a.get("displayIcon") or "",
             "role": (a.get("role") or {}).get("displayName", ""),
             "abilities": [{"slot": ab.get("slot", ""), "name": ab.get("displayName", ""), "icon": ab.get("displayIcon") or ""}

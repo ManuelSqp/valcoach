@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.16.2** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.16.3** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -409,7 +409,9 @@ Nexus doesn't count every number the same any more:
   using one, and when your first ability comes (median, attack and defense); the coaching run sees each round's
   casts too, and the round playback in the report shows them (4.16.2): a ⚡ pulse where a player used an ability,
   ticks under the time bar, an ability count per player, and your own casts in *Round events* (new coaching runs;
-  run the coaching again for older reports). Replays stored before 4.16 are read again once for this (needs the kept `.vrf` and vrfkit on the
+  run the coaching again for older reports). Since 4.16.3 also the **placed utility** itself: smokes as grey
+  areas, slows and mollies as coloured areas, walls, traps, recon (with a pulsing ring), orbs and flashes as their
+  ability icon, each where it was placed and for as long as it lasted, in the colour of the player's team. Replays stored before 4.16 are read again once for this (needs the kept `.vrf` and vrfkit on the
   server). *Dying with utility unused* on the habits list still comes from the match data (works without replays).
 - **Goals** (*Habits › Goals*): one number, a target and the next 5–20 games. The weekly focus sets one for each
   player from its "number to watch", *Make it a goal* on a habit sets one, or you set one by hand. Nexus checks it

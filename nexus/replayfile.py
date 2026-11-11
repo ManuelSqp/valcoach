@@ -193,9 +193,11 @@ def extract(export_dir: Path, vrf_name: str = "") -> dict:
         last_bucket[sub] = b
         pos.setdefault(sub, []).append([t, round(x, 1), round(y, 1), round(z or 0.0, 1), round(mv["yaw"][i] or 0.0, 1)])
     casts = _casts(export_dir, set(players))
+    effects = _effects(export_dir)
     return {
         "format": FORMAT,
         "casts": casts,
+        "effects": effects,
         "match_id": _match_id(manifest, vrf_name),
         "build": str(manifest.get("replay_build") or ""),
         "duration_ms": int(manifest.get("duration_ms") or 0),
@@ -260,6 +262,166 @@ def _casts(export_dir: Path, subjects: set[str]) -> list[list]:
     drop = {rnd: statistics.median(v) for rnd, v in by_round.items()}
     out = [[int(drop[rnd] + cast * 1000), player, slot] for (player, rnd, slot, cast) in first]
     return sorted(out)
+
+
+# 4.16.3: placed utility (smokes, walls, slows, mollies, traps, recon, orbs, flashes). Every ability effect is an
+# actor in actors.parquet with a class, a spawn position and an open/close lifetime (vrfkit docs/DATA.md,
+# "Persistent effect position"); the classification follows vrfkit's tools/extract_active_effects.py.
+EFFECT_WORDS = ("smoke", "wall", "barrier", "toxicscreen", "slow", "trap", "cage", "molotov", "fire", "decay",
+                "orb", "drone", "scout", "recon", "nanoswarm", "alarmbot", "reveal", "flash", "bolt", "turret")
+AGENT_PATH_RE = re.compile(r"/Game/Characters/(\w+)/")
+SLOT_RE = re.compile(r"_(Q|E|C|X|4)_", re.I)
+SLOT_LETTER = {"q": "Q", "e": "E", "c": "C", "x": "X", "4": "E"}     # "4" is the E slot in class names
+
+
+def effect_type(class_path: str) -> str:
+    c = class_path.lower().replace("throughwall", "")
+    if "smoke" in c:
+        return "smoke"
+    if "wall" in c or "barrier" in c or "toxicscreen" in c:
+        return "wall"
+    if "slow" in c:
+        return "slow"
+    if "trap" in c or "cage" in c or "turret" in c or "alarmbot" in c:
+        return "trap"
+    if "molotov" in c or "fire" in c or "decay" in c or "nanoswarm" in c or "orbitalstrike" in c:
+        return "damage"
+    if "flash" in c:
+        return "flash"
+    if "orb" in c:
+        return "orb"
+    if "drone" in c or "scout" in c or "recon" in c or "reveal" in c or "bolt" in c:
+        return "recon"
+    return "other"
+
+
+def is_effect(class_path: str) -> bool:
+    if not class_path or "/Game/Characters/" not in class_path:
+        return False
+    c = class_path.lower().replace("throughwall", "")
+    leaf = c.rsplit("/", 1)[-1]
+    if leaf.startswith(("ability_", "gun_", "fxc_", "comp_")) or not any(w in c for w in EFFECT_WORDS):
+        return False
+    return True
+
+
+def _effects(export_dir: Path) -> list[list]:
+    """[[open_ms, close_ms or None, agent codename, slot letter, type, kind, x, y], ...]. A projectile (bolt,
+    flash, grenade) is placed where it last moved; a zone or object where it spawned. [] if not available."""
+    f = Path(export_dir) / "actors.parquet"
+    if not f.is_file():
+        return []
+    try:
+        import pyarrow.parquet as pq
+        names = pq.read_schema(f).names
+        need = ["actor_net_guid", "event", "time_ms", "class_path", "spawn_x", "spawn_y"]
+        if not set(need) <= set(names):
+            return []
+        t = pq.read_table(f, columns=need).to_pylist()
+    except Exception as e:
+        log_.warning("ability effects not read: %s", e)
+        return []
+    evs: dict[int, list] = {}
+    for r in t:
+        cp = str(r.get("class_path") or "")
+        if is_effect(cp):
+            evs.setdefault(r["actor_net_guid"], []).append(r)
+    inst = []                                       # (guid, open, close, class, x, y)
+    for g, rs in evs.items():
+        rs.sort(key=lambda r: r["time_ms"] or 0)
+        cur = None
+        for r in rs:
+            if r["event"] == "open":
+                if cur:
+                    inst.append((g, *cur[:1], None, *cur[1:]))
+                cur = (int(r["time_ms"] or 0), r["class_path"], r.get("spawn_x"), r.get("spawn_y"))
+            elif r["event"] == "close" and cur:
+                inst.append((g, cur[0], int(r["time_ms"] or 0), *cur[1:]))
+                cur = None
+        if cur:
+            inst.append((g, cur[0], None, *cur[1:]))
+    if not inst:
+        return []
+    # projectiles: where they last moved before they closed (ReplicatedMovement, world units)
+    proj = {g for g, _, _, cp, _, _ in inst if cp.rsplit("/", 1)[-1].lower().startswith("projectile_")}
+    last: dict[int, list] = {}
+    if proj:
+        try:
+            import pyarrow as pa
+            import pyarrow.compute as pc
+            import pyarrow.parquet as pq
+            fp = Path(export_dir) / "fields.parquet"
+            if fp.is_file() and {"actor_net_guid", "field_name", "value_str", "time_ms"} <= set(pq.read_schema(fp).names):
+                tb = pq.read_table(fp, columns=["actor_net_guid", "field_name", "value_str", "time_ms"])
+                tb = tb.filter(pc.equal(tb["field_name"], "ReplicatedMovement"))
+                tb = tb.filter(pc.is_in(tb["actor_net_guid"], value_set=pa.array(sorted(proj), type=tb.schema.field("actor_net_guid").type)))
+                for r in tb.to_pylist():
+                    try:
+                        loc = (json.loads(r["value_str"] or "{}").get("location") or {})
+                    except ValueError:
+                        continue
+                    if loc.get("x") is not None:
+                        last.setdefault(r["actor_net_guid"], []).append((int(r["time_ms"] or 0), loc["x"], loc["y"]))
+        except Exception as e:
+            log_.info("projectile positions not read: %s", e)
+    out = []
+    for g, t0, t1, cp, x, y in inst:
+        mv = [m for m in last.get(g, []) if t1 is None or m[0] <= t1]
+        if mv:
+            _, x, y = max(mv)
+        if x is None or y is None:
+            continue
+        m = AGENT_PATH_RE.search(cp)
+        slot = SLOT_RE.search(cp.rsplit("/", 1)[-1])
+        leaf = cp.rsplit("/", 1)[-1].split(".", 1)[0]
+        out.append([t0, t1, m.group(1) if m else "", SLOT_LETTER.get(slot.group(1).lower(), "") if slot else "",
+                    effect_type(cp), leaf.split("_", 1)[0].lower(), round(float(x)), round(float(y))])
+    return sorted(out)
+
+
+def round_effects(data: dict, match: Match, offsets: dict[int, int], agent_names: dict[str, str] | None = None,
+                  ) -> dict[int, list[dict]]:
+    """Round index -> [{t0, t1 (round ms; t1 None = until the round ends), owner puuid or None, agent, slot,
+    type, x, y}]. The owner is the player with that agent (the codename is mapped with agent_names, e.g.
+    "wraith" -> "Omen"); with the same agent on both teams, the one who cast an ability just before."""
+    eff = data.get("effects") or []
+    if not eff:
+        return {}
+    starts = sorted((int(n), int(t)) for n, t in data.get("rounds") or [])
+    names = {k.lower(): v for k, v in (agent_names or {}).items()}
+    by_agent: dict[str, list[str]] = {}
+    for p in match.players.values():
+        by_agent.setdefault(p.agent.lower(), []).append(p.puuid)
+    casts = sorted((t, str(s).lower()) for t, s, _ in data.get("casts") or [])
+    known = {p.lower(): p for p in match.players}
+    out: dict[int, list[dict]] = {}
+    for t0, t1, code, slot, typ, _kind, x, y in eff:
+        rnd = next((n for n, t in reversed(starts) if t <= t0), None)
+        if rnd is None or rnd not in offsets:
+            continue
+        agent = names.get(str(code).lower(), "")
+        cands = by_agent.get(agent.lower(), []) if agent else []
+        owner = cands[0] if len(cands) == 1 else None
+        if len(cands) > 1:
+            near = [known.get(s) for t, s in casts if t0 - 5000 <= t <= t0 + 500 and known.get(s) in cands]
+            owner = near[-1] if near else None
+        off = offsets[rnd]
+        out.setdefault(rnd, []).append({"t0": int(t0 - off), "t1": None if t1 is None else int(t1 - off),
+                                        "owner": owner, "agent": agent, "slot": slot, "type": typ, "x": x, "y": y})
+    return out
+
+
+def refresh_if_old(replays_dir: Path, match_id: str, work_dir: Path, vrfkit: str) -> dict | None:
+    """Reads the kept .vrf again when the stored data predates casts / effects (4.16 / 4.16.3)."""
+    try:
+        vrf = vrf_file(replays_dir, match_id)
+        if not vrf.is_file():
+            return None
+        ingest(vrf, replays_dir, work_dir, vrfkit)
+        return load(replays_dir, match_id)
+    except Exception as e:
+        log_.info("replay %s not read again: %s", match_id, e)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -581,7 +743,7 @@ def describe(paths: dict[str, list], match: Match, round_index: int, focus: str,
 
 
 def for_match(replays_dir: Path, work_dir: Path, vrfkit: str, match: Match, focus: str, mi: MapInfo | None,
-              log=lambda s: None) -> dict | None:
+              log=lambda s: None, agent_names: dict[str, str] | None = None) -> dict | None:
     """Everything the coaching run takes from the replay file, or None (logged why) if there is none or it
     doesn't fit: {"minimap": {round: describe}, "self_paths": {round: path}, "others": {round: {...}}}."""
     if not has_replay(replays_dir, match.match_id):
@@ -595,6 +757,8 @@ def for_match(replays_dir: Path, work_dir: Path, vrfkit: str, match: Match, focu
     if data is None:
         log("! Replay file can't be read")
         return None
+    if "effects" not in data:                     # stored before 4.16.3: read the .vrf again for the utility
+        data = refresh_if_old(replays_dir, match.match_id, work_dir, vrfkit) or data
     if data.get("match_id") and data["match_id"] != match.match_id.lower():
         log("! The replay file belongs to another match; not used")
         return None
@@ -608,6 +772,7 @@ def for_match(replays_dir: Path, work_dir: Path, vrfkit: str, match: Match, focu
     paths = round_paths(data, match, offsets)
     rcasts = round_casts(data, match, offsets)
     cast_events = round_cast_events(data, match, offsets)
+    effects = round_effects(data, match, offsets, agent_names)
     team = match.team_of(focus)
     out: dict = {"minimap": {}, "self_paths": {}, "others": {}}
     for idx, ps in paths.items():
@@ -618,6 +783,7 @@ def for_match(replays_dir: Path, work_dir: Path, vrfkit: str, match: Match, focu
             "players": {p: s for p, s in ps.items() if p != focus and match.team_of(p) != team},
             "enemies": [],
             "casts": cast_events.get(idx) or [],       # 4.16.2: everyone's ability casts for the playback
+            "effects": effects.get(idx) or [],         # 4.16.3: smokes, walls, recon ... where and how long
         }
         if mi is not None:
             d = describe(ps, match, idx, focus, mi, casts=(rcasts.get(idx) or {}).get(focus))
