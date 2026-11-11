@@ -4,6 +4,12 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.16.2
+- **Utility in the round playback** (reports with a replay file): a ⚡ pulse where a player used an ability, small
+  ticks under the time bar (your casts taller), "⚡ N" abilities so far next to each player, your own casts in
+  *Round events*, and a *utility* switch to hide them. Buy-phase casts show at 0:00. Reports made before this
+  update get it when the coaching is run again.
+
 ## 4.16.1
 - **Replay files on the Server page** (*Server*, admins): how many matches have a replay file, their size, how many
   were uploaded in the last 7 and 30 days, the last upload, how many still have the .vrf, how many were lined up

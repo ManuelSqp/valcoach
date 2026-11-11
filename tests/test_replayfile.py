@@ -104,6 +104,7 @@ def test_for_match_fills_what_the_coach_reads(tmp_path, match, map_info):
     team = match.team_of(focus)
     assert set(others["allies"]) == {p for p in match.players if match.team_of(p) == team and p != focus}
     assert set(others["players"]) == {p for p in match.players if match.team_of(p) != team}
+    assert others["casts"] == []                                      # no casts in this replay
     d = out["minimap"][0]
     assert d["source"] == "replay file" and d["timeline"] and d["your_path"]
     assert any("enemies" in e for e in d["timeline"])

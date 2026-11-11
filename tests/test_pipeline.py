@@ -206,6 +206,15 @@ def test_replay_uses_measured_teammates(match, map_info, focus):
     short = next(k for k, v in rp["roster"].items() if v["name"] == match.players[mate].name)
     assert rp["measured"] == [short] and rp["seen"][0][0] == 5000
     assert sum(q[3] == 1 for q in rp["tracks"][short]["pts"]) >= 15
+    assert rp["casts"] == []
+    # 4.16.2: ability casts from the replay file show in the playback (buy phase at 0:00, none after a death)
+    victim = rnd.kills[0].victim
+    others["casts"] = [[-3000, mate, 1], [4000, focus, 2], [rnd.kills[0].t_round_ms + 500, victim, 3], [1000, "nobody", 1]]
+    rp = build_replay(match, rnd, focus, map_info, an.view, None, None, others)
+    you = next(k for k, v in rp["roster"].items() if v["you"])
+    assert {"t": 0, "id": short, "buy": True, "slot": 1} in rp["casts"]
+    assert {"t": 4000, "id": you, "buy": False, "slot": 2} in rp["casts"] or victim == focus
+    assert not any(c["slot"] == 3 for c in rp["casts"])                # cast after the player died: dropped
 
 
 class FakeLLM:

@@ -263,6 +263,11 @@ def build_replay(match: Match, rnd: Round, focus: str, mi: MapInfo | None, vm: V
             continue
         tracks[short] = {"pts": _track(dedup, nav, uv_per_ms), "death": deaths.get(puuid)}
 
+    # 4.16.2: ability casts from the replay file (everyone; buy-phase casts show at 0:00)
+    casts = [{"t": max(0, int(t)), "id": ids[pu], "buy": t < 0, "slot": slot}
+             for t, pu, slot in sorted(others.get("casts") or []) if pu in ids
+             and (pu not in deaths or t <= deaths[pu])]
+
     roster = {}
     for puuid, short in ids.items():
         p = match.players.get(puuid)
@@ -272,5 +277,5 @@ def build_replay(match: Match, rnd: Round, focus: str, mi: MapInfo | None, vm: V
         }
     return {"events": events, "roster": roster, "tracks": tracks, "path": path, "end": end,
             "attack": rnd.side_of(team) == "attack", "view": vm.ok, "routes": nav is not None,
-            "measured": sorted(measured), "seen": seen,
+            "measured": sorted(measured), "seen": seen, "casts": casts,
             "source": "replay file" if others.get("players") else ("video" if measured else "")}

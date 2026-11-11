@@ -460,6 +460,20 @@ def round_paths(data: dict, match: Match, offsets: dict[int, int]) -> dict[int, 
     return out
 
 
+def round_cast_events(data: dict, match: Match, offsets: dict[int, int]) -> dict[int, list[list]]:
+    """Round index -> [[round time (ms), puuid, slot], ...] for the playback (4.16.2); negative = buy phase."""
+    starts = sorted((int(n), int(t)) for n, t in data.get("rounds") or [])
+    known = {p.lower(): p for p in match.players}
+    out: dict[int, list[list]] = {}
+    for t_ms, sub, slot in data.get("casts") or []:
+        puuid = known.get(str(sub).lower())
+        rnd = next((n for n, t in reversed(starts) if t <= t_ms), None)
+        if puuid is None or rnd is None or rnd not in offsets:
+            continue
+        out.setdefault(rnd, []).append([int(t_ms - offsets[rnd]), puuid, int(slot or 0)])
+    return out
+
+
 def round_casts(data: dict, match: Match, offsets: dict[int, int]) -> dict[int, dict[str, list[float]]]:
     """Round index -> {puuid: [round time (s) of each ability cast]} (negative = during the buy phase).
     A cast belongs to the round whose start (buy phase) is the last one before it."""
@@ -593,6 +607,7 @@ def for_match(replays_dir: Path, work_dir: Path, vrfkit: str, match: Match, focu
         return None
     paths = round_paths(data, match, offsets)
     rcasts = round_casts(data, match, offsets)
+    cast_events = round_cast_events(data, match, offsets)
     team = match.team_of(focus)
     out: dict = {"minimap": {}, "self_paths": {}, "others": {}}
     for idx, ps in paths.items():
@@ -602,6 +617,7 @@ def for_match(replays_dir: Path, work_dir: Path, vrfkit: str, match: Match, focu
             "allies": {p: s for p, s in ps.items() if p != focus and match.team_of(p) == team},
             "players": {p: s for p, s in ps.items() if p != focus and match.team_of(p) != team},
             "enemies": [],
+            "casts": cast_events.get(idx) or [],       # 4.16.2: everyone's ability casts for the playback
         }
         if mi is not None:
             d = describe(ps, match, idx, focus, mi, casts=(rcasts.get(idx) or {}).get(focus))
