@@ -115,6 +115,33 @@ def agent_icons(match: Match, registry: AgentRegistry | None) -> dict[str, str]:
     return out
 
 
+ABILITY_SLOT = {"Q": "Ability1", "E": "Ability2", "C": "Grenade", "X": "Ultimate"}
+# radius of a placed effect on the map, in world units (about: a smoke is ~4.5 m across the middle)
+EFFECT_RADIUS = {"smoke": 450, "slow": 550, "damage": 450, "orb": 300}
+
+
+def ability_icons(used: set[tuple[str, str]], registry: AgentRegistry | None) -> dict[str, str]:
+    """"Agent|Q" -> embedded ability icon (white on transparent), for the utility in the playback."""
+    out: dict[str, str] = {}
+    if registry is None or not used:
+        return out
+    try:
+        registry.load()
+    except Exception:
+        return out
+    for agent, slot in used:
+        a = registry.find(name=agent)
+        if a is None or slot not in ABILITY_SLOT:
+            continue
+        try:
+            f = registry.ability_icon_file(a, ABILITY_SLOT[slot])
+            if f and f.exists():
+                out[f"{agent}|{slot}"] = "data:image/png;base64," + base64.b64encode(f.read_bytes()).decode()
+        except Exception:
+            pass
+    return out
+
+
 # ---------------------------------------------------------------------------
 def _track(known: list[tuple[int, list[float], int]], nav: NavGrid | None,
            uv_per_ms: float | None = None) -> list[list]:
@@ -263,6 +290,21 @@ def build_replay(match: Match, rnd: Round, focus: str, mi: MapInfo | None, vm: V
             continue
         tracks[short] = {"pts": _track(dedup, nav, uv_per_ms), "death": deaths.get(puuid)}
 
+    # 4.16.2: ability casts from the replay file (everyone; buy-phase casts show at 0:00)
+    casts = [{"t": max(0, int(t)), "id": ids[pu], "buy": t < 0, "slot": slot}
+             for t, pu, slot in sorted(others.get("casts") or []) if pu in ids
+             and (pu not in deaths or t <= deaths[pu])]
+
+    # 4.16.3: placed utility (smokes, walls, slows, mollies, traps, recon, orbs, flashes) from the replay file
+    uvu = abs(mi.x_mult) if mi.x_mult else 0
+    effects = []
+    for e in others.get("effects") or []:
+        if e["t1"] is not None and e["t1"] < 0:
+            continue
+        effects.append({"t0": max(0, e["t0"]), "t1": e["t1"], "id": ids.get(e["owner"]) if e.get("owner") else None,
+                        "agent": e.get("agent") or "", "slot": e.get("slot") or "", "type": e["type"],
+                        "p": _uv(mi, e["x"], e["y"]), "r": round(EFFECT_RADIUS.get(e["type"], 0) * uvu, 4)})
+
     roster = {}
     for puuid, short in ids.items():
         p = match.players.get(puuid)
@@ -272,5 +314,5 @@ def build_replay(match: Match, rnd: Round, focus: str, mi: MapInfo | None, vm: V
         }
     return {"events": events, "roster": roster, "tracks": tracks, "path": path, "end": end,
             "attack": rnd.side_of(team) == "attack", "view": vm.ok, "routes": nav is not None,
-            "measured": sorted(measured), "seen": seen,
+            "measured": sorted(measured), "seen": seen, "casts": casts, "effects": effects,
             "source": "replay file" if others.get("players") else ("video" if measured else "")}

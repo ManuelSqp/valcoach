@@ -2,6 +2,9 @@
 // Data per round (RD.rounds[n]): events (kills/plants/defuses with snapshots), tracks per player
 // ([t, u, v, kind] with kind 1 = known position, 0 = estimated route, 2 = spawn), roster, end (ms),
 // measured (ids tracked on the VOD minimap, or every player with a replay file: source 'replay file') and seen ([t, u, v] enemy icons spotted on the minimap).
+// casts (4.16.2, replay file): [{t, id, buy}] ability uses, drawn as a pulse where the player stood.
+// effects (4.16.3, replay file): [{t0, t1, id, agent, slot, type, p, r}] placed utility (smoke, wall, slow,
+// damage, trap, recon, orb, flash, other) drawn at its spot while it lasts, with the ability's icon.
 (function () {
   const NS = 'http://www.w3.org/2000/svg', S = 1000;
   const COL = {us: '#2dd4bf', them: '#ff4655', you: '#f6d24a', better: '#f2b84b', plant: '#ff4655', defuse: '#2dd4bf'};
@@ -10,6 +13,7 @@
   const TRAIL_MS = 6000;
   const KILL_FLASH_MS = 2000;
   const SEEN_MS = 900;            // a spotted enemy icon stays visible this long
+  const CAST_MS = 1800;           // an ability pulse is shown this long after the cast
 
   const fmt = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const parseT = s => { const m = /(\d+):(\d{1,2})/.exec(s || ''); return m ? (+m[1] * 60 + +m[2]) * 1000 : null; };
@@ -57,6 +61,12 @@
     const kills = R.events.filter(e => e.kind === 'kill');
     const plant = R.events.find(e => e.kind === 'plant'), defuse = R.events.find(e => e.kind === 'defuse');
     const bt = B ? parseT(B.time) : null;
+    const casts = R.casts || [];
+    const effects = R.effects || [];
+    const FX = {smoke: ['#aab3c2', .5], slow: ['#7fc4ff', .28], damage: ['#ff8a3d', .32], orb: ['#c58cff', .3]};
+    const FX_NAME = {smoke: 'smoke', wall: 'wall', slow: 'slow', damage: 'molly / damage', trap: 'trap', recon: 'recon',
+                     orb: 'orb', flash: 'flash', other: 'ability'};
+    const castsBefore = (id, t) => casts.reduce((n, c) => n + (c.id === id && c.t <= t ? 1 : 0), 0);
 
     // ------------------------------------------------------------ layout
     box.innerHTML = '';
@@ -79,7 +89,8 @@
        <label><input type="checkbox" data-o="trails" checked> trails</label>
        ${R.view ? '<label><input type="checkbox" data-o="cones" checked> view cones</label>' : ''}
        ${(R.seen || []).length ? '<label><input type="checkbox" data-o="seen" checked> spotted enemies</label>' : ''}
-       <span class="rp-note">solid = known position (kills${(R.measured || []).length ? (R.source === 'replay file' ? ', replay file' : ', your minimap') : ''}) · faded = estimated ${R.routes ? '(walkable route at running speed)' : '(straight line)'}${(R.seen || []).length ? ' · red rings = enemies seen on your minimap' : ''} · click a player to show their route · zoom: + / − or Ctrl + wheel</span>`);
+       ${casts.length || effects.length ? '<label><input type="checkbox" data-o="util" checked> utility</label>' : ''}
+       <span class="rp-note">solid = known position (kills${(R.measured || []).length ? (R.source === 'replay file' ? ', replay file' : ', your minimap') : ''}) · faded = estimated ${R.routes ? '(walkable route at running speed)' : '(straight line)'}${(R.seen || []).length ? ' · red rings = enemies seen on your minimap' : ''}${casts.length ? ' · ⚡ pulse = ability used (replay file)' : ''}${effects.length ? ' · grey circles = smokes, icons = placed utility while it lasts' : ''} · click a player to show their route · zoom: + / − or Ctrl + wheel</span>`);
     main.append(stage, bar, opts);
     if (B) main.appendChild(h('div', {class: 'rp-better'}, `<b>Better position ${esc(B.time)}: ${esc(B.callout)}</b> — ${esc(B.why)}`));
     const side = h('aside', {class: 'rp-side'});
@@ -111,7 +122,7 @@
 
     // ------------------------------------------------------------ state
     let T = 0, playing = false, speed = 1, last = null;
-    const show = {names: true, callouts: true, trails: true, cones: !!R.view, seen: true};
+    const show = {names: true, callouts: true, trails: true, cones: !!R.view, seen: true, util: true};
     const measured = new Set(R.measured || []);
     const selected = new Set();
     const youId = ids.find(id => who(id).you);
@@ -126,14 +137,18 @@
     const rows = {};
     for (const id of ids) {
       const r = h('button', {class: 'rp-row', 'data-id': id, title: 'Show / hide route'},
-        `${avatar(id)}<span class="rp-nm">${esc(who(id).you ? 'You' : who(id).name)}<small>${esc(who(id).agent)}${measured.has(id) ? (R.source === 'replay file' ? ' · from replay file' : ' · tracked on video') : ''}</small></span><span class="rp-st"></span>`);
+        `${avatar(id)}<span class="rp-nm">${esc(who(id).you ? 'You' : who(id).name)}<small>${esc(who(id).agent)}${measured.has(id) ? (R.source === 'replay file' ? ' · from replay file' : ' · tracked on video') : ''}</small></span>${casts.length ? '<span class="rp-ut" title="Abilities used so far this round">⚡0</span>' : ''}<span class="rp-st"></span>`);
       r.onclick = () => { selected.has(id) ? selected.delete(id) : selected.add(id); draw(); };
       rosterEl.appendChild(r); rows[id] = r;
     }
     const feedRows = [];
-    for (const e of R.events) {
+    const feedEvents = [...R.events, ...casts.filter(c => who(c.id).you).map(c => ({kind: 'cast', t: c.t, time: c.buy ? 'buy' : fmt(c.t), id: c.id}))]
+      .sort((a, b) => a.t - b.t);
+    for (const e of feedEvents) {
       let txt;
-      if (e.kind === 'kill') {
+      if (e.kind === 'cast') {
+        txt = `<span class="rp-cast">⚡</span><span>You used an ability</span>`;
+      } else if (e.kind === 'kill') {
         txt = `${e.killer ? avatar(e.killer, 'sm') : ''}<span>${esc(e.killer ? (who(e.killer).you ? 'You' : who(e.killer).name) : 'Spike')}</span>
                <span class="rp-arrow" style="color:${e.ours ? COL.us : COL.them}">→</span>${avatar(e.victim, 'sm')}<span>${esc(who(e.victim).you ? 'you' : who(e.victim).name)}</span>`;
       } else {
@@ -150,6 +165,11 @@
       const c = e.kind === 'kill' ? (e.ours ? COL.us : COL.them) : (e.kind === 'plant' ? COL.plant : COL.defuse);
       const tk = h('span', {class: 'rp-tick' + (e.kind !== 'kill' ? ' spike' : ''), title: `${e.time} ${e.kind}`});
       tk.style.left = (100 * e.t / R.end) + '%'; tk.style.background = c;
+      ticks.appendChild(tk);
+    }
+    for (const c of casts) {                       // small ticks under the bar: who used utility when
+      const tk = h('span', {class: 'rp-tick cast' + (who(c.id).you ? ' you' : ''), title: `${c.buy ? 'buy phase' : fmt(c.t)} ${who(c.id).you ? 'you' : who(c.id).name}: ability`});
+      tk.style.left = (100 * c.t / R.end) + '%'; tk.style.background = colorOf(c.id);
       ticks.appendChild(tk);
     }
 
@@ -245,6 +265,42 @@
         el('circle', {cx: q[1] * S, cy: q[2] * S, r: 17, fill: 'none', stroke: COL.them, 'stroke-width': 4, opacity: .25 + .6 * f}, g);
         el('circle', {cx: q[1] * S, cy: q[2] * S, r: 5, fill: COL.them, opacity: .25 + .6 * f}, g);
       }
+      // placed utility while it lasts: smokes / slows / mollies as areas, the rest as icons (replay file)
+      if (show.util) {
+        const live = effects.filter(e => T >= e.t0 && (e.t1 == null ? true : T <= e.t1));
+        const area = live.filter(e => FX[e.type] && e.r > 0), mark = live.filter(e => !(FX[e.type] && e.r > 0));
+        for (const e of area) {
+          const [c, a] = FX[e.type], x = e.p[0] * S, y = e.p[1] * S, rr = e.r * S;
+          const fade = e.t1 != null ? Math.min(1, (e.t1 - T) / 1500) : 1, grow = Math.min(1, (T - e.t0) / 500);
+          el('circle', {cx: x, cy: y, r: rr * (.35 + .65 * grow), fill: c, opacity: a * fade,
+                        stroke: e.id ? colorOf(e.id) : '#d6dbe4', 'stroke-width': 3, 'stroke-opacity': .7 * fade}, g);
+        }
+        for (const e of [...area, ...mark]) {
+          const x = e.p[0] * S, y = e.p[1] * S, ic = icons[`${e.agent}|${e.slot}`], c = e.id ? colorOf(e.id) : '#d6dbe4';
+          const fade = e.t1 != null ? Math.max(.25, Math.min(1, (e.t1 - T) / 1500)) : 1;
+          const grp = el('g', {opacity: fade}, g);
+          if (e.type === 'recon') {                      // reveal: a slow ring
+            const k = ((T - e.t0) % 1600) / 1600;
+            el('circle', {cx: x, cy: y, r: 18 + 50 * k, fill: 'none', stroke: c, 'stroke-width': 3, opacity: 1 - k}, grp);
+          }
+          el('circle', {cx: x, cy: y, r: 15, fill: '#0b0e13', stroke: c, 'stroke-width': 3, opacity: .9}, grp);
+          if (ic) el('image', {href: ic, x: x - 11, y: y - 11, width: 22, height: 22}, grp);
+          else { const t = el('text', {x, y: y + 6, 'font-size': 16, 'text-anchor': 'middle', fill: '#fff'}, grp); t.textContent = e.slot || '•'; }
+          const tt = el('title', {}, grp);
+          tt.textContent = `${e.id ? (who(e.id).you ? 'You' : who(e.id).name) : e.agent || '?'}: ${e.agent} ${e.slot} (${FX_NAME[e.type] || 'ability'})`;
+        }
+      }
+      // ability pulses: where a player stood when they used an ability (replay file)
+      if (show.util) for (const c of casts) {
+        if (T < c.t || T > c.t + CAST_MS) continue;
+        const tr = R.tracks[c.id]; if (!tr) continue;
+        const p = posAt(tr, c.t); if (!p) continue;
+        const f = (T - c.t) / CAST_MS, x = p[0] * S, y = p[1] * S;
+        el('circle', {cx: x, cy: y, r: 26 + 38 * f, fill: 'none', stroke: colorOf(c.id), 'stroke-width': 5 * (1 - f) + 1, opacity: 1 - f}, g);
+        const t = el('text', {x: x + 24, y: y - 20, 'font-size': 24, fill: '#ffd84a', stroke: '#0b0e13', 'stroke-width': 4,
+                              'paint-order': 'stroke', opacity: 1 - f * .7}, g);
+        t.textContent = '⚡';
+      }
       // kill lines just after each kill
       for (const e of kills) {
         if (!e.from || T < e.t || T > e.t + KILL_FLASH_MS) continue;
@@ -284,6 +340,8 @@
         rows[id].classList.toggle('dead', !!dead);
         rows[id].classList.toggle('sel', selected.has(id));
         rows[id].querySelector('.rp-st').textContent = dead ? `✕ ${fmt(tr.death)}` : '';
+        const ut = rows[id].querySelector('.rp-ut');
+        if (ut) { const k = castsBefore(id, T); ut.textContent = `⚡${k}`; ut.classList.toggle('zero', k === 0); }
       }
       let cur = null;
       for (const [e, r] of feedRows) { r.classList.toggle('past', e.t <= T); if (e.t <= T && T - e.t < 2500) cur = r; }
