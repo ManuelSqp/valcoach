@@ -73,6 +73,7 @@ def register(app, store, sr, get_team) -> None:
         return {"opps": opps, "sel": sel, "who": who, "a": rp.analyse(ex, roster, at) if ex else {}, "n": len(ex)}
 
     app.extensions["nexus"]["replay_scouting"] = scouting
+    app.extensions["nexus"]["team_replays"] = lambda t: (team_extracts(t, our_puuids(t)), our_puuids(t))     # 4.20
 
     @app.get("/teams/<int:tid>/replay-scouting")
     def team_replay_prep(tid: int):

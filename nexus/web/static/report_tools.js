@@ -63,6 +63,59 @@
     });
   }).catch(() => {});
 
+  // ------------------------------------------------------------- playback: notes, strat board, picture (4.20)
+  // The report keeps the playback script of the version it was made with; the current one is loaded so older
+  // reports get the notes too. Notes here are the owner's own (only he opens this report).
+  if (C.pins_url && C.replay_js) {
+    const pcss = document.createElement('style');
+    pcss.textContent = `
+.rp-tick.pin{top:-3px;width:9px;height:9px;border-radius:50%;transform:translateX(-4px);border:2px solid #0b0e13}
+.rp-bar .rp-pin.on{border-color:#f6d24a;color:#f6d24a}
+.rp-msg{font-size:12.5px;opacity:.75}.rp-msg a{color:var(--accent,#f4b740)}
+.rp-compose{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;padding:8px;border:1px solid #f6d24a;border-radius:8px;background:rgba(255,255,255,.04)}
+.rp-compose[hidden]{display:none}
+.rp-compose input{flex:1;min-width:180px;padding:6px 9px;border-radius:7px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.25);color:inherit;font:inherit;font-size:13px}
+.rp-compose button{font:inherit;font-size:12.5px;padding:5px 10px;border-radius:7px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:inherit;cursor:pointer}
+.rp-compose .rp-csave{border-color:#f6d24a}
+.rp-ctime,.rp-cmsg{font-size:12.5px;opacity:.75}
+.rp-pins .rp-pinrow{opacity:1}.rp-pinrow span{flex:1}.rp-pinrow small{opacity:.6}
+.rp-pdel{flex:none!important;opacity:.6;padding:0 4px}.rp-pdel:hover{color:#ff4655;opacity:1}
+.rp-none{font-size:12.5px;opacity:.7;margin:0}`;
+    document.head.appendChild(pcss);
+    let PINS = {};
+    const pinApi = async body => {
+      const r = await post(C.pins_url, body); const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'not saved');
+      PINS = d.pins || {};
+    };
+    window.NEXUS_RP = {
+      pins: n => PINS[String(n)] || [],
+      addPin: (n, p) => pinApi({action: 'pin', round: +n, t: p.t, text: p.text, strokes: p.strokes}),
+      delPin: (n, id) => pinApi({action: 'unpin', round: +n, id}),
+      canDelete: () => true,
+    };
+    if (C.strat) window.NEXUS_RP.toStrat = async (n, m) => {
+      const ts = `${Math.floor(m.t / 60000)}:${String(Math.floor(m.t / 1000) % 60).padStart(2, '0')}`;
+      const r = await post(C.strat.url, {map: C.map, side: m.side, name: `${C.map} R${n} ${ts} (${C.match || 'report'})`.slice(0, 80), items: m.items,
+                                         notes: `From the coaching report, round ${n} at ${ts}.` + (m.notes ? '\n' + m.notes : '')});
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'not made');
+      return d.url;
+    };
+    if (C.moment_url) window.NEXUS_RP.toDiscord = async (n, png, text) => {
+      const fd = new FormData(); fd.append('png', png, 'moment.png'); fd.append('text', text);
+      const r = await fetch(C.moment_url, {method: 'POST', body: fd}); const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'not posted');
+    };
+    const s = document.createElement('script');
+    s.src = C.replay_js;
+    s.onload = () => fetch(C.pins_url).then(r => r.json()).then(d => { PINS = d.pins || {}; }).catch(() => {}).then(() => {
+      const box = document.getElementById('rp-box');            // rebuild the round shown with the new playback
+      if (box && box.dataset.round && typeof window.showReplay === 'function') window.showReplay(box.dataset.round);
+    });
+    document.head.appendChild(s);
+  }
+
   // ------------------------------------------------------------- clips
   if (!C.clip_url) return;
   document.querySelectorAll('button.jump').forEach(b => {

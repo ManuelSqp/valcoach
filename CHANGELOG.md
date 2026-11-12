@@ -4,6 +4,19 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.20.0
+- **Lineups from your replay files** (*Strategy › Lineups*): utility one of you threw from about the same spot
+  (within 4 m) to about the same spot (within 3 m) three times or more shows as a suggestion, with a small map of
+  the throw, where it lands, the usual time and who throws it. *＋ Add* puts it in the library (add a clip later).
+  The replay extracts are worked out once more to know where each throw came from.
+- **Notes in your coaching reports**: the report's playback has *✎ Note* too (only you see them), *⇢ Strat board*
+  (into your team's strat book) and the new picture buttons. Older reports get them as well (the current playback
+  is loaded into the report).
+- **A moment as a picture**: *⤓ Picture* saves the playback as it's shown (zoom, utility, notes) as a PNG; *📷 Discord*
+  posts it with the notes around that time, from a report to the team's clip channel and from a review evening to
+  its review channel.
+- German texts.
+
 ## 4.19.0
 - **Counter-plans from replay scouting**: on *Replay scouting*, *Write counter-plans for <map>* gives the coach the
   team's habits from the replay files (setup and spots at 20 s, utility with place and time, plants) together with

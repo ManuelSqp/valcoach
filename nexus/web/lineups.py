@@ -12,6 +12,8 @@ from ..stats import roles
 
 SIDES = ("", "attack", "defense")
 SITES = ("", "A", "B", "C", "Mid")
+TYPE_TITLE = {"smoke": "Smoke", "damage": "Molly", "slow": "Slow", "recon": "Recon", "flash": "Flash", "wall": "Wall",
+              "trap": "Trap"}
 
 
 def clip_info(url: str) -> dict | None:
@@ -99,7 +101,45 @@ def register(app, store, get_team, known_maps: list[str]) -> None:
             groups.setdefault(r["agent"], []).append(r)
         return render_template("team_lineups.html", t=t, tab="strats", maps=maps, sel=sel, counts=counts, groups=groups,
                                agents_with=sorted({r["agent"] for r in rows}), agent=agent, side=side, abilities=ab,
-                               sides=SIDES, sites=SITES, premier_status=None)
+                               sides=SIDES, sites=SITES, premier_status=None, suggested=suggestions(t, sel, rows),
+                               map_img=url_for("map_image", name=sel) if sel else "")
+
+    def suggestions(t, sel: str, rows: list[dict]) -> list[dict]:
+        """4.20: lineups your team already throws again and again (replay files), not in the library yet."""
+        from ..coach.replay import ABILITY_SLOT
+        from ..stats import replayprep as rp
+        fn = app.extensions["nexus"].get("team_replays")
+        if not sel or fn is None:
+            return []
+        try:
+            ex, ours = fn(t)
+            found = rp.lineups(ex, ours).get(sel, []) if ex else []
+        except Exception:
+            return []
+        try:
+            slots = {a["name"]: {ab["slot"]: ab["name"] for ab in a.get("abilities", [])} for a in agents_reg.load() if a.get("name")}
+        except Exception:
+            slots = {}
+        have = {(r["agent"], r["title"].lower()) for r in rows}
+        out = []
+        for x in found:
+            ability = slots.get(x["agent"], {}).get(ABILITY_SLOT.get(x["slot"], ""), "")
+            kind = TYPE_TITLE.get(x["type"], x["type"])
+            x["title"] = f"{kind} {x['area']} from {x['from_area']}"[:80]
+            if (x["agent"], x["title"].lower()) in have:
+                continue
+            x["ability"] = ability
+            x["site"] = x["zone"] if x["zone"] in SITES else ""
+            # the mini map shows the throw: both ends with room around them, 16:10
+            x0, x1 = sorted((x["from"][0], x["to"][0]))
+            y0, y1 = sorted((x["from"][1], x["to"][1]))
+            w = max(x1 - x0 + 220, (y1 - y0 + 220) * 1.6, 360)
+            h = w / 1.6
+            x["box"] = f"{(x0 + x1) / 2 - w / 2:.0f} {(y0 + y1) / 2 - h / 2:.0f} {w:.0f} {h:.0f}"
+            x["notes"] = (f"Thrown {x['n']}× in your replay files ({x['matches']} {'match' if x['matches'] == 1 else 'matches'}), "
+                          f"around {int(x['t'] or 0)} s into the round, mostly by {x['who']}.")
+            out.append(x)
+        return out[:12]
 
     @app.post("/teams/<int:tid>/lineups/<int:lid>/delete")
     def lineup_delete(tid: int, lid: int):

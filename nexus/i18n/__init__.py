@@ -25,7 +25,53 @@ from pathlib import Path
 LANGS = {"en": "English", "de": "Deutsch"}
 DEFAULT = "en"
 _DIR = Path(__file__).resolve().parent
-NUM_RE = re.compile(r"(?<![\w#])[-+]?\d+(?:[.,'’]\d+)*(?![\w])")
+NUM_SEPS = ".,'’"
+
+
+def _word(c: str) -> bool:
+    return c.isalnum() or c == "_"
+
+
+def num_spans(s: str) -> list[tuple[int, int]]:
+    r"""Where the numbers are: an optional sign, digits, more digit groups after . , ' or ’ (1'000, 3.5); not
+    glued to a letter, digit, _ or # on either side. A plain left-to-right scan (linear; what the regex
+    (?<![\w#])[-+]?\d+(?:[.,'’]\d+)*(?!\w) matched, without its backtracking)."""
+    out: list[tuple[int, int]] = []
+    i, n = 0, len(s)
+    while i < n:
+        c = s[i]
+        if (c.isdecimal() or (c in "+-" and i + 1 < n and s[i + 1].isdecimal())) \
+                and (i == 0 or not (_word(s[i - 1]) or s[i - 1] == "#")):
+            j = i + 1 if c in "+-" else i
+            while j < n and s[j].isdecimal():
+                j += 1
+            ends = [j]                                   # where a number may end: after each digit group
+            while j + 1 < n and s[j] in NUM_SEPS and s[j + 1].isdecimal():
+                j += 1
+                while j < n and s[j].isdecimal():
+                    j += 1
+                ends.append(j)
+            end = next((e for e in reversed(ends) if e == n or not _word(s[e])), None)
+            if end is not None:
+                out.append((i, end))
+                i = end
+                continue
+        i += 1
+    return out
+
+
+def find_nums(s: str) -> list[str]:
+    return [s[a:b] for a, b in num_spans(s)]
+
+
+def mask_nums(s: str, mark: str) -> str:
+    parts, last = [], 0
+    for a, b in num_spans(s):
+        parts.append(s[last:a])
+        parts.append(mark)
+        last = b
+    parts.append(s[last:])
+    return "".join(parts)
 WS_RE = re.compile(r"\s+")
 TAG_RE = re.compile(r"(<!--.*?-->|<[^>]+>)", re.S)
 ATTR_RE = re.compile(r'(\s(?:title|placeholder|aria-label|data-q|data-confirm|data-tip|alt)=")([^"]*)(")')
@@ -64,16 +110,16 @@ class Catalog:
     def lookup(self, s: str, depth: int = 0) -> str | None:
         if s in self.exact:
             return self.exact[s]
-        nums = NUM_RE.findall(s)
+        nums = find_nums(s)
         if nums:
-            key = NUM_RE.sub(MARK, s)
+            key = mask_nums(s, MARK)
             t = self.exact.get(key)
             if t is not None and t.count(MARK) == len(nums):
                 it = iter(nums)
                 return re.sub(MARK, lambda _m: next(it), t)
         if depth > 0:                         # parts of a pattern: only whole known phrases
             return None
-        key = NUM_RE.sub(MARK, s) if nums else None
+        key = mask_nums(s, MARK) if nums else None
         for pat in self.patterns:                 # most specific first; each on the text and on its #-form
             out = self._apply(pat, s, depth)
             if out is None and key is not None:
