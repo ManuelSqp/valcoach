@@ -62,6 +62,10 @@ METRICS = {
     "clutch": ("Clutches won", lambda rs: (lambda a, w: _ratio(w, a) if a >= 2 else None)(*_clutch(rs)), "pct", True, True, 2),
     "no_util": ("Deaths without using utility", lambda rs: (lambda a, b: _ratio(a, b) if b >= 5 else None)(
         *[sum((r.get("no_util") or [0, 0])[i] for r in _full(rs)) for i in (0, 1)]), "pct", False, True, 2),
+    # 4.19: per round, for goals from "You vs your rank" (not on the Progress page)
+    "kpr": ("Kills per round", lambda rs: _ratio(_sum(rs, "kills"), _sum(rs, "rounds")), "dec", True, False, 3),
+    "dpr": ("Deaths per round", lambda rs: _ratio(_sum(rs, "deaths"), _sum(rs, "rounds")), "dec", False, False, 3),
+    "apr": ("Assists per round", lambda rs: _ratio(_sum(rs, "assists"), _sum(rs, "rounds")), "dec", True, False, 3),
     "retake": ("Retakes won", lambda rs: (lambda n, w: _ratio(w, n) if n >= 3 else None)(*_pair(rs, "retake")), "pct", True, True, 2),
 }
 ORDER = ["win_rate", "acs", "kd", "kast", "first_duels", "traded", "alone", "survival", "hs", "clutch", "retake", "adr",

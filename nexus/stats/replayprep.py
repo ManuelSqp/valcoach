@@ -245,6 +245,26 @@ def analyse(extracts: dict[str, dict], puuids: set[str], at: int = 20) -> dict:
     return out
 
 
+def facts(d: dict, name: str = "") -> dict:
+    """One map of analyse() as a compact block for the model (4.19 counter-plans)."""
+    out: dict = {"team": name, "matches_with_replay": d.get("matches", 0),
+                 "note": "from replay files: positions twice a second, every smoke / wall / molly / recon with spot and time"}
+    for side in ("attack", "defense"):
+        s = d.get(side)
+        if not s or not s["rounds"]:
+            continue
+        out[f"when_they_{side}"] = {
+            "rounds": s["rounds"], "won": s["won"],
+            "setup_20s": [f"{p} in {c} of {s['with_pos']} rounds" for p, c in s["setups"][:3]],
+            "spots_taken": [f"{x['area']} ({x['zone']}) in {x['share']:.0%} of rounds" + (f" by {', '.join(x['agents'])}" if x["agents"] else "")
+                            for x in s["spots"][:6]],
+            "utility": [f"{x['type']} at {x['area']} in {x['n']} of {s['rounds']} rounds, around {int(x['t'] or 0)} s"
+                        + (f" ({', '.join(x['agents'])})" if x["agents"] else "") for x in s["util"][:8]],
+            **({"plants": [f"{site}: {c}" for site, c in s["plants"]]} if side == "attack" else {}),
+        }
+    return out
+
+
 def hints(a: dict, min_rounds: int = 5) -> list[str]:
     """Plain lines per map and side (enough rounds only)."""
     out = []

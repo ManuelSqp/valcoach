@@ -18,6 +18,8 @@ MIN_GAMES = 5            # your full games with lobby ranks
 MIN_PEERS = 30           # player-games of your rank
 SAME = 1                 # within one division = your rank
 NEXT = (2, 4)            # two to four divisions higher = a rank higher
+GOAL_METRIC = {"acs": "acs", "kpr": "kpr", "dpr": "dpr", "apr": "apr", "adr": "adr", "hs": "hs", "kast": "kast",
+               "owr": "first_duels"}          # 4.19: our metric -> the goal metric (stats/progress.py)
 REL_GAP = 0.07           # a difference counts from 7 % (numbers) ...
 PTS_GAP = 0.03           # ... or 3 points (shares)
 
@@ -109,9 +111,27 @@ def analyse(rows: list[dict]) -> dict | None:
                         "v_same": _verdict(key, better, you[key], s.get(key)),
                         "v_next": _verdict(key, better, you[key], h.get(key)) if h else "",
                         "raw": (you[key], s.get(key), h.get(key) if h else None)})
+    for m in metrics:
+        m["goal"] = goal_for(m)
     out = {"rank": rank, "games": len(full), "same": s["n"], "next": h.get("n", 0), "metrics": metrics}
     out["hints"] = hints(out)
     return out
+
+
+def goal_for(m: dict) -> dict | None:
+    """4.19: a goal for a number that's behind: reach your rank's value, else (already there) the value a rank
+    higher. {metric, target (as typed in the goal form), level: "rank" / "next", text} or None."""
+    gm = GOAL_METRIC.get(m["key"])
+    if gm is None:
+        return None
+    col, level = (1, "rank") if m["v_same"] == "bad" else ((2, "next") if m["v_next"] == "bad" else (0, ""))
+    if not col or m["raw"][col] is None:
+        return None
+    v = m["raw"][col]
+    share = m["key"] in ("hs", "kast", "owr")
+    target = f"{v * 100:.0f} %" if share else (f"{v:.0f}" if m["key"] in ("acs", "adr") else f"{v:.2f}")
+    text = f"{m['label']} like your rank" if level == "rank" else f"{m['label']} like a rank higher"
+    return {"metric": gm, "target": target, "level": level, "text": text}
 
 
 def _gap(m: dict, col: int) -> float:

@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.18.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.19.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -320,7 +320,9 @@ and strat boards. The strat book has a **Lineups** library with clip links per m
 **You vs your rank** (*Stats & maps*, 4.18) compares your ACS, kills, deaths, assists and damage per round,
 headshot share, KAST and opening duels with the other players of your rank in your own matches (within one division,
 by the rank shown in each match), and with the players a rank higher where there are enough of them. Clear
-differences are green / red; the coach gets the same comparison (`stats/peers.py`).
+differences are green / red; the coach gets the same comparison (`stats/peers.py`). A number that's behind has a
+**＋ Goal** button (4.19): it sets a goal on the Habits page to reach your rank's value (or, where you're already
+there, the value a rank higher) in the next 10 games, which then checks itself against your games.
 
 **Progress and Training** (player tabs). *Progress* shows your numbers week by week with trends, whether each
 weekly focus moved its number, and clutches / retakes / post-plants. **When you play best** (4.17) groups your games by their place in a session
@@ -537,6 +539,10 @@ the jump buttons.
   moment (10, 20, 30 or 45 s into the round). Per side: the usual setup (how many in which zone, e.g. "A 2 · Mid 1 ·
   B 2"), the spots taken most, the utility thrown most (type, place, usual time), where they plant, all on the map
   (`stats/replayprep.py`, worked out once per match as `<match id>.prep.json`).
+  **Write counter-plans** (4.19, for a team you played) gives the coach those habits with your numbers, comp and
+  roles: 3 game plans for that map built to punish them (e.g. hit the site they leave light, take the space before
+  their usual smoke), each saying which habit it uses. They replace the map's plans under *Game plans*, marked
+  *Counter-plans against …*, and go to Discord with the match prep like any plan.
 
 ### Run it permanently
 

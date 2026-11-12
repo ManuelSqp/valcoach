@@ -127,7 +127,8 @@ def prep_embeds(team_name: str, maps: list[dict], plans: dict[str, dict]) -> lis
                 extra += "\n↪ " + " / ".join(p["if_then"][:2])
             fields.append({"name": _cut(f"{'⚔' if p.get('side') == 'attack' else '🛡'} {p['title']}", 256),
                            "value": _cut(f"{p.get('idea', '')}\n{steps}{extra}", 1024)})
-        out.append({"title": f"{m['map']}", "color": RED, "description": _cut("\n".join(lines) or "No comp (not enough data).", 4000),
+        opp = (plans.get(m["map"]) or {}).get("_opponent")      # 4.19: counter-plans from replay scouting
+        out.append({"title": f"{m['map']}" + (f" · vs {opp}" if opp else ""), "color": RED, "description": _cut("\n".join(lines) or "No comp (not enough data).", 4000),
                     "fields": fields[:6], "footer": {"text": f"{team_name} · Nexus"}})
     return out
 
