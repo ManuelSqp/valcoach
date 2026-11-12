@@ -158,7 +158,9 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             can_edit=can_edit,
             pick=pick, pick_map=pick_map, locked=locked + [""] * (4 - len(locked)),
             recent=rows[:12], ctx=stats_context(rows),
-            peers=__import__("nexus.stats.peers", fromlist=["analyse"]).analyse(rows))
+            peers=__import__("nexus.stats.peers", fromlist=["analyse"]).analyse(rows),
+            goal_edit=own_player(pid, can_edit),
+            open_goals={x["metric"] for x in sr.goals(pid).load() if x.get("state", "open") == "open"})
 
     def stats_context(rows: list[dict]) -> dict:
         """4.15: weighted numbers, rounds by buy state and games by lobby strength."""
@@ -305,8 +307,11 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             flash("Pick a number and a target.", "error")
             return redirect(url_for("habits", pid=pid) + "#goals")
         games = f.get("games", type=int) or gl.GOAL_GAMES
-        sr.goals(pid).add(metric, target, sr.games(pid).rows(), text=text, source="you", games=games)
+        source = "your rank" if f.get("from") == "peers" else "you"
+        sr.goals(pid).add(metric, target, sr.games(pid).rows(), text=text, source=source, games=games)
         flash(f"Goal set: {METRICS[metric][0]} in the next {max(3, min(30, games))} games.", "ok")
+        if f.get("from") == "peers":                 # 4.19: from "You vs your rank": back there
+            return redirect(url_for("stats", pid=pid, queue=f.get("queue") or None) + "#peers")
         return redirect(url_for("habits", pid=pid) + "#goals")
 
     @app.post("/profiles/<int:pid>/goals/<gid>/drop")
@@ -1144,6 +1149,30 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
         post = prep_post(b, [i["map"] for i in items]) if request.form.get("post") and g.team_owner else None
         sr.submit_plans(tid, items, language(t), post, picked(store))
         return redirect(url_for("team_plans", tid=tid, map=None if which == "__all" else which))
+
+    @app.post("/teams/<int:tid>/replay-scouting/counter")
+    def team_replay_counter(tid: int):
+        """4.19: game plans for one map against a team from replay scouting (its habits go to the model)."""
+        from ..stats import replayprep as rp
+        t = get_team(tid)
+        who, mp = request.form.get("who", ""), request.form.get("map", "")
+        sc = app.extensions["nexus"]["replay_scouting"](t, who)
+        if sc["sel"] is None or sc["who"] != who or mp not in sc["a"]:
+            flash("Pick a team you played and a map with replays first.", "error")
+            return redirect(url_for("team_replay_prep", tid=tid, who=who, map=mp))
+        b = build(t)                                  # cached: only read
+        if mp not in b["maps"]:
+            flash(f"{mp} isn't one of the team's maps (team settings).", "error")
+            return redirect(url_for("team_replay_prep", tid=tid, who=who, map=mp))
+        items = plan_items(t, b, [mp])
+        if not items:
+            flash("Pick 5 starters and update everyone's stats first (the plans need a comp for this map).", "error")
+            return redirect(url_for("team_replay_prep", tid=tid, who=who, map=mp))
+        name = sc["sel"]["label"]
+        items[0]["opponent"] = {"name": name, "habits": rp.facts(sc["a"][mp], name)}
+        sr.submit_plans(tid, items, language(t), None, picked(store))
+        flash(f"Writing counter-plans for {mp} against {name}.", "ok")
+        return redirect(url_for("team_plans", tid=tid, map=mp))
 
     @app.post("/teams/<int:tid>/discord/prep")
     def team_post_prep(tid: int):

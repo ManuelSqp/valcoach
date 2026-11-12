@@ -3,6 +3,7 @@
 {% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
 {% block head %}
 <style>
+.counterbanner{margin:12px 0 0;border-color:var(--accent)}
 .ai{border-radius:50%;vertical-align:middle;background:var(--ink);object-fit:cover;flex:none}
 .plans{display:grid;gap:14px}
 .plan{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
@@ -103,6 +104,7 @@
 </div>
 
 {% if plans and plans.plans %}
+{% if plans._opponent %}<section class="card counterbanner"><b>Counter-plans against {{ plans._opponent }}</b> <span class="small muted">built on their habits from the replay files (<a href="{{ url_for('team_replay_prep', tid=t.id, map=sel) }}">Replay scouting</a>). <b>Write plans</b> makes general ones again.</span></section>{% endif %}
 <div class="plans">
   {% for p in plans.plans %}
   <section class="plan">
@@ -123,7 +125,7 @@
   </section>
   {% endfor %}
 </div>
-<p class="small muted" style="margin-top:10px">Written by {{ plans._model }} {% if plans._created %}on {{ plans._created|epoch }}{% endif %} from your matches together, your notes and the comp above.</p>
+<p class="small muted" style="margin-top:10px">Written by {{ plans._model }} {% if plans._created %}on {{ plans._created|epoch }}{% endif %} from your matches together, your notes and the comp above{% if plans._opponent %} and the habits of {{ plans._opponent }}{% endif %}.</p>
 {% elif not (status and status.status in ('queued', 'running')) %}
 <section class="card"><p>No plans for {{ sel }} yet. <b>Write plans</b> turns your numbers on this map, the comp, everyone's roles and your notes into 3 plays (2 attack, 1 defense) with a step for every player.</p></section>
 {% endif %}

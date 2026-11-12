@@ -56,33 +56,40 @@ def register(app, store, sr, get_team) -> None:
                 out[mid] = ex
         return out
 
-    @app.get("/teams/<int:tid>/replay-scouting")
-    def team_replay_prep(tid: int):
-        t = get_team(tid)
+    def scouting(t, who: str, at: int = 20) -> dict:
+        """{opps, sel, who, analysis, n} for a team and the picked roster ("us" = the team itself)."""
         ours = our_puuids(t)
         ex = team_extracts(t, ours) if ours else {}
         labels = {}
         pj = app.extensions["nexus"].get("premier")
         if pj:
-            labels = {r["match_id"]: r.get("opponent") for r in pj.reviews(tid) if r.get("opponent")}
+            labels = {r["match_id"]: r.get("opponent") for r in pj.reviews(t.id) if r.get("opponent")}
         opps = rp.opponents(ex, ours, labels)
-        who = request.args.get("who", "")
         sel = next((o for o in opps if o["key"] == who), None)
         if sel is None and who != "us":
             sel = opps[0] if opps else None
             who = sel["key"] if sel else "us"
         roster = set(sel["puuids"]) if sel else ours
+        return {"opps": opps, "sel": sel, "who": who, "a": rp.analyse(ex, roster, at) if ex else {}, "n": len(ex)}
+
+    app.extensions["nexus"]["replay_scouting"] = scouting
+
+    @app.get("/teams/<int:tid>/replay-scouting")
+    def team_replay_prep(tid: int):
+        t = get_team(tid)
         try:
             at = int(request.args.get("at", 20))
         except ValueError:
             at = 20
         at = at if at in rp.TIMES else 20
-        a = rp.analyse(ex, roster, at) if ex else {}
+        sc = scouting(t, request.args.get("who", ""), at)
+        a = sc["a"]
         maps = sorted(a, key=lambda m: -a[m]["matches"])
         mp = request.args.get("map", "")
         mp = mp if mp in a else (maps[0] if maps else "")
-        return render_template("team_replay_prep.html", t=t, tab="replay_prep", premier_status=None, opps=opps, who=who,
-                               sel=sel, a=a, maps=maps, mp=mp, d=a.get(mp) or {}, at=at, times=rp.TIMES,
-                               hints=[h for h in rp.hints({mp: a[mp]}) if h] if mp else [], n_replays=len(ex),
+        return render_template("team_replay_prep.html", t=t, tab="replay_prep", premier_status=None, opps=sc["opps"],
+                               who=sc["who"], sel=sc["sel"], a=a, maps=maps, mp=mp, d=a.get(mp) or {}, at=at, times=rp.TIMES,
+                               hints=[h for h in rp.hints({mp: a[mp]}) if h] if mp else [], n_replays=sc["n"],
                                type_col=TYPE_COL, type_name=TYPE_NAME,
-                               map_img=url_for("map_image", name=mp) if mp else "")
+                               map_img=url_for("map_image", name=mp) if mp else "",
+                               plans_status=app.extensions["nexus"]["stats"].status(f"plans:{tid}"))

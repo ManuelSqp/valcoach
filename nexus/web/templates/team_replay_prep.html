@@ -18,7 +18,8 @@ form.rpick select{width:auto;min-width:220px}
 .rlist .c{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 .rlist .sw{width:12px;height:12px;border-radius:50%;flex:none;border:2px solid rgba(0,0,0,.4)}
 .rh{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:14px 0 2px}
-.whints{margin:10px 0 4px;padding-left:18px}.whints li{margin:3px 0}
+.whints{margin:10px 0 4px;padding-left:18px}
+form.counter{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 4px;padding:0;background:none;border:0;box-shadow:none}.whints li{margin:3px 0}
 .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:6px}
 .legend span{display:inline-flex;gap:5px;align-items:center}
 </style>
@@ -48,6 +49,11 @@ form.rpick select{width:auto;min-width:220px}
 {% if maps %}
 <div class="subtabs maptabs" role="navigation" aria-label="Map">{% for m in maps %}<a class="{{ 'on' if m == mp }}" href="{{ url_for('team_replay_prep', tid=t.id, who=who, at=at, map=m) }}">{{ m }}<span class="n">{{ a[m].matches }}</span></a>{% endfor %}</div>
 {% if hints %}<ul class="whints">{% for h in hints %}<li>{{ h }}.</li>{% endfor %}</ul>{% endif %}
+{% if sel and who != 'us' %}<form method="post" action="{{ url_for('team_replay_counter', tid=t.id) }}" class="counter">
+  <input type="hidden" name="who" value="{{ who }}"><input type="hidden" name="map" value="{{ mp }}">
+  <button class="btn sm" {{ 'disabled' if plans_status and plans_status.status in ('queued', 'running') }} title="The coach writes 3 game plans for {{ mp }} that use these habits (2 attack, 1 defense). They replace the current plans for {{ mp }}.">Write counter-plans for {{ mp }}</button>
+  <span class="small muted">3 plays against {{ sel.label }}, built on these habits, in <a href="{{ url_for('team_plans', tid=t.id, map=mp) }}">Game plans</a></span>
+</form>{% endif %}
 
 <div class="rpgrid" style="margin-top:10px">
 {% for side in ('defense', 'attack') %}{% set s = d.get(side) %}

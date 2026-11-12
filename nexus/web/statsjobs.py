@@ -588,7 +588,8 @@ class StatsRunner:
             for i, it in enumerate(items, 1):
                 self._log(key, f"· {it['map']} ({i}/{len(items)}) with {llm.model} ...")
                 try:
-                    out = write_plans(llm, it["map"], it["facts"], it["lineup"], it["callouts"], it["notes"], it["tips"], language)
+                    out = write_plans(llm, it["map"], it["facts"], it["lineup"], it["callouts"], it["notes"], it["tips"], language,
+                                      opponent=it.get("opponent"))
                     out["_created"] = time.time()
                     (d / f"{slug(it['map'])}.json").write_text(json.dumps(out, ensure_ascii=False))
                 except Exception as e:

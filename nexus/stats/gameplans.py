@@ -20,6 +20,12 @@ Write concrete plans the team can run in the next match. Rules:
   B Main and peeks on the rotation at 1:05, Player 5 holds Mid for rotators".
 - Include "if this happens -> do that" adjustments.
 - No generic advice. No aim tips. Write in {language}."""
+COUNTER = """
+These plans are for the match against {opponent}. Their habits from replay files are given
+("when_they_attack" -> your defense plans, "when_they_defend" -> your attack plans): their usual setup and
+spots at 20 s, their utility with place and time, where they plant. Build the plans to punish those habits
+(e.g. hit the site they leave light, take the space before their usual smoke goes up, stack where they
+plant most) and say in "why" which habit each plan uses."""
 
 
 def schema(players: list[str]) -> dict:
@@ -40,16 +46,21 @@ def schema(players: list[str]) -> dict:
 
 
 def write_plans(llm, map_name: str, facts: dict, lineup: list[dict], callouts: list[str], notes: list[str],
-                tips: list[str], language: str = "English") -> dict:
-    """lineup: [{player, agent, roles}] for the 5 starters."""
+                tips: list[str], language: str = "English", opponent: dict | None = None) -> dict:
+    """lineup: [{player, agent, roles}] for the 5 starters. opponent (4.19): {name, habits} from replay scouting
+    -> counter-plans against that team."""
     payload = {"map": map_name, "lineup": lineup, "your_numbers_on_this_map": facts,
                "team_notes": notes[:10], "patterns_from_your_matches": tips[:8]}
+    if opponent:
+        payload["opponent_habits"] = opponent.get("habits") or {}
     user = ("Team and map (YAML):\n" + yaml.safe_dump(payload, sort_keys=False, allow_unicode=True) +
             "\nWrite 3 plans: 2 for attack and 1 for defense.")
     players = [p["player"] for p in lineup]
     sch = schema(players)
-    out = llm.chat_json(SYSTEM.format(map=map_name, callouts=", ".join(callouts) or "the map's usual callouts",
-                                      language=language) + field_guide(sch), user, sch)
+    system = SYSTEM.format(map=map_name, callouts=", ".join(callouts) or "the map's usual callouts", language=language)
+    if opponent:
+        system += COUNTER.format(opponent=opponent.get("name") or "this opponent")
+    out = llm.chat_json(system + field_guide(sch), user, sch)
     # keep each plan's steps in lineup order, one per player
     for p in out.get("plans", []):
         by = {s.get("player"): s for s in p.get("steps", [])}
@@ -64,4 +75,6 @@ def write_plans(llm, map_name: str, facts: dict, lineup: list[dict], callouts: l
     out["_facts"] = facts
     out["_lineup"] = lineup
     out["_model"] = getattr(llm, "model", "")
+    if opponent:
+        out["_opponent"] = opponent.get("name") or "this opponent"
     return out

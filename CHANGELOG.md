@@ -4,6 +4,17 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.19.0
+- **Counter-plans from replay scouting**: on *Replay scouting*, *Write counter-plans for <map>* gives the coach the
+  team's habits from the replay files (setup and spots at 20 s, utility with place and time, plants) together with
+  your numbers, comp and roles. It writes 3 game plans (2 attack, 1 defense) built to punish those habits, each
+  saying which habit it uses. They show under *Game plans* as *Counter-plans against …* (replacing that map's
+  plans; *Write plans* makes general ones again) and the Discord match prep names the opponent.
+- **Goals from "You vs your rank"**: every number that's behind your rank (or, where you're there already, a rank
+  higher) has a *＋ Goal* button. It sets a goal for the next 10 games on the Habits page, which checks itself
+  against your games. New goal numbers for that: kills, deaths and assists per round.
+- German texts for both.
+
 ## 4.18.0
 - **You vs your rank** (*Stats & maps*): your ACS, kills / deaths / assists / damage per round, headshot share, KAST
   and opening duels against the other players of your rank in your own matches (within one division, by the rank
