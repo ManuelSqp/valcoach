@@ -413,6 +413,202 @@
       },
     };
   }
+  // ---- 4.23: builders for the scenario library
+  // several targets at once in a box of yaw (±w°) x pitch (pmin..pmax°) x distance; each hit puts one back
+  // somewhere else, at least sep° from the others. hp: hits a target needs (points only for the last one).
+  // head: all at head height (pitch ~0).
+  function multi(o) {
+    return {
+      kind: 'click',
+      setup(st) { st.targets = []; for (let i = 0; i < o.n; i++) this.spawn(st); },
+      spawn(st) {
+        let a, b, k = 0;
+        do {
+          a = rand(-o.w, o.w); b = o.head ? rand(-0.4, 0.4) : rand(o.pmin, o.pmax); k++;
+        } while (k < 40 && st.targets.some(t => Math.hypot(t.a - a, t.b - b) < (o.sep || 6)));
+        const d = rand(o.dmin, o.dmax);
+        st.targets.push({c: place(a * D2R, b * D2R, d, o.r), r: o.r, born: st.t, a, b, hp: o.hp || 1});
+      },
+      hit(st, tg) {
+        if (--tg.hp > 0) { tg.r *= 0.85; return 'hp'; }             // not down yet: smaller, shoot again
+        st.targets.splice(st.targets.indexOf(tg), 1); this.spawn(st);
+      },
+    };
+  }
+  // one target at a time that is only there for `life` seconds (shorter after each hit, longer after a miss)
+  function timed(o) {
+    const base = flicks(o);
+    return {
+      kind: 'click',
+      setup(st) { st.life = o.life; st.escaped = 0; st.targets = []; st.next = st.t + 0.3; },
+      update(st) {
+        const tg = st.targets[0];
+        if (!tg && st.t >= st.next) { base.spawn(st); return; }
+        if (tg && st.t - tg.born > st.life) {
+          st.targets = []; st.escaped++; st.life = Math.min(o.life, st.life + 0.05); st.next = st.t + rand(0.15, 0.45);
+        }
+      },
+      hit(st) { pathHit(st); st.targets = []; st.life = Math.max(o.min, st.life - 0.02); st.next = st.t + rand(0.15, 0.45); },
+    };
+  }
+  // spider: a target in the middle, then one around it, back to the middle, and so on
+  function spider(o) {
+    return {
+      kind: 'click',
+      setup(st) { st.out = false; st.targets = []; this.spawn(st); },
+      spawn(st) {
+        st.out = !st.out;
+        const d = rand(o.dmin, o.dmax);
+        if (!st.out) { st.targets = [{c: place(0, 0, d, o.r), r: o.r, born: st.t}]; return; }
+        const ang = Math.random() * 2 * Math.PI, a = rand(o.amin, o.amax);
+        st.targets = [{c: place(Math.cos(ang) * a * D2R, Math.sin(ang) * a * 0.55 * D2R, d, o.r), r: o.r, born: st.t}];
+      },
+      hit(st) { pathHit(st); this.spawn(st); },
+    };
+  }
+  // a target circling around you at distance d (wide tracking): angular speed changes, sometimes reverses;
+  // jump: hops now and then; vy: also moves up and down
+  function orbit(o) {
+    return {
+      kind: 'track',
+      setup(st, here) {
+        const a0 = here ? yaw : rand(-0.3, 0.3);
+        st.targets = [{c: [0, o.y, -o.d], r: o.r, born: st.t, a: a0, h: o.y}];
+        st.mv = {w: (Math.random() < 0.5 ? -1 : 1) * rand(o.wmin, o.wmax), flip: st.t + rand(o.fmin, o.fmax), vy: 0, jump: st.t + rand(1, 2.5), jv: 0};
+        this.put(st.targets[0]);
+      },
+      put(tg) { tg.c = [Math.sin(tg.a) * o.d, tg.h, -Math.cos(tg.a) * o.d]; },
+      update(st, dt) {
+        const tg = st.targets[0], m = st.mv;
+        if (!tg) return;
+        if (st.t >= m.flip) {
+          m.w = (Math.random() < (o.rev || 0.5) ? -Math.sign(m.w) : Math.sign(m.w)) * rand(o.wmin, o.wmax);
+          m.flip = st.t + rand(o.fmin, o.fmax);
+          if (o.vy) m.vy = rand(-o.vy, o.vy);
+        }
+        tg.a += m.w * D2R * dt;
+        if (Math.abs(tg.a) > (o.span || 75) * D2R) { tg.a = Math.sign(tg.a) * (o.span || 75) * D2R; m.w = -m.w; }
+        if (o.vy) { tg.h = clamp(tg.h + m.vy * dt, o.y - 0.9, o.y + 1.4); if (tg.h <= o.y - 0.9 || tg.h >= o.y + 1.4) m.vy = -m.vy; }
+        if (o.jump) {                                // a hop: up and down again (about 0.6 s)
+          if (!m.jv && tg.h <= o.y + 0.001 && st.t >= m.jump) { m.jv = 4.2; m.jump = st.t + rand(0.9, 2.2); }
+          if (m.jv || tg.h > o.y) { tg.h += m.jv * dt; m.jv -= 13 * dt; if (tg.h <= o.y) { tg.h = o.y; m.jv = 0; } }
+        }
+        this.put(tg);
+      },
+    };
+  }
+  // a strafing target (tracker) that also hops (jump) or crouches (duck) now and then
+  function strafer(o) {
+    const base = tracker(o);
+    return {
+      kind: 'track',
+      setup(st, here) { base.setup(st, here); st.hop = {v: 0, off: 0, next: st.t + rand(0.8, 2), duck: 0}; },
+      update(st, dt) {
+        base.update(st, dt);
+        const tg = st.targets[0], h = st.hop;
+        if (!tg) return;
+        if (o.jump) {
+          if (!h.v && h.off <= 0 && st.t >= h.next) { h.v = 4.0; h.next = st.t + rand(0.9, 2.4); }
+          if (h.v || h.off > 0) { h.off += h.v * dt; h.v -= 12.5 * dt; if (h.off <= 0) { h.off = 0; h.v = 0; } }
+          tg.c[1] += h.off;
+        }
+        if (o.duck) {
+          if (st.t >= h.next && !h.duck) { h.duck = st.t + rand(0.35, 0.8); h.next = st.t + rand(1.2, 2.6); }
+          if (h.duck && st.t > h.duck) h.duck = 0;
+          if (h.duck) tg.c[1] -= 0.45;
+        }
+      },
+    };
+  }
+  function peeks(o) {
+    o = Object.assign({z: 14, spread: 4.5, r: 0.26, win: 0.9, min: 0.38, out: 0.12}, o);
+    return {
+      kind: 'click',
+      setup(st) {
+        st.covers = [-o.spread, 0, o.spread].map(x => ({min: [x - 0.8, 0, -o.z - 0.5], max: [x + 0.8, 3.2, -o.z + 0.5]}));
+        st.window = o.win; st.targets = []; st.next = st.t + 0.6; st.escaped = 0;
+      },
+      update(st) {
+        const tg = st.targets[0];
+        if (!tg && st.t >= st.next) {
+          const cv = st.covers[Math.floor(Math.random() * 3)], side = Math.random() < 0.5 ? -1 : 1;
+          const x0 = side < 0 ? cv.min[0] + 0.35 : cv.max[0] - 0.35;
+          st.targets = [{c: [x0, EYE - 0.05, -o.z - 0.35], r: o.r, born: st.t, x0, x1: x0 + side * 1.0, phase: 'out', t0: st.t}];
+          return;
+        }
+        if (!tg) return;
+        const k = (st.t - tg.t0) / o.out;
+        if (tg.phase === 'out') {
+          tg.c[0] = tg.x0 + (tg.x1 - tg.x0) * Math.min(1, k);
+          if (k >= 1) { tg.phase = 'stay'; tg.t0 = st.t; tg.born = st.t; }
+        } else if (tg.phase === 'stay' && st.t - tg.t0 >= st.window) {
+          tg.phase = 'in'; tg.t0 = st.t;
+        } else if (tg.phase === 'in') {
+          tg.c[0] = tg.x1 + (tg.x0 - tg.x1) * Math.min(1, k);
+          if (k >= 1) {               // got away
+            st.targets = []; st.escaped++; st.window = Math.min(o.win, st.window + 0.04); st.next = st.t + rand(0.35, 0.9);
+          }
+        }
+      },
+      hit(st) { st.targets = []; st.window = Math.max(o.min, st.window - 0.025); st.next = st.t + rand(0.35, 0.9); },
+    };
+  }
+    // Hold the angle: a doorway in front of you, an enemy model comes out of the left or right side: a wide swing
+    // (stops in the opening for a moment), a jiggle (shows a shoulder and the head, goes straight back) or a run
+    // through the opening. Only the head kills; a body shot is counted but the enemy keeps going.
+  function angle(o) {
+    o = Object.assign({dmin: 10, dmax: 17, wmin: 2.6, wmax: 4.2, swing: 0.5, jiggle: 0.25, win: 0.8, min: 0.42, fast: 1}, o);
+    return {
+      kind: 'click', heads: true,
+      setup(st) {
+        const D = rand(o.dmin, o.dmax), W = rand(o.wmin, o.wmax), x0 = rand(-1.2, 1.2);
+        st.door = {D, W, x0, l: x0 - W / 2, r: x0 + W / 2, z: -D - 1.4};
+        st.covers = [{min: [x0 - W / 2 - 7, 0, -D - 0.5], max: [x0 - W / 2, 3.6, -D + 0.5]},
+                     {min: [x0 + W / 2, 0, -D - 0.5], max: [x0 + W / 2 + 7, 3.6, -D + 0.5]},
+                     {min: [x0 - W / 2 - 7, 3.6, -D - 0.5], max: [x0 + W / 2 + 7, 4.2, -D + 0.5]}];
+        st.window = o.win; st.targets = []; st.next = st.t + rand(0.5, 1.1); st.escaped = 0; st.body = 0;
+      },
+      update(st, dt) {
+        const dr = st.door;
+        let tg = st.targets[0];
+        if (!tg && st.t >= st.next) {
+          const side = Math.random() < 0.5 ? -1 : 1;                   // -1: from the left wall
+          const edge = side < 0 ? dr.l : dr.r, hidden = edge + side * 0.9, roll = Math.random();
+          const type = roll < o.swing ? 'swing' : roll < o.swing + o.jiggle ? 'jiggle' : 'cross';
+          const stopAt = type === 'swing' ? edge - side * rand(0.7, Math.max(0.9, dr.W * 0.55))
+                       : type === 'jiggle' ? edge - side * 0.42 : (side < 0 ? dr.r : dr.l) + side * -0.9;
+          tg = {agent: true, c: [hidden, 0, dr.z], born: Infinity, type, side, edge, stopAt, phase: 'out', t0: st.t,
+                speed: (type === 'jiggle' ? 4.2 : 5.4) * o.fast};
+          st.targets = [tg];
+          return;
+        }
+        if (!tg) return;
+        const dir = Math.sign(tg.stopAt - tg.c[0]);
+        // visible from the moment the head clears the wall edge: that's when the reaction time starts
+        if (tg.born === Infinity && (tg.c[0] - tg.edge) * -tg.side > 0.05) tg.born = st.t;
+        if (tg.phase === 'out') {
+          tg.c[0] += dir * tg.speed * dt;
+          if (Math.sign(tg.stopAt - tg.c[0]) !== dir) {
+            tg.c[0] = tg.stopAt;
+            if (tg.type === 'cross') { this.gone(st); return; }
+            tg.phase = 'stay'; tg.t0 = st.t;
+          }
+        } else if (tg.phase === 'stay' && st.t - tg.t0 >= (tg.type === 'jiggle' ? 0.06 : st.window)) {
+          tg.phase = 'in';
+        } else if (tg.phase === 'in') {
+          const home = tg.edge + tg.side * 0.9;
+          tg.c[0] += Math.sign(home - tg.c[0]) * tg.speed * dt;
+          if ((tg.c[0] - home) * tg.side >= 0) this.gone(st);
+        }
+      },
+      gone(st) { st.targets = []; st.escaped++; st.window = Math.min(o.win + 0.1, st.window + 0.03); st.next = st.t + rand(0.5, 1.3); },
+      hit(st, tg, head) {
+        if (!head) { st.body++; return false; }                    // keeps going
+        st.targets = []; st.window = Math.max(o.min, st.window - 0.02); st.next = st.t + rand(0.5, 1.3);
+        return true;
+      },
+    };
+  }
   const GRID_X = [-2.4, -1.2, 0, 1.2, 2.4], GRID_Y = [0.75, 1.65, 2.55, 3.45];
   const SC = {
     grid: {
@@ -450,95 +646,47 @@
     // close: big targets 6–8 m away, far around you (an enemy in your face). far: small ones 22–30 m away
     flick_close: flicks({dmin: 6, dmax: 8, r: 0.32, amin: 35, amax: 85, pmin: -8, pmax: 12, vert: 0.3}),
     flick_far: flicks({dmin: 22, dmax: 30, r: 0.2, amin: 6, amax: 28, pmin: -3, pmax: 5, vert: 0.25}),
-    peek: {
-      kind: 'click',
-      setup(st) {
-        st.covers = [-4.5, 0, 4.5].map(x => ({min: [x - 0.8, 0, -14.5], max: [x + 0.8, 3.2, -13.5]}));
-        st.window = 0.9; st.targets = []; st.next = st.t + 0.6; st.escaped = 0;
-      },
-      update(st) {
-        const tg = st.targets[0];
-        if (!tg && st.t >= st.next) {
-          const cv = st.covers[Math.floor(Math.random() * 3)], side = Math.random() < 0.5 ? -1 : 1;
-          const x0 = side < 0 ? cv.min[0] + 0.35 : cv.max[0] - 0.35;
-          st.targets = [{c: [x0, EYE - 0.05, -14.35], r: 0.26, born: st.t, x0, x1: x0 + side * 1.0, phase: 'out', t0: st.t}];
-          return;
-        }
-        if (!tg) return;
-        const k = (st.t - tg.t0) / 0.12;
-        if (tg.phase === 'out') {
-          tg.c[0] = tg.x0 + (tg.x1 - tg.x0) * Math.min(1, k);
-          if (k >= 1) { tg.phase = 'stay'; tg.t0 = st.t; tg.born = st.t; }
-        } else if (tg.phase === 'stay' && st.t - tg.t0 >= st.window) {
-          tg.phase = 'in'; tg.t0 = st.t;
-        } else if (tg.phase === 'in') {
-          tg.c[0] = tg.x1 + (tg.x0 - tg.x1) * Math.min(1, k);
-          if (k >= 1) {               // got away
-            st.targets = []; st.escaped++; st.window = Math.min(0.9, st.window + 0.04); st.next = st.t + rand(0.35, 0.9);
-          }
-        }
-      },
-      hit(st) { st.targets = []; st.window = Math.max(0.38, st.window - 0.025); st.next = st.t + rand(0.35, 0.9); },
-    },
-    // Hold the angle: a doorway in front of you, an enemy model comes out of the left or right side: a wide swing
-    // (stops in the opening for a moment), a jiggle (shows a shoulder and the head, goes straight back) or a run
-    // through the opening. Only the head kills; a body shot is counted but the enemy keeps going.
-    holdangle: {
-      kind: 'click', heads: true,
-      setup(st) {
-        const D = rand(10, 17), W = rand(2.6, 4.2), x0 = rand(-1.2, 1.2);
-        st.door = {D, W, x0, l: x0 - W / 2, r: x0 + W / 2, z: -D - 1.4};
-        st.covers = [{min: [x0 - W / 2 - 7, 0, -D - 0.5], max: [x0 - W / 2, 3.6, -D + 0.5]},
-                     {min: [x0 + W / 2, 0, -D - 0.5], max: [x0 + W / 2 + 7, 3.6, -D + 0.5]},
-                     {min: [x0 - W / 2 - 7, 3.6, -D - 0.5], max: [x0 + W / 2 + 7, 4.2, -D + 0.5]}];
-        st.window = 0.8; st.targets = []; st.next = st.t + rand(0.5, 1.1); st.escaped = 0; st.body = 0;
-      },
-      update(st, dt) {
-        const dr = st.door;
-        let tg = st.targets[0];
-        if (!tg && st.t >= st.next) {
-          const side = Math.random() < 0.5 ? -1 : 1;                   // -1: from the left wall
-          const edge = side < 0 ? dr.l : dr.r, hidden = edge + side * 0.9, roll = Math.random();
-          const type = roll < 0.5 ? 'swing' : roll < 0.75 ? 'jiggle' : 'cross';
-          const stopAt = type === 'swing' ? edge - side * rand(0.7, Math.max(0.9, dr.W * 0.55))
-                       : type === 'jiggle' ? edge - side * 0.42 : (side < 0 ? dr.r : dr.l) + side * -0.9;
-          tg = {agent: true, c: [hidden, 0, dr.z], born: Infinity, type, side, edge, stopAt, phase: 'out', t0: st.t,
-                speed: type === 'jiggle' ? 4.2 : 5.4};
-          st.targets = [tg];
-          return;
-        }
-        if (!tg) return;
-        const dir = Math.sign(tg.stopAt - tg.c[0]);
-        // visible from the moment the head clears the wall edge: that's when the reaction time starts
-        if (tg.born === Infinity && (tg.c[0] - tg.edge) * -tg.side > 0.05) tg.born = st.t;
-        if (tg.phase === 'out') {
-          tg.c[0] += dir * tg.speed * dt;
-          if (Math.sign(tg.stopAt - tg.c[0]) !== dir) {
-            tg.c[0] = tg.stopAt;
-            if (tg.type === 'cross') { this.gone(st); return; }
-            tg.phase = 'stay'; tg.t0 = st.t;
-          }
-        } else if (tg.phase === 'stay' && st.t - tg.t0 >= (tg.type === 'jiggle' ? 0.06 : st.window)) {
-          tg.phase = 'in';
-        } else if (tg.phase === 'in') {
-          const home = tg.edge + tg.side * 0.9;
-          tg.c[0] += Math.sign(home - tg.c[0]) * tg.speed * dt;
-          if ((tg.c[0] - home) * tg.side >= 0) this.gone(st);
-        }
-      },
-      gone(st) { st.targets = []; st.escaped++; st.window = Math.min(0.9, st.window + 0.03); st.next = st.t + rand(0.5, 1.3); },
-      hit(st, tg, head) {
-        if (!head) { st.body++; return false; }                    // keeps going
-        st.targets = []; st.window = Math.max(0.42, st.window - 0.02); st.next = st.t + rand(0.5, 1.3);
-        return true;
-      },
-    },
+    peek: peeks({}),
+    holdangle: angle({}),
     track: tracker({d: 9, r: 0.38, y: 1.35, bob: 0.06, vmin: 2.4, vmax: 5.2, fmin: 0.25, fmax: 1.1, bound: 5}),
     // close: an enemy 4.5 m away, fast across the screen. far: small, 20 m away. reactive: short ADAD strafes
     // with sudden stops, like a player dodging
     track_close: tracker({d: 4.5, r: 0.34, y: 1.4, bob: 0.05, vmin: 3.4, vmax: 6.2, fmin: 0.25, fmax: 0.8, bound: 2.8, acc: 32}),
     track_far: tracker({d: 20, r: 0.24, y: 1.45, bob: 0.04, vmin: 2.0, vmax: 4.2, fmin: 0.5, fmax: 1.5, bound: 9}),
     track_react: tracker({d: 9, r: 0.36, y: 1.4, vmin: 4.2, vmax: 6.2, fmin: 0.12, fmax: 0.45, bound: 4.5, acc: 60, stop: 0.3}),
+    // ---- 4.23: the library (names and texts in stats/trainer.py)
+    flick_mid: flicks({dmin: 12, dmax: 16, r: 0.26, amin: 15, amax: 45}),
+    flick_wide: flicks({dmin: 8, dmax: 11, r: 0.3, amin: 50, amax: 70, vert: 0.2}),
+    flick_vert: flicks({dmin: 10, dmax: 14, r: 0.26, amin: 10, amax: 28, vert: 0.95, pmin: -8, pmax: 16}),
+    flick_tiny: flicks({dmin: 14, dmax: 18, r: 0.12, amin: 8, amax: 30, pmin: -3, pmax: 6}),
+    spider: spider({dmin: 8, dmax: 9, r: 0.3, amin: 20, amax: 45}),
+    spider_far: spider({dmin: 18, dmax: 22, r: 0.16, amin: 6, amax: 18}),
+    six_shot: multi({n: 6, w: 20, pmin: -4, pmax: 12, dmin: 12, dmax: 12, r: 0.28, sep: 6}),
+    head_switch: multi({n: 4, w: 35, head: true, dmin: 13, dmax: 16, r: 0.2, sep: 9}),
+    close_switch: multi({n: 3, w: 65, pmin: -6, pmax: 10, dmin: 5, dmax: 7, r: 0.32, sep: 25}),
+    tiny_switch: multi({n: 5, w: 15, pmin: -3, pmax: 6, dmin: 18, dmax: 20, r: 0.13, sep: 4}),
+    double_tap: multi({n: 3, w: 25, pmin: -3, pmax: 8, dmin: 10, dmax: 14, r: 0.3, hp: 2, sep: 8}),
+    reflex: timed({dmin: 10, dmax: 13, r: 0.3, amin: 10, amax: 40, life: 1.1, min: 0.45}),
+    reflex_small: timed({dmin: 14, dmax: 18, r: 0.17, amin: 5, amax: 25, life: 1.0, min: 0.5}),
+    reflex_wide: timed({dmin: 7, dmax: 9, r: 0.3, amin: 40, amax: 70, life: 1.2, min: 0.55, vert: 0.2}),
+    pinpoint: multi({n: 1, w: 10, pmin: -2, pmax: 3, dmin: 24, dmax: 28, r: 0.1, sep: 2}),
+    headline_far: flicks({dmin: 24, dmax: 30, r: 0.16, amin: 4, amax: 20, vert: 0.03, pmin: -0.5, pmax: 0.5}),
+    micro_spider: spider({dmin: 16, dmax: 18, r: 0.12, amin: 1.5, amax: 5}),
+    peek_far: peeks({z: 28, spread: 7, r: 0.2, win: 0.9, min: 0.45}),
+    peek_fast: peeks({win: 0.6, min: 0.25, out: 0.08}),
+    angle_close: angle({dmin: 5, dmax: 8, wmin: 2.2, wmax: 3}),
+    angle_long: angle({dmin: 24, dmax: 32, wmin: 2, wmax: 3, win: 0.7}),
+    angle_jiggle: angle({swing: 0.15, jiggle: 0.7}),
+    angle_wide: angle({swing: 1, jiggle: 0, win: 0.75, wmin: 3.5, wmax: 5}),
+    angle_runners: angle({swing: 0, jiggle: 0, fast: 1.25}),
+    track_smooth: tracker({d: 11, r: 0.4, y: 1.4, bob: 0.04, vmin: 1.5, vmax: 2.8, fmin: 0.8, fmax: 2, bound: 5}),
+    track_fast: tracker({d: 7, r: 0.32, y: 1.4, vmin: 5.5, vmax: 7.5, fmin: 0.2, fmax: 0.6, bound: 3.8, acc: 45}),
+    track_tiny: tracker({d: 14, r: 0.18, y: 1.45, bob: 0.03, vmin: 2, vmax: 4, fmin: 0.4, fmax: 1.2, bound: 6}),
+    track_jump: strafer({d: 8, r: 0.34, y: 1.4, vmin: 3, vmax: 5, fmin: 0.3, fmax: 0.9, bound: 4, jump: true}),
+    track_crouch: strafer({d: 8, r: 0.34, y: 1.45, vmin: 3, vmax: 5, fmin: 0.3, fmax: 0.9, bound: 4, duck: true}),
+    orbit: orbit({d: 7, r: 0.36, y: 1.4, wmin: 25, wmax: 60, fmin: 0.6, fmax: 1.6, span: 75}),
+    orbit_air: orbit({d: 9, r: 0.34, y: 1.4, wmin: 20, wmax: 45, fmin: 0.5, fmax: 1.4, jump: true}),
+    orbit_vert: orbit({d: 8, r: 0.34, y: 1.6, wmin: 10, wmax: 30, fmin: 0.5, fmax: 1.2, vy: 2.2}),
   };
   // The sens finder's test: parts of the same scenarios back to back, without breaks (switching seamlessly, the
   // trackers starting at the crosshair). quick: flicks (close and far in turn), then tracking. 15 and 30 minutes:
@@ -731,7 +879,9 @@
     if (!head && tg.agent) { if (st.ix) st.ix.p.body++; }
     else if (st.ix && tg.from) { const pk = st.ix.p[tg.from]; pk[0]++; pk[1] += ms; pk[2]++; }
     else ixFlick(st, tg, ms);
-    if (SC[st.id].hit(st, tg, head) === false) { tick(520); return; }        // a body shot: counted, not a kill
+    const res = SC[st.id].hit(st, tg, head);
+    if (res === false) { tick(520); return; }                                // a body shot: counted, not a kill
+    if (res === 'hp') { st.hits++; if (part) part.hits++; tick(900); return; } // a hit that doesn't kill yet (double tap)
     st.from = {y: yaw, p: pitch};
     const pts = 100 + clamp(100 * (1 - (ms - 250) / 750), 0, 100);
     st.hits++; st.times.push(ms); st.lastHit = st.t; st.points += pts;
@@ -1158,5 +1308,12 @@
     svg.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hide(); });
     svg.addEventListener('click', e => { const g = nearest(e); if (g) show(g); else hide(); });     // touch screens
   }
-  window.nexusTrainer = {open, startFinder, xParse, xCode, crosshair: () => xh, finder: () => finder, state: () => st, aim: (y, p) => { yaw = y; pitch = p; }, shoot, score};   // for tests
+  // step: advance a run by dt seconds without the screen (tests): the scenario moves, tracking counts while fire
+  function step(dt, fire) {
+    if (!st) return;
+    st.t += dt;
+    if (SC[st.id].update) SC[st.id].update(st, dt);
+    if (st.kind === 'track' && fire && aimed()) st.on += dt;
+  }
+  window.nexusTrainer = {open, startFinder, xParse, xCode, crosshair: () => xh, finder: () => finder, state: () => st, aim: (y, p) => { yaw = y; pitch = p; }, shoot, score, step};   // for tests
 })();
