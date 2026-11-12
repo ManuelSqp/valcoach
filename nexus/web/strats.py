@@ -59,6 +59,7 @@ def clean_board(data: dict) -> dict:
         out["notes"] = str(out["notes"] or "")[:5000]
     return out
 MAX_PNG_BYTES = 8_000_000
+FROM_REPLAY_TYPES = ("agent", "ab", "smoke", "molly", "zone", "pen", "text", "arrow")
 SLOT_ORDER = {"grenade": 0, "ability1": 1, "ability2": 2, "ultimate": 3}
 
 
@@ -232,6 +233,29 @@ def register(app, store, sr, get_team, known_maps: list[str]) -> None:
             store.keep_strat_version(sid, g.user.id)        # the board before this save, for History
         store.update_strat(sid, g.user.id, **fields)
         return jsonify(ok=True, saved_at=time.strftime("%H:%M:%S"))
+
+    @app.post("/api/teams/<int:tid>/strats/from-replay")
+    def strat_from_replay(tid: int):
+        """4.18: a moment of the round playback (positions, utility, drawings) as a new strat board."""
+        t = get_team(tid)
+        body = request.get_json(silent=True)                 # JSON only: a cross-site form can't send this
+        if not isinstance(body, dict):
+            return jsonify(error="expected JSON"), 400
+        m = str(body.get("map") or "")
+        side = body.get("side") if body.get("side") in SIDES else "attack"
+        if m not in maps_for(t):
+            return jsonify(error="unknown map"), 400
+        items = []
+        for i, it in enumerate(body.get("items") or []):
+            if isinstance(it, dict) and it.get("t") in FROM_REPLAY_TYPES and len(items) < 120:
+                items.append({**it, "id": f"r{i}"})
+        name = str(body.get("name") or "").strip()[:80] or f"{m} {side}"
+        data = clean_board({"steps": [{"name": "Setup", "call": str(body.get("call") or "")[:200], "items": items}],
+                            "notes": str(body.get("notes") or "")[:5000]})
+        if len(json.dumps(data)) > MAX_BOARD_BYTES:
+            return jsonify(error="board too big"), 413
+        sid = store.create_strat(tid, g.user.id, m, side, name, data)
+        return jsonify(ok=True, url=url_for("strat_edit", tid=tid, sid=sid))
 
     @app.get("/api/teams/<int:tid>/strats/<int:sid>/versions")
     def strat_versions(tid: int, sid: int):

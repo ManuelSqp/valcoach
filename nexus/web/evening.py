@@ -25,6 +25,11 @@ from ..stats import evening as ev_stats
 SID_RE = re.compile(r"[0-9a-f]{10}")
 PRESENT_S = 20                   # someone counts as "here" this long after his last refresh
 MAX_NOTE = 200
+MAX_PIN_TEXT = 300               # 4.18: notes on the playback (a moment, text and lines drawn on the map)
+MAX_PINS = 40                    # per round
+MAX_STROKES = 12
+MAX_STROKE_PTS = 300
+REPLAY_V = 2                     # 4.18: the replay file's positions and utility when there is one
 MAX_EVENINGS = 60
 _lock = threading.RLock()
 _present: dict[tuple[int, str], dict[str, float]] = {}
@@ -124,10 +129,56 @@ def register(app, store, sr, get_team) -> None:
                 d.pop(name, None)
             return sorted(d)
 
+    def pin_action(ev: dict, b: dict, act: str, host: bool) -> str | None:
+        """Add or remove a note on the playback: {round, t (ms), text, strokes: [[[x, y], ...]] in 0..1000}."""
+        try:
+            n = int(b.get("round"))
+        except (TypeError, ValueError):
+            return "unknown round"
+        if not 1 <= n <= len(ev["rounds"]):
+            return "unknown round"
+        pins = ev.setdefault("pins", {}).setdefault(str(n), [])
+        if act == "unpin":
+            pid = str(b.get("id") or "")
+            p = next((x for x in pins if x["id"] == pid), None)
+            if p is None:
+                return "unknown note"
+            if not (host or p.get("by_id") == g.user.id):
+                return "not yours"
+            pins.remove(p)
+            if not pins:
+                ev["pins"].pop(str(n), None)
+            return None
+        try:
+            t_ms = max(0, min(300_000, int(b.get("t"))))
+        except (TypeError, ValueError):
+            return "unknown time"
+        text = str(b.get("text") or "").strip()[:MAX_PIN_TEXT]
+        strokes = []
+        for st in (b.get("strokes") or [])[:MAX_STROKES]:
+            if not isinstance(st, list):
+                continue
+            pts = []
+            for p in st[:MAX_STROKE_PTS]:
+                try:
+                    pts.append([max(0, min(1000, int(p[0]))), max(0, min(1000, int(p[1])))])
+                except (TypeError, ValueError, IndexError):
+                    continue
+            if len(pts) >= 2:
+                strokes.append(pts)
+        if not text and not strokes:
+            return "write something or draw on the map"
+        if len(pins) >= MAX_PINS:
+            return "too many notes in this round"
+        pins.append({"id": secrets.token_hex(4), "t": t_ms, "text": text, "strokes": strokes,
+                     "by": g.user.display_name or g.user.username, "by_id": g.user.id, "created": time.time()})
+        pins.sort(key=lambda x: x["t"])
+        return None
+
     def state(t, ev: dict) -> dict:
         return {"current": ev.get("current", 1), "host": ev.get("host"), "finished": bool(ev.get("finished")),
                 "marks": ev.get("marks") or {}, "here": here(t.id, ev["id"]), "updated": ev.get("updated", 0),
-                "planned": ev.get("planned") or ""}
+                "planned": ev.get("planned") or "", "pins": ev.get("pins") or {}}
 
     # ------------------------------------------------------------------ pages
     @app.route("/teams/<int:tid>/review-evening", methods=["GET", "POST"])
@@ -182,6 +233,9 @@ def register(app, store, sr, get_team) -> None:
                                                 "players": ev["players"], "me": my_player(t, ev), "host": can_host(t, ev),
                                                 "api": url_for("team_evening_api", tid=tid, sid=sid),
                                                 "replay": url_for("team_evening_replay", tid=tid, sid=sid),
+                                                "uid": g.user.id, "map": ev.get("map") or "",
+                                                "to_strat": url_for("strat_from_replay", tid=tid),
+                                                "opponent": ev.get("opponent") or "",
                                                 "replay_js": url_for("replay_js"),
                                                 "summary": url_for("team_evening_summary", tid=tid, sid=sid), "marks": ev_stats.MARKS,
                                                 "agent_icon": url_for("agent_icon", name="__A__")}).replace("</", "<\\/"),
@@ -227,6 +281,10 @@ def register(app, store, sr, get_team) -> None:
                                   "by": g.user.display_name or g.user.username}
                 else:
                     return jsonify(error="unknown mark"), 400
+            elif act in ("pin", "unpin"):
+                err = pin_action(ev, b, act, can_host(t, ev))
+                if err:
+                    return jsonify(error=err), 400 if err != "not yours" else 403
             elif act == "goto":
                 if not can_host(t, ev):
                     return jsonify(error="only the host moves everyone"), 403
@@ -303,7 +361,7 @@ def register(app, store, sr, get_team) -> None:
         ev = load(tid, sid)
         p = edir(tid) / f"{sid}.replay.json"
         data = _read(p)
-        if data is None:
+        if data is None or data.get("v") != REPLAY_V:
             data = build_replay_data(ev)
             _write(p, data)
         resp = jsonify(data)
@@ -330,10 +388,12 @@ def register(app, store, sr, get_team) -> None:
         vm = calibrate(m)
         nav = nav_grid(mi, reg)
         focus = next((p.puuid for p in m.players_on(ev["side_team"])), "")
+        rep = replay_file(m, focus, mi)              # 4.18: everyone's positions and utility from the replay file
         rounds = {}
         for r in m.rounds:
             try:
-                rp = build_replay(m, r, focus, mi, vm, None, nav)
+                rp = build_replay(m, r, focus, mi, vm, (rep or {}).get("self_paths", {}).get(r.index), nav,
+                                  (rep or {}).get("others", {}).get(r.index))
             except Exception:
                 rp = None
             if rp:
@@ -341,7 +401,30 @@ def register(app, store, sr, get_team) -> None:
                     x["you"] = False          # every viewer marks himself in the browser
                 rounds[r.number] = rp
         agents = {p.agent: url_for("agent_icon", name=p.agent) for p in m.players.values()}
-        return {"map": meta, "agents": agents, "better": {}, "rounds": rounds}
+        from ..coach.replay import ABILITY_SLOT
+        for o in (rep or {}).get("others", {}).values():
+            for e in o.get("effects") or []:
+                if e.get("agent") and e.get("slot") in ABILITY_SLOT:
+                    agents[f"{e['agent']}|{e['slot']}"] = url_for("ability_icon", agent=e["agent"], slot=ABILITY_SLOT[e["slot"]])
+        return {"v": REPLAY_V, "map": meta, "agents": agents, "better": {}, "rounds": rounds,
+                "source": "replay file" if rep else ""}
+
+    def replay_file(m, focus: str, mi) -> dict | None:
+        """The match's replay file (positions of all ten, casts, placed utility), or None."""
+        from .. import replayfile
+        from ..maps import AgentRegistry
+        replays = store.data_dir / "replays"
+        if not focus or not replayfile.has_replay(replays, m.match_id):
+            return None
+        try:
+            names = {a["dev"]: a["name"] for a in AgentRegistry(cache).load() if a.get("dev")}
+        except Exception:
+            names = {}
+        try:
+            return replayfile.for_match(replays, cache / "vrf_work", replayfile.vrfkit_path(store.get("vrfkit_path") or ""), m, focus, mi,
+                                        agent_names=names)
+        except Exception:
+            return None
 
     @app.get("/replay.js")
     def replay_js():

@@ -1,0 +1,88 @@
+"""Team › Match day › Replay scouting (4.18): what the replay files on the server show about a team's habits.
+
+Pick an opponent you played (from the stored replays of matches where 2+ of your team played; the same
+roster met again, or scrims, is grouped) or your own team ("how readable are we"), a map and a moment in
+the round: the usual setup, the spots taken, the utility thrown and where they plant (stats/replayprep.py)."""
+from __future__ import annotations
+
+from flask import render_template, request, url_for
+
+from .. import replayfile
+from ..maps import AgentRegistry, MapRegistry
+from ..stats import replayprep as rp
+
+TYPE_COL = {"smoke": "#aab3c2", "wall": "#7dd3fc", "slow": "#7fc4ff", "damage": "#ff8a3d", "trap": "#f2b84b",
+            "recon": "#c58cff", "orb": "#c58cff", "flash": "#ffffff"}
+TYPE_NAME = {"smoke": "Smoke", "wall": "Wall", "slow": "Slow", "damage": "Molly / damage", "trap": "Trap",
+             "recon": "Recon", "orb": "Orb", "flash": "Flash"}
+
+
+def register(app, store, sr, get_team) -> None:
+    cache = store.data_dir / "cache"
+    replays = store.data_dir / "replays"
+
+    def our_puuids(t) -> set[str]:
+        out = set()
+        for m in t.member_list:
+            pu = m.get("puuid") or (sr.games(m["pid"]).load() or {}).get("puuid")
+            if pu:
+                out.add(pu)
+        return out
+
+    def agent_names() -> dict[str, str]:
+        try:
+            return {a["dev"]: a["name"] for a in AgentRegistry(cache).load() if a.get("dev")}
+        except Exception:
+            return {}
+
+    def team_extracts(t, ours: set[str]) -> dict[str, dict]:
+        """Extracts of every stored replay in which 2+ of the team played (the members' matches and every
+        file on the server)."""
+        out: dict[str, dict] = {}
+        reg, names = None, None
+        mids = set(replayfile.stored(replays))
+        for m in t.member_list:
+            for r in sr.games(m["pid"]).rows():
+                mid = str(r.get("match_id") or "").lower()
+                if mid and mid not in mids and r.get("source") == "full" and replayfile.has_replay(replays, mid):
+                    mids.add(mid)
+        for mid in sorted(mids):
+            if reg is None:
+                reg, names = MapRegistry(cache), agent_names()
+            ex = rp.for_match(replays, cache, mid, reg, names)
+            if not ex or not ex.get("ok"):
+                continue
+            if len(set(ex.get("roster") or {}) & ours) >= 2:
+                out[mid] = ex
+        return out
+
+    @app.get("/teams/<int:tid>/replay-scouting")
+    def team_replay_prep(tid: int):
+        t = get_team(tid)
+        ours = our_puuids(t)
+        ex = team_extracts(t, ours) if ours else {}
+        labels = {}
+        pj = app.extensions["nexus"].get("premier")
+        if pj:
+            labels = {r["match_id"]: r.get("opponent") for r in pj.reviews(tid) if r.get("opponent")}
+        opps = rp.opponents(ex, ours, labels)
+        who = request.args.get("who", "")
+        sel = next((o for o in opps if o["key"] == who), None)
+        if sel is None and who != "us":
+            sel = opps[0] if opps else None
+            who = sel["key"] if sel else "us"
+        roster = set(sel["puuids"]) if sel else ours
+        try:
+            at = int(request.args.get("at", 20))
+        except ValueError:
+            at = 20
+        at = at if at in rp.TIMES else 20
+        a = rp.analyse(ex, roster, at) if ex else {}
+        maps = sorted(a, key=lambda m: -a[m]["matches"])
+        mp = request.args.get("map", "")
+        mp = mp if mp in a else (maps[0] if maps else "")
+        return render_template("team_replay_prep.html", t=t, tab="replay_prep", premier_status=None, opps=opps, who=who,
+                               sel=sel, a=a, maps=maps, mp=mp, d=a.get(mp) or {}, at=at, times=rp.TIMES,
+                               hints=[h for h in rp.hints({mp: a[mp]}) if h] if mp else [], n_replays=len(ex),
+                               type_col=TYPE_COL, type_name=TYPE_NAME,
+                               map_img=url_for("map_image", name=mp) if mp else "")

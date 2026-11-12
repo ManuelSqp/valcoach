@@ -3246,6 +3246,7 @@ def test_goals_checkins_and_context(app, monkeypatch):
     # stats page: weighted numbers, rounds by buy state, lobbies
     page = c.get(f"/profiles/{me}/stats").data.decode()
     assert "How much the numbers tell" in page and "Win rate weighted" in page and "Rounds won: " in page
+    assert 'id="peers"' in page and "You vs your rank" in page and "Damage per round" in page     # 4.18
 
     # habits page: set a goal by hand, from a habit, drop it
     page = c.get(f"/profiles/{me}/habits").data.decode()

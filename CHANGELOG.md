@@ -4,6 +4,24 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.18.0
+- **You vs your rank** (*Stats & maps*): your ACS, kills / deaths / assists / damage per round, headshot share, KAST
+  and opening duels against the other players of your rank in your own matches (within one division, by the rank
+  shown in each match), and against the players a rank higher once there are enough of them. Clear differences in
+  green / red plus a line on the biggest ones. Game rows are rebuilt once from the cache (row v7) to get everyone's
+  numbers; the coach gets the comparison too.
+- **Notes on the playback** (*Review evening*): pause, press *✎ Note*, draw on the map and write a line. Everyone
+  sees it on the time bar and in the *Notes* list; the drawing shows around its time and the playback stops there
+  (*stop at notes*, can be switched off). Your own notes can be deleted, the host can delete all.
+- **⇢ Strat board** on the review evening's playback: this moment as a new board in the strat book, with everyone
+  alive where they stand (both teams, with names), the utility that's up and the drawings.
+- **Replay scouting** (*Match day › Replay scouting*): from the replay files of your matches, how a team you played
+  sets up (e.g. "A 2 · Mid 1 · B 2" at 20 s), the spots it takes, the utility it throws (type, place, usual time) and
+  where it plants, per map and side, on the map. Works for your own team too ("how readable are we"). A team met
+  more than once (three or more of the same players) is put together.
+- The review evening's minimap uses the replay file when there is one (all ten players' paths, placed utility).
+- German texts for all of it.
+
 ## 4.17.0
 - **When you play best** (*Progress*): your win rate by game in the session (games less than 75 minutes apart count
   as one session), after 0 / 1 / 2+ losses in a row, by time of day and by weekday, each bar green / red when it is

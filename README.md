@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.17.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.18.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -126,7 +126,7 @@ Then in the browser:
 ### Finding your way
 
 One menu on the left (☰ on a phone). At the top you pick the **team** and the **player** it works on; opening a team
-or player page picks it for you. Below: *Match day* (This week, Availability, Match-day brief, Opponents),
+or player page picks it for you. Below: *Match day* (This week, Availability, Match-day brief, Opponents, Replay scouting),
 *Strategy* (Comps, Drafts, Game plans, Strat book, Lineups), *Performance* (Matches & reports, Stats & maps,
 Agents & roles, Rounds & economy, Teammates, Rank & progress), *Practice* (Training, Habits, Aim, Ask the coach, Practice plan, Review evening, Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes,
 Player & playbook, Team settings). Ctrl+K searches everything. *Home* shows what's up today. The look (10 styles,
@@ -147,6 +147,11 @@ still there, getting worse) and checks whether the coach's tips worked. *Practic
 week of practice from those habits, the week's map, its strats and lineups, with reminders on Discord and your phone.
 *Practice › Review evening* goes through one match round by round together: the host moves, everyone follows on his
 own screen and marks his own rounds (my fault, good, talk about it); the summary goes into the practice plan.
+On the minimap (4.18) anyone can leave a **note** at a moment: pause, press *✎ Note*, draw lines on the map and write
+a line. Everyone sees it on the time bar and in the *Notes* list, the drawing shows around its time and the playback
+stops there (*stop at notes*). *⇢ Strat board* puts the moment (everyone alive where they stand, the utility that's
+up, the drawings) on a new board in the strat book. With a replay file the minimap has all ten players' real paths
+and the placed utility.
 *Practice › Aim* keeps aim routines (Aimlabs share links, KovaaK's codes, steps for the Range), picks the ones that fit
 your matches and sets your warm-up, which shows on the match screen, in the practice plan and as a push before the match.
 For KovaaK's the coach writes the playlists itself: download one (dated DD-MM-YYYY in its name), save it in
@@ -311,6 +316,11 @@ shows with every pick, e.g. "#1 in Sam's agent pool". The team owner switches it
 **Look & feel.** Every user picks a style (ten, from Classic to Retro arcade) and switches the animations on or
 off under *Account › Look & feel*. **Ctrl+K** (or `/`) opens a quick search for players, team tabs, maps, drafts
 and strat boards. The strat book has a **Lineups** library with clip links per map, agent and ability.
+
+**You vs your rank** (*Stats & maps*, 4.18) compares your ACS, kills, deaths, assists and damage per round,
+headshot share, KAST and opening duels with the other players of your rank in your own matches (within one division,
+by the rank shown in each match), and with the players a rank higher where there are enough of them. Clear
+differences are green / red; the coach gets the same comparison (`stats/peers.py`).
 
 **Progress and Training** (player tabs). *Progress* shows your numbers week by week with trends, whether each
 weekly focus moved its number, and clutches / retakes / post-plants. **When you play best** (4.17) groups your games by their place in a session
@@ -522,6 +532,11 @@ the jump buttons.
 - **How many are there**: the *Server* page (admins) lists the stored replay files: count, size, uploads in the
   last 7 / 30 days, the last upload, how many were lined up with the match data and have ability casts, per map,
   and whether vrfkit works.
+- **Replay scouting** (*Match day › Replay scouting*, 4.18): pick a team you played (from the replays of matches two
+  or more of you played; the same roster met again or a scrim partner is grouped) or your own team, a map and a
+  moment (10, 20, 30 or 45 s into the round). Per side: the usual setup (how many in which zone, e.g. "A 2 · Mid 1 ·
+  B 2"), the spots taken most, the utility thrown most (type, place, usual time), where they plant, all on the map
+  (`stats/replayprep.py`, worked out once per match as `<match id>.prep.json`).
 
 ### Run it permanently
 
@@ -627,6 +642,7 @@ Settings (web) or `[video]` (CLI).
 | `web/lineups.py` | lineups library in the strat book |
 | `stats/progress.py`, `stats/training.py`, `web/player_views.py` | Progress and Training tabs: weekly numbers, focus checks, aim, routine, learning paths |
 | `stats/sessions.py`, `stats/duos.py` | when you play best (sessions, losing streaks, time of day) and which teammates play well together |
+| `stats/peers.py`, `stats/replayprep.py`, `web/prep_views.py` | you vs your rank, replay scouting (setups, utility, plants per team) |
 | `stats/scouting.py` | scouting summaries of other teams, how to play them, the map veto |
 | `web/premierjobs.py`, `web/premier_views.py` | Premier tab: division scouting, match reviews, this week's map, the brief |
 | `web/drafts.py`, `web/static/drafts.js` | roster drafts: storage (typed fields only), player numbers per agent, the drag-and-drop editor |

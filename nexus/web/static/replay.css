@@ -29,3 +29,16 @@
 .rp-ut{font-size:11.5px;font-weight:700;color:#ffd84a;font-variant-numeric:tabular-nums;margin-left:auto;padding:0 4px}
 .rp-ut.zero{color:var(--muted,#8a94a6);font-weight:500}
 .rp-cast{color:#ffd84a;font-weight:700}
+/* 4.18: notes on the playback, strat board */
+.rp-tick.pin{top:-3px;width:9px;height:9px;border-radius:50%;transform:translateX(-4px);border:2px solid #0b0e13}
+.rp-bar .rp-pin.on{border-color:#f6d24a;color:#f6d24a}
+.rp-msg{font-size:12.5px;color:var(--muted)}.rp-msg a{color:var(--accent)}
+.rp-compose{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;padding:8px;border:1px solid #f6d24a;border-radius:8px;background:var(--panel2)}
+.rp-compose[hidden]{display:none}
+.rp-compose input{flex:1;min-width:180px}
+.rp-compose button{background:var(--panel3);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:5px 10px;font:inherit;font-size:13px;cursor:pointer}
+.rp-compose .rp-csave{border-color:#f6d24a}
+.rp-ctime,.rp-cmsg{font-size:12.5px;color:var(--muted)}
+.rp-pins .rp-pinrow{opacity:1}.rp-pinrow span{flex:1}.rp-pinrow small{color:var(--muted)}
+.rp-pdel{flex:none!important;color:var(--muted);padding:0 4px}.rp-pdel:hover{color:var(--red)}
+.rp-none{font-size:12.5px;color:var(--muted);margin:0}
