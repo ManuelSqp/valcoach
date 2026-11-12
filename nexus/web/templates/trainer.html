@@ -98,6 +98,17 @@
 .tr-pbar::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--muted)}
 .tr-pbar::after{content:"";position:absolute;left:clamp(0%,var(--p),100%);top:-2px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--accent)}
 .tr-group{margin:18px 0 8px;font-size:15px;color:var(--muted);font-weight:600}
+.tr-group[hidden],.tr-grid[hidden],.tr-card[hidden]{display:none}
+.tr-filter{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:4px 0 6px}
+.tr-chips{display:flex;flex-wrap:wrap;gap:4px}
+.tr-chips button{font:inherit;font-size:12.5px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
+.tr-chips button span{opacity:.6;margin-left:2px}
+.tr-chips button.on{background:var(--accent);border-color:var(--accent);color:#0b0e13;font-weight:650}
+.tr-new{font-size:12.5px;color:var(--muted);display:flex;gap:5px;align-items:center}
+#tr-search{width:auto;min-width:220px;flex:1;max-width:320px}
+.tr-lvl{font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:1px 7px;border-radius:99px;vertical-align:middle;margin-left:4px}
+.tr-lvl.l1{background:var(--win-soft);color:var(--win)}.tr-lvl.l2{background:rgba(244,183,64,.15);color:#f4b740}.tr-lvl.l3{background:rgba(255,70,85,.15);color:var(--red)}
+.tr-tags{display:flex;flex-wrap:wrap;gap:4px;margin:-2px 0 8px}.tr-tags span{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:0 7px}
 .tr-mode{text-align:left;font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line2);border-radius:var(--radius-sm);padding:10px 12px;cursor:pointer;display:grid;gap:4px;align-content:start}
 .tr-mode:hover{border-color:var(--accent)}.tr-mode:focus-visible{outline:none;box-shadow:var(--focus)}
 .tr-mode b{font-size:14px}.tr-mode span{font-size:12.5px;color:var(--muted)}
@@ -198,17 +209,25 @@
 </section>
 
 
-<h2>Scenarios</h2>
+<h2>Scenario library <span class="muted" style="font-weight:400">{{ summary|length }}</span></h2>
 <p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Click a scenario, then click once more to lock the mouse. Esc pauses,
   F switches fullscreen. Your crosshair: <i>Crosshair</i> on the start screen of any scenario.
   {% if not can_save %}You can play, but scores aren't saved for this player (only the player or their owner can).{% endif %}</p>
+<div class="tr-lib" id="tr-lib">
+  <div class="tr-filter" role="toolbar" aria-label="Filter the scenarios">
+    <div class="tr-chips" data-f="group"><button type="button" class="on" data-v="">All <span>{{ summary|length }}</span></button>{% for g, gname in groups.items() %}<button type="button" data-v="{{ g }}">{{ gname }} <span>{{ summary|selectattr('group', 'equalto', g)|list|length }}</span></button>{% endfor %}</div>
+    <div class="tr-chips" data-f="level"><button type="button" class="on" data-v="">Any level</button>{% for lv, lname in levels.items() %}<button type="button" data-v="{{ lv }}">{{ lname }}</button>{% endfor %}</div>
+    <label class="tr-new"><input type="checkbox" id="tr-untried"> Not tried yet</label>
+    <input type="text" role="searchbox" id="tr-search" placeholder="Search: tracking, head, close…" aria-label="Search the scenarios">
+  </div>
 {% for g, gname in groups.items() %}
-<h3 class="tr-group">{{ gname }}</h3>
-<div class="tr-grid">
+<h3 class="tr-group" data-g="{{ g }}">{{ gname }}</h3>
+<div class="tr-grid" data-g="{{ g }}">
   {% for s in summary if s.group == g %}{% set sc = scenarios|selectattr('id', 'equalto', s.id)|first %}
-  <section class="tr-card">
-    <h3>{{ s.name }}</h3>
+  <section class="tr-card" data-group="{{ g }}" data-level="{{ sc.level }}" data-runs="{{ s.runs }}" data-text="{{ (s.name ~ ' ' ~ sc.about ~ ' ' ~ sc.focus|join(' ') ~ ' ' ~ gname)|lower }}">
+    <h3>{{ s.name }} <span class="tr-lvl l{{ sc.level }}" title="Difficulty">{{ levels[sc.level] }}</span></h3>
     <p>{{ sc.about }}</p>
+    <div class="tr-tags">{% for f in sc.focus %}<span>{{ f }}</span>{% endfor %}<span>{{ 'tracking' if sc.kind == 'track' else 'clicking' }}</span></div>
     <div class="tr-stats">
       <div>Best<b>{{ s.best|int if s.best is not none else '–' }}</b></div>
       <div>Last<b>{{ s.last|int if s.last is not none else '–' }}</b></div>
@@ -220,6 +239,36 @@
   {% endfor %}
 </div>
 {% endfor %}
+<p class="muted small" id="tr-none" hidden>No scenario fits these filters.</p>
+</div>
+<script>
+(function () {
+  const lib = document.getElementById('tr-lib');
+  if (!lib) return;
+  const f = {group: '', level: ''};
+  const apply = () => {
+    const q = document.getElementById('tr-search').value.trim().toLowerCase(), untried = document.getElementById('tr-untried').checked;
+    let shown = 0;
+    lib.querySelectorAll('.tr-card').forEach(c => {
+      const ok = (!f.group || c.dataset.group === f.group) && (!f.level || c.dataset.level === f.level)
+        && (!untried || c.dataset.runs === '0') && (!q || q.split(/\s+/).every(w => (c.dataset.text + ' ' + c.textContent.toLowerCase()).includes(w)));
+      c.hidden = !ok; if (ok) shown++;
+    });
+    lib.querySelectorAll('.tr-grid').forEach(g => {
+      const any = [...g.querySelectorAll('.tr-card')].some(c => !c.hidden);
+      g.hidden = !any; lib.querySelector(`.tr-group[data-g="${g.dataset.g}"]`).hidden = !any;
+    });
+    document.getElementById('tr-none').hidden = shown > 0;
+  };
+  lib.querySelectorAll('.tr-chips').forEach(row => row.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    row.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    f[row.dataset.f] = b.dataset.v; apply();
+  }));
+  document.getElementById('tr-search').addEventListener('input', apply);
+  document.getElementById('tr-untried').addEventListener('change', apply);
+})();
+</script>
 
 <div id="tr-stage" aria-live="polite">
   <canvas id="tr-canvas"></canvas>

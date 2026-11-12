@@ -54,9 +54,89 @@ SCENARIOS.update({
                     "focus": ["tracking", "peeking", "reaction"],
                     "about": "Short left-right strafes and sudden stops, like a player dodging. React to each change."},
 })
-GROUPS = {"flicks": "Flicks", "duels": "Duels", "tracking": "Tracking"}
+
+# 4.23: the library. level: 1 easy, 2 medium, 3 hard. Same ids in static/trainer.js.
+def _sc(name, kind, group, level, focus, about, seconds=45):
+    return {"name": name, "kind": kind, "seconds": seconds, "group": group, "level": level, "focus": focus, "about": about}
+
+
+SCENARIOS.update({
+    "flick_mid": _sc("Mid-range flicks", "click", "flicks", 1, ["flicks", "warmup"],
+                     "Medium targets 12–16 m away, 15–45° from the crosshair. The everyday flick: fast, then stop on it."),
+    "flick_wide": _sc("Wide flicks", "click", "flicks", 2, ["flicks", "reaction"],
+                      "Targets 50–70° to the side, close. Someone you didn't check: one big, controlled turn."),
+    "flick_vert": _sc("Vertical flicks", "click", "flicks", 2, ["flicks", "crosshair"],
+                      "Up and down as much as sideways: high ledges, boxes, stairs. Your vertical flicks are usually the weak ones."),
+    "flick_tiny": _sc("Tiny flicks", "click", "flicks", 3, ["flicks", "micro"],
+                      "Small targets 14–18 m away. Speed only counts if you hit: slow down at the end of the flick."),
+    "spider": _sc("Spider flicks", "click", "flicks", 1, ["flicks", "warmup", "crosshair"],
+                  "A target in the middle, then one around it, back to the middle. Flick out, come back to your crosshair spot."),
+    "spider_far": _sc("Far spider", "click", "precision", 3, ["micro", "crosshair", "flicks"],
+                      "The spider far away with small targets: short, exact flicks out and back."),
+    "six_shot": _sc("Six shot", "click", "switching", 1, ["switching", "warmup", "flicks"],
+                    "Six targets on a wall at once: clear them in a smooth order, the shortest way from one to the next."),
+    "head_switch": _sc("Head-line switching", "click", "switching", 2, ["switching", "crosshair"],
+                       "Four targets, all at head height, spread wide. Move along the line, never up or down."),
+    "close_switch": _sc("Close switching", "click", "switching", 2, ["switching", "flicks", "reaction"],
+                        "Three big targets around you, up to 65° apart: a site full of enemies at close range."),
+    "tiny_switch": _sc("Tiny switching", "click", "switching", 3, ["switching", "micro"],
+                       "Five small targets far away, close together: short, exact switches without overshooting."),
+    "double_tap": _sc("Double tap", "click", "switching", 2, ["switching", "spray", "crosshair"],
+                      "Each target needs two hits (it shrinks after the first). Stay on it for the second shot, then switch."),
+    "reflex": _sc("Reflex flicks", "click", "reflex", 1, ["reaction", "flicks"],
+                  "A target shows up for about a second, then it's gone. Each hit makes the next one shorter."),
+    "reflex_small": _sc("Reflex: small", "click", "reflex", 3, ["reaction", "micro"],
+                        "Small, far targets that vanish fast: react and hit, no second try."),
+    "reflex_wide": _sc("Reflex: wide", "click", "reflex", 2, ["reaction", "flicks", "peeking"],
+                       "Close targets far to the side, there for a moment: like an enemy appearing beside you."),
+    "pinpoint": _sc("Pinpoint", "click", "precision", 3, ["micro", "crosshair"],
+                    "One tiny target 24–28 m away, the next close to it. Calm, exact taps: accuracy over speed."),
+    "headline_far": _sc("Far head-line", "click", "precision", 2, ["crosshair", "micro", "flicks"],
+                        "Small heads far away, always at head height. Long-range crosshair placement."),
+    "micro_spider": _sc("Micro spider", "click", "precision", 3, ["micro", "crosshair"],
+                        "Tiny steps out of the middle and back: the small corrections after a flick."),
+    "peek_far": _sc("Far peeks", "click", "duels", 2, ["peeking", "reaction", "micro"],
+                    "Enemies peek out from cover 28 m away: small and quick, like a long corridor."),
+    "peek_fast": _sc("Fast peeks", "click", "duels", 3, ["peeking", "reaction"],
+                     "Shorter peeks that get faster with every hit. Pure reaction from a held crosshair."),
+    "angle_close": _sc("Close angle", "click", "duels", 2, ["peeking", "reaction", "flicks"],
+                       "Hold a doorway 5–8 m away: they come out fast and big. Head only."),
+    "angle_long": _sc("Long angle", "click", "duels", 3, ["peeking", "micro", "crosshair"],
+                      "Hold a narrow gap 24–32 m away: a small head for a short moment. Head only."),
+    "angle_jiggle": _sc("Jiggle peeks", "click", "duels", 3, ["peeking", "reaction"],
+                        "Mostly jiggles: a shoulder and the head, straight back. Wait for the real swing or hit the head in time."),
+    "angle_wide": _sc("Wide swings", "click", "duels", 1, ["peeking", "crosshair"],
+                      "Only wide swings that stop in the opening: the easiest duel, perfect your crosshair placement. Head only."),
+    "angle_runners": _sc("Runners", "click", "duels", 3, ["peeking", "reaction", "tracking"],
+                         "Every enemy runs through the doorway without stopping: shoot the head as they cross."),
+    "track_smooth": _sc("Smooth tracking", "track", "tracking", 1, ["tracking", "warmup"],
+                        "A big target moving slowly and evenly: stay on it with smooth movement, no jerks."),
+    "track_fast": _sc("Fast strafes", "track", "tracking", 3, ["tracking", "reaction"],
+                      "Fast, short strafes 7 m away: react to every change of direction."),
+    "track_tiny": _sc("Small target tracking", "track", "tracking", 2, ["tracking", "micro"],
+                      "A small target 14 m away: small, precise corrections to stay on it."),
+    "track_jump": _sc("Jumping strafes", "track", "tracking", 2, ["tracking", "spray"],
+                      "A strafing target that jumps now and then: follow it up and down too."),
+    "track_crouch": _sc("Crouch spam", "track", "tracking", 2, ["tracking", "spray", "crosshair"],
+                        "A strafing target that crouches suddenly: drop your crosshair with it."),
+    "orbit": _sc("Around you", "track", "tracking", 2, ["tracking", "flicks"],
+                 "A target running in a circle around you, up to 75° to each side: big, smooth turns."),
+    "orbit_air": _sc("Air tracking", "track", "tracking", 3, ["tracking", "reaction"],
+                     "Running around you and jumping: follow it in the air and when it lands."),
+    "orbit_vert": _sc("Up and down", "track", "tracking", 3, ["tracking", "crosshair"],
+                      "Moves sideways and up and down at the same time: tracking in two directions."),
+})
+GROUPS = {"flicks": "Flicks", "switching": "Switching", "reflex": "Reflex", "precision": "Precision", "duels": "Duels",
+          "tracking": "Tracking"}
+LEVELS = {1: "Easy", 2: "Medium", 3: "Hard"}
+_OLD = {"grid": ("switching", 1), "headline": ("flicks", 1), "micro": ("precision", 2), "peek": ("duels", 1),
+        "flick_close": ("flicks", 2), "flick_far": ("precision", 2), "holdangle": ("duels", 2), "track": ("tracking", 1),
+        "track_close": ("tracking", 2), "track_far": ("tracking", 2), "track_react": ("tracking", 3)}
 for _k, _v in SCENARIOS.items():
-    _v.setdefault("group", {"grid": "flicks", "headline": "flicks", "micro": "flicks", "peek": "duels"}.get(_k, "tracking"))
+    if _k in _OLD:
+        _v["group"], _v["level"] = _OLD[_k]
+    _v.setdefault("group", "tracking")
+    _v.setdefault("level", 2)
 
 WARMUP = [("grid", 30), ("headline", 30), ("micro", 30)]       # short and the same every day
 

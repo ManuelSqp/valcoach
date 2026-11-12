@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.22.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.23.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -166,9 +166,14 @@ the coach finds more online.
 
 **Aim trainer:** *Practice › Aim trainer* is an aim trainer in the browser (and in the Nexus app) that plays like
 Valorant: your Valorant sensitivity (0.07° per mouse count × sens), Valorant's field of view and raw mouse input
-(Chrome, Edge, the Nexus app; other browsers get a warning). Eleven scenarios in three groups: flicks (grid, head-line,
-micro, close, far), duels (peek reaction, *Hold the angle* with an enemy model and headshots only) and tracking (strafe,
-close, far, reactive), a short daily warm-up and a training picked from what your matches show. Your Valorant crosshair
+(Chrome, Edge, the Nexus app; other browsers get a warning). A **scenario library** of 43 scenarios (4.23) in six
+groups, each marked easy, medium or hard: *flicks* (head-line, close, mid, far, wide, vertical, tiny, spider),
+*switching* (grid, six shot, head-line, close, tiny, double tap), *reflex* (targets that vanish, shorter after every
+hit), *precision* (micro taps, pinpoint, far head-line, spiders at range), *duels* (peeks near, far and fast; *Hold the
+angle* with an enemy model and headshots only, also close, long, jiggles, wide swings and runners) and *tracking*
+(strafes slow to fast, small targets, jumping and crouching targets, targets circling around you, in the air and up
+and down). The library filters by group and level, searches, and shows what you haven't tried yet. Plus a short daily
+warm-up and a training picked from what your matches show (from the whole library). Your Valorant crosshair
 (paste its code) is set inside the trainer. Scores are
 kept per player, finishing a warm-up or training ticks it off on the Aim page, and the coach knows the scores.
 The *Sens finder* plays a short mixed test at different sensitivities, blind and in random order (a wide spread around

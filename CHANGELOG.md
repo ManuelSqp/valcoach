@@ -4,6 +4,21 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.23.0
+- **Aim trainer scenario library**: 32 new scenarios, 43 in all, in six groups with a difficulty each:
+  - Flicks: mid-range, wide (50–70°), vertical, tiny, spider (out and back to the middle).
+  - Switching: six shot, head-line switching, close switching (up to 65° apart), tiny switching, double tap
+    (two hits per target).
+  - Reflex: targets that vanish after about a second, shorter after every hit (normal, small, wide).
+  - Precision: pinpoint, far head-line, far spider, micro spider.
+  - Duels: far and fast peeks; the doorway with an enemy model as close angle, long angle, jiggle peeks, wide swings
+    and runners (headshots only).
+  - Tracking: smooth, fast strafes, small target, jumping strafes, crouch spam, around you (a target circling you),
+    air tracking, up and down.
+- The scenario list is a library: filter by group and difficulty, search (in English and German), "not tried yet".
+- The daily training picks from the whole library by what your matches show.
+- German texts.
+
 ## 4.22.0
 - **Quiz on the playback**: each question shows the round on the minimap up to the moment it asks about, locked
   there (no later kills on the bar or in the list, no round length) until you answer; then it plays on so you see
