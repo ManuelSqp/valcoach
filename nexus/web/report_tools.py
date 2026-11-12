@@ -300,6 +300,7 @@ def post_moment(url: str, what: str):
     text = re.sub(r"[\r\n]+", "\n", str(request.form.get("text") or ""))[:1500]
     try:
         post_file(url, f"📍 {what}" + (f"\n{text}" if text else ""), "moment.png", data)
-    except Exception as e:
-        return jsonify(error=f"Discord: {e}"), 502
+    except Exception:                       # details go to the log, not to the browser
+        log.warning("posting a playback picture to Discord failed", exc_info=True)
+        return jsonify(error="Discord didn't take the picture (see the server log)"), 502
     return jsonify(ok=True)

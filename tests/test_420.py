@@ -135,3 +135,30 @@ def test_lineups_page_suggests_from_replays(app):  # noqa: F811 (fixtures)
     assert 'id="suggested"' not in c.get(f"/teams/{tid}/lineups?map=Bind").data.decode()      # in the library now
     app.extensions["nexus"]["team_replays"] = lambda t: (_ for _ in ()).throw(RuntimeError("x"))
     assert c.get(f"/teams/{tid}/lineups?map=Bind").status_code == 200                           # never breaks the page
+
+
+def test_number_scan_matches_the_old_regex_and_stays_linear():
+    import random
+    import time
+    from nexus.i18n import find_nums, mask_nums
+    old = re.compile(r"(?<![\w#])[-+]?\d+(?:[.,'’]\d+)*(?![\w])")
+    rnd = random.Random(7)
+    for _ in range(20000):
+        s = "".join(rnd.choice("0123456789.,'’+-#_ aZé%:/") for _ in range(rnd.randint(0, 12)))
+        assert find_nums(s) == old.findall(s) and mask_nums(s, "\x00") == old.sub("\x00", s), s
+    assert find_nums("1'000 Spiele, 3.5 KD, -2 RR, R2, #3") == ["1'000", "3.5", "-2"]
+    t = time.time()
+    find_nums("9" * 100000 + "x" + "9." * 50000)
+    assert time.time() - t < 1
+
+
+def test_discord_error_stays_in_the_log(app, monkeypatch):  # noqa: F811 (fixtures)
+    from nexus import discord as dc
+    from nexus.web.report_tools import post_moment
+
+    def boom(*a, **k):
+        raise RuntimeError("secret https://discord.com/api/webhooks/123/token")
+    monkeypatch.setattr(dc, "post_file", boom)
+    with app.test_request_context("/", method="POST", data={"png": (io.BytesIO(PNG), "m.png")}, content_type="multipart/form-data"):
+        r, code = post_moment("https://x", "Bind")
+    assert code == 502 and "secret" not in r.get_data(as_text=True) and "token" not in r.get_data(as_text=True)
