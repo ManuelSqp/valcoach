@@ -4,6 +4,18 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.22.0
+- **Quiz on the playback**: each question shows the round on the minimap up to the moment it asks about, locked
+  there (no later kills on the bar or in the list, no round length) until you answer; then it plays on so you see
+  what happened. If your coaching report of that match commented on the round, the coach's summary, mistakes and
+  better option are shown with a link to the report. Questions from older quizzes work as before, without the map.
+- **Who should learn what** (*Strategy › Comp sheet*): the agents your maps need (ideal comp, or picked by a third
+  of the teams in your lobbies) that nobody has in their pool, the thin roles, and per player the one or two of
+  those agents that fit best (how much they play the role, their ACS on it against players of their rank on the
+  same agents; a player who alone covers another role stays there). *＋ Add to pool* adds it to the player's pool.
+- The review evening's playback builder is shared with the quiz.
+- German texts.
+
 ## 4.21.0
 - **Team economy** (*Strategy › Economy*): the team's buys in your matches together, next to the teams in the same
   lobbies (same maps, patch and ranks): round win rate per buy and per matchup, forces that were lost and left you

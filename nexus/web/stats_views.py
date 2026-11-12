@@ -554,11 +554,48 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             agents = [{"agent": a, "role": roles.role_of(a), "who": compsheet.who_plays(a, pools)}
                       for a in (idl or {}).get("agents", [])]
             ideals.append({"map": mp, "ideal": idl, "agents": agents, "searched": mp.lower() in web})
-        return render_template("team_sheet.html", t=t, tab="sheet", players=players, ideals=ideals,
+        advice = agent_advice(t, c, players, maps, ideals)
+        return render_template("team_sheet.html", t=t, tab="sheet", players=players, ideals=ideals, advice=advice,
                                hue=compsheet.hue, all_agents=sorted(roles.all_agents()), is_owner=g.team_owner,
                                edit=request.args.get("edit", type=int), web_search_on=web_search_on(),
                                web_status=sr.status(f"webcomps:{tid}"), queues=QUEUE_TABS, follow_pools=saved["follow"],
                                premier_status=sr.status(f"premier:{tid}"))
+
+    def agent_advice(t, c, players: list[dict], maps: list[str], ideals: list[dict]) -> dict | None:
+        """4.22: which agent each player should add next (stats/agentpool.py)."""
+        from ..stats import agentpool
+        try:
+            meta = local_meta(filter_rows(owner_rows(t.owner_id), t.queue))
+            return agentpool.advise(
+                [{"label": pl["label"], "pid": pl["pid"], "rows": c["rows_by"][pl["pid"]], "pool": [a["agent"] for a in pl["agents"]],
+                  "no": pl["no"]} for pl in players],
+                maps, {x["map"]: (x["ideal"] or {}).get("agents") or [] for x in ideals}, meta)
+        except Exception:
+            return None
+
+    @app.post("/teams/<int:tid>/sheet/pool/<int:pid>/add")
+    def team_sheet_pool_add(tid: int, pid: int):
+        """4.22: "＋ Add to pool" from the advisor: the agent goes to the end of the player's pool."""
+        from ..stats import compsheet
+        t = get_team(tid)
+        if pid not in [m["pid"] for m in t.member_list]:
+            abort(404)
+        if not sheet_can_edit(t, pid):
+            abort(403)
+        agent = (compsheet.clean_agents([request.form.get("agent", "")]) or [None])[0]
+        if agent is None:
+            abort(400)
+        data = compsheet.load(sr.team_dir(tid))
+        saved = data["pools"].get(str(pid))
+        cur = compsheet.pool(filter_rows(sr.games(pid).rows(), t.queue), saved)
+        order = [a["agent"] for a in cur["agents"]]
+        if agent not in order:
+            order.append(agent)
+        data["pools"][str(pid)] = {"order": order, "no": [a for a in cur["no"] if a != agent]}
+        compsheet.save(sr.team_dir(tid), data)
+        p = store.profile(pid)
+        flash(f"{agent} added to the pool of {p.name if p else 'the player'}.", "ok")
+        return redirect(url_for("team_sheet", tid=tid) + "#advisor")
 
     @app.post("/teams/<int:tid>/sheet/pool/<int:pid>")
     def team_sheet_pool(tid: int, pid: int):

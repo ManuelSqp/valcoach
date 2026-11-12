@@ -108,6 +108,41 @@ def register(app, store, sr, helpers: dict) -> None:
                                result_url=url_for("quiz_result", pid=pid), rate_url=url_for("quiz_rate", pid=pid),
                                focus_url=url_for("own_focus", pid=pid), own=sr.read_own_focus(pid))
 
+    @app.get("/api/profiles/<int:pid>/quiz/<qid>/replay")
+    def quiz_replay(pid: int, qid: str):
+        """4.22: the question's round on the playback (locked at the moment until answered), and what the coach
+        said about that round in your report of the match."""
+        p, can_edit = view_profile(pid)
+        q = next((x for x in sr.read_quiz(pid).get("questions") or [] if x.get("id") == qid), None)
+        if q is None or "t_ms" not in q:
+            return jsonify(error="no playback for this question"), 404
+        fn = app.extensions["nexus"].get("playback")
+        puuid = (sr.games(pid).load() or {}).get("puuid") or ""
+        try:
+            data = fn(q["match_id"], focus=puuid, only={int(q["round"])}, riot_id=(p.name, p.tag)) if fn else {"rounds": {}}
+        except Exception:
+            data = {"rounds": {}}
+        if not data.get("map") or str(q["round"]) not in {str(k) for k in data["rounds"]}:
+            return jsonify(error="no playback for this round"), 404
+        coach = None
+        if can_edit:
+            for j in store.jobs_for_match(pid, q["match_id"]):
+                if j.status != "done":
+                    continue
+                jp = store.resolve(j.json_path)
+                try:
+                    rep = json.loads(jp.read_text()) if jp else {}
+                except (OSError, ValueError):
+                    continue
+                r = next((x for x in rep.get("rounds") or [] if int(x.get("number", 0)) == int(q["round"])), None)
+                fb = (r or {}).get("feedback") or {}
+                if fb.get("summary") or (fb.get("player") or {}).get("mistakes"):
+                    pl = fb.get("player") or {}
+                    coach = {"summary": fb.get("summary") or "", "mistakes": (pl.get("mistakes") or [])[:3],
+                             "better": pl.get("better_option") or "", "url": url_for("job_report", jid=j.id)}
+                    break
+        return jsonify(replay=data, round=str(q["round"]), t=int(q["t_ms"]), coach=coach)
+
     @app.post("/api/profiles/<int:pid>/quiz/result")
     def quiz_result(pid: int):
         p, can_edit = view_profile(pid)

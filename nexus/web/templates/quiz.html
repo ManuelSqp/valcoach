@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Quiz · {{ p.riot_id }} · Nexus{% endblock %}
 {% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='replay.css') }}?v={{ app_version }}">
 <style>
+.qrp{margin:10px 0 12px}.qrp[hidden]{display:none}
+.qrp .rpnote{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+.qcoach{margin-top:8px;padding:8px 10px;border-left:3px solid var(--accent);background:var(--panel2);border-radius:0 8px 8px 0}
+.qcoach ul{margin:4px 0 0;padding-left:18px}
 .qz{max-width:760px}
 .qhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 .qtag{font-size:11px;font-weight:800;color:var(--muted)}
@@ -45,8 +50,10 @@
 <section class="card qz" id="quiz">
   <div class="qhead"><span class="qtag" id="qtag"></span><div class="qdots" id="qdots"></div></div>
   <div class="qq" id="qq"></div>
+  <div class="qrp" id="qrp" hidden><div class="replay" id="rp-box"></div>
+    <p class="rpnote" id="qrpnote">The round up to this moment. After you answer it plays on.</p></div>
   <div class="qopts" id="qopts"></div>
-  <div class="qx" id="qx"><div class="why" id="qwhy"></div><div class="hap" id="qhap"></div>
+  <div class="qx" id="qx"><div class="why" id="qwhy"></div><div class="hap" id="qhap"></div><div class="qcoach" id="qcoach" hidden></div>
     <div class="qact">{% if can_edit %}<span class="lbl">This question was</span>
       <button class="btn sm ghost qrate" data-r="good">good</button><button class="btn sm ghost qrate" data-r="unrealistic">unrealistic</button><button class="btn sm ghost qrate" data-r="obvious">too obvious</button>
       <button class="btn sm ghost" id="qfocus" title="Your own focus for this week (Training tab, team focus, brief)">🎯 Make this my focus</button>{% endif %}
@@ -63,6 +70,7 @@
   <p class="small muted" style="margin:6px 0 0">Last {{ results|length }} rounds of the quiz{% if best is not none %} · best {{ (best * 100)|round|int }}%{% endif %}.</p></section>
 {% endif %}
 <script type="application/json" id="quiz-data">{{ q.questions|tojson }}</script>
+<script src="{{ url_for('replay_js') }}?v={{ app_version }}"></script>
 <script>
 (function () {
   const Q = JSON.parse(document.getElementById('quiz-data').textContent);
@@ -70,8 +78,38 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
   let i = 0; const answers = [];
   function dots() { $('qdots').innerHTML = Q.map((q, n) => `<span class="${n < answers.length ? (answers[n] === Q[n].best ? 'ok' : 'bad') : ''} ${n === i ? 'cur' : ''}"></span>`).join(''); }
+  // 4.22: the moment on the playback, locked there until answered; the coach's comment on the round
+  const RP = {}, rbox = $('rp-box');
+  const replayUrl = id => {{ url_for('quiz_replay', pid=p.id, qid='QID')|tojson }}.replace('QID', encodeURIComponent(id));
+  async function showReplay(q) {
+    if (rbox._destroy) rbox._destroy();
+    rbox.innerHTML = ''; delete rbox.dataset.built; $('qrp').hidden = true;
+    if (q.t_ms == null || !window.nexusBuild) return;
+    if (!(q.id in RP)) {
+      try { const r = await fetch(replayUrl(q.id)); RP[q.id] = r.ok ? await r.json() : null; } catch (e) { RP[q.id] = null; }
+    }
+    const d = RP[q.id];
+    if (!d || Q[i] !== q) return;
+    window.VALCOACH_REPLAY = d.replay; rbox.dataset.round = d.round;
+    $('qrp').hidden = false; $('qrpnote').textContent = 'The round up to this moment. After you answer it plays on.';
+    window.nexusBuild(rbox);
+    if (rbox._seek) { rbox._lock(d.t); rbox._seek(d.t); }
+  }
+  function afterAnswer(q) {
+    const d = RP[q.id];
+    if (d && rbox._lock && rbox.dataset.round === d.round) { rbox._lock(null); rbox._play(); $('qrpnote').textContent = 'What happened next.'; }
+    const c = d && d.coach, box = $('qcoach');
+    box.hidden = !c; box.textContent = '';
+    if (!c) return;
+    const el = (tag, text) => { const x = document.createElement(tag); if (text != null) x.textContent = text; return x; };
+    box.append(el('b', 'What the coach said about this round:'), ' ', c.summary || '');
+    if (c.mistakes && c.mistakes.length) { const ul = el('ul'); c.mistakes.forEach(m => ul.appendChild(el('li', m))); box.appendChild(ul); }
+    if (c.better) { const dv = el('div'); dv.append(el('b', 'Better:'), ' ', c.better); box.appendChild(dv); }
+    if (/^\/[^/\\]/.test(c.url || '')) { const a = el('a', 'Open the report'); a.href = c.url; box.append(' ', a); }
+  }
   function show() {
     const q = Q[i];
+    showReplay(q);
     $('qtag').textContent = `${i + 1}/${Q.length} · ${q.kind_label} · ${q.map} round ${q.round} (${q.side})${q.agent ? ' · ' + q.agent : ''}`;
     $('qq').textContent = q.question;
     $('qopts').innerHTML = q.options.map((o, n) => `<button class="qo" data-n="${n}"><b>${'ABCD'[n]}</b><span>${esc(o)}</span></button>`).join('');
@@ -89,6 +127,7 @@
     $('qhap').innerHTML = `<b>What happened:</b> ${esc(q.happened)}`;
     $('qnext').textContent = i === Q.length - 1 ? 'See the score' : 'Next';
     $('qx').classList.add('on'); dots(); $('qnext').focus();
+    afterAnswer(q);
   });
   const post = (url, body) => fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   document.querySelectorAll('.qrate').forEach(b => b.onclick = async () => {
@@ -106,7 +145,8 @@
   $('qnext').onclick = async () => {
     if (i < Q.length - 1) { i += 1; show(); return; }
     const score = answers.filter((a, n) => a === Q[n].best).length;
-    ['qq', 'qopts', 'qx'].forEach(id => $(id).style.display = 'none'); $('qtag').textContent = 'Done'; i = Q.length; dots();
+    ['qq', 'qopts', 'qx', 'qrp'].forEach(id => $(id).style.display = 'none'); $('qtag').textContent = 'Done'; i = Q.length; dots();
+    if (rbox._destroy) rbox._destroy();
     $('qend').hidden = false;
     $('qend').innerHTML = `<div class="big">${score}/${Q.length}</div><p>${score === Q.length ? 'Every call right.' : score >= Q.length / 2 ? 'Good: look at the ones you missed with your team.' : 'Worth talking through with your team.'}</p>
       <button class="btn ghost" onclick="location.reload()">Again</button>`;
