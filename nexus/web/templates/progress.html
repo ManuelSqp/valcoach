@@ -25,6 +25,13 @@
 @media(max-width:700px){.rk{grid-template-columns:1fr}}
 .rk .now{font-size:26px;font-weight:800;line-height:1.1}.rk .rr{font-size:14px;color:var(--muted);font-weight:600}
 .rk .d{font-size:13px;font-weight:700;margin-top:6px}.rk .d.up{color:var(--win)}.rk .d.down{color:var(--red)}
+.whints{margin:10px 0 0;padding-left:18px;font-size:13.5px}.whints li{margin:3px 0;color:var(--amber)}
+.wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:12px}
+.wbox h3{margin:0 0 6px;font-size:14px}
+.wrow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 38px 28px;gap:8px;align-items:center;font-size:12.5px;padding:2px 0}
+.wrow.early{opacity:.55}.wrow .wl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wbar{height:8px;background:var(--panel3);border-radius:99px;overflow:hidden}.wbar i{display:block;height:100%;border-radius:99px}
+.wv{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}.wn{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
 .rkc{width:100%;height:auto;max-height:300px;display:block}
 .rkc .tl{stroke:var(--line);stroke-width:1}.rkc text{fill:var(--muted);font:500 13px var(--font);letter-spacing:0}
 .rkc .ln{fill:none;stroke:var(--text);stroke-width:2;stroke-linejoin:round;opacity:.85}
@@ -59,6 +66,27 @@
     </svg>{% else %}<p class="muted small">The line appears after a few ranked games.</p>{% endif %}
   </div>
   <p class="small muted" style="margin:8px 0 0">{% if rank_src == 'rr' %}Rank and RR after each ranked game (HenrikDev's rank history, kept here so older games stay). Green = RR won, red = lost. Hover for the game; ringed dots have a coaching report (click).{% else %}From the rank shown in each ranked match (no RR yet: press <i>Import</i> on Stats &amp; maps to load the RR history).{% endif %}</p>
+</section>
+{% endif %}
+
+{% if when %}
+<section class="card" id="when" style="margin-bottom:14px">
+  <div class="row between"><h2 style="margin:0">When you play best</h2>
+    <span class="small muted">{{ when.sessions }} sessions, {{ when.avg_len }} games each on average · {{ (when.overall.wr|pct) }} won overall</span></div>
+  {% if when.hints %}<ul class="whints">{% for h in when.hints %}<li>{{ h }}.</li>{% endfor %}</ul>{% endif %}
+  <div class="wgrid">
+    {% for title, items, tip in (("Game in the session", when.by_game, "A session = games with less than 75 minutes between them."),
+                                 ("After losses", when.after_losses, "Win rate of the next game in the same session."),
+                                 ("Time of day", when.by_time, "Server time: morning 05–12, afternoon 12–18, evening 18–22, late 22–05."),
+                                 ("Weekday", when.by_day, "A game before 05:00 counts for the day before.")) %}
+    <div class="wbox"><h3 tabindex="0" data-tip="{{ tip }}">{{ title }}</h3>
+      {% for b in items %}<div class="wrow {{ 'early' if b.confidence == 'early sign' }}" tabindex="0" data-tip="{{ b.games }} games, {{ (b.wr|pct) }} won, ACS {{ b.acs|round|int }} ({{ b.confidence }})">
+        <span class="wl">{{ b.label }}</span><span class="wbar"><i style="width:{{ ((b.wr or 0) * 100)|round|int }}%;background:{{ 'var(--win)' if b.wr >= when.overall.wr + 0.05 else ('var(--red)' if b.wr <= when.overall.wr - 0.05 else 'var(--blue)') }}"></i></span>
+        <span class="wv">{{ (b.wr|pct) }}</span><span class="wn">{{ b.games }}</span></div>{% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  <p class="small muted" style="margin:8px 0 0">Win rate per group; the number on the right is games. Green / red = 5 points above / below your overall win rate. Faded rows rest on few games (early sign).</p>
 </section>
 {% endif %}
 

@@ -694,6 +694,13 @@ class StatsRunner:
         ci = self.checkin_facts(pid)
         if ci:
             out["check_ins"] = ci
+        try:
+            from ..stats import sessions
+            w = sessions.facts(rows)
+            if w:
+                out["when_they_play_best"] = w           # 4.17
+        except Exception:
+            pass
         return out
 
     def checkin_facts(self, pid: int) -> dict | None:

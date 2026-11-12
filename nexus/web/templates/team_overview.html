@@ -13,6 +13,10 @@
 .alist{display:flex;flex-direction:column;gap:4px}
 .arow{display:grid;grid-template-columns:24px 1fr auto auto;gap:8px;align-items:center;font-size:13px}
 .arow .n{font-variant-numeric:tabular-nums;color:var(--muted);text-align:right;min-width:52px}
+.duohl{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin:12px 0}
+.duohl > div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;gap:2px}
+.duohl b{font-size:15px}
+table.duos tr.early td{opacity:.55}
 .conf{font-size:11px;padding:0 7px;border-radius:99px;background:var(--win-soft);color:var(--win);white-space:nowrap}
 .conf.early{background:var(--accent-soft);color:var(--amber)}
 .early{color:var(--amber);margin-left:2px;font-weight:700}
@@ -175,5 +179,28 @@
   <p class="muted small" style="margin:8px 0 0">Playstyle: where a player stands among the players in your matches (50 % = average).</p>
 </section>
 {% endif %}
+{% endif %}
+
+{% if duos %}
+<section class="card" id="duos">
+  <div class="row between"><h2 style="margin:0">Who plays well together</h2>
+    <span class="small muted">{{ duos.matches }} team matches{% if duos.sum.team_wr is not none %} · {{ pct(duos.sum.team_wr) }} won{% endif %}</span></div>
+  {% set s = duos.sum %}
+  {% if s.best %}<div class="duohl">
+    <div><span class="muted small">Best pair</span><b>{{ s.best.a }} + {{ s.best.b }}</b><span class="small">{{ pct(s.best.wr) }} of {{ s.best.games }} games won</span></div>
+    {% if s.worst and s.worst is not sameas s.best %}<div><span class="muted small">Weakest pair</span><b>{{ s.worst.a }} + {{ s.worst.b }}</b><span class="small">{{ pct(s.worst.wr) }} of {{ s.worst.games }} games won</span></div>{% endif %}
+    {% if s.traders %}<div><span class="muted small">Trade each other most</span><b>{{ s.traders.a }} + {{ s.traders.b }}</b><span class="small">{{ pct(s.traders.trade_share) }} of their deaths</span></div>{% endif %}
+    {% if s.apart and s.apart.alone_share %}<div><span class="muted small">Split up most</span><b>{{ s.apart.a }} + {{ s.apart.b }}</b><span class="small">both died alone in {{ pct(s.apart.alone_share) }} of rounds</span></div>{% endif %}
+  </div>{% endif %}
+  <div class="tablewrap"><table class="mx duos">
+    <thead><tr><th>Pair</th><th>Games</th><th>Won</th><th tabindex="0" data-tip="One of them died and the other killed that enemy within 5 s, as a share of the pair's deaths in these games.">Traded each other</th><th tabindex="0" data-tip="Rounds in which both died with no teammate within 20 m.">Both died alone</th></tr></thead>
+    <tbody>{% for p in duos.pairs %}<tr class="{{ 'early' if p.confidence == 'early sign' }}">
+      <td><b>{{ p.a }}</b> + <b>{{ p.b }}</b></td><td>{{ p.games }}</td>
+      <td class="{{ 'wr-good' if duos.sum.team_wr is not none and p.games >= 4 and p.wr >= duos.sum.team_wr + 0.08 else ('wr-bad' if duos.sum.team_wr is not none and p.games >= 4 and p.wr <= duos.sum.team_wr - 0.08 else '') }}">{{ pct(p.wr) }}</td>
+      <td>{% if p.trade_share is not none %}{{ pct(p.trade_share) }} <span class="muted small">({{ p.trades }}/{{ p.deaths }})</span>{% else %}–{% endif %}</td>
+      <td>{{ pct(p.alone_share) if p.alone_share is not none else '–' }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="muted small" style="margin:8px 0 0">Matches where at least 3 of the team played together; a pair counts when both were on the same team. Faded rows: fewer than 12 games together (early sign).</p>
+</section>
 {% endif %}
 {% endblock %}

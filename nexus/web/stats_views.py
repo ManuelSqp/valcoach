@@ -742,7 +742,21 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         ov = overview_team(checkin_igl(t, team_roles(members, local_meta(filter_rows(owner_rows(t.owner_id), t.queue)), maps)),
                            pros) if members else None
         return render_template("team_overview.html", t=t, tab="overview", ov=ov, view=view, queues=QUEUE_TABS,
-                               premier_status=sr.status(f"premier:{tid}"))
+                               premier_status=sr.status(f"premier:{tid}"), duos=team_duos(t))
+
+    def team_duos(t) -> dict | None:
+        """4.17: every pair of members in the matches they played together."""
+        from ..stats import duos as du
+        try:
+            d = team_data(t)
+        except Exception:
+            return None
+        ms = d["matches"]
+        ps = du.pairs(ms, d["names"]) if ms else []
+        if not ps:
+            return None
+        won = sum(1 for m, side in ms if m.team_rounds_won.get(side, 0) > m.team_rounds_won.get(m.other_team(side), 0))
+        return {"pairs": ps, "matches": len(ms), "sum": du.summary(ps, won / len(ms) if ms else None)}
 
     team_cache: dict[tuple, object] = {}
 
@@ -1076,6 +1090,12 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
         from ..stats import checkins as ck
         notes = store.team_notes(t.id)
         team_ci = ck.team_facts(ck.load(sr.team_dir(t.id)), {m["pid"]: b["byid"][m["pid"]].name for m in b["members"]})
+        try:
+            from ..stats import duos as du
+            td = team_data(t)
+            duo_facts = du.facts(du.pairs(td["matches"], td["names"])) if td["matches"] else []
+        except Exception:
+            duo_facts = []
         scores = {p["label"]: p["scores"] for p in b["roles"]["players"]}
         items = []
         for m in b["members"]:
@@ -1086,6 +1106,9 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
             facts.update(sr.coach_extras(m["pid"], b["rows_by"][m["pid"]], cache_dir))      # 4.15
             if team_ci:
                 facts["team_check_ins"] = team_ci
+            mine = [x for x in duo_facts if name in x["pair"].split(" + ")]
+            if mine:
+                facts["duos_with_teammates"] = mine          # 4.17
             items.append({"pid": m["pid"], "name": name, "roles": b["role_of"].get(name, []), "facts": facts})
         return items
 

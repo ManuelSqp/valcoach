@@ -84,6 +84,7 @@ def register(app, store, sr, helpers: dict) -> None:
                                can_edit=can_edit, weeks=weeks, cards=cards, checks=checks, clutch=cl, retake=rt,
                                postplant=pp, n_full=len(full), n_v3=v3, n=len(rows),
                                rank=rk.summary(pts), rank_chart=rk.chart(pts), rank_src=rank_src,
+                               when=__import__("nexus.stats.sessions", fromlist=["analyse"]).analyse(rows),
                                reports={j.match_id: j.id for j in reversed(store.jobs(pid, 500)) if j.status == "done"} if can_edit else {})
 
     # ------------------------------------------------------------------ quiz

@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.16.4** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.17.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -288,6 +288,12 @@ listed as a weakness: they mostly come with the role. On top, which agent roles 
 roles nobody covers and mains that collide. Two views: **Top 5 agents** (a card per player) and **All agents** (every
 agent and map as a table, players side by side, plus roles and playstyle in one table).
 
+**Who plays well together** (4.17, at the bottom of *Player overview*): every pair of teammates from the matches at
+least three of you played together, with games, win rate, how often they traded each other (one died, the other
+killed that enemy within 5 s) and how often both died alone in the same round. On top the best and weakest pair,
+the pair that trades each other most and the one that splits up most. Pairs with fewer than 12 games together are
+faded (`stats/duos.py`). The coach sees the pairs too.
+
 **Comp sheet** (*Strategy › Comp sheet*, 4.13) is the team's agent pool and ideal comps on one page. **Agent pool:**
 a column per player with his agents from best to worst (green to red), starting from the stats (most played, then
 win rate). Each player edits his own column (linked by the in-game name; the team owner can edit all): move agents
@@ -307,7 +313,10 @@ off under *Account › Look & feel*. **Ctrl+K** (or `/`) opens a quick search fo
 and strat boards. The strat book has a **Lineups** library with clip links per map, agent and ability.
 
 **Progress and Training** (player tabs). *Progress* shows your numbers week by week with trends, whether each
-weekly focus moved its number, and clutches / retakes / post-plants. *Training* has your aim fundamentals (headshots,
+weekly focus moved its number, and clutches / retakes / post-plants. **When you play best** (4.17) groups your games by their place in a session
+(games less than 75 minutes apart), by the losses right before, by time of day and by weekday, and says plainly
+when a difference is clear, e.g. that the win rate drops from the 4th game on or after two losses in a row
+(`stats/sessions.py`). The coach uses it too. *Training* has your aim fundamentals (headshots,
 fights by range), what to work on, a 20-minute warm-up with a streak, teammates to learn from, and up to five agents
 to learn with a learning path that ticks itself from your games.
 
@@ -617,6 +626,7 @@ Settings (web) or `[video]` (CLI).
 | `web/ui.py`, `web/static/ui.js`, `web/static/styles/*.css` | styles per user, animation switches, Ctrl+K search |
 | `web/lineups.py` | lineups library in the strat book |
 | `stats/progress.py`, `stats/training.py`, `web/player_views.py` | Progress and Training tabs: weekly numbers, focus checks, aim, routine, learning paths |
+| `stats/sessions.py`, `stats/duos.py` | when you play best (sessions, losing streaks, time of day) and which teammates play well together |
 | `stats/scouting.py` | scouting summaries of other teams, how to play them, the map veto |
 | `web/premierjobs.py`, `web/premier_views.py` | Premier tab: division scouting, match reviews, this week's map, the brief |
 | `web/drafts.py`, `web/static/drafts.js` | roster drafts: storage (typed fields only), player numbers per agent, the drag-and-drop editor |

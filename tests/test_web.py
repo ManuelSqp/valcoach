@@ -1521,6 +1521,7 @@ def test_progress_and_training_pages(app, monkeypatch):
     assert _wait_stats(app, f"import:{me}")["status"] == "done"
     page = c.get(f"/profiles/{me}/progress").data.decode()
     assert "Clutches, retakes, post-plants" in page and "KAST" in page and "1v1" in page
+    assert 'id="when"' in page and "Game in the session" in page and "After losses" in page     # 4.17
     # rank over time from the RR history (kept locally), with a chart
     assert "Rank over time" in page and "<svg class=\"rkc\"" in page and " RR</div>" in page
     entries = app.extensions["nexus"]["stats"].rank_path(me)
@@ -3291,6 +3292,7 @@ def test_goals_checkins_and_context(app, monkeypatch):
     assert "3 answers" in page and "red-3 note" in page and "Caller according to the check-ins: <b>red-2</b>" in page
     ov = c.get(f"/teams/{tid}/overview").data.decode()
     assert "Named as the caller in 3 of 3 post-match check-ins" in ov
+    assert 'id="duos"' in ov and "Who plays well together" in ov and "Traded each other" in ov      # 4.17
     assert "caller (3 check-in votes)" in c.get(f"/teams/{tid}/roles").data.decode()
 
     # what the coach gets for a player
