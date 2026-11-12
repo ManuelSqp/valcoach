@@ -35,6 +35,8 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--panel3)}tr.sel td{bac
 .pickres .opt.first{border-color:var(--win)}
 .pickres .opt .agentcell{font-weight:700;font-size:15px}
 .tag2{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:0 7px;margin-left:4px}
+.whints{margin:10px 0 4px;padding-left:18px}.whints li{margin:3px 0}
+table.peers{max-width:760px}table.peers td.n,table.peers th.n{text-align:right}table.peers .wr-good{color:var(--win)}table.peers .wr-bad{color:var(--red)}
 </style>
 {% endblock %}
 {% block content %}
@@ -89,6 +91,20 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--panel3)}tr.sel td{bac
   </div>
   {% if ctx.note %}<p class="small" style="margin:8px 0 0;color:var(--amber)">{{ ctx.note }}.</p>{% endif %}
   {% if ctx.opp %}<div class="row small muted" style="margin-top:10px;gap:14px;flex-wrap:wrap">{% for o in ctx.opp %}<span>{{ o.label }}: {{ o.games }} games, {{ o.wr|pct }} won, ACS {{ o.acs|num }}{% if o.kd is not none %}, K/D {{ o.kd|num(2) }}{% endif %} <i>({{ o.confidence }})</i></span>{% endfor %}</div>{% endif %}
+</section>
+{% endif %}
+
+{% if peers %}
+<section class="card" id="peers">
+  <div class="row between"><h2 style="margin:0">You vs your rank</h2>
+    <span class="small muted">{{ peers.games }} games around {{ peers.rank }} · {{ peers.same }} player-games of your rank{% if peers.next %} · {{ peers.next }} a rank higher{% endif %}</span></div>
+  {% if peers.hints %}<ul class="whints">{% for h in peers.hints %}<li>{{ h }}.</li>{% endfor %}</ul>{% endif %}
+  <div class="tablewrap"><table class="peers">
+    <tr><th></th><th class="n">You</th><th class="n" tabindex="0" data-tip="Players within one division of your rank in the same matches.">Your rank</th>{% if peers.next %}<th class="n" tabindex="0" data-tip="Players two to four divisions above your rank in the same matches.">A rank higher</th>{% endif %}</tr>
+    {% for m in peers.metrics %}<tr><td>{{ m.label }}</td><td class="n"><b class="{{ 'wr-good' if m.v_same == 'good' else ('wr-bad' if m.v_same == 'bad' else '') }}">{{ m.you }}</b></td>
+      <td class="n">{{ m.same }}</td>{% if peers.next %}<td class="n {{ 'muted' if not m.v_next }}">{{ m.next }}</td>{% endif %}</tr>{% endfor %}
+  </table></div>
+  <p class="small muted" style="margin:8px 0 0">From the other players in your own matches, with the rank shown in each match. Green / red: clearly better / worse than your rank. Opening duels per round depend on your role, so they are neither good nor bad.</p>
 </section>
 {% endif %}
 

@@ -157,7 +157,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             all_agents=roles.all_agents(), map_names=sorted({m["map"] for m in maps} | set(KNOWN_MAPS)), tab="stats",
             can_edit=can_edit,
             pick=pick, pick_map=pick_map, locked=locked + [""] * (4 - len(locked)),
-            recent=rows[:12], ctx=stats_context(rows))
+            recent=rows[:12], ctx=stats_context(rows),
+            peers=__import__("nexus.stats.peers", fromlist=["analyse"]).analyse(rows))
 
     def stats_context(rows: list[dict]) -> dict:
         """4.15: weighted numbers, rounds by buy state and games by lobby strength."""
@@ -922,6 +923,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     register_practice(app, store, sr, get_team)
     from .evening import register as register_evening
     register_evening(app, store, sr, get_team)
+    from .prep_views import register as register_prep
+    register_prep(app, store, sr, get_team)
     from .aim import register as register_aim
     register_aim(app, store, sr, view_profile, filter_rows)
     from .trainer import register as register_trainer

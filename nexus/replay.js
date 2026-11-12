@@ -5,6 +5,11 @@
 // casts (4.16.2, replay file): [{t, id, buy}] ability uses, drawn as a pulse where the player stood.
 // effects (4.16.3, replay file): [{t0, t1, id, agent, slot, type, p, r}] placed utility (smoke, wall, slow,
 // damage, trap, recon, orb, flash, other) drawn at its spot while it lasts, with the ability's icon.
+// Hooks (4.18, set by the page as window.NEXUS_RP, all optional): pins(round) -> [{id, t, text, by, strokes}],
+// addPin(round, {t, text, strokes}) -> Promise, delPin(round, id) -> Promise, canDelete(pin) -> bool,
+// toStrat(round, {t, side, items, notes}) -> Promise of the new strat board's URL. With them the playback gets
+// notes at a moment with lines drawn on the map (shown around their time, the playback stops there) and
+// "Strat board" (this moment's positions, utility and drawings on a new board).
 (function () {
   const NS = 'http://www.w3.org/2000/svg', S = 1000;
   const COL = {us: '#2dd4bf', them: '#ff4655', you: '#f6d24a', better: '#f2b84b', plant: '#ff4655', defuse: '#2dd4bf'};
@@ -14,6 +19,9 @@
   const KILL_FLASH_MS = 2000;
   const SEEN_MS = 900;            // a spotted enemy icon stays visible this long
   const CAST_MS = 1800;           // an ability pulse is shown this long after the cast
+  const PIN_MS = 4000;            // a note and its drawing are shown this long from their time
+  const AB_SLOT = {Q: 'Ability1', E: 'Ability2', C: 'Grenade', X: 'Ultimate'};
+  const PIN_COL = '#f6d24a';
 
   const fmt = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const parseT = s => { const m = /(\d+):(\d{1,2})/.exec(s || ''); return m ? (+m[1] * 60 + +m[2]) * 1000 : null; };
@@ -67,6 +75,8 @@
     const FX_NAME = {smoke: 'smoke', wall: 'wall', slow: 'slow', damage: 'molly / damage', trap: 'trap', recon: 'recon',
                      orb: 'orb', flash: 'flash', other: 'ability'};
     const castsBefore = (id, t) => casts.reduce((n, c) => n + (c.id === id && c.t <= t ? 1 : 0), 0);
+    const HK = window.NEXUS_RP || null;
+    const pinsOf = () => (HK && HK.pins ? HK.pins(n) || [] : []);
 
     // ------------------------------------------------------------ layout
     box.innerHTML = '';
@@ -82,7 +92,14 @@
        <span class="rp-time">0:00 / ${fmt(R.end)}</span>
        <div class="rp-scrub"><div class="rp-ticks"></div><input type="range" min="0" max="${R.end}" step="100" value="0"></div>
        <select class="rp-speed" title="Speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
-       ${vodStart != null ? '<button class="rp-vod" title="Show this moment in the VOD">🎬</button>' : ''}`);
+       ${vodStart != null ? '<button class="rp-vod" title="Show this moment in the VOD">🎬</button>' : ''}
+       ${HK && HK.addPin ? '<button class="rp-pin" title="Draw on the map and leave a note at this moment">✎ Note</button>' : ''}
+       ${HK && HK.toStrat ? '<button class="rp-strat" title="This moment (positions, utility, drawings) on a new strat board">⇢ Strat board</button>' : ''}
+       <span class="rp-msg"></span>`);
+    const comp = h('div', {class: 'rp-compose', hidden: ''},
+      `<span class="rp-ctime"></span><input type="text" maxlength="300" placeholder="What should everyone see here?">
+       <button class="rp-csave">Save note</button><button class="rp-cundo" title="Remove the last line">↶</button>
+       <button class="rp-ccancel">Cancel</button><span class="rp-cmsg"></span>`);
     const opts = h('div', {class: 'rp-opts'},
       `<label><input type="checkbox" data-o="names" checked> names</label>
        <label><input type="checkbox" data-o="callouts" checked> callouts</label>
@@ -90,8 +107,9 @@
        ${R.view ? '<label><input type="checkbox" data-o="cones" checked> view cones</label>' : ''}
        ${(R.seen || []).length ? '<label><input type="checkbox" data-o="seen" checked> spotted enemies</label>' : ''}
        ${casts.length || effects.length ? '<label><input type="checkbox" data-o="util" checked> utility</label>' : ''}
+       ${HK && HK.pins ? '<label><input type="checkbox" data-o="pins" checked> notes</label><label><input type="checkbox" data-o="stop" checked> stop at notes</label>' : ''}
        <span class="rp-note">solid = known position (kills${(R.measured || []).length ? (R.source === 'replay file' ? ', replay file' : ', your minimap') : ''}) · faded = estimated ${R.routes ? '(walkable route at running speed)' : '(straight line)'}${(R.seen || []).length ? ' · red rings = enemies seen on your minimap' : ''}${casts.length ? ' · ⚡ pulse = ability used (replay file)' : ''}${effects.length ? ' · grey circles = smokes, icons = placed utility while it lasts' : ''} · click a player to show their route · zoom: + / − or Ctrl + wheel</span>`);
-    main.append(stage, bar, opts);
+    main.append(stage, bar, comp, opts);
     if (B) main.appendChild(h('div', {class: 'rp-better'}, `<b>Better position ${esc(B.time)}: ${esc(B.callout)}</b> — ${esc(B.why)}`));
     const side = h('aside', {class: 'rp-side'});
     const rosterEl = h('div', {class: 'rp-roster'});
@@ -99,6 +117,8 @@
     const colA = h('div', {class: 'rp-col'}), colB = h('div', {class: 'rp-col'});
     colA.append(h('div', {class: 'rp-h'}, 'Players'), rosterEl);
     colB.append(h('div', {class: 'rp-h'}, 'Round events'), feedEl);
+    const pinsEl = h('div', {class: 'rp-feed rp-pins'});
+    if (HK && HK.pins) colB.append(h('div', {class: 'rp-h'}, 'Notes'), pinsEl);
     side.append(colA, colB);
     root.append(main, side);
     box.appendChild(root);
@@ -122,7 +142,8 @@
 
     // ------------------------------------------------------------ state
     let T = 0, playing = false, speed = 1, last = null;
-    const show = {names: true, callouts: true, trails: true, cones: !!R.view, seen: true, util: true};
+    const show = {names: true, callouts: true, trails: true, cones: !!R.view, seen: true, util: true, pins: true, stop: true};
+    let drawing = false, pending = [], stroke = null, pinSig = '';
     const measured = new Set(R.measured || []);
     const selected = new Set();
     const youId = ids.find(id => who(id).you);
@@ -173,6 +194,32 @@
       ticks.appendChild(tk);
     }
 
+    // notes: list + ticks, rebuilt when they change (another viewer's notes arrive with the page's polling)
+    function renderPins() {
+      const ps = pinsOf(), sig = ps.map(p => p.id + ':' + p.t).join(',');
+      if (sig === pinSig) return;
+      pinSig = sig;
+      ticks.querySelectorAll('.rp-tick.pin').forEach(x => x.remove());
+      pinsEl.innerHTML = ps.length ? '' : '<p class="rp-none">No notes yet. Pause at a moment, press ✎ Note, draw on the map and write a line.</p>';
+      for (const p of ps) {
+        const tk = h('span', {class: 'rp-tick pin', title: `${fmt(p.t)} note: ${p.text || 'drawing'}`});
+        tk.style.left = (100 * p.t / R.end) + '%'; tk.style.background = PIN_COL;
+        ticks.appendChild(tk);
+        const r = h('button', {class: 'rp-ev rp-pinrow'}, `<b>${fmt(p.t)}</b><span>✎ ${esc(p.text || '(drawing)')} <small>${esc(String(p.by || '').split('#')[0])}</small></span>` +
+          (HK.delPin && (!HK.canDelete || HK.canDelete(p)) ? '<span class="rp-pdel" title="Delete this note">✕</span>' : ''));
+        r.onclick = ev => {
+          if (ev.target.classList.contains('rp-pdel')) {
+            ev.stopPropagation();
+            HK.delPin(n, p.id).then(() => { pinSig = ''; draw(); }).catch(e => { msg(e.message || 'not deleted'); });
+            return;
+          }
+          pause(); seek(p.t);
+        };
+        pinsEl.appendChild(r);
+      }
+    }
+    const msg = html => { bar.querySelector('.rp-msg').innerHTML = html; };
+
     // ------------------------------------------------------------ drawing
     function cone(x, y, a, color, alpha) {
       const L = 95, w = Math.PI / 6;
@@ -211,6 +258,7 @@
     }
 
     function draw() {
+      if (HK && HK.pins) renderPins();
       while (g.firstChild) g.removeChild(g.firstChild);
       gCall.style.display = show.callouts ? '' : 'none';
       // spike
@@ -334,6 +382,23 @@
         const est = knownGap(tr, T) > KNOWN_MS;
         token(id, p[0] * S, p[1] * S, {est, alpha: est ? .62 : 1});
       }
+      // notes: their lines and text around their time, and what's being drawn now
+      const line = (pts, op, dash) => el('polyline', {points: pts.map(q => `${q[0]},${q[1]}`).join(' '), fill: 'none', stroke: PIN_COL,
+        'stroke-width': 7, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: op, 'stroke-dasharray': dash ? '14 8' : null}, g);
+      if (show.pins) for (const p of pinsOf()) {
+        if (T < p.t - 300 || T > p.t + PIN_MS) continue;
+        const op = T < p.t ? .5 : Math.max(.25, 1 - (T - p.t) / PIN_MS * .75);
+        for (const st of p.strokes || []) line(st, op);
+        if (p.text) {
+          const at = (p.strokes && p.strokes[0] && p.strokes[0][0]) || [40, 60];
+          const right = at[0] > S / 2;       // on the right half the text runs to the left, so it stays on the map
+          const tx = el('text', {x: right ? at[0] - 14 : at[0] + 14, y: Math.max(at[1] - 14, 30), 'text-anchor': right ? 'end' : 'start',
+                                 'font-size': 26, 'font-weight': 700, fill: PIN_COL,
+                                 stroke: '#0b0e13', 'stroke-width': 6, 'paint-order': 'stroke', opacity: Math.min(1, op + .2)}, g);
+          tx.textContent = p.text.length > 60 ? p.text.slice(0, 58) + '…' : p.text;
+        }
+      }
+      for (const st of pending) line(st, .95, true);
       // side panel state
       for (const id of ids) {
         const tr = R.tracks[id], dead = tr && tr.death != null && T >= tr.death;
@@ -354,8 +419,13 @@
     const playBtn = bar.querySelector('.rp-play');
     function frame(ts) {
       if (!playing) return;
+      const before = T;
       if (last !== null) T += (ts - last) * speed;
       last = ts;
+      if (show.stop && show.pins) {
+        const p = pinsOf().find(q => q.t > before && q.t <= T);
+        if (p) { T = p.t; pause(); draw(); return; }
+      }
       if (T >= R.end) { T = R.end; pause(); }
       draw();
       if (playing) requestAnimationFrame(frame);
@@ -368,9 +438,56 @@
     bar.querySelector('.rp-speed').onchange = ev => { speed = +ev.target.value; };
     const vodBtn = bar.querySelector('.rp-vod');
     if (vodBtn) vodBtn.onclick = () => { pause(); if (window.seek) window.seek(vodStart + T / 1000); };
+    const pinBtn = bar.querySelector('.rp-pin'), cin = comp.querySelector('input');
+    const compose = on => {
+      drawing = on; comp.hidden = !on; svg.style.cursor = on ? 'crosshair' : '';
+      if (on) { pause(); comp.querySelector('.rp-ctime').textContent = `Note at ${fmt(T)}: draw on the map, then write a line`; comp.querySelector('.rp-cmsg').textContent = ''; cin.focus(); }
+      else { pending = []; stroke = null; cin.value = ''; }
+      if (pinBtn) pinBtn.classList.toggle('on', on);
+      draw();
+    };
+    if (pinBtn) pinBtn.onclick = () => compose(!drawing);
+    comp.querySelector('.rp-ccancel').onclick = () => compose(false);
+    comp.querySelector('.rp-cundo').onclick = () => { pending.pop(); draw(); };
+    const savePin = () => {
+      const text = cin.value.trim();
+      if (!text && !pending.length) { comp.querySelector('.rp-cmsg').textContent = 'Draw on the map or write something first.'; return; }
+      comp.querySelector('.rp-cmsg').textContent = 'saving…';
+      HK.addPin(n, {t: Math.round(T), text, strokes: pending}).then(() => { pinSig = ''; compose(false); })
+        .catch(e => { comp.querySelector('.rp-cmsg').textContent = 'Not saved: ' + (e.message || e); });
+    };
+    comp.querySelector('.rp-csave').onclick = savePin;
+    cin.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); savePin(); } else if (e.key === 'Escape') compose(false); });
+
+    // this moment on a new strat board: everyone alive where they stand, the utility that's up, the drawings
+    function moment() {
+      const items = [];
+      for (const id of ids) {
+        const tr = R.tracks[id]; if (!tr || (tr.death != null && T >= tr.death)) continue;
+        const p = posAt(tr, T); if (!p) continue;
+        items.push({t: 'agent', a: who(id).agent, x: Math.round(p[0] * S), y: Math.round(p[1] * S), c: who(id).us ? 'us' : 'them', label: who(id).name});
+      }
+      for (const e of effects) {
+        if (!(T >= e.t0 && (e.t1 == null || T <= e.t1))) continue;
+        const x = Math.round(e.p[0] * S), y = Math.round(e.p[1] * S), c = e.id && !who(e.id).us ? 'them' : 'us';
+        if (e.agent && AB_SLOT[e.slot]) items.push({t: 'ab', a: e.agent, s: AB_SLOT[e.slot], x, y, c});
+        else items.push({t: e.type === 'smoke' ? 'smoke' : e.type === 'damage' ? 'molly' : 'zone', x, y, r: 4.5});
+      }
+      const near = pinsOf().filter(p => Math.abs(p.t - T) <= PIN_MS);
+      for (const st of [...pending, ...near.flatMap(p => p.strokes || [])]) items.push({t: 'pen', pts: st, c: 'us'});
+      return {t: Math.round(T), side: R.attack ? 'attack' : 'defense', items,
+              notes: near.filter(p => p.text).map(p => `${fmt(p.t)} ${p.text}`).join('\n')};
+    }
+    const stratBtn = bar.querySelector('.rp-strat');
+    if (stratBtn) stratBtn.onclick = () => {
+      pause(); msg('making the strat board…');
+      HK.toStrat(n, moment()).then(url => msg(`<a href="${esc(url)}" target="_blank" rel="noopener">Open the strat board ↗</a>`))
+        .catch(e => msg(esc('Not made: ' + (e.message || e))));
+    };
     opts.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = () => { show[cb.dataset.o] = cb.checked; draw(); });
     root.tabIndex = 0;
     root.addEventListener('keydown', e => {
+      if (e.target.closest && e.target.closest('input, textarea, select')) return;
       if (e.key === ' ') { e.preventDefault(); playing ? pause() : play(); }
       else if (e.key === 'ArrowRight') { pause(); seek(T + 1000); }
       else if (e.key === 'ArrowLeft') { pause(); seek(T - 1000); }
@@ -391,6 +508,23 @@
       e.preventDefault(); const [x, y] = toSvg(e.clientX, e.clientY); zoom(e.deltaY > 0 ? 1.18 : 1 / 1.18, x, y);
     }, {passive: false});
     let drag = null;
+    svg.addEventListener('pointerdown', e => {
+      if (!drawing) return;
+      const [x, y] = toSvg(e.clientX, e.clientY);
+      stroke = [[Math.round(x), Math.round(y)]]; pending.push(stroke);
+      svg.setPointerCapture(e.pointerId); e.stopImmediatePropagation(); draw();
+    });
+    svg.addEventListener('pointermove', e => {
+      if (!drawing || !stroke) return;
+      const [x, y] = toSvg(e.clientX, e.clientY), l = stroke[stroke.length - 1];
+      if (Math.hypot(l[0] - x, l[1] - y) > 5 && stroke.length < 300) { stroke.push([Math.round(x), Math.round(y)]); draw(); }
+      e.stopImmediatePropagation();
+    });
+    svg.addEventListener('pointerup', e => {
+      if (!drawing) return;
+      if (stroke && stroke.length < 2) pending.pop();
+      stroke = null; e.stopImmediatePropagation(); draw();
+    });
     svg.addEventListener('pointerdown', e => { drag = {x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false}; svg.setPointerCapture(e.pointerId); });
     svg.addEventListener('pointermove', e => {
       if (!drag) return;
@@ -416,6 +550,7 @@
     };
 
     box._destroy = () => { playing = false; if (document.fullscreenElement === root) document.exitFullscreen(); };
+    box._redraw = () => { if (!playing) draw(); };      // the page got new notes (playing redraws anyway)
     draw();
   }
 

@@ -45,6 +45,7 @@
     if (st.finished !== wasFinished && !mine) { location.reload(); return; }
     if (follow && !host && S.current !== cur) { cur = S.current; renderRound(); }
     renderStrip(); renderHere(); renderMarks();
+    const rb = $('#rp-box'); if (replayOn && rb && rb._redraw) rb._redraw();       // notes from the others
     if (st.updated !== shownSummary) refreshSummary(st.updated);
   }
   let shownSummary = S.updated, sumTimer = null;
@@ -230,6 +231,23 @@
     ]).then(([d]) => { replayData = d; });
     return loading;
   }
+  // 4.18: notes with drawings on the playback (saved for everyone) and "this moment on a strat board"
+  window.NEXUS_RP = {
+    pins: n => ((S.pins || {})[String(n)] || []),
+    addPin: (n, p) => api({action: 'pin', round: +n, t: p.t, text: p.text, strokes: p.strokes}).then(st => apply(st, true)),
+    delPin: (n, id) => api({action: 'unpin', round: +n, id}).then(st => apply(st, true)),
+    canDelete: p => host || p.by_id === B.uid,
+    toStrat: async (n, m) => {
+      const ts = `${Math.floor(m.t / 60000)}:${String(Math.floor(m.t / 1000) % 60).padStart(2, '0')}`;
+      const name = `${B.map} R${n} ${ts} vs ${B.opponent || 'them'}`.slice(0, 80);
+      const r = await fetch(B.to_strat, {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({map: B.map, side: m.side, name, items: m.items,
+                              notes: `From the review evening, round ${n} at ${ts}.` + (m.notes ? '\n' + m.notes : '')})});
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'not made');
+      return d.url;
+    },
+  };
   async function showReplay() {
     const box = $('#rp-box'), note = $('#rpnote');
     try { await loadReplay(); } catch (e) { note.textContent = 'No replay for this match (the map or the round data is missing).'; return; }

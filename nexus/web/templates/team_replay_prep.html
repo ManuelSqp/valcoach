@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Replay scouting · {{ t.name }} · Nexus{% endblock %}
+{% macro ai(agent, size=20) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
+{% macro pct(x) %}{{ (x * 100)|round|int }} %{% endmacro %}
+{% block head %}
+<style>
+.ai{border-radius:50%;vertical-align:middle;background:var(--ink);object-fit:cover;flex:none}
+.maptabs .n{font-size:11px;font-weight:650;background:var(--line);color:var(--muted);border-radius:99px;padding:0 6px;margin-left:6px}
+form.rpick{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;justify-content:flex-start;margin:12px 0;padding:0;background:none;border:0;box-shadow:none}
+form.rpick label{display:flex;flex-direction:column;align-items:flex-start;gap:4px;font-size:12.5px;color:var(--muted);margin:0}
+form.rpick select{width:auto;min-width:220px}
+.rpgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px;align-items:start}
+.rpmap{width:100%;aspect-ratio:1;background:var(--ink);border-radius:10px;display:block}
+.rpmap text{font:600 15px ui-sans-serif,system-ui,sans-serif}
+.rlist{margin:8px 0 0;padding:0;list-style:none;font-size:13.5px}
+.rlist li{display:flex;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--line)}
+.rlist li:first-child{border-top:0}
+.rlist .c{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.rlist .sw{width:12px;height:12px;border-radius:50%;flex:none;border:2px solid rgba(0,0,0,.4)}
+.rh{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:14px 0 2px}
+.whints{margin:10px 0 4px;padding-left:18px}.whints li{margin:3px 0}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:6px}
+.legend span{display:inline-flex;gap:5px;align-items:center}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+
+{% if not n_replays %}
+<section class="card" style="margin-top:12px">
+  <h2>No replay files yet</h2>
+  <p>Replay scouting reads the game's replay files on the server: where every player stood, every smoke, wall, molly and
+    recon with its spot and time. Upload replays of matches two or more of you played (on a coaching report or in the app);
+    each one shows the habits of the team you played, and yours.</p>
+</section>
+{% else %}
+
+<form class="rpick" method="get">
+  <label>Team<select name="who" onchange="this.form.submit()">
+    {% for o in opps %}<option value="{{ o.key }}" {{ 'selected' if who == o.key }}>{{ o.label }} ({{ o.matches|length }} {{ 'match' if o.matches|length == 1 else 'matches' }})</option>{% endfor %}
+    <option value="us" {{ 'selected' if who == 'us' }}>{{ t.name }} (your team)</option></select></label>
+  <label>Moment<select name="at" onchange="this.form.submit()">{% for s in times %}<option value="{{ s }}" {{ 'selected' if s == at }}>{{ s }} s into the round</option>{% endfor %}</select></label>
+  {% if mp %}<input type="hidden" name="map" value="{{ mp }}">{% endif %}
+  <noscript><button class="btn sm">Show</button></noscript>
+</form>
+{% if sel %}<p class="small muted" style="margin:-4px 0 10px"><span>Players:</span> <b>{{ sel.names|join(', ') }}</b></p>{% endif %}
+
+{% if maps %}
+<div class="subtabs maptabs" role="navigation" aria-label="Map">{% for m in maps %}<a class="{{ 'on' if m == mp }}" href="{{ url_for('team_replay_prep', tid=t.id, who=who, at=at, map=m) }}">{{ m }}<span class="n">{{ a[m].matches }}</span></a>{% endfor %}</div>
+{% if hints %}<ul class="whints">{% for h in hints %}<li>{{ h }}.</li>{% endfor %}</ul>{% endif %}
+
+<div class="rpgrid" style="margin-top:10px">
+{% for side in ('defense', 'attack') %}{% set s = d.get(side) %}
+<section class="card" id="{{ side }}">
+  <div class="row between"><h2 style="margin:0">{{ 'Defense' if side == 'defense' else 'Attack' }}</h2>
+    {% if s %}<span class="small muted">{{ s.rounds }} rounds, {{ s.won }} won</span>{% endif %}</div>
+  {% if not s %}<p class="muted small">{{ 'No defense rounds in the replays on this map.' if side == 'defense' else 'No attack rounds in the replays on this map.' }}</p>{% else %}
+  <svg class="rpmap" viewBox="0 0 1000 1000" role="img" aria-label="{{ mp }}">
+    <defs><clipPath id="cl-{{ side }}" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath></defs>
+    <image href="{{ map_img }}" x="0" y="0" width="1000" height="1000" opacity=".8" preserveAspectRatio="none"/>
+    {% for typ, ag, slot, u, v, t0 in s.util_points %}<circle cx="{{ u }}" cy="{{ v }}" r="{{ 36 if typ in ('smoke', 'slow', 'damage') else 14 }}" fill="{{ type_col.get(typ, '#ddd') }}" opacity="{{ 0.22 if typ in ('smoke', 'slow', 'damage') else 0.7 }}" stroke="{{ type_col.get(typ, '#ddd') }}" stroke-width="2"><title>{{ ag }} {{ type_name.get(typ, typ) }} · {{ t0|round|int }} s</title></circle>{% endfor %}
+    {% for ag, u, v in s.points %}<image href="{{ url_for('agent_icon', name=ag) }}" x="{{ u - 13 }}" y="{{ v - 13 }}" width="26" height="26" opacity=".55" clip-path="url(#cl-{{ side }})"><title>{{ ag }}</title></image>{% endfor %}
+  </svg>
+  <div class="legend"><span><i class="sw" style="background:#9aa4b2;display:inline-block;width:10px;height:10px;border-radius:50%"></i>agent icons: where players stood {{ at }} s in (one icon per player and round)</span>{% for typ in ('smoke', 'damage', 'slow', 'wall', 'recon', 'trap') %}<span><i class="sw" style="background:{{ type_col[typ] }};display:inline-block;width:10px;height:10px;border-radius:50%"></i>{{ type_name[typ] }}</span>{% endfor %}</div>
+
+  {% if s.setups %}<div class="rh">Setup at {{ at }} s</div>
+  <ul class="rlist">{% for p, c in s.setups %}<li><b>{{ p }}</b><span class="c">{{ c }} of {{ s.with_pos }} rounds</span></li>{% endfor %}</ul>{% endif %}
+  {% if s.spots %}<div class="rh">Spots taken most</div>
+  <ul class="rlist">{% for x in s.spots %}<li>{% for ag in x.agents %}{{ ai(ag) }}{% endfor %}<span>{{ x.area }}</span> <span class="muted small">{{ x.zone }}</span><span class="c">{{ pct(x.share) }} of rounds{% if x.players >= 1.5 %} · usually {{ x.players|round|int }}{% endif %}</span></li>{% endfor %}</ul>{% endif %}
+  {% if s.util %}<div class="rh">Utility thrown most</div>
+  <ul class="rlist">{% for x in s.util %}<li><i class="sw" style="background:{{ type_col.get(x.type, '#ddd') }}"></i><span>{{ type_name.get(x.type, x.type) }}</span> <span class="muted">{{ x.area }}</span>{% for ag in x.agents %}{{ ai(ag, 18) }}{% endfor %}<span class="c">{{ x.n }}× · around {{ (x.t or 0)|round|int }} s</span></li>{% endfor %}</ul>{% endif %}
+  {% if s.plants %}<div class="rh">Plants</div>
+  <ul class="rlist">{% for site, c in s.plants %}<li><b>{{ site }}</b><span class="c">{{ c }} of {{ s.rounds }} rounds</span></li>{% endfor %}</ul>{% endif %}
+  {% endif %}
+</section>
+{% endfor %}
+</div>
+{% else %}
+<section class="card"><p class="muted" style="margin:0">No rounds of this team in the replay files.</p></section>
+{% endif %}
+<p class="small muted" style="margin-top:10px">From {{ n_replays }} {{ 'replay file' if n_replays == 1 else 'replay files' }} of matches two or more of you played. A team you met more than once (the same three or more players) is shown together. Setups are left out after a plant; utility up to {{ 100 }} s into the round.</p>
+{% endif %}
+{% endblock %}

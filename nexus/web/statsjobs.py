@@ -701,6 +701,13 @@ class StatsRunner:
                 out["when_they_play_best"] = w           # 4.17
         except Exception:
             pass
+        try:
+            from ..stats import peers
+            pr = peers.facts(rows)
+            if pr:
+                out["you_vs_your_rank"] = pr               # 4.18
+        except Exception:
+            pass
         return out
 
     def checkin_facts(self, pid: int) -> dict | None:

@@ -20,7 +20,7 @@ from ..parse import parse_match
 from . import roles
 
 QUEUES = ("competitive", "premier", "unrated")
-ROW_VERSION = 6            # bump when rows from full matches gain fields; old rows are rebuilt from the cache
+ROW_VERSION = 7            # bump when rows from full matches gain fields; old rows are rebuilt from the cache
 ISOLATED_UNITS = 2000      # ~20 m to the nearest living teammate
 TRADE_MS = 3000
 Log = Callable[[str], None]
@@ -163,6 +163,7 @@ def row_from_match(match: Match, puuid: str, mi: MapInfo | None) -> dict | None:
     row["adr"] = round(dmg / n, 1)
     row["lobby"] = lobby_metrics(match)
     row["lobby_agents"] = lobby_agents(match, puuid)
+    row["peers"] = peer_metrics(match, puuid)      # v7 (4.18): everyone else with rank, for "you vs your rank"
     return row
 
 
@@ -219,6 +220,50 @@ def lobby_agents(match: Match, puuid: str) -> list[list]:
         out.append([p.agent, round(p.score / n, 1), round(p.kills / n, 3), round(p.deaths / n, 3), round(p.assists / n, 3),
                     round(openings.get(p.puuid, 0) / n, 3), round(p.headshots / shots, 3) if shots else None]
                    + ([round(c[s] / n, 3) for s in SLOTS] if c else [None] * 4))
+    return out
+
+
+def peer_metrics(match: Match, puuid: str) -> list[list]:
+    """Everyone else in the match with a known rank: [rank id, ACS, kills, deaths, assists (per round), ADR,
+    headshot share (None without shots), KAST share, first kills, first deaths]."""
+    from .rank import tier_id
+    n = len(match.rounds) or 1
+    dmg: dict[str, int] = {}
+    kast: dict[str, int] = {}
+    fk: dict[str, int] = {}
+    fd: dict[str, int] = {}
+    for rnd in match.rounds:
+        for pu, st in rnd.stats.items():
+            dmg[pu] = dmg.get(pu, 0) + (st.damage_dealt or 0)
+        if rnd.kills:
+            k0 = rnd.kills[0]
+            if k0.killer:
+                fk[k0.killer] = fk.get(k0.killer, 0) + 1
+            if k0.victim:
+                fd[k0.victim] = fd.get(k0.victim, 0) + 1
+        good: set[str] = set()
+        dead: set[str] = set()
+        for i, k in enumerate(rnd.kills):
+            if k.killer:
+                good.add(k.killer)
+            good.update(k.assistants or [])
+            dead.add(k.victim)
+            # traded: the killer died within 3 s to the victim's team
+            if any(k2.victim == k.killer and k2.killer_team == k.victim_team
+                   and 0 <= k2.t_round_ms - k.t_round_ms <= TRADE_MS for k2 in rnd.kills[i + 1:]):
+                good.add(k.victim)
+        for p in match.players.values():
+            if p.puuid in good or p.puuid not in dead:
+                kast[p.puuid] = kast.get(p.puuid, 0) + 1
+    out = []
+    for p in match.players.values():
+        t = tier_id(p.tier)
+        if p.puuid == puuid or t is None:
+            continue
+        shots = p.headshots + p.bodyshots + p.legshots
+        out.append([t, round(p.score / n, 1), round(p.kills / n, 3), round(p.deaths / n, 3), round(p.assists / n, 3),
+                    round(dmg.get(p.puuid, 0) / n, 1), round(p.headshots / shots, 3) if shots else None,
+                    round(kast.get(p.puuid, 0) / n, 3), fk.get(p.puuid, 0), fd.get(p.puuid, 0)])
     return out
 
 
