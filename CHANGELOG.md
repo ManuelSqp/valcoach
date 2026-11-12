@@ -4,6 +4,17 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.17.0
+- **When you play best** (*Progress*): your win rate by game in the session (games less than 75 minutes apart count
+  as one session), after 0 / 1 / 2+ losses in a row, by time of day and by weekday, each bar green / red when it is
+  5 points above / below your overall win rate, faded when it rests on few games. When a difference is clear the
+  page says it in a sentence ("From the 4th game of a session the win rate drops from 56% to 41%: stopping after 3
+  games is worth trying"). The coach gets the same numbers.
+- **Who plays well together** (team *Player overview*): every pair of teammates with games, win rate, how often they
+  traded each other and how often both died alone in the same round, plus the best and weakest pair, the pair that
+  trades each other most and the one that splits up most. The weekly focus coach sees each player's pairs.
+- German texts for both.
+
 ## 4.16.4
 - **Rank over time stays current**: besides HenrikDev's stored rank history (long, but only updated when HenrikDev
   looks the account up, so it could lag days behind), every import now also reads the live history of the last
