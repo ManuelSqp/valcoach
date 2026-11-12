@@ -42,6 +42,7 @@
     {% if lines %}{% if wm and mlines.get(wm) %}<p class="small" style="margin:12px 0 6px"><b>In general</b></p>{% endif %}<ul class="howto">{% for l in lines %}<li>{{ l }}</li>{% endfor %}</ul>
     {% elif s.matches and not (wm and mlines.get(wm)) %}<p class="muted small" style="margin:0">Nothing stands out yet. See the maps below.</p>{% endif %}
     {% if s.pistols.played %}<p class="small muted" style="margin:10px 0 0">Pistol rounds: won {{ s.pistols.won }} of {{ s.pistols.played }}.</p>{% endif %}
+    {% set r = replays %}{% include "_replays_of.html" %}
   </section>
   <section class="card">
     <h2>Map veto <span class="muted" style="text-transform:none;letter-spacing:0">(playoffs)</span></h2>

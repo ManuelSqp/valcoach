@@ -764,6 +764,20 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
         won = sum(1 for m, side in ms if m.team_rounds_won.get(side, 0) > m.team_rounds_won.get(m.other_team(side), 0))
         return {"pairs": ps, "matches": len(ms), "sum": du.summary(ps, won / len(ms) if ms else None)}
 
+    def team_econ(t) -> dict | None:
+        """4.21: the team's buys against the teams in the same lobbies."""
+        from ..stats import teamecon
+        try:
+            d = team_data(t)
+        except Exception:
+            return None
+        return teamecon.analyse(d["matches"], d["names"]) if d["matches"] else None
+
+    @app.get("/teams/<int:tid>/economy")
+    def team_economy(tid: int):
+        t = get_team(tid)
+        return render_template("team_economy.html", t=t, tab="economy", e=team_econ(t), premier_status=sr.status(f"premier:{tid}"))
+
     team_cache: dict[tuple, object] = {}
 
     def team_data(t) -> dict:
@@ -915,7 +929,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             flash("Removed.", "ok")
         return redirect(url_for("team_settings", tid=tid) + "#access")
 
-    register_team_extras(app, store, sr, {"get_team": get_team, "team_context": team_context,
+    register_team_extras(app, store, sr, {"get_team": get_team, "team_context": team_context, "team_econ": team_econ,
                                           "team_data": team_data, "owner_rows": owner_rows, "comp_pools": comp_pools})
     from .strats import register as register_strats
     register_strats(app, store, sr, get_team, KNOWN_MAPS)
@@ -1018,6 +1032,7 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
     get_team, team_context, team_data, owner_rows = (helpers["get_team"], helpers["team_context"],
                                                      helpers["team_data"], helpers["owner_rows"])
     comp_pools = helpers["comp_pools"]
+    team_econ = helpers["team_econ"]
     cache_dir = store.data_dir / "cache"
 
     def language(t) -> str:
@@ -1104,6 +1119,11 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
             duo_facts = du.facts(du.pairs(td["matches"], td["names"])) if td["matches"] else []
         except Exception:
             duo_facts = []
+        try:
+            from ..stats import teamecon
+            econ = teamecon.facts(team_econ(t))
+        except Exception:
+            econ = None
         scores = {p["label"]: p["scores"] for p in b["roles"]["players"]}
         items = []
         for m in b["members"]:
@@ -1117,6 +1137,8 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
             mine = [x for x in duo_facts if name in x["pair"].split(" + ")]
             if mine:
                 facts["duos_with_teammates"] = mine          # 4.17
+            if econ:
+                facts["team_economy"] = econ                 # 4.21
             items.append({"pid": m["pid"], "name": name, "roles": b["role_of"].get(name, []), "facts": facts})
         return items
 

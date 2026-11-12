@@ -1,0 +1,12 @@
+{# 4.21: a scouted team in your replay files. Needs r (replays_of) and t. #}
+{% if r %}<div class="rof">
+  <p class="small" style="margin:12px 0 6px"><b>From your replay files</b> <span class="muted">({{ r.matches }} {{ 'match' if r.matches == 1 else 'matches' }} against them{% if r.map %}, on {{ r.map }}{% endif %})</span></p>
+  {% if r.hints %}<ul class="howto">{% for h in r.hints %}<li>{{ h }}.</li>{% endfor %}</ul>
+  {% else %}<p class="muted small" style="margin:0">{% if r.map %}No rounds on {{ r.map }} in those replays.{% else %}Too few rounds for a pattern yet.{% endif %}</p>{% endif %}
+  <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px">
+    <a class="btn sm ghost" href="{{ r.url }}">Setups, spots and utility on the map</a>
+    {% if r.map %}<form method="post" action="{{ url_for('team_replay_counter', tid=t.id) }}" style="margin:0">
+      <input type="hidden" name="who" value="{{ r.key }}"><input type="hidden" name="map" value="{{ r.map }}">
+      <button class="btn sm" title="The coach writes 3 game plans for {{ r.map }} built on these habits. They replace the current plans for {{ r.map }}.">Write counter-plans for {{ r.map }}</button></form>{% endif %}
+  </div>
+</div>{% endif %}

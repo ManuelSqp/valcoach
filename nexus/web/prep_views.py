@@ -75,6 +75,25 @@ def register(app, store, sr, get_team) -> None:
     app.extensions["nexus"]["replay_scouting"] = scouting
     app.extensions["nexus"]["team_replays"] = lambda t: (team_extracts(t, our_puuids(t)), our_puuids(t))     # 4.20
 
+    def replays_of(t, puuids, map_name: str | None = None, sc: dict | None = None) -> dict | None:
+        """4.21: what the replay files show of a known team (3+ of its players in a roster you played), for the
+        match-day screen, the brief and the scouting page. {key, label, matches, maps, map, hints, url} or None."""
+        puuids = {p for p in puuids or () if p}
+        if len(puuids) < 3:
+            return None
+        sc = sc or scouting(t, "us")
+        o = next((o for o in sc["opps"] if len(set(o["puuids"]) & puuids) >= 3), None)
+        if o is None:
+            return None
+        a = rp.analyse({mid: ex for mid, ex in team_extracts(t, our_puuids(t)).items() if mid in o["matches"]}, set(o["puuids"]))
+        mp = map_name if map_name in a else None
+        return {"key": o["key"], "label": o["label"], "matches": len(o["matches"]), "maps": o["maps"], "map": mp,
+                "hints": rp.hints({mp: a[mp]} if mp else a, min_rounds=3)[:6],
+                "url": url_for("team_replay_prep", tid=t.id, who=o["key"], map=mp or "")}
+
+    app.extensions["nexus"]["replays_of"] = replays_of
+    app.extensions["nexus"]["replay_scouting_all"] = lambda t: scouting(t, "us")
+
     @app.get("/teams/<int:tid>/replay-scouting")
     def team_replay_prep(tid: int):
         t = get_team(tid)

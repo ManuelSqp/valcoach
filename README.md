@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.20.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.21.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -548,6 +548,14 @@ the jump buttons.
   roles: 3 game plans for that map built to punish them (e.g. hit the site they leave light, take the space before
   their usual smoke), each saying which habit it uses. They replace the map's plans under *Game plans*, marked
   *Counter-plans against …*, and go to Discord with the match prep like any plan.
+  On match day (4.21) a scouted Premier team you have replays of (3+ of the same players) shows its habits right in
+  the opponent card of the *Match screen* and on its scouting page, with the counter-plan button; the *Match-day
+  brief* and its Discord post list every team of the division you have replays of.
+- **Team economy** (*Strategy › Economy*, 4.21): how the team's buys go in the matches you played together, next to
+  the teams in the same lobbies: win rate per buy (pistol, eco, force, full) and per matchup (anti-eco, force into
+  rifles, ...), forces that were lost and left you broke the next round, split buys (half the team on rifles, half
+  saving), the round after a won pistol, who buys or saves against the team's call, and the rounds per match lost
+  to buys (`stats/teamecon.py`). The weekly focus coach gets it too.
 
 ### Run it permanently
 

@@ -53,6 +53,9 @@
     {% if b.threats %}<p class="small muted" style="margin:-4px 0 8px">Strongest teams on {{ b.map }} in your division (their Premier record there):</p>
     {% for x in b.threats %}<div><a href="{{ url_for('team_scouted', tid=t.id, team_id=x.id) }}"><b>{{ x.name }}</b></a> <span class="muted">#{{ x.tag }}</span> · {{ x.wins }}–{{ x.games - x.wins }}</div>{% endfor %}
     {% else %}<p class="muted" style="margin:0">Scout your division (Premier › Division) to see this.</p>{% endif %}
+    {% if b.replays %}<p class="small" style="margin:12px 0 6px"><b>Teams you have replay files of</b> <span class="muted">(their habits on {{ b.map }})</span></p>
+    {% for x in b.replays %}<div class="rb"><a href="{{ url_for('team_scouted', tid=t.id, team_id=x.id) }}"><b>{{ x.name }}</b></a> <span class="muted">· {{ x.matches }} {{ 'match' if x.matches == 1 else 'matches' }}</span> · <a href="{{ x.url }}">replay scouting</a>
+      {% if x.hints %}<ul class="small" style="margin:2px 0 6px;padding-left:18px">{% for h in x.hints[:3] %}<li>{{ h }}.</li>{% endfor %}</ul>{% endif %}</div>{% endfor %}{% endif %}
     <p class="small" style="margin:10px 0 0">Got matched? <a href="{{ url_for('team_division', tid=t.id) }}">Open the opponent →</a></p></div>
   {% endif %}
 </div>
