@@ -218,7 +218,16 @@
         pinsEl.appendChild(r);
       }
     }
-    const msg = html => { bar.querySelector('.rp-msg').innerHTML = html; };
+    // status line next to the buttons: always plain text; a link only to a page of this site
+    const msg = (text, url) => {
+      const box = bar.querySelector('.rp-msg');
+      box.textContent = '';
+      if (url && /^\/[^/\\]/.test(url)) {
+        const a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = text;
+        box.appendChild(a);
+      } else box.textContent = text;
+    };
 
     // ------------------------------------------------------------ drawing
     function cone(x, y, a, color, alpha) {
@@ -481,8 +490,8 @@
     const stratBtn = bar.querySelector('.rp-strat');
     if (stratBtn) stratBtn.onclick = () => {
       pause(); msg('making the strat board…');
-      HK.toStrat(n, moment()).then(url => msg(`<a href="${esc(url)}" target="_blank" rel="noopener">Open the strat board ↗</a>`))
-        .catch(e => msg(esc('Not made: ' + (e.message || e))));
+      HK.toStrat(n, moment()).then(url => msg('Open the strat board ↗', String(url || '')))
+        .catch(e => msg('Not made: ' + (e.message || e)));
     };
     opts.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = () => { show[cb.dataset.o] = cb.checked; draw(); });
     root.tabIndex = 0;

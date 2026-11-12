@@ -133,7 +133,8 @@ def for_match(replays_dir: Path, cache_dir: Path, match_id: str, registry: MapRe
 
 
 def _key(puuids) -> str:
-    return hashlib.sha1(",".join(sorted(puuids)).encode()).hexdigest()[:10]
+    """A short, stable id for a roster in the page's URL (not a secret)."""
+    return hashlib.sha256(",".join(sorted(puuids)).encode()).hexdigest()[:12]
 
 
 def opponents(extracts: dict[str, dict], ours: set[str], labels: dict[str, str] | None = None) -> list[dict]:
