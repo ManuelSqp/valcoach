@@ -343,10 +343,17 @@ def register(app, store, sr, get_team) -> None:
         return resp
 
     def build_replay_data(ev: dict) -> dict:
+        return playback(ev["match_id"], side_team=ev["side_team"])
+
+    def playback(match_id: str, focus: str = "", side_team: str = "", only: set[int] | None = None,
+                 riot_id: tuple[str, str] | None = None) -> dict:
+        """The round playback data of a match (positions, kills, utility; the replay file's when there is one).
+        focus: the player shown as "you" (else: nobody, the first of side_team is the point of view);
+        only: these round numbers. 4.22: also used by the quiz."""
         from ..analysis.view import calibrate
         from ..coach.replay import build_replay, map_meta, nav_grid
         from ..maps import MapRegistry
-        raw = _read(cache / "matches" / f"{ev['match_id']}.json")
+        raw = _read(cache / "matches" / f"{match_id}.json")
         if not raw:
             return {"map": None, "rounds": {}}
         m = parse_match(raw)
@@ -361,18 +368,24 @@ def register(app, store, sr, get_team) -> None:
         meta["image"] = url_for("map_image", name=mi.name)
         vm = calibrate(m)
         nav = nav_grid(mi, reg)
-        focus = next((p.puuid for p in m.players_on(ev["side_team"])), "")
-        rep = replay_file(m, focus, mi)              # 4.18: everyone's positions and utility from the replay file
+        if riot_id and focus not in m.players:                 # no puuid stored yet: find the player by Riot ID
+            fp = m.find_player(*riot_id)
+            focus = fp.puuid if fp else focus
+        pov = focus if focus in m.players else next((p.puuid for p in m.players_on(side_team)), "")
+        rep = replay_file(m, pov, mi)              # 4.18: everyone's positions and utility from the replay file
         rounds = {}
         for r in m.rounds:
+            if only and r.number not in only:
+                continue
             try:
-                rp = build_replay(m, r, focus, mi, vm, (rep or {}).get("self_paths", {}).get(r.index), nav,
+                rp = build_replay(m, r, pov, mi, vm, (rep or {}).get("self_paths", {}).get(r.index), nav,
                                   (rep or {}).get("others", {}).get(r.index))
             except Exception:
                 rp = None
             if rp:
-                for x in rp["roster"].values():
-                    x["you"] = False          # every viewer marks himself in the browser
+                if not focus:
+                    for x in rp["roster"].values():
+                        x["you"] = False          # every viewer marks himself in the browser
                 rounds[r.number] = rp
         agents = {p.agent: url_for("agent_icon", name=p.agent) for p in m.players.values()}
         from ..coach.replay import ABILITY_SLOT
@@ -382,6 +395,8 @@ def register(app, store, sr, get_team) -> None:
                     agents[f"{e['agent']}|{e['slot']}"] = url_for("ability_icon", agent=e["agent"], slot=ABILITY_SLOT[e["slot"]])
         return {"v": REPLAY_V, "map": meta, "agents": agents, "better": {}, "rounds": rounds,
                 "source": "replay file" if rep else ""}
+
+    app.extensions["nexus"]["playback"] = playback
 
     def replay_file(m, focus: str, mi) -> dict | None:
         """The match's replay file (positions of all ten, casts, placed utility), or None."""

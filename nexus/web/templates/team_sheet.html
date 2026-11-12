@@ -3,6 +3,11 @@
 {% macro ai(agent, size=22) %}<img class="ai" src="{{ url_for('agent_icon', name=agent) }}" width="{{ size }}" height="{{ size }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% endmacro %}
 {% block head %}
 <style>
+.advmiss{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0}.am{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:99px;padding:3px 10px 3px 4px}
+.advgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px}
+.advp{border:1px solid var(--line);border-radius:10px;padding:10px 12px}.advh{margin-bottom:6px}
+.advs{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)}.advs>div{flex:1}
+.advs ul{margin:4px 0 0;padding-left:16px;font-size:13px;color:var(--muted)}.advs form{margin:0}
 .ai{border-radius:50%;vertical-align:middle;background:var(--ink);object-fit:cover;flex:none}
 .pools{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;align-items:start}
 .pcol{background:var(--panel2);border:1px solid var(--line);border-radius:10px;overflow:hidden}
@@ -175,6 +180,23 @@
   </div>
   {% endif %}
 </section>
+
+{% if advice and (advice.missing or advice.thin) %}
+<section class="card" id="advisor">
+  <div class="row between"><h2 style="margin:0">Who should learn what</h2>
+    <span class="small muted">agents your maps need that nobody has in their pool</span></div>
+  {% if advice.missing %}<div class="advmiss">{% for m in advice.missing %}<span class="am" title="{{ m.role }}{% if m.ideal %} · ideal comp{% endif %}{% if m.share %} · picked by {{ (m.share * 100)|round|int }} % of teams in your lobbies{% endif %}">{{ ai(m.agent, 20) }}{{ m.agent }} <span class="muted small">{{ m.maps|join(', ') }}</span></span>{% endfor %}</div>
+  {% else %}<p class="small muted">Every agent your maps need is in someone's pool.</p>{% endif %}
+  {% if advice.thin %}<p class="small" style="margin:8px 0 0"><b>Thin roles:</b> {% for r in advice.thin %}{{ r }} ({{ advice.roles[r]|join(', ') if advice.roles[r] else 'nobody' }}){{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+  <div class="advgrid">{% for pl in advice.players if pl.suggest %}
+    <div class="advp"><div class="advh"><b>{{ pl.label }}</b> <span class="muted small">plays {{ pl.pool|join(', ') or '–' }}</span></div>
+      {% for s in pl.suggest %}<div class="advs">{{ ai(s.agent, 34) }}<div><b>{{ s.agent }}</b> <span class="muted small">{{ s.role }}</span>
+        <ul>{% for w in s.why %}<li>{{ w }}</li>{% endfor %}</ul></div>
+        {% set me = players|selectattr('pid', 'equalto', pl.pid)|first %}{% if me and me.can_edit %}<form method="post" action="{{ url_for('team_sheet_pool_add', tid=t.id, pid=pl.pid) }}"><input type="hidden" name="agent" value="{{ s.agent }}"><button class="btn sm ghost" title="Put {{ s.agent }} at the end of the pool; the comps then count it">＋ Add to pool</button></form>{% endif %}</div>{% endfor %}
+    </div>{% endfor %}</div>
+  <p class="small muted" style="margin:10px 0 0">Needed = in a map's ideal composition or picked by a third of the teams in your lobbies there. Each missing agent goes to the player who fits it best: how much they play that role and how their numbers on it compare with players of their rank on the same agents; someone who is the only one for another role is kept there.</p>
+</section>
+{% endif %}
 {% endif %}
 <script>
 (function () {

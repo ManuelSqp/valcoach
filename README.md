@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.20.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.22.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -308,7 +308,11 @@ win rate). Each player edits his own column (linked by the in-game name; the tea
 up or down, add agents he wants to play, mark agents he won't play. Agents played later are added at the end;
 *Back to the stats* drops the changes. **Ideal composition:** per map the comp the web sources name most (the team
 owner clicks *Search the web*, needs web search under *Settings*), or 5 agents set by hand. Under every agent: who on
-the team has it in his pool and how high (`stats/compsheet.py`).
+the team has it in his pool and how high (`stats/compsheet.py`). **Who should learn what** (4.22): the agents your
+maps need (in a map's ideal comp, or picked by a third of the teams in your lobbies there) that nobody has in their
+pool, and per player the one or two of them that fit best: how much he plays that role and how his ACS on it
+compares with players of his rank on the same agents; someone who is the only player for another role is kept
+there. *＋ Add to pool* puts the agent in his pool (`stats/agentpool.py`).
 
 **Follow our agent pools** (4.14, a switch next to *Make comps with* on the comps page, on the comp sheet and in the
 team settings; off by default): the comps then use these pools in every mode, also for drafts and the Discord
@@ -328,6 +332,11 @@ by the rank shown in each match), and with the players a rank higher where there
 differences are green / red; the coach gets the same comparison (`stats/peers.py`). A number that's behind has a
 **＋ Goal** button (4.19): it sets a goal on the Habits page to reach your rank's value (or, where you're already
 there, the value a rank higher) in the next 10 games, which then checks itself against your games.
+
+**Quiz** (*Practice › Quiz*): decisions from moments of your own games (left alone at the end, a first death far
+from the team, a lead that slipped), written as questions with 3-4 calls by the model. Since 4.22 the question
+shows the round on the minimap up to that moment (nothing later: no later kills, no round length); after you answer
+it plays on, and if a coaching report of that match commented on the round, the coach's words are shown with a link.
 
 **Progress and Training** (player tabs). *Progress* shows your numbers week by week with trends, whether each
 weekly focus moved its number, and clutches / retakes / post-plants. **When you play best** (4.17) groups your games by their place in a session
@@ -548,6 +557,14 @@ the jump buttons.
   roles: 3 game plans for that map built to punish them (e.g. hit the site they leave light, take the space before
   their usual smoke), each saying which habit it uses. They replace the map's plans under *Game plans*, marked
   *Counter-plans against …*, and go to Discord with the match prep like any plan.
+  On match day (4.21) a scouted Premier team you have replays of (3+ of the same players) shows its habits right in
+  the opponent card of the *Match screen* and on its scouting page, with the counter-plan button; the *Match-day
+  brief* and its Discord post list every team of the division you have replays of.
+- **Team economy** (*Strategy › Economy*, 4.21): how the team's buys go in the matches you played together, next to
+  the teams in the same lobbies: win rate per buy (pistol, eco, force, full) and per matchup (anti-eco, force into
+  rifles, ...), forces that were lost and left you broke the next round, split buys (half the team on rifles, half
+  saving), the round after a won pistol, who buys or saves against the team's call, and the rounds per match lost
+  to buys (`stats/teamecon.py`). The weekly focus coach gets it too.
 
 ### Run it permanently
 

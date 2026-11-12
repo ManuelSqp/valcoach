@@ -227,5 +227,6 @@ def write_quiz(llm, picked: list[dict], language: str = "English", bank: list[di
         qs.append({"id": m["id"], "kind": m["kind"], "kind_label": KINDS[m["kind"]], "map": m["facts"]["map"],
                    "round": m["facts"]["round"], "side": m["facts"]["side"], "match_id": m["facts"]["match_id"],
                    "agent": m["facts"].get("agent"), "question": str(q["question"]).strip()[:600], "options": opts, "best": best,
-                   "why": str(q.get("why") or "").strip()[:600], "happened": m["happened"], "won": m["facts"]["won"]})
+                   "why": str(q.get("why") or "").strip()[:600], "happened": m["happened"], "won": m["facts"]["won"],
+                   "t_ms": int(m.get("t_ms") or 0)})        # 4.22: the moment on the playback
     return qs

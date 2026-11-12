@@ -4,6 +4,31 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.22.0
+- **Quiz on the playback**: each question shows the round on the minimap up to the moment it asks about, locked
+  there (no later kills on the bar or in the list, no round length) until you answer; then it plays on so you see
+  what happened. If your coaching report of that match commented on the round, the coach's summary, mistakes and
+  better option are shown with a link to the report. Questions from older quizzes work as before, without the map.
+- **Who should learn what** (*Strategy › Comp sheet*): the agents your maps need (ideal comp, or picked by a third
+  of the teams in your lobbies) that nobody has in their pool, the thin roles, and per player the one or two of
+  those agents that fit best (how much they play the role, their ACS on it against players of their rank on the
+  same agents; a player who alone covers another role stays there). *＋ Add to pool* adds it to the player's pool.
+- The review evening's playback builder is shared with the quiz.
+- German texts.
+
+## 4.21.0
+- **Team economy** (*Strategy › Economy*): the team's buys in your matches together, next to the teams in the same
+  lobbies (same maps, patch and ranks): round win rate per buy and per matchup, forces that were lost and left you
+  broke the next round, split buys (2+ on rifles while 2+ save), the round after a won pistol, who bought while the
+  team saved (and the other way round) and how many rounds per match are lost to buys. Plain lines on what stands
+  out; the weekly focus coach gets the same numbers.
+- **The opponent's replays on match day**: when a scouted Premier team is in your replay files (3+ of the same
+  players), the opponent card on the *Match screen* and the team's scouting page show its habits on the map with a
+  link to *Replay scouting* and *Write counter-plans*. The *Match-day brief* (page and Discord post) lists every team
+  of your division you have replays of.
+- Fixed: posting the match-day brief to Discord failed when only one side's round win rate was known.
+- German texts (also the matchup descriptions on *Rounds & economy*).
+
 ## 4.20.0
 - **Lineups from your replay files** (*Strategy › Lineups*): utility one of you threw from about the same spot
   (within 4 m) to about the same spot (within 3 m) three times or more shows as a suggestion, with a small map of

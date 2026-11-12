@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Economy · {{ t.name }} · Nexus{% endblock %}
+{% macro pct(x) %}{% if x is none %}–{% else %}{{ (x * 100)|round|int }} %{% endif %}{% endmacro %}
+{% macro vc(v) %}{{ 'eg' if v == 'good' else ('eb' if v == 'bad' else '') }}{% endmacro %}
+{% block head %}
+<style>
+.enotes{margin:4px 0 0;padding:0;list-style:none}
+.enotes li{padding:7px 10px;border-left:3px solid var(--win);margin:6px 0;background:var(--panel2);border-radius:0 8px 8px 0}
+.enotes li.bad{border-left-color:var(--red)}
+table.econ td.n,table.econ th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.econ .eg{color:var(--win);font-weight:700}table.econ .eb{color:var(--red);font-weight:700}
+table.econ .sub{display:block;font-size:12px;color:var(--muted);font-weight:400}
+.egrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px}
+.ebox{border:1px solid var(--line);border-radius:10px;padding:12px}
+.ebox h3{margin:0 0 6px;font-size:14px}
+.ebox .big{font-size:24px;font-weight:800}
+.ebox .vs{font-size:12.5px;color:var(--muted)}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+
+{% if not e %}
+<section class="card" style="margin-top:12px"><h2>Not enough team matches yet</h2>
+  <p>The economy review needs about 60 rounds from matches where three or more of your starters played together (with
+    round data). Update everyone's stats, then come back.</p></section>
+{% else %}
+<section class="card" style="margin-top:12px" id="econ">
+  <div class="row between"><h2 style="margin:0">How your buys go</h2>
+    <span class="small muted">{{ e.games }} matches, {{ e.rounds }} rounds together · against the teams in the same lobbies</span></div>
+  {% if e.notes %}<ul class="enotes">{% for n in e.notes %}<li class="{{ 'bad' if n.bad }}">{{ n.text }}.</li>{% endfor %}</ul>{% endif %}
+
+  <div class="egrid">
+    <div class="ebox"><h3 tabindex="0" data-tip="Rounds lost in a force that left the team broke the next round, or with half the team on rifles and half saving.">Rounds lost to buys</h3>
+      <div class="big">{{ e.lost_to_buys }}</div><div class="vs">per match</div></div>
+    <div class="ebox"><h3 tabindex="0" data-tip="A force buy that was lost and left the team without a full buy the next round: the gamble cost two rounds.">Forces that broke you</h3>
+      <div class="big">{{ e.broke.us }} <span class="vs">of {{ e.broke.forces }}</span></div><div class="vs">{{ pct(e.broke.share) }} · lobbies {{ pct(e.broke.share_them) }}</div></div>
+    <div class="ebox"><h3 tabindex="0" data-tip="Two or more on rifles and two or more saving in the same round.">Split buys</h3>
+      <div class="big">{{ e.split.us.rounds }}</div><div class="vs">{{ pct(e.split.share) }} of rounds, {{ pct(e.split.us.wr) }} won · lobbies {{ pct(e.split.share_them) }}</div></div>
+    <div class="ebox"><h3>After a won pistol</h3>
+      <div class="big {{ vc(e.bonus.v) }}">{{ pct(e.bonus.us.wr) }}</div><div class="vs">{{ e.bonus.us.rounds }} rounds · lobbies {{ pct(e.bonus.them.wr) }}</div></div>
+  </div>
+</section>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Win rate by buy</h2>
+    <div class="tablewrap"><table class="econ">
+      <tr><th>Buy</th><th class="n">Of all rounds</th><th class="n">You</th><th class="n" tabindex="0" data-tip="The other teams in the same matches: same maps, patch and ranks.">Lobbies</th></tr>
+      {% for x in e.kinds %}<tr><td>{{ x.text }}</td><td class="n">{{ pct(x.share) }}</td>
+        <td class="n"><span class="{{ vc(x.v) }}">{{ pct(x.us.wr) }}</span><span class="sub">{{ x.us.won }}/{{ x.us.rounds }}</span></td>
+        <td class="n">{{ pct(x.them.wr) }}<span class="sub">{{ x.them.won }}/{{ x.them.rounds }}</span></td></tr>{% endfor %}
+    </table></div>
+  </section>
+  <section class="card">
+    <h2>You vs their buy</h2>
+    <div class="tablewrap"><table class="econ">
+      <tr><th></th><th class="n">You</th><th class="n">Lobbies</th></tr>
+      {% for x in e.matchups %}<tr><td>{{ x.title }}<span class="sub">{{ x.text }}</span></td>
+        <td class="n"><span class="{{ vc(x.v) }}">{{ pct(x.us.wr) }}</span><span class="sub">{{ x.us.won }}/{{ x.us.rounds }}</span></td>
+        <td class="n">{{ pct(x.them.wr) }}<span class="sub">{{ x.them.won }}/{{ x.them.rounds }}</span></td></tr>{% endfor %}
+    </table></div>
+  </section>
+</div>
+
+{% if e.players %}
+<section class="card">
+  <h2>Buying with the team</h2>
+  <div class="tablewrap"><table class="econ">
+    <tr><th>Player</th><th class="n" tabindex="0" data-tip="Rifle money (3,000+ loadout) while the team's average says eco.">Bought while the team saved</th>
+      <th class="n" tabindex="0" data-tip="Under 2,000 loadout while the team full bought.">Saved while the team bought</th></tr>
+    {% for p in e.players %}<tr><td>{{ p.name }}</td>
+      <td class="n">{{ p.alone_buy.rounds }}×{% if p.alone_buy.rounds %}<span class="sub">{{ pct(p.alone_buy.wr) }} won</span>{% endif %}</td>
+      <td class="n">{{ p.alone_save.rounds }}×{% if p.alone_save.rounds %}<span class="sub">{{ pct(p.alone_save.wr) }} won</span>{% endif %}</td></tr>{% endfor %}
+  </table></div>
+</section>
+{% endif %}
+<p class="small muted">Buys from each team's average loadout at the start of the round: eco under 2,000 credits, force / half buy
+  2,000–3,900, full buy from 3,900; rounds 1 and 13 are pistols. Green / red: 8 points or more better / worse than the teams in your
+  lobbies. Your own buys (all your games): Performance › Rounds &amp; economy.</p>
+{% endif %}
+{% endblock %}

@@ -92,6 +92,34 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
         d = team_data(t)
         return map_record(d["matches"]), d["matches"]
 
+    def replays_of(t, s: dict | None, map_name: str | None, sc: dict | None = None) -> dict | None:
+        """4.21: the scouted team in your replay files (3+ of its players), or None."""
+        fn = app.extensions["nexus"].get("replays_of")
+        if not fn or not s:
+            return None
+        try:
+            return fn(t, {p.get("puuid") for p in s.get("players") or []}, map_name, sc)
+        except Exception:
+            return None
+
+    def division_replays(t, map_name: str | None, idx: dict) -> list[dict]:
+        """4.21: every scouted team of the division you have replay files of."""
+        fn = app.extensions["nexus"].get("replay_scouting_all")
+        if not fn:
+            return []
+        try:
+            sc = fn(t)
+        except Exception:
+            return []
+        if not sc["opps"]:
+            return []
+        out = []
+        for tm in (idx.get("teams") or {}).values():
+            r = replays_of(t, pj.scouted(t.id, tm["id"]), map_name, sc)
+            if r:
+                out.append({"id": tm["id"], "name": tm["name"], **r})
+        return sorted(out, key=lambda x: -x["matches"])
+
     # ------------------------------------------------------------------ brief
     def brief(t, map_name: str | None) -> dict:
         out: dict = {"map": map_name, "week": week_id()}
@@ -146,6 +174,7 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
         threats.sort(key=lambda x: (-(x["wins"] + 1) / (x["games"] + 2), -x["games"]))
         out["threats"] = threats[:4]
         out["scouted"] = len(idx.get("teams") or {})
+        out["replays"] = division_replays(t, map_name, idx)        # 4.21
         return out
 
     def brief_embed(t, b: dict) -> dict:
@@ -158,9 +187,8 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
                 f"**{p['agent']}** {p['player']}" + (f" (or {p['alt']})" if p.get("alt") else "") for p in b["comp"]["picks"]))
         o = b.get("ours") or {}
         if o.get("games"):
-            sides = ""
-            if o.get("attack") is not None:
-                sides = f", rounds won: attack {o['attack']:.0%}, defense {o['defense']:.0%}"
+            parts = [f"{k} {o[k]:.0%}" for k in ("attack", "defense") if o.get(k) is not None]   # one side can be unknown
+            sides = (", rounds won: " + ", ".join(parts)) if parts else ""
             lines.append(f"**Our record on {b['map']}:** {o['wins']}–{o['games'] - o['wins']}{sides}")
         for p in b.get("plans", []):
             lines.append(f"{'⚔' if p.get('side') == 'attack' else '🛡'} **{p['title']}**: {p.get('idea') or ''}")
@@ -169,6 +197,9 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
         if b.get("threats"):
             lines.append("**Strongest on this map in our division:** " + ", ".join(
                 f"{x['name']} {x['wins']}–{x['games'] - x['wins']}" for x in b["threats"][:3]))
+        for r in (b.get("replays") or [])[:3]:                      # 4.21: teams we have replay files of
+            lines.append(f"**Replays of {r['name']}** ({r['matches']} {'match' if r['matches'] == 1 else 'matches'})"
+                         + (": " + "; ".join(r["hints"][:2]) if r.get("hints") else ""))
         lines.append("When you get matched: open the opponent under Premier › Division in Nexus.")
         return {"title": f"Match day: {b['map']}"[:250], "description": "\n".join(lines)[:3900], "color": 0xFF4655,
                 "footer": {"text": f"{t.name} · Nexus brief"}}
@@ -312,7 +343,7 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
         roles.load(cache_dir)
         mlines = {m: map_lines(s, m) for m in s.get("maps", {})}
         return render_template("premier_team.html", **ctx(t, "division", s=s, v=v, lines=general_lines(s), mlines=mlines, wm=wm,
-                                                           status=sr.status(f"scout:{tid}")))
+                                                           status=sr.status(f"scout:{tid}"), replays=replays_of(t, s, wm)))
 
     @app.get("/teams/<int:tid>/premier/review/<match_id>")
     def team_review_page(tid: int, match_id: str):
@@ -407,7 +438,7 @@ def register(app, store, sr, helpers: dict) -> PremierJobs:
                 opp = {"id": oid, "name": s.get("name"), "tag": s.get("tag", ""), "record": f"{s.get('wins', 0)}–{s.get('losses', 0)}",
                        "map": mp, "lines": map_lines(s, m) if m else [], "general": general_lines(s)[:3],
                        "econ": [x for x in (s.get("economy") or {}).get("lines", []) if not x.startswith("Pistol")][:2],
-                       "comps": (mp.get("comps") or [])[:2]}
+                       "comps": (mp.get("comps") or [])[:2], "replays": replays_of(t, s, m)}
         roles.load(cache_dir)
         return render_template("team_match.html", **ctx(t, "match", b=b, sel=m, maps=maps, plans=plans, strats=strats,
                                                          lineups=lineups, comp_agents=comp_agents, me_name=me_name,

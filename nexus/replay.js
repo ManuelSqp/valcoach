@@ -188,12 +188,12 @@
     for (const e of R.events) {
       const c = e.kind === 'kill' ? (e.ours ? COL.us : COL.them) : (e.kind === 'plant' ? COL.plant : COL.defuse);
       const tk = h('span', {class: 'rp-tick' + (e.kind !== 'kill' ? ' spike' : ''), title: `${e.time} ${e.kind}`});
-      tk.style.left = (100 * e.t / R.end) + '%'; tk.style.background = c;
+      tk.style.left = (100 * e.t / R.end) + '%'; tk.style.background = c; tk.dataset.t = e.t;
       ticks.appendChild(tk);
     }
     for (const c of casts) {                       // small ticks under the bar: who used utility when
       const tk = h('span', {class: 'rp-tick cast' + (who(c.id).you ? ' you' : ''), title: `${c.buy ? 'buy phase' : fmt(c.t)} ${who(c.id).you ? 'you' : who(c.id).name}: ability`});
-      tk.style.left = (100 * c.t / R.end) + '%'; tk.style.background = colorOf(c.id);
+      tk.style.left = (100 * c.t / R.end) + '%'; tk.style.background = colorOf(c.id); tk.dataset.t = c.t;
       ticks.appendChild(tk);
     }
 
@@ -423,7 +423,7 @@
       let cur = null;
       for (const [e, r] of feedRows) { r.classList.toggle('past', e.t <= T); if (e.t <= T && T - e.t < 2500) cur = r; }
       for (const [, r] of feedRows) r.classList.toggle('now', r === cur);
-      bar.querySelector('.rp-time').textContent = `${fmt(T)} / ${fmt(R.end)}`;
+      bar.querySelector('.rp-time').textContent = LOCK == null ? `${fmt(T)} / ${fmt(R.end)}` : fmt(T);
       bar.querySelector('input').value = T;
     }
 
@@ -438,13 +438,27 @@
         const p = pinsOf().find(q => q.t > before && q.t <= T);
         if (p) { T = p.t; pause(); draw(); return; }
       }
+      if (LOCK != null && T >= LOCK) { T = LOCK; pause(); }
       if (T >= R.end) { T = R.end; pause(); }
       draw();
       if (playing) requestAnimationFrame(frame);
     }
     function play() { if (T >= R.end) T = 0; playing = true; last = null; playBtn.textContent = '❚❚'; requestAnimationFrame(frame); }
     function pause() { playing = false; playBtn.textContent = '▶'; }
-    function seek(t) { T = Math.max(0, Math.min(R.end, t)); draw(); }
+    function seek(t) { T = Math.max(0, Math.min(LOCK == null ? R.end : LOCK, t)); draw(); }
+    // 4.22 (quiz): the page can jump to a moment and lock the playback there: nothing after it is shown
+    // (no later kills in the list or on the bar, no round length) until it's unlocked
+    let LOCK = null;
+    function lock(t) {
+      LOCK = t == null ? null : Math.max(0, Math.min(R.end, t));
+      for (const [e, r] of feedRows) r.hidden = LOCK != null && e.t > LOCK;
+      for (const tk of ticks.querySelectorAll('.rp-tick')) if (tk.dataset.t) tk.hidden = LOCK != null && +tk.dataset.t > LOCK;
+      if (LOCK != null && T > LOCK) T = LOCK;
+      draw();
+    }
+    box._seek = t => { pause(); seek(t); };
+    box._lock = lock;
+    box._play = () => play();
     playBtn.onclick = () => playing ? pause() : play();
     bar.querySelector('input').oninput = ev => { pause(); seek(+ev.target.value); };
     bar.querySelector('.rp-speed').onchange = ev => { speed = +ev.target.value; };
