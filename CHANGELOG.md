@@ -4,6 +4,13 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.16.4
+- **Rank over time stays current**: besides HenrikDev's stored rank history (long, but only updated when HenrikDev
+  looks the account up, so it could lag days behind), every import now also reads the live history of the last
+  ranked games. Both are merged, nothing is counted twice. The import log shows both ("recent rank", "rank
+  history").
+- The rank chart's labels no longer blow up on wide screens (normal font and size).
+
 ## 4.16.3
 - **Placed utility in the round playback** (reports with a replay file): smokes (grey areas), slows and mollies /
   damage zones (coloured areas), walls, traps, recon bolts and drones (pulsing ring), orbs and flashes (ability

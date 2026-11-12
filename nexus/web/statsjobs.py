@@ -99,13 +99,16 @@ class StatsRunner:
                                cfg.path(cfg.paths.cache_dir), lambda m: self._log(key, m),
                                full_limit=FULL_LIMIT, stored_limit=STORED_LIMIT)
             self._log(key, f"✓ {res['total']} games ({res['full']} new with round data, {res['stored']} new from the archive)")
-            try:                                   # rank + RR per game for Progress (optional)
-                from ..henrik import mmr_history
-                from ..stats.rank import RankStore, parse_entries
-                n = RankStore(self.rank_path(pid)).merge(parse_entries(mmr_history(client, p.region, p.name, p.tag)))
-                self._log(key, f"· rank history: {n} new games")
-            except Exception as e:
-                self._log(key, f"  ! rank history: {e}")
+            # rank + RR per game for Progress (optional). 4.16.4: the live history (last games, current) and the
+            # stored one (longer, but only updated when HenrikDev looks the account up) are both merged.
+            from ..henrik import mmr_history, mmr_history_recent
+            from ..stats.rank import RankStore, parse_entries
+            for label, fetch in (("recent rank", mmr_history_recent), ("rank history", mmr_history)):
+                try:
+                    n = RankStore(self.rank_path(pid)).merge(parse_entries(fetch(client, p.region, p.name, p.tag)))
+                    self._log(key, f"· {label}: {n} new games")
+                except Exception as e:
+                    self._log(key, f"  ! {label}: {e}")
             self._set(key, status="done")
         except Exception as e:
             self._log(key, "✗ " + str(e))

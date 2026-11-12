@@ -96,7 +96,8 @@ class FakeHenrik:
         return out
 
     def _get(self, path, params=None):
-        if "/stored-mmr-history/" in path:                 # rank history: Gold 3 climbing 9 RR per win
+        if "mmr-history/" in path:                         # rank history: Gold 3 climbing 9 RR per win
+            live = "/stored-mmr-history/" not in path
             name, tag = path.rstrip("/").split("/")[-2:]
             mine = sorted(self._mine(name, tag, "competitive"), key=lambda d: d["metadata"]["started_at"])
             out, pts = [], 1050
@@ -108,7 +109,12 @@ class FakeHenrik:
                 out.append({"match_id": d["metadata"]["match_id"], "tier": {"id": 3 + pts // 100, "name": ""},
                             "ranking_in_tier": pts % 100, "last_mmr_change": ch, "elo": pts,
                             "map": {"name": d["metadata"]["map"]["name"]}, "date": d["metadata"]["started_at"]})
-            return {"status": 200, "data": list(reversed(out))}
+            if live:      # Riot's live history: the last 10 games, other field names; the stored one lags a game
+                return {"status": 200, "data": [{"match_id": e["match_id"], "currenttier": e["tier"]["id"],
+                                                  "ranking_in_tier": e["ranking_in_tier"],
+                                                  "mmr_change_to_last_game": e["last_mmr_change"], "map": e["map"],
+                                                  "date_raw": e["date"]} for e in reversed(out[-10:])]}
+            return {"status": 200, "data": list(reversed(out[:-1]))}
         raise AssertionError(path)
 
     def match_history(self, region, platform, name, tag, mode=None, size=10, start=0):

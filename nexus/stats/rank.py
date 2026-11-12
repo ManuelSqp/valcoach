@@ -108,7 +108,7 @@ def series(entries: list[dict], rows: list[dict]) -> tuple[list[dict], str]:
     return out, "match"
 
 
-def chart(pts: list[dict], width: int = 720, height: int = 220, last: int = 80) -> dict | None:
+def chart(pts: list[dict], width: int = 1100, height: int = 250, last: int = 80) -> dict | None:
     """SVG-ready numbers: the line, a dot per game and the tier lines in range."""
     pts = pts[-last:]
     if len(pts) < 2:
@@ -118,7 +118,7 @@ def chart(pts: list[dict], width: int = 720, height: int = 220, last: int = 80) 
     hi = (max(vals) // 100 + 1) * 100
     if hi - lo < 200:
         hi = lo + 200
-    pad_l, pad_r, pad_t, pad_b = 92, 12, 10, 22
+    pad_l, pad_r, pad_t, pad_b = 96, 12, 10, 24
     W, H = width - pad_l - pad_r, height - pad_t - pad_b
     xs = lambda i: pad_l + (W * i / (len(pts) - 1))
     ys = lambda v: pad_t + H * (1 - (v - lo) / (hi - lo))
