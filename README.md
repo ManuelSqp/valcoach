@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.19.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.20.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -151,7 +151,10 @@ On the minimap (4.18) anyone can leave a **note** at a moment: pause, press *✎
 a line. Everyone sees it on the time bar and in the *Notes* list, the drawing shows around its time and the playback
 stops there (*stop at notes*). *⇢ Strat board* puts the moment (everyone alive where they stand, the utility that's
 up, the drawings) on a new board in the strat book. With a replay file the minimap has all ten players' real paths
-and the placed utility.
+and the placed utility. *⤓ Picture* saves the moment as a PNG and *📷 Discord* posts it (with the notes around that
+time) to the team's review channel (4.20). The playback in your own coaching reports has the same buttons (4.20):
+notes there are just for you, the strat board goes to your team's strat book and the picture to its clip channel;
+older reports get them too.
 *Practice › Aim* keeps aim routines (Aimlabs share links, KovaaK's codes, steps for the Range), picks the ones that fit
 your matches and sets your warm-up, which shows on the match screen, in the practice plan and as a push before the match.
 For KovaaK's the coach writes the playlists itself: download one (dated DD-MM-YYYY in its name), save it in
@@ -315,7 +318,9 @@ shows with every pick, e.g. "#1 in Sam's agent pool". The team owner switches it
 
 **Look & feel.** Every user picks a style (ten, from Classic to Retro arcade) and switches the animations on or
 off under *Account › Look & feel*. **Ctrl+K** (or `/`) opens a quick search for players, team tabs, maps, drafts
-and strat boards. The strat book has a **Lineups** library with clip links per map, agent and ability.
+and strat boards. The strat book has a **Lineups** library with clip links per map, agent and ability. With replay files it suggests
+the lineups your team already uses (4.20): utility a player threw from about the same spot to about the same spot
+three times or more, with a small map of the throw, ready to add with one click.
 
 **You vs your rank** (*Stats & maps*, 4.18) compares your ACS, kills, deaths, assists and damage per round,
 headshot share, KAST and opening duels with the other players of your rank in your own matches (within one division,

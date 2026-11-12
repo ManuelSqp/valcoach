@@ -18,7 +18,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from flask import abort, g, jsonify, request, send_file
+from flask import abort, g, jsonify, request, send_file, url_for
 
 from ..coach.prompts import field_guide
 
@@ -229,10 +229,77 @@ def register(app, store, get_job, llm_for, discord_url_for):
             return jsonify(error=f"Discord: {e}"), 502
         return jsonify(ok=True)
 
+    # ---- 4.20: notes on the playback (only the report's owner sees them), a moment as a picture on Discord
+    def pins_path(jp: Path) -> Path:
+        return Path(jp).parent / "pins.json"
+
+    @app.route("/api/jobs/<jid>/pins", methods=["GET", "POST"])
+    def job_pins(jid: str):
+        from . import pins as pn
+        j = get_job(jid)
+        report, jp = report_of(j)
+        try:
+            data = json.loads(pins_path(jp).read_text())
+        except (OSError, ValueError):
+            data = {}
+        if request.method == "GET":
+            return jsonify(pins=data)
+        b = request.get_json(silent=True) or {}
+        act = b.get("action")
+        n = b.get("round")
+        if act not in ("pin", "unpin") or not isinstance(n, int) or isinstance(n, bool) \
+                or not any(int(x.get("number", 0)) == n for x in report.get("rounds", [])):
+            return jsonify(error="unknown round or action"), 400
+        with _lock:
+            err = pn.apply(data, b, act, n, g.user.display_name or g.user.username, g.user.id, True)
+            if err:
+                return jsonify(error=err), 400
+            tmp = pins_path(jp).with_suffix(".tmp")
+            tmp.write_text(json.dumps(data, ensure_ascii=False))
+            tmp.replace(pins_path(jp))
+        return jsonify(pins=data)
+
+    @app.post("/jobs/<jid>/moment/discord")
+    def job_moment_discord(jid: str):
+        j = get_job(jid)
+        url = discord_url_for(j)
+        if not url:
+            return jsonify(error="none of your teams with this player has a Discord webhook"), 400
+        return post_moment(url, f"{j.map or 'match'}")
+
     def boot(j) -> dict:
         """What the report page's script needs (added to the served report)."""
         from .models import choices, last_choice
+        from .. import __version__
+        strat = None
+        for t in store.teams_for_user(g.user.id):            # a moment on the strat board of this player's team
+            if any(m["pid"] == j.profile_id for m in t.member_list):
+                strat = {"url": url_for("strat_from_replay", tid=t.id), "team": t.name}
+                break
         return {"ask_url": f"/api/jobs/{j.id}/ask", "clip_url": f"/jobs/{j.id}/clip" if j.vod_path and ffmpeg() else "",
                 "discord_url": f"/jobs/{j.id}/clip/discord" if j.vod_path and ffmpeg() and discord_url_for(j) else "",
-                "llm": [{"value": c["value"], "label": c["label"]} for c in choices(store, g.user)], "llm_last": last_choice(g.user)}
+                "llm": [{"value": c["value"], "label": c["label"]} for c in choices(store, g.user)], "llm_last": last_choice(g.user),
+                "pins_url": f"/api/jobs/{j.id}/pins", "replay_js": url_for("replay_js") + f"?v={__version__}",
+                "moment_url": f"/jobs/{j.id}/moment/discord" if discord_url_for(j) else "", "map": j.map or "",
+                "strat": strat}
     return boot
+
+
+MAX_PNG_BYTES = 8_000_000
+
+
+def post_moment(url: str, what: str):
+    """The playback picture the page sent (form: png, text) to a Discord webhook."""
+    from ..discord import post_file
+    f = request.files.get("png")
+    if f is None:
+        return jsonify(error="no image"), 400
+    data = f.read(MAX_PNG_BYTES + 1)
+    if len(data) > MAX_PNG_BYTES or not data.startswith(b"\x89PNG"):
+        return jsonify(error="not a PNG or too big"), 400
+    text = re.sub(r"[\r\n]+", "\n", str(request.form.get("text") or ""))[:1500]
+    try:
+        post_file(url, f"📍 {what}" + (f"\n{text}" if text else ""), "moment.png", data)
+    except Exception as e:
+        return jsonify(error=f"Discord: {e}"), 502
+    return jsonify(ok=True)

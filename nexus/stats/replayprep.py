@@ -5,7 +5,8 @@ A replay file has every player twice a second and every smoke, wall, molly and r
 the replay as <match id>.prep.json:
 
   rounds: [{n, team, side, won, plant: site or "", at: {"10": [[agent, zone, area, u, v], ...], "20": ...},
-            util: [[type, agent, slot, t0 s, zone, area, u, v], ...]}]   (one entry per team and round)
+            util: [[type, agent, slot, t0 s, zone, area, u, v, from_u, from_v, from_area, owner], ...]}]
+  (one entry per team and round; v2 / 4.20: where the owner stood when he threw it, for lineup suggestions)
 
 analyse() then sums those extracts for one roster (any team: an opponent you faced, or your own team) per
 map and side: the usual setup (how many players in which zone, e.g. "A 2 · Mid 1 · B 2"), the spots taken
@@ -26,9 +27,14 @@ from .. import replayfile
 from ..maps import MapRegistry
 from ..parse import parse_match
 
-VERSION = 1
+VERSION = 2
 TIMES = (10, 20, 30, 45)           # seconds into the round at which positions are kept
 UTIL_UNTIL_S = 100                 # utility after this (late post-plant / retake) is left out
+THROW_S = 5.0                      # the owner's cast up to this long before the effect appears = the throw
+LINEUP_TYPES = ("smoke", "damage", "slow", "recon", "flash", "wall", "trap")
+LINEUP_MIN = 3                     # thrown this often from about the same spot to about the same spot
+LINEUP_TO_M = 3.0                  # landing within this many meters
+LINEUP_FROM_M = 4.0                # thrown from within this many meters
 SHOWN_TYPES = ("smoke", "wall", "slow", "damage", "trap", "recon", "orb", "flash")
 log_ = logging.getLogger(__name__)
 
@@ -49,6 +55,7 @@ def extract(match, data: dict, mi, agent_names: dict[str, str] | None = None) ->
         return {"v": VERSION, "ok": False}
     paths = replayfile.round_paths(data, match, offsets)
     effects = replayfile.round_effects(data, match, offsets, agent_names)
+    casts = replayfile.round_casts(data, match, offsets) if data.get("casts") else {}
     agent = {p.puuid: p.agent for p in match.players.values()}
     out = []
     for r in match.rounds:
@@ -87,12 +94,19 @@ def extract(match, data: dict, mi, agent_names: dict[str, str] | None = None) ->
                     zone, area = mi.zone(f["x"], f["y"]), mi.area(f["x"], f["y"])
                 except Exception:
                     continue
+                # where the owner stood when he threw it: his last cast just before, else half a second before
+                ct = [c for c in ((casts.get(r.index) or {}).get(f["owner"]) or []) if t0 - THROW_S <= c <= t0 + 0.2]
+                pt = replayfile._at(ps.get(f["owner"]) or [], max(0.0, ct[-1] if ct else t0 - 0.5))
+                try:
+                    frm = [*_uv(mi, *pt), mi.area(*pt)] if pt else [None, None, ""]
+                except Exception:
+                    frm = [None, None, ""]
                 e["util"].append([f["type"], f.get("agent") or "", f.get("slot") or "", round(max(0.0, t0), 1),
-                                  zone, area, *_uv(mi, f["x"], f["y"])])
+                                  zone, area, *_uv(mi, f["x"], f["y"]), *frm, f["owner"]])
             out.append(e)
     roster = {p.puuid: {"name": p.name, "team": p.team, "agent": p.agent} for p in match.players.values()}
     return {"v": VERSION, "ok": True, "map": match.map_name, "started_at": match.started_at, "roster": roster,
-            "rounds": out}
+            "rounds": out, "m": round(abs(mi.x_mult) * 100 * 1000, 3) or 7.0}
 
 
 def for_match(replays_dir: Path, cache_dir: Path, match_id: str, registry: MapRegistry | None = None,
@@ -221,7 +235,7 @@ def analyse(extracts: dict[str, dict], puuids: set[str], at: int = 20) -> dict:
                     sp[0] += 1
                     sp[1] += e["won"]
                     sp[3] += c
-            for typ, ag, slot, t0, zone, area, u, v in e.get("util") or []:
+            for typ, ag, slot, t0, zone, area, u, v, *_ in e.get("util") or []:
                 k = s["util"][(typ, zone, area)]
                 k[0] += 1
                 k[1].append(t0)
@@ -263,6 +277,47 @@ def facts(d: dict, name: str = "") -> dict:
             **({"plants": [f"{site}: {c}" for site, c in s["plants"]]} if side == "attack" else {}),
         }
     return out
+
+
+def lineups(extracts: dict[str, dict], puuids: set[str]) -> dict[str, list[dict]]:
+    """4.20: utility the roster's players threw from about the same spot to about the same spot LINEUP_MIN+ times:
+    lineups they already use. {map: [{agent, slot, type, side, zone, area, from_area, n, matches, t, who,
+    to: [u, v], from: [u, v]}]}, most used first."""
+    groups: dict[tuple, list] = defaultdict(list)
+    per_m: dict[str, float] = {}
+    for mid, ex in extracts.items():
+        roster = ex.get("roster") or {}
+        mp = ex.get("map") or "?"
+        per_m[mp] = ex.get("m") or 7.0
+        for e in ex.get("rounds") or []:
+            for it in e.get("util") or []:
+                if len(it) < 12 or it[0] not in LINEUP_TYPES or it[11] not in puuids or it[8] is None:
+                    continue
+                typ, ag, slot, t0, zone, area, u, v, fu, fv, farea, owner = it[:12]
+                groups[(mp, e["side"], ag, slot, typ)].append(
+                    {"to": (u, v), "from": (fu, fv), "t": t0, "zone": zone, "area": area, "from_area": farea,
+                     "who": roster.get(owner, {}).get("name", "?"), "match": mid})
+    out: dict[str, list[dict]] = defaultdict(list)
+    for (mp, side, ag, slot, typ), items in groups.items():
+        m = per_m.get(mp, 7.0)
+        lim_to, lim_from = (LINEUP_TO_M * m) ** 2, (LINEUP_FROM_M * m) ** 2
+        left = list(items)
+        while left:
+            seed = left[0]
+            near = [x for x in left if (x["to"][0] - seed["to"][0]) ** 2 + (x["to"][1] - seed["to"][1]) ** 2 <= lim_to
+                    and (x["from"][0] - seed["from"][0]) ** 2 + (x["from"][1] - seed["from"][1]) ** 2 <= lim_from]
+            left = [x for x in left if x not in near]
+            if len(near) < LINEUP_MIN:
+                continue
+            avg = lambda k, i: round(sum(x[k][i] for x in near) / len(near))       # noqa: E731
+            top = lambda k: Counter(x[k] for x in near).most_common(1)[0][0]        # noqa: E731
+            out[mp].append({"agent": ag, "slot": slot, "type": typ, "side": side, "zone": top("zone"), "area": top("area"),
+                            "from_area": top("from_area"), "n": len(near), "matches": len({x["match"] for x in near}),
+                            "t": _median([x["t"] for x in near]), "who": top("who"),
+                            "to": [avg("to", 0), avg("to", 1)], "from": [avg("from", 0), avg("from", 1)]})
+    for mp in out:
+        out[mp].sort(key=lambda x: (-x["n"], x["agent"]))
+    return dict(out)
 
 
 def hints(a: dict, min_rounds: int = 5) -> list[str]:

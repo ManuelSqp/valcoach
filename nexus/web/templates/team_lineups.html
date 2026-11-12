@@ -18,6 +18,8 @@
 .lc .t{font-weight:700}.lc .m{font-size:11.5px;color:var(--muted)}
 .lc .tags{display:flex;gap:4px;flex-wrap:wrap}.lc .tags span{font-size:10.5px;padding:1px 7px;border-radius:99px;background:var(--panel3);color:var(--muted)}
 .lc form{margin-top:auto;align-self:flex-end}
+.sugg{margin:6px 0 14px;padding-bottom:12px;border-bottom:1px solid var(--line)}.sugg h3{margin:8px 0;font-size:15px}
+.lc svg.mini{display:block;width:100%;aspect-ratio:16/10;background:var(--ink)}
 </style>
 {% endblock %}
 {% block content %}
@@ -30,6 +32,23 @@
         <label for="fa" class="sr-only">Agent</label><select id="fa" name="agent" style="width:auto" onchange="this.form.submit()"><option value="">all agents</option>{% for a in agents_with %}<option {{ 'selected' if a == agent }}>{{ a }}</option>{% endfor %}</select>
         <label for="fs" class="sr-only">Side</label><select id="fs" name="side" style="width:auto" onchange="this.form.submit()"><option value="">both sides</option><option value="attack" {{ 'selected' if side == 'attack' }}>attack</option><option value="defense" {{ 'selected' if side == 'defense' }}>defense</option></select>
       </form></div>
+    {% if suggested %}<div class="sugg" id="suggested"><h3>From your replay files <span class="muted small" style="font-weight:400">thrown again and again from the same spot: add the ones worth keeping</span></h3>
+      <div class="lcards">{% for x in suggested %}
+        <div class="lc">
+          <svg class="mini" viewBox="{{ x.box }}" role="img" aria-label="{{ x.title }}">
+            <image href="{{ map_img }}" x="0" y="0" width="1000" height="1000" opacity=".75" preserveAspectRatio="none"/>
+            <line x1="{{ x['from'][0] }}" y1="{{ x['from'][1] }}" x2="{{ x.to[0] }}" y2="{{ x.to[1] }}" stroke="#f6d24a" stroke-width="9" stroke-dasharray="22 14" stroke-linecap="round"/>
+            <circle cx="{{ x['from'][0] }}" cy="{{ x['from'][1] }}" r="20" fill="#2dd4bf" stroke="#0b0e13" stroke-width="5"/>
+            <circle cx="{{ x.to[0] }}" cy="{{ x.to[1] }}" r="{{ 45 if x.type in ('smoke', 'damage', 'slow') else 22 }}" fill="#f6d24a" fill-opacity=".45" stroke="#f6d24a" stroke-width="6"/>
+          </svg>
+          <div class="b"><span class="t">{{ ai(x.agent, 20) }} {{ x.title }}</span>
+            <span class="tags">{% if x.ability %}<span>{{ x.ability }}</span>{% endif %}<span>{{ x.side }}</span>{% if x.site %}<span>{{ x.site }}</span>{% endif %}<span>{{ x.n }}×</span></span>
+            <span class="small">{{ x.notes }}</span>
+            <form method="post" action="{{ url_for('team_lineups', tid=t.id) }}"><input type="hidden" name="map" value="{{ sel }}">
+              {% for k in ('title', 'agent', 'ability', 'side', 'site', 'notes') %}<input type="hidden" name="{{ k }}" value="{{ x[k] }}">{% endfor %}
+              <button class="btn sm" title="Add it to the library; add a clip link later if you have one">＋ Add</button></form>
+          </div>
+        </div>{% endfor %}</div></div>{% endif %}
     {% for ag, rows in groups.items() %}
     <div class="agroup"><h3>{{ ai(ag, 28) }} {{ ag }} <span class="muted small" style="font-weight:400">{{ rows|length }}</span></h3>
       <div class="lcards">{% for r in rows %}

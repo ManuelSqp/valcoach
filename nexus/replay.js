@@ -9,7 +9,8 @@
 // addPin(round, {t, text, strokes}) -> Promise, delPin(round, id) -> Promise, canDelete(pin) -> bool,
 // toStrat(round, {t, side, items, notes}) -> Promise of the new strat board's URL. With them the playback gets
 // notes at a moment with lines drawn on the map (shown around their time, the playback stops there) and
-// "Strat board" (this moment's positions, utility and drawings on a new board).
+// "Strat board" (this moment's positions, utility and drawings on a new board). 4.20: toDiscord(round, png Blob,
+// text) -> Promise posts the moment as a picture; "⤓ Picture" saves it (always there).
 (function () {
   const NS = 'http://www.w3.org/2000/svg', S = 1000;
   const COL = {us: '#2dd4bf', them: '#ff4655', you: '#f6d24a', better: '#f2b84b', plant: '#ff4655', defuse: '#2dd4bf'};
@@ -95,6 +96,8 @@
        ${vodStart != null ? '<button class="rp-vod" title="Show this moment in the VOD">🎬</button>' : ''}
        ${HK && HK.addPin ? '<button class="rp-pin" title="Draw on the map and leave a note at this moment">✎ Note</button>' : ''}
        ${HK && HK.toStrat ? '<button class="rp-strat" title="This moment (positions, utility, drawings) on a new strat board">⇢ Strat board</button>' : ''}
+       <button class="rp-pic" title="Save this moment as a picture">⤓ Picture</button>
+       ${HK && HK.toDiscord ? '<button class="rp-disc" title="Post this moment (map, players, utility, notes) to the team\'s Discord">📷 Discord</button>' : ''}
        <span class="rp-msg"></span>`);
     const comp = h('div', {class: 'rp-compose', hidden: ''},
       `<span class="rp-ctime"></span><input type="text" maxlength="300" placeholder="What should everyone see here?">
@@ -487,6 +490,54 @@
       return {t: Math.round(T), side: R.attack ? 'attack' : 'defense', items,
               notes: near.filter(p => p.text).map(p => `${fmt(p.t)} ${p.text}`).join('\n')};
     }
+    // this moment as a picture: the map as it's shown now (zoom included), with the round and time on top
+    async function dataUrl(href) {
+      if (!href || href.startsWith('data:')) return href;
+      try {
+        const b = await (await fetch(href)).blob(); if (!b.type.startsWith('image')) return null;
+        return await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); });
+      } catch (e) { return null; }
+    }
+    const caption = () => {
+      const near = pinsOf().filter(p => p.text && Math.abs(p.t - T) <= PIN_MS).map(p => p.text);
+      return [`${M.name || ''} round ${n} · ${fmt(T)}`.trim(), ...near].join('\n');
+    };
+    async function picture() {
+      const clone = svg.cloneNode(true), P = 1400;
+      clone.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.w}`);
+      clone.setAttribute('font-family', 'Inter, Segoe UI, Helvetica, Arial, sans-serif');
+      for (const im of clone.querySelectorAll('image')) {
+        const d = await dataUrl(im.getAttribute('href'));
+        if (d) im.setAttribute('href', d); else im.remove();
+      }
+      const k = view.w / S;
+      const title = el('text', {x: view.x + 16 * k, y: view.y + 38 * k, 'font-size': 30 * k, 'font-weight': 800, fill: '#fff',
+                                stroke: '#0b0e13', 'stroke-width': 6 * k, 'paint-order': 'stroke'});
+      title.textContent = caption().split('\n')[0];
+      clone.appendChild(title);
+      clone.setAttribute('width', P); clone.setAttribute('height', P);
+      const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], {type: 'image/svg+xml'}));
+      const img = new Image();
+      await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = url; });
+      const c = document.createElement('canvas'); c.width = P; c.height = P;
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#0b0e13'; ctx.fillRect(0, 0, P, P); ctx.drawImage(img, 0, 0, P, P);
+      URL.revokeObjectURL(url);
+      return await new Promise(res => c.toBlob(res, 'image/png'));
+    }
+    bar.querySelector('.rp-pic').onclick = async () => {
+      pause();
+      try {
+        const b = await picture(), a = document.createElement('a');
+        a.href = URL.createObjectURL(b); a.download = `${(M.name || 'round').replace(/[^\w-]+/g, '-')}-r${n}-${fmt(T).replace(':', 'm')}s.png`; a.click();
+      } catch (e) { msg('No picture: ' + (e.message || e)); }
+    };
+    const discBtn = bar.querySelector('.rp-disc');
+    if (discBtn) discBtn.onclick = async () => {
+      pause(); discBtn.disabled = true; msg('posting…');
+      try { await HK.toDiscord(n, await picture(), caption()); msg('Posted to Discord'); }
+      catch (e) { msg('Discord: ' + (e.message || e)); }
+      discBtn.disabled = false;
+    };
     const stratBtn = bar.querySelector('.rp-strat');
     if (stratBtn) stratBtn.onclick = () => {
       pause(); msg('making the strat board…');

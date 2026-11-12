@@ -248,6 +248,11 @@
       return d.url;
     },
   };
+  if (B.moment) window.NEXUS_RP.toDiscord = async (n, png, text) => {
+    const fd = new FormData(); fd.append('png', png, 'moment.png'); fd.append('text', text);
+    const r = await fetch(B.moment, {method: 'POST', body: fd}); const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'not posted');
+  };
   async function showReplay() {
     const box = $('#rp-box'), note = $('#rpnote');
     try { await loadReplay(); } catch (e) { note.textContent = 'No replay for this match (the map or the round data is missing).'; return; }
