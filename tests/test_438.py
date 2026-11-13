@@ -27,7 +27,7 @@ def test_sidebar_topics_and_tabs(app):  # noqa: F811 (fixture)
     aim = _tabs(c.get(f"/profiles/{pid}/aim").data.decode())
     assert len(aim) == 1 and "Aim trainer" in aim[0] and "Warm-up &amp; routines" in aim[0] and "Mouse &amp; monitor" in aim[0]
     # a topic with a single page shows no tab bar
-    assert _tabs(c.get(f"/profiles/{pid}").data.decode()) == []
+    assert _tabs(c.get(f"/profiles/{pid}/ask").data.decode()) == []
 
 
 def test_team_tabs_follow_permissions(app):  # noqa: F811 (fixture)

@@ -4,6 +4,7 @@
 {% import "_ui.html" as vc %}
 {% call vc.pagehead('Matches & reports', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, none)],
     p.region|upper ~ ', coaching: ' ~ (p.mode|mode_label) ~ ', ' ~ p.language ~ (', playbook set' if p.playbook.strip() else ', no playbook yet')) %}
+  <a class="btn sm" href="{{ url_for('replay_files', pid=p.id) }}">Upload replays</a>
   <a class="btn sm ghost" href="{{ url_for('profile_edit', pid=p.id) }}">Player &amp; playbook</a>
 {% endcall %}
 

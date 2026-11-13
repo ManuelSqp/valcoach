@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.39.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.40.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -228,6 +228,8 @@ by hand.
 coming out of main facing the site). Enemy models peek from the callouts in front of you, at their real direction and
 distance on that map, and the callout's name shows when one appears. The positions come from valorant-api.com's
 callouts, which have no walls or heights: each spot gets a piece of cover and everyone is at your height.
+
+**Replay files:** *Performance › Matches › Replay files* uploads replay files (.vrf, from VALORANT › Saved › Demos) of any match, several at once, without a coaching run, and lists which of your recent matches still have none.
 
 **3D maps:** *Practice › 3D maps* rebuilds a map from the replay files on the server, not from the game's files: every
 spot a player stood on is floor at that height (ramps, Heaven over Market, boxes people stand on), everything else is
