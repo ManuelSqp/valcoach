@@ -79,12 +79,17 @@
 .shadd select{width:auto;max-width:150px;font-size:13px;padding:5px 26px 5px 8px;min-height:0;height:auto}
 .shl{margin:0;padding-left:18px;font-size:13.5px}.shl li{margin:5px 0}
 .shl code{font-size:12px;padding:1px 6px;border-radius:5px;background:var(--panel2);border:1px solid var(--line);user-select:all;overflow-wrap:anywhere}
+.kmore{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
 .linkcopy{background:none;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:12.5px;padding:0 4px}
 </style>
 {% endblock %}
 {% block content %}
+{% if page == 'kovaaks' %}
+{{ vc.pagehead('KovaaK\'s', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id)), ('Aim', url_for('aim', pid=p.id))],
+   'Playlists from the coach, community playlists, your imported scores and the scenarios the coach picks from') }}
+{% else %}
 {{ vc.pagehead('Aim', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
-   'Routines for Aimlabs, KovaaK\'s and the Range, picked from what your matches show') }}
+   'Your warm-up and routines (the Nexus trainer, Aimlabs, the Range), picked from what your matches show') }}
 
 {% set wid = warm.id if warm else '' %}
 <div class="aim-top">
@@ -156,6 +161,55 @@
   </section>
 </div>
 
+<section class="card" id="library">
+  <h2>Library</h2>
+  <div class="chips" id="chips"><button type="button" class="on" data-f="">All</button>{% for k, v in focus.items() %}<button type="button" data-f="{{ k }}">{{ v }}</button>{% endfor %}</div>
+  <div class="lib">
+    {% for r in lib %}{% set sc = scores.get(r.id) or [] %}
+    <div class="rt {{ 'is-warm' if r.id == wid }}" data-focus="{{ r.focus|join(' ') }}">
+      <h3>{{ r.name }}<small>{{ r.minutes }} min</small></h3>
+      <div class="src">{{ kinds[r.kind] }} · {{ 'built in' if r.source == 'builtin' else (r.source_name if r.source == 'team' else 'yours') }}{% if r.by and r.source == 'team' %}, added by {{ r.by }}{% endif %}</div>
+      <div>{{ tags(r) }}</div>
+      {% if r.steps %}<div class="st">{{ r.steps }}</div>{% endif %}
+      {% if sc %}<div class="sc">Your scores: {% for x in sc[-6:] %}{{ '%g'|format(x.score) }}{{ ' → ' if not loop.last }}{% endfor %}</div>{% endif %}
+      <div class="row2">{{ use(r) }}
+        {% if can_log and r.id != wid %}<form method="post"><input type="hidden" name="action" value="warmup"><input type="hidden" name="rid" value="{{ r.id }}"><button class="btn sm ghost">My warm-up</button></form>{% endif %}
+        {% if can_log %}{% if r.id in done %}<span class="done-tag">Done today</span>{% else %}<form method="post"><input type="hidden" name="action" value="done"><input type="hidden" name="rid" value="{{ r.id }}"><button class="btn sm ghost">Done today</button></form>{% endif %}{% endif %}
+        {% for t in teams if team_warm.get(t.id) == r.id %}<span class="ft">{{ t.name }}'s warm-up</span>{% endfor %}
+        {% if r.source == 'mine' or (r.source == 'team' and (r.tid in owned or r.added_by == user.id)) %}
+        <form method="post" data-q="Remove {{ r.name }}?" onsubmit="return confirm(this.dataset.q)"><input type="hidden" name="action" value="remove"><input type="hidden" name="rid" value="{{ r.id }}"><input type="hidden" name="scope" value="{{ 'team:' ~ r.tid if r.source == 'team' else 'me' }}"><button class="btn sm ghost danger">Remove</button></form>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card" id="add">
+  <h2>Add a routine</h2>
+  <p class="small muted" style="margin:-4px 0 12px">In Aimlabs: open your playlist, press <i>Share</i> and paste the link here (opening it starts Aimlabs and offers the playlist).
+    In KovaaK's: copy the playlist's share code. Or write down steps for the Range or Deathmatch.</p>
+  <form method="post" class="addf">
+    <input type="hidden" name="action" value="add">
+    <label>Name<input type="text" name="name" maxlength="60" required placeholder="e.g. Tuesday flick playlist"></label>
+    <label>What it is<select name="kind" id="kind">{% for k in addable %}<option value="{{ k }}">{{ kinds[k] }}</option>{% endfor %}</select></label>
+    <label>Minutes<input name="minutes" type="number" min="1" max="90" value="10"></label>
+    <label>Save for<select name="scope"><option value="me">Only me</option>{% for t in teams %}<option value="team:{{ t.id }}">Team {{ t.name }}</option>{% endfor %}</select></label>
+    <label class="full" data-k="aimlabs link">Link<input name="url" type="url" maxlength="400" placeholder="https://"></label>
+    <label class="full" data-k="kovaaks" hidden>KovaaK's share code<input type="text" name="code" maxlength="64" autocomplete="off"></label>
+    <label class="full">Steps or notes<textarea name="steps" rows="3" maxlength="600" placeholder="What to do, in order (needed for In game)"></textarea></label>
+    <div class="full"><span class="small muted">Trains</span><div class="fsel">{% for k, v in focus.items() %}<label><input type="checkbox" name="focus" value="{{ k }}" {{ 'checked' if k == 'warmup' }}> {{ v }}</label>{% endfor %}</div></div>
+    <div class="full"><button class="btn primary">Add the routine</button></div>
+  </form>
+</section>
+<section class="card kmore">
+  <div><h2 style="margin:0 0 4px">KovaaK's</h2>
+  <p class="small muted" style="margin:0">Playlists from the coach, community share codes, your imported scores and the scenarios the coach
+    picks from.{% if kruns %} <span>{{ kruns }} runs imported.</span>{% endif %}</p></div>
+  <a class="btn sm" href="{{ url_for('aim_kovaaks_page', pid=p.id) }}">Open KovaaK's</a>
+</section>
+
+{% endif %}
+{% if page == 'kovaaks' %}
 <section class="card" id="kovaaks">
   <h2>KovaaK's playlists from the coach</h2>
   <p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Built from what your matches show and changed every week. Download a playlist, save it in
@@ -273,50 +327,12 @@
 </section>
 </div>
 
-<section class="card" id="library">
-  <h2>Library</h2>
-  <div class="chips" id="chips"><button type="button" class="on" data-f="">All</button>{% for k, v in focus.items() %}<button type="button" data-f="{{ k }}">{{ v }}</button>{% endfor %}</div>
-  <div class="lib">
-    {% for r in lib %}{% set sc = scores.get(r.id) or [] %}
-    <div class="rt {{ 'is-warm' if r.id == wid }}" data-focus="{{ r.focus|join(' ') }}">
-      <h3>{{ r.name }}<small>{{ r.minutes }} min</small></h3>
-      <div class="src">{{ kinds[r.kind] }} · {{ 'built in' if r.source == 'builtin' else (r.source_name if r.source == 'team' else 'yours') }}{% if r.by and r.source == 'team' %}, added by {{ r.by }}{% endif %}</div>
-      <div>{{ tags(r) }}</div>
-      {% if r.steps %}<div class="st">{{ r.steps }}</div>{% endif %}
-      {% if sc %}<div class="sc">Your scores: {% for x in sc[-6:] %}{{ '%g'|format(x.score) }}{{ ' → ' if not loop.last }}{% endfor %}</div>{% endif %}
-      <div class="row2">{{ use(r) }}
-        {% if can_log and r.id != wid %}<form method="post"><input type="hidden" name="action" value="warmup"><input type="hidden" name="rid" value="{{ r.id }}"><button class="btn sm ghost">My warm-up</button></form>{% endif %}
-        {% if can_log %}{% if r.id in done %}<span class="done-tag">Done today</span>{% else %}<form method="post"><input type="hidden" name="action" value="done"><input type="hidden" name="rid" value="{{ r.id }}"><button class="btn sm ghost">Done today</button></form>{% endif %}{% endif %}
-        {% for t in teams if team_warm.get(t.id) == r.id %}<span class="ft">{{ t.name }}'s warm-up</span>{% endfor %}
-        {% if r.source == 'mine' or (r.source == 'team' and (r.tid in owned or r.added_by == user.id)) %}
-        <form method="post" data-q="Remove {{ r.name }}?" onsubmit="return confirm(this.dataset.q)"><input type="hidden" name="action" value="remove"><input type="hidden" name="rid" value="{{ r.id }}"><input type="hidden" name="scope" value="{{ 'team:' ~ r.tid if r.source == 'team' else 'me' }}"><button class="btn sm ghost danger">Remove</button></form>{% endif %}
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-</section>
-
-<section class="card" id="add">
-  <h2>Add a routine</h2>
-  <p class="small muted" style="margin:-4px 0 12px">In Aimlabs: open your playlist, press <i>Share</i> and paste the link here (opening it starts Aimlabs and offers the playlist).
-    In KovaaK's: copy the playlist's share code. Or write down steps for the Range or Deathmatch.</p>
-  <form method="post" class="addf">
-    <input type="hidden" name="action" value="add">
-    <label>Name<input type="text" name="name" maxlength="60" required placeholder="e.g. Tuesday flick playlist"></label>
-    <label>What it is<select name="kind" id="kind">{% for k in addable %}<option value="{{ k }}">{{ kinds[k] }}</option>{% endfor %}</select></label>
-    <label>Minutes<input name="minutes" type="number" min="1" max="90" value="10"></label>
-    <label>Save for<select name="scope"><option value="me">Only me</option>{% for t in teams %}<option value="team:{{ t.id }}">Team {{ t.name }}</option>{% endfor %}</select></label>
-    <label class="full" data-k="aimlabs link">Link<input name="url" type="url" maxlength="400" placeholder="https://"></label>
-    <label class="full" data-k="kovaaks" hidden>KovaaK's share code<input type="text" name="code" maxlength="64" autocomplete="off"></label>
-    <label class="full">Steps or notes<textarea name="steps" rows="3" maxlength="600" placeholder="What to do, in order (needed for In game)"></textarea></label>
-    <div class="full"><span class="small muted">Trains</span><div class="fsel">{% for k, v in focus.items() %}<label><input type="checkbox" name="focus" value="{{ k }}" {{ 'checked' if k == 'warmup' }}> {{ v }}</label>{% endfor %}</div></div>
-    <div class="full"><button class="btn primary">Add the routine</button></div>
-  </form>
-</section>
+<p class="small muted"><a href="{{ url_for('aim', pid=p.id) }}">← Back to Aim</a></p>
+{% endif %}
 <script>
 (function () {
   const chips = document.getElementById('chips');
-  chips.addEventListener('click', e => {
+  if (chips) chips.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     chips.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
     document.querySelectorAll('.rt').forEach(r => { r.hidden = !!b.dataset.f && !r.dataset.focus.split(' ').includes(b.dataset.f); });
@@ -361,7 +377,7 @@
   });
   const kind = document.getElementById('kind');
   const sync = () => document.querySelectorAll('[data-k]').forEach(l => { l.hidden = !l.dataset.k.split(' ').includes(kind.value); });
-  kind.addEventListener('change', sync); sync();
+  if (kind) { kind.addEventListener('change', sync); sync(); }
 })();
 </script>
 {% endblock %}

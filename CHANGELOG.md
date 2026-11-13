@@ -4,6 +4,12 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.25.0
+- **KovaaK's has its own page** (*Aim › KovaaK's*): the coach's playlists, community share codes, your imported scores
+  and the scenarios the coach picks from moved off the Aim page. The Aim page is now the warm-up, what your matches
+  show, the routines and the library; one card at the bottom opens KovaaK's (with how many runs you imported).
+  Everything works as before: downloads, imports, the desktop app, KovaaK's runs as warm-up days.
+
 ## 4.24.0
 - **57 more aim trainer scenarios, 100 in all**, modelled on the drill types KovaaK's and Aim Lab are known for
   (our own versions, names and texts), in two new groups and the old ones:
