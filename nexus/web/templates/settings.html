@@ -79,8 +79,8 @@ section.card[id]{scroll-margin-top:60px}
 
 <section class="card" id="search">
   <h2>Web search (optional)</h2>
-  <p class="hint" style="margin-top:-6px">The coach can look things up instead of guessing: agent abilities and patch changes when you ask the coach,
-    KovaaK's playlists and share codes on the Aim page. Answers show the pages they used.</p>
+  <p class="hint" style="margin-top:-6px">The coach can look things up instead of guessing: agent abilities and patch changes when you ask the coach{{ ',' if kovaaks_on else '.' }}
+    {% if kovaaks_on %}KovaaK's playlists and share codes on the Aim page. {% endif %}Answers show the pages they used.</p>
   <div class="grid2">
     <div class="field"><label>Search with</label>
       <select name="search_provider">{% for k, v in search_providers.items() %}<option value="{{ k }}" {{ 'selected' if s.search_provider == k }}>{{ v }}</option>{% endfor %}</select>

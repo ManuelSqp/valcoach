@@ -21,6 +21,10 @@ import zipfile
 from collections import defaultdict
 from datetime import date, datetime
 
+# 4.26: KovaaK's is off on the web pages (Aim, Ask the coach, Settings, Account, This PC). The code, the stored
+# scores and the desktop app's endpoints stay; set this to True to bring every KovaaK's part back.
+WEB = False
+
 # what a scenario trains (the Aim page's focus keys; "switching" and "reaction" are KovaaK's-only)
 FOCUS_EXTRA = {"switching": "Target switching", "reaction": "Reaction"}
 SECONDS_PER_RUN = 75                # 60 s scenario + loading and the score screen

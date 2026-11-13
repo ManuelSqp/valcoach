@@ -187,7 +187,7 @@
 <section class="card" id="add">
   <h2>Add a routine</h2>
   <p class="small muted" style="margin:-4px 0 12px">In Aimlabs: open your playlist, press <i>Share</i> and paste the link here (opening it starts Aimlabs and offers the playlist).
-    In KovaaK's: copy the playlist's share code. Or write down steps for the Range or Deathmatch.</p>
+    {% if kovaaks_on %}In KovaaK's: copy the playlist's share code. {% endif %}Or write down steps for the Range or Deathmatch.</p>
   <form method="post" class="addf">
     <input type="hidden" name="action" value="add">
     <label>Name<input type="text" name="name" maxlength="60" required placeholder="e.g. Tuesday flick playlist"></label>
@@ -195,18 +195,18 @@
     <label>Minutes<input name="minutes" type="number" min="1" max="90" value="10"></label>
     <label>Save for<select name="scope"><option value="me">Only me</option>{% for t in teams %}<option value="team:{{ t.id }}">Team {{ t.name }}</option>{% endfor %}</select></label>
     <label class="full" data-k="aimlabs link">Link<input name="url" type="url" maxlength="400" placeholder="https://"></label>
-    <label class="full" data-k="kovaaks" hidden>KovaaK's share code<input type="text" name="code" maxlength="64" autocomplete="off"></label>
+    {% if kovaaks_on %}<label class="full" data-k="kovaaks" hidden>KovaaK's share code<input type="text" name="code" maxlength="64" autocomplete="off"></label>{% endif %}
     <label class="full">Steps or notes<textarea name="steps" rows="3" maxlength="600" placeholder="What to do, in order (needed for In game)"></textarea></label>
     <div class="full"><span class="small muted">Trains</span><div class="fsel">{% for k, v in focus.items() %}<label><input type="checkbox" name="focus" value="{{ k }}" {{ 'checked' if k == 'warmup' }}> {{ v }}</label>{% endfor %}</div></div>
     <div class="full"><button class="btn primary">Add the routine</button></div>
   </form>
 </section>
-<section class="card kmore">
+{% if kovaaks_on %}<section class="card kmore">
   <div><h2 style="margin:0 0 4px">KovaaK's</h2>
   <p class="small muted" style="margin:0">Playlists from the coach, community share codes, your imported scores and the scenarios the coach
     picks from.{% if kruns %} <span>{{ kruns }} runs imported.</span>{% endif %}</p></div>
   <a class="btn sm" href="{{ url_for('aim_kovaaks_page', pid=p.id) }}">Open KovaaK's</a>
-</section>
+</section>{% endif %}
 
 {% endif %}
 {% if page == 'kovaaks' %}

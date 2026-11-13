@@ -39,7 +39,7 @@
 <section class="card" id="pc-outside">
   <h2>Only in the Nexus app</h2>
   <p style="max-width:70ch">This page belongs to the Nexus app for Windows. The app shows Nexus in its own window and does what a
-    website can't: it puts the coach's playlists into KovaaK's, sends your KovaaK's scores, and cuts your matches out of
+    website can't: it {% if kovaaks_on %}puts the coach's playlists into KovaaK's, sends your KovaaK's scores, and {% endif %}cuts your matches out of
     Medal recordings and uploads them.</p>
   <p><a class="btn primary" href="{{ download }}" target="_blank" rel="noopener noreferrer">Download the installer</a></p>
   <p class="hint">Run nexus-setup.exe, enter <code translate="no">{{ request.host_url.rstrip('/') }}</code> as the address and log in as usual.
@@ -63,14 +63,14 @@
   </div>
 
   <div class="pc-tiles">
-    <button type="button" class="pc-tile" data-go="pc-kovaaks"><span>Playlists</span><b id="t-playlists">–</b><span id="t-playlists-sub"></span></button>
-    <button type="button" class="pc-tile" data-go="pc-kovaaks"><span>Scores</span><b id="t-scores">–</b><span id="t-scores-sub"></span></button>
+    {% if kovaaks_on %}<button type="button" class="pc-tile" data-go="pc-kovaaks"><span>Playlists</span><b id="t-playlists">–</b><span id="t-playlists-sub"></span></button>
+    <button type="button" class="pc-tile" data-go="pc-kovaaks"><span>Scores</span><b id="t-scores">–</b><span id="t-scores-sub"></span></button>{% endif %}
     <button type="button" class="pc-tile" data-go="pc-medal"><span>Medal</span><b id="t-medal">–</b><span id="t-medal-sub"></span></button>
     <button type="button" class="pc-tile" data-go="pc-demos"><span>Replays</span><b id="t-replays">–</b><span id="t-replays-sub"></span></button>
   </div>
 
   <div class="pc-cols">
-    <section class="panel" id="pc-kovaaks">
+    {% if kovaaks_on %}<section class="panel" id="pc-kovaaks">
       <header><h2>KovaaK's</h2></header>
       <p class="small muted" style="margin-top:0">The coach's warm-up and training playlists land in KovaaK's › Playlists › Local Playlists, dated.
         Your scores go to the Aim page.</p>
@@ -80,7 +80,7 @@
         <label class="switch"><input type="checkbox" data-key="put_playlists"><span class="tr" aria-hidden="true"></span><span>Put the playlists into KovaaK's (once a day)</span></label>
         <label class="switch"><input type="checkbox" data-key="send_scores"><span class="tr" aria-hidden="true"></span><span>Send new scores to Nexus</span></label>
       </div>
-    </section>
+    </section>{% endif %}
 
     <section class="panel" id="pc-medal">
       <header><h2>Medal</h2></header>
@@ -134,6 +134,7 @@
 
   function tile(id, on, ok, sub) {
     const b = $(id);
+    if (!b) return;                        // a tile that's switched off (4.26)
     b.textContent = on && ok ? 'On' : (on ? 'Check folder' : 'Off');
     b.className = on && ok ? 'ok' : (on ? 'warn' : 'off');
     $(id + '-sub').textContent = on ? sub : 'Switched off';
@@ -147,6 +148,7 @@
     if (sel && s.player_id && document.activeElement !== sel) sel.value = String(s.player_id);
     for (const k of ['kovaaks', 'medal', 'demos']) {
       const c = $('f-' + k), path = s[k + '_dir'];
+      if (!c) continue;
       c.textContent = path || 'Not set'; c.title = path || '';
       c.classList.toggle('missing', !s[k + '_ok']);
     }
