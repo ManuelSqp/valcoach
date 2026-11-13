@@ -36,6 +36,7 @@ def _read(path: Path) -> dict:
 
 def register(app, store, sr, view_profile, filter_rows) -> None:
     from .aim import player_runs
+    from ..stats import kovaaks as kv
     from .trainer import trainer_data
 
     @app.template_filter("askfmt")
@@ -87,7 +88,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
             try:
                 llm, _cfg = sr._llm(p, choice)
                 rows = filter_rows(sr.games(pid).rows(), "everything")
-                data = ac.facts(p.riot_id, rows, player_runs(sr, pid), trainer_data(sr, pid))
+                data = ac.facts(p.riot_id, rows, player_runs(sr, pid) if kv.WEB else [], trainer_data(sr, pid))
                 data.update(sr.coach_extras(pid, rows, store.data_dir / "cache"))     # 4.15
                 f = path(pid, uid)
                 hist = _read(f).get("items", [])

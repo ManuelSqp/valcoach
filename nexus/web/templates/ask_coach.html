@@ -56,7 +56,7 @@
   {% else %}Without web search the coach only knows what it learned in training, so details that change with patches can be out of date.{% if user.is_admin %} <a href="{{ url_for('settings') }}#search">Set up web search</a>{% endif %}{% endif %}</p>
 <div class="starters" id="starters">
   <button type="button">Why do I lose so many first duels, and what should I change?</button>
-  <button type="button">Which KovaaK's playlist fits what my aim needs?</button>
+  {% if kovaaks_on %}<button type="button">Which KovaaK's playlist fits what my aim needs?</button>{% else %}<button type="button">Which aim trainer scenarios fit what my aim needs?</button>{% endif %}
   <button type="button">What changed for my main agent in the latest patch?</button>
   <button type="button">How should I play defence on my worst map?</button>
 </div>

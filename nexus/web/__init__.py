@@ -307,6 +307,10 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
         played = {r.get("created") for r in q.get("results") or []}
         return len(q.get("questions") or []) if q.get("questions") and q.get("created") not in played else 0
 
+    def _kv_web() -> bool:
+        from ..stats import kovaaks as _kv
+        return _kv.WEB
+
     @app.context_processor
     def inject():
         user = getattr(g, "user", None)
@@ -339,6 +343,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             "host_boot": _host_boot(),
             "llm_choices": model_choices(store, user) if user else [],
             "llm_last": last_choice(user) if user else "",
+            "kovaaks_on": _kv_web(),
             "new_version": bool(user) and store.get(f"seen_version:{user.id}") not in ("", __version__),
         }
 

@@ -2380,7 +2380,9 @@ def test_small_fixes_37(app):
     assert len(boot["draft"]["data"]["slots"]) == 5 and boot["draft"]["data"]["status"] == "idea"
 
 
-def test_aim_routines_and_warmup(app):
+def test_aim_routines_and_warmup(app, monkeypatch):
+    from nexus.stats import kovaaks as _kv
+    monkeypatch.setattr(_kv, "WEB", True)        # 4.26: KovaaK's is off on the pages; these tests switch it on
     c = setup_admin(app)
     store = app.extensions["nexus"]["store"]
     pid = add_profile(c)
@@ -2469,7 +2471,9 @@ def test_german_interface_and_language_switch(app):
     assert content == "Auf Discord gepostet" and embeds[0]["title"] == "Entscheidende Runden"
 
 
-def test_kovaaks_playlists_scores_and_scenarios(app):
+def test_kovaaks_playlists_scores_and_scenarios(app, monkeypatch):
+    from nexus.stats import kovaaks as _kv
+    monkeypatch.setattr(_kv, "WEB", True)
     import io as _io
     import zipfile as _zip
     c = setup_admin(app)
@@ -2631,6 +2635,8 @@ def test_settings_web_search_width_and_backup_message(app, tmp_path):
 
 
 def test_kovaaks_community_playlists(app, monkeypatch):
+    from nexus.stats import kovaaks as _kv
+    monkeypatch.setattr(_kv, "WEB", True)
     from nexus.coach import websearch as ws
     c = setup_admin(app)
     pid = add_profile(c)

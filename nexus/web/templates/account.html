@@ -180,8 +180,8 @@
 
 <section class="card" id="devices">
   <h2>Nexus app for Windows</h2>
-  <p class="small muted" style="max-width:80ch;margin:-4px 0 12px">Nexus in its own window, plus what only works on your PC: it puts the coach's
-    KovaaK's playlists into KovaaK's, sends your new KovaaK's scores, and cuts your matches out of Medal recordings and uploads them,
+  <p class="small muted" style="max-width:80ch;margin:-4px 0 12px">Nexus in its own window, plus what only works on your PC: it {% if kovaaks_on %}puts the coach's
+    KovaaK's playlists into KovaaK's, sends your new KovaaK's scores, and {% endif %}cuts your matches out of Medal recordings and uploads them,
     so the recording is ready on the match's coach page. Download <a href="{{ url_for('this_pc') }}">the installer</a>, enter the address
     <code translate="no">{{ request.host_url.rstrip('/') }}</code> and log in as usual: the app then appears in this list.</p>
   {% if devices %}

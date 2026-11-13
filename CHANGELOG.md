@@ -4,6 +4,15 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.26.0
+- **KovaaK's is gone from the web pages**: no KovaaK's page, no KovaaK's routines in the Aim library or warm-up, no
+  KovaaK's share codes in *Add a routine*, no KovaaK's question in *Ask the coach* (and the coach no longer gets your
+  KovaaK's scores), no KovaaK's in Settings, Account and This PC. If your warm-up was a KovaaK's one, it falls back
+  to the Nexus trainer warm-up (if you've played the trainer, or have no warm-up routine of your own).
+- Nothing is deleted: the code, your imported scores and saved share codes stay, and the desktop app's endpoints still
+  work. One switch brings it all back: `WEB = True` in `nexus/stats/kovaaks.py`.
+- German texts.
+
 ## 4.25.0
 - **KovaaK's has its own page** (*Aim › KovaaK's*): the coach's playlists, community share codes, your imported scores
   and the scenarios the coach picks from moved off the Aim page. The Aim page is now the warm-up, what your matches

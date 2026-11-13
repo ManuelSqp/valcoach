@@ -94,10 +94,12 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                  "url": f"/profiles/{int(pid)}/trainer?plan=training"}]
 
     def library(pid: int, uid: int) -> list[dict]:
-        out = [dict(r, source="builtin", source_name="Nexus") for r in am.BUILTIN + coach_files(pid) + trainer_plans(pid)]
+        out = [dict(r, source="builtin", source_name="Nexus") for r in am.BUILTIN + (coach_files(pid) if kv.WEB else []) + trainer_plans(pid)]
         for t in teams_of(pid, uid):
             out += [dict(r, source="team", tid=t.id, source_name=t.name) for r in _read(team_path(t.id), {}).get("routines", [])]
         out += [dict(r, source="mine", source_name="your routines") for r in _read(user_path(uid), {}).get("routines", [])]
+        if not kv.WEB:                      # 4.26: KovaaK's routines stay stored, but don't show
+            out = [r for r in out if r.get("kind") not in ("kovaaks", "kovaaksfile")]
         return out
 
     def can_log(p, can_edit: bool, uid: int) -> bool:
@@ -111,7 +113,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         pdata = _read(player_path(pid), {})
         tw = next((team_warmup(t) for t in teams_of(pid, uid) if team_warmup(t)), None)
         # someone who plays KovaaK's (scores imported) gets the coach's KovaaK's warm-up by default
-        played = "k-warmup" if pdata.get("kovaaks") else ("t-warmup" if trainer_played(pid) else None)
+        played = "k-warmup" if pdata.get("kovaaks") and kv.WEB else ("t-warmup" if trainer_played(pid) else None)
         return am.warmup_for(lib, pdata.get("warmup"), tw or played)
 
     def trainer_played(pid: int) -> bool:
@@ -174,6 +176,8 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
     # 4.25: KovaaK's on its own page (Aim › KovaaK's), so the Aim page is about the warm-up and the routines
     @app.route("/profiles/<int:pid>/aim/kovaaks", methods=["GET", "POST"])
     def aim_kovaaks_page(pid: int):
+        if not kv.WEB:
+            abort(404)
         return aim_page(pid, "kovaaks")
 
     def aim_page(pid: int, page: str):
@@ -209,7 +213,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                                lib=shown, need=need, picks=am.pick(shown, need), warm=warm, mine_warm=pdata.get("warmup"),
                                done=done, effect=am.effect(rows, log, kv.run_days(runs)), recent=recent, names=names, teams=teams, team_warm=team_warm,
                                plans=[plan(pid, uid, k, rows) for k in kv.KINDS], kstats=kv.summary(runs)[:16], kruns=len(runs),
-                               scen_by_focus=by_focus, n_scen=len(scen), addable=am.ADDABLE,
+                               scen_by_focus=by_focus, n_scen=len(scen), addable=[k for k in am.ADDABLE if kv.WEB or k != "kovaaks"],
                                owned={t.id for t in teams if t.owner_id == uid}, focus=am.FOCUS, kinds=am.KINDS,
                                scores={r["id"]: am.scores(log, r["id"]) for r in lib}, is_aimlabs=am.is_aimlabs,
                                min_games=am.MIN_GAMES, shared_pick=kv.suggest(need, runs, 4, have), shared_all=shared_all,
@@ -227,7 +231,11 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         rid = f.get("rid", "")
         teams = {t.id: t for t in teams_of(p.id, uid)}
         if act and act.startswith("k_"):
+            if not kv.WEB:
+                abort(404)
             return kovaaks_post(p, can_edit, uid, act, teams)
+        if act == "add" and f.get("kind") == "kovaaks" and not kv.WEB:
+            abort(400)
         with _lock:
             if act == "add":
                 r, err = am.clean({**f, "focus": f.getlist("focus")})
@@ -457,6 +465,8 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
 
     @app.get("/profiles/<int:pid>/aim/kovaaks/<kind>.json")
     def aim_kovaaks(pid: int, kind: str):
+        if not kv.WEB:
+            abort(404)
         """The playlist file for KovaaK's, dated (DD-MM-YYYY) in its name and file name, so older ones can stay."""
         p, _ = view_profile(pid)
         if kind not in kv.KINDS:
@@ -469,6 +479,8 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
 
     @app.post("/api/profiles/<int:pid>/aim/find-playlists")
     def aim_find_playlists(pid: int):
+        if not kv.WEB:
+            abort(404)
         """Start looking for KovaaK's share codes on the web for what this player's aim needs (Settings › Web
         search). It runs in the background (several searches and pages can take a minute); the page polls the
         GET below."""
@@ -506,6 +518,8 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
 
     @app.get("/api/profiles/<int:pid>/aim/find-playlists")
     def aim_find_playlists_state(pid: int):
+        if not kv.WEB:
+            abort(404)
         view_profile(pid)
         with _find_lock:
             for k in [k for k, v in _finds.items() if time.time() - v.get("t", 0) > 1800]:
