@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.23.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.24.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -166,13 +166,18 @@ the coach finds more online.
 
 **Aim trainer:** *Practice › Aim trainer* is an aim trainer in the browser (and in the Nexus app) that plays like
 Valorant: your Valorant sensitivity (0.07° per mouse count × sens), Valorant's field of view and raw mouse input
-(Chrome, Edge, the Nexus app; other browsers get a warning). A **scenario library** of 43 scenarios (4.23) in six
-groups, each marked easy, medium or hard: *flicks* (head-line, close, mid, far, wide, vertical, tiny, spider),
-*switching* (grid, six shot, head-line, close, tiny, double tap), *reflex* (targets that vanish, shorter after every
-hit), *precision* (micro taps, pinpoint, far head-line, spiders at range), *duels* (peeks near, far and fast; *Hold the
-angle* with an enemy model and headshots only, also close, long, jiggles, wide swings and runners) and *tracking*
-(strafes slow to fast, small targets, jumping and crouching targets, targets circling around you, in the air and up
-and down). The library filters by group and level, searches, and shows what you haven't tried yet. Plus a short daily
+(Chrome, Edge, the Nexus app; other browsers get a warning). A **scenario library** of 100 scenarios (4.24) in eight
+groups, each marked easy, medium or hard: *flicks* (head-line, close, mid, far, wide, vertical, tiny, spider, low,
+high, behind you), *switching* (grid, six shot, head-line, close, tiny, double and triple tap, wide walls, bursts),
+*moving targets* (bouncing, jinking, hopping, strafing, shrinking, a horde walking at you), *reflex* (targets that
+vanish, pop-ups, side vision, friend or foe: don't shoot the blue ones), *precision* (micro taps, pinpoint, far
+head-line, spiders at range, small grids and bursts), *duels* (peeks near, far and fast; *Hold the angle* with an
+enemy model and headshots only, also close, long, jiggles, wide swings and runners), *tracking* (strafes slow to
+fast and long to zig-zag, small targets, above and below you, jumping and crouching, lines, arcs, stars, circles,
+a target that blinks away, targets circling around you, in the air and up
+and down) and *switch tracking* (several moving targets that each go down after a
+moment of fire, also fast, evasive, wide, small and floating). These follow the drill types the big aim trainers
+are known for, in Nexus's own versions. The library filters by group and level, searches, and shows what you haven't tried yet. Plus a short daily
 warm-up and a training picked from what your matches show (from the whole library). Your Valorant crosshair
 (paste its code) is set inside the trainer. Scores are
 kept per player, finishing a warm-up or training ticks it off on the Aim page, and the coach knows the scores.
