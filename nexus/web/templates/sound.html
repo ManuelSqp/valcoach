@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% import "_ui.html" as vc %}
+{% block title %}Sound · {{ p.riot_id }} · Nexus{% endblock %}
+{% block head %}<style>
+.so-top{display:grid;grid-template-columns:minmax(0,520px) minmax(260px,1fr);gap:18px;align-items:start}
+@media(max-width:900px){.so-top{grid-template-columns:1fr}}
+.so-radar{position:relative;aspect-ratio:1/1;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:50%;user-select:none}
+.so-radar svg{position:absolute;inset:0;width:100%;height:100%}
+.so-radar.ask{cursor:crosshair}
+.so-ring{fill:none;stroke:var(--line2);stroke-width:1.5}
+.so-ring.mid{stroke-dasharray:4 6}
+.so-tick{stroke:var(--line2);stroke-width:1.5}
+.so-txt{font-size:22px;fill:var(--faint);font-weight:600}
+.so-me{fill:var(--accent)}
+.so-look{fill:var(--accent);opacity:.18}
+.so-ok{stroke:var(--win);stroke-width:5;stroke-linecap:round}
+.so-bad{stroke:var(--red);stroke-width:5;stroke-linecap:round}
+.so-wave{fill:none;stroke:var(--accent);stroke-width:3;animation:so-w 1s ease-out infinite}
+@keyframes so-w{from{r:30;opacity:.9}to{r:120;opacity:0}}
+.so-sec{stroke:var(--panel);stroke-width:2}
+.so-panel{display:grid;gap:12px}
+.so-modes{display:flex;gap:6px;flex-wrap:wrap}
+.so-modes button,.so-pick button{font:inherit;font-size:13.5px;padding:6px 12px;border-radius:99px;border:1px solid var(--line2);background:transparent;color:var(--muted);cursor:pointer}
+.so-modes button.on,.so-pick button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:650}
+.so-pick{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.so-pick span{font-size:12.5px;color:var(--muted);margin-right:4px}
+.so-q{font-family:var(--font-head);font-size:clamp(22px,2.6vw,30px);font-weight:850;font-stretch:72%;line-height:1.1;margin:0}
+.so-sub{font-size:13.5px;color:var(--muted);margin:0}
+.so-bar{height:6px;border-radius:99px;background:var(--panel2);overflow:hidden}.so-bar div{height:100%;width:0;background:var(--accent);transition:width .2s}
+.so-big{font-family:var(--font-num);font-size:44px;font-weight:800;font-stretch:72%;line-height:1}
+.so-res dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0}
+.so-res dl div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.so-res dt{font-size:12px;color:var(--muted)}.so-res dd{margin:0;font-size:20px;font-weight:750}
+.so-grid{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:18px;align-items:start}
+@media(max-width:800px){.so-grid{grid-template-columns:1fr}}
+.so-tbl{width:100%;border-collapse:collapse;font-size:14px}
+.so-tbl th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+.so-tbl td{padding:7px 8px;border-bottom:1px solid var(--line)}
+</style>{% endblock %}
+{% block content %}
+{{ vc.pagehead('Sound', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+   'Hear where a sound comes from: footsteps, a reload, a beep, from anywhere around you') }}
+
+<div class="so-top">
+  <div class="so-radar" id="so-radar"><svg id="so-svg" viewBox="-500 -500 1000 1000" role="img" aria-label="Around you"></svg></div>
+  <section class="card so-panel" style="margin:0">
+    <div class="so-modes" id="so-modes">{% for k, v in modes.items() %}<button type="button" data-m="{{ k }}" class="{{ 'on' if loop.first }}">{{ v }}</button>{% endfor %}</div>
+    <div id="so-play"><p class="so-sub">Put on headphones (speakers can't do front and behind). Each sound plays once from somewhere around you:
+      click on the circle where it came from. You look up, towards the top of the circle.</p></div>
+    <div class="so-pick" id="so-dist" hidden><span>How far?</span><button type="button" data-v="near">Near</button><button type="button" data-v="far">Far</button></div>
+    <div class="so-pick" id="so-height" hidden><span>From where?</span><button type="button" data-v="up">Above</button><button type="button" data-v="level">Same floor</button><button type="button" data-v="down">Below</button></div>
+    <div class="so-bar" id="so-bar" hidden><div></div></div>
+    <div class="so-res" id="so-res" hidden></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn primary" id="so-start">Start · {{ boot.sounds }} sounds</button>
+      <button type="button" class="btn ghost" id="so-test">Test the sound</button></div>
+    <p class="small muted" style="margin:0">The sounds are made in the browser, not taken from Valorant: what you train is hearing the direction.</p>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px">
+  <h2>Your hearing</h2>
+  {% if not s.rounds %}<p class="small muted" style="margin:-4px 0 10px">Nothing played yet. A round is {{ boot.sounds }} sounds; the closer your click, the more points.</p>{% endif %}
+  <div class="so-grid">
+    <table class="so-tbl">
+      <thead><tr><th>Mode</th><th>Rounds</th><th>Best</th><th>Off by (last 5)</th><th>Near/far or height right</th></tr></thead>
+      <tbody>{% for k, m in s.modes.items() %}<tr><td>{{ m.name }}</td><td>{{ m.rounds }}</td><td>{{ m.best if m.best is not none else '–' }}</td>
+        <td>{% if m.err is not none %}{{ m.err }}°{% else %}–{% endif %}</td>
+        <td>{% if m.right is not none %}{{ (m.right * 100)|round|int }}%{% else %}–{% endif %}</td></tr>{% endfor %}</tbody>
+    </table>
+    <div>
+      <svg viewBox="-110 -110 220 220" style="width:100%;max-width:240px" role="img" aria-label="How far off, by direction">
+        {% for x in s.sectors %}{% set e = x.err %}{% set col = 'var(--panel3)' if e is none else ('var(--win)' if e < 20 else ('var(--accent)' if e < 40 else 'var(--red)')) %}
+        <path class="so-sec" fill="{{ col }}" d="{{ x.d }}"><title>{{ x.name }}: {{ x.err ~ '°' if e is not none else '–' }}</title></path>
+        {% endfor %}<circle r="9" class="so-me"/>
+      </svg>
+      <p class="small muted" style="margin:6px 0 0">How far off you are, by direction (green under 20°, red over 40°).
+        {% if s.worst %}Hardest for you: <b>{{ s.worst }}</b>.{% endif %}
+        {% if s.fb %}Front and behind mixed up {{ s.fb }} times in your last {{ s.fb_of }} sounds.{% endif %}</p>
+    </div>
+  </div>
+</section>
+<script>window.NEXUS_SOUND = {{ boot|tojson }};</script>
+<script src="{{ url_for('static', filename='sound.js') }}?v={{ app_version }}"></script>
+{% endblock %}

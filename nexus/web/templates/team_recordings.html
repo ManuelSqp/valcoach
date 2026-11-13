@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Recordings · {{ t.name }} · Nexus{% endblock %}
+{% block head %}
+<style>
+.rec{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.rec:first-child{border-top:0}
+.rec b{font-size:15px}.rec .meta{font-size:12.5px;color:var(--muted)}
+.rec .n{font-size:12.5px;font-weight:650;color:var(--accent);background:var(--panel2);border-radius:99px;padding:1px 9px;margin-left:6px}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+<section class="card">
+  <h2>Recordings to review together</h2>
+  <p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Every match recording of your players that a coaching report was made with
+    (uploaded, or cut from Medal by the Nexus app). Open one to watch it together: pause, draw on the frame and leave a
+    comment at that moment; everyone in the team sees the comments at their time in the video.</p>
+  {% for r in rows %}
+  <div class="rec">
+    <div><b translate="no">{{ r.player }}</b> · <span translate="no">{{ r.j.map or 'match' }}</span>{% if r.j.score %} {{ r.j.score }}{% endif %}
+      {% if r.notes %}<span class="n">{{ r.notes }} comment{{ 's' if r.notes != 1 }}</span>{% endif %}
+      <div class="meta">{{ r.j.created_at[:10] }} · <span translate="no">{{ r.j.vod_name }}</span>{% if r.last %} · <span>last comment</span> <span>{{ r.last|epoch }}</span>{% endif %}</div></div>
+    <a class="btn sm primary" href="{{ url_for('vod_review', jid=r.j.id) }}">Review</a>
+  </div>
+  {% else %}<p class="muted small" style="margin:0">No recordings yet. When a player makes a coaching report with a match recording
+    (or the Nexus app cuts one from Medal), it shows up here.</p>{% endfor %}
+</section>
+{% endblock %}

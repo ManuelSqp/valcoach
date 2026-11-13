@@ -977,6 +977,10 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     register_lineups(app, store, get_team, KNOWN_MAPS)
     from .practice import register as register_practice
     register_practice(app, store, sr, get_team)
+    from .scrims import register as register_scrims
+    register_scrims(app, store, sr, get_team, KNOWN_MAPS)
+    from .vodreview import register as register_vodreview
+    register_vodreview(app, store, sr, get_team)
     from .evening import register as register_evening
     register_evening(app, store, sr, get_team)
     from .prep_views import register as register_prep
@@ -984,7 +988,11 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     from .aim import register as register_aim
     register_aim(app, store, sr, view_profile, filter_rows)
     from .trainer import register as register_trainer
-    register_trainer(app, store, sr, view_profile, filter_rows)
+    register_trainer(app, store, sr, view_profile, filter_rows, KNOWN_MAPS)
+    from .callouts import register as register_callouts
+    register_callouts(app, store, sr, view_profile, filter_rows, KNOWN_MAPS)
+    from .sound import register as register_sound
+    register_sound(app, store, sr, view_profile)
     from .askcoach import register as register_ask
     register_ask(app, store, sr, view_profile, filter_rows)
     from .drafts import register as register_drafts

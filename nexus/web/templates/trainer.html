@@ -7,6 +7,9 @@
 {%- endif -%}
 {%- endmacro %}
 {% block head %}<style>
+.tr-ang-row{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end}
+.tr-ang-row label{display:grid;gap:4px;font-size:12.5px;color:var(--muted)}
+.tr-ang-row select{width:auto;min-width:160px}
 .tr-setup{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;margin-bottom:18px}
 .tr-setup label{display:grid;gap:4px;font-size:12.5px;color:var(--muted)}
 .tr-setup input{width:110px}
@@ -209,6 +212,21 @@
 </section>
 
 
+{% if angles %}
+<section class="card tr-angles" id="tr-angles">
+  <h2>Map angles</h2>
+  <p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Stand on a real site and hold it: enemies peek from the callouts in front of
+    you, at their real direction and distance on the map (from the map's callouts: no walls or heights, so each spot gets a
+    piece of cover and everyone is at your height). The callout shows when one appears: call it. Only a headshot kills.</p>
+  <div class="tr-ang-row">
+    <label>Map<select id="tr-ang-map">{% for m in angles %}<option translate="no">{{ m }}</option>{% endfor %}</select></label>
+    <label>Where<select id="tr-ang-pos"></select></label>
+    <button type="button" class="btn primary" id="tr-ang-play">Play · 60 s</button>
+  </div>
+  <div class="small muted" id="tr-ang-spots" style="margin-top:8px"></div>
+</section>
+{% endif %}
+
 <h2>Scenario library <span class="muted" style="font-weight:400">{{ summary|length }}</span></h2>
 <p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Click a scenario, then click once more to lock the mouse. Esc pauses,
   F switches fullscreen. Your crosshair: <i>Crosshair</i> on the start screen of any scenario.
@@ -321,7 +339,7 @@
 <script>
 window.NEXUS_TRAINER = {{ {
   'scenarios': scenarios, 'plans': plans, 'start': start, 'play': play, 'can_save': can_save, 'scale': setup.scale or 1,
-  'summary': summary,
+  'summary': summary, 'angles': angles,
   'sens_base': setup.sens or 0.4, 'dpi': setup.get('dpi'), 'crosshair': setup.get('crosshair'), 'sens_rec': rec.sens if rec and rec.edge else None,
   'urls': {'sens': url_for('trainer_sens', pid=p.id), 'run': url_for('trainer_run', pid=p.id), 'setup': url_for('trainer_setup', pid=p.id), 'aim': url_for('aim', pid=p.id)}
 }|tojson }};

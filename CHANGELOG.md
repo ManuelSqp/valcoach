@@ -4,6 +4,50 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.31.0
+- **VOD review**: watch a match recording together. *Review the recording together* on a report with a recording,
+  or *Team › Practice › Recordings* for all of the team's recordings (with how many comments each has). Pause, draw
+  on the frame (pen, arrow, circle, five colours), comment at that moment; each drawing shows at its time in the
+  video. The timeline marks the rounds (won or lost, from the report) and the comments; jump to a round, slow down
+  to 0.25×, step frame by frame. Teammates' new comments come in while you watch.
+- Everyone in a team with that player can watch and comment (the recording too, not the rest of the report);
+  whoever wrote a comment and the report's owner can remove it.
+- German texts.
+
+## 4.30.0
+- **Scrims** (*Team › Practice › Scrims*): the team's scrim log. Per scrim: date, opponent, map, score, the side you
+  started on and the first half (optional), what went well and what didn't, in words and as topics (retakes, trades,
+  pistol rounds, comms and more). Over all scrims: won–lost, rounds won, the last ten results, per map and per
+  opponent, rounds won per side, and *What the scrims show*: the topics that keep coming up as a problem or keep
+  working, the best and worst map, the weaker side. Filter by map or opponent.
+- Everyone in the team adds scrims; whoever wrote one and the team owner can change or remove it.
+- German texts.
+
+## 4.29.0
+- **Sound** (*Practice › Sound*): hear where a sound comes from (headphones). Footsteps, a reload or a beep play once
+  from somewhere around you, in 3D (the browser's HRTF panner); click the direction on a radar. Modes: *Direction*,
+  *Distance* (also near or far) and *Height* (also above, same floor or below). 15 sounds a round, the closer the more
+  points. Shows how far off you are on average, front/back mix-ups, and a wheel of how far off you are by direction.
+  *Test the sound* checks left and right.
+- The sounds are made in the browser, not Valorant's: what's trained is hearing the direction.
+- German texts.
+
+## 4.28.0
+- **Map angles** in the aim trainer (above the library, and as a scenario in *Duels*): pick a map and where you stand
+  (hold a site facing its main, or take it from main facing the site). Enemy models peek from behind cover at the
+  callouts in front of you, at their real direction and distance on the map; the callout's name shows when one
+  appears. Only headshots kill. The maps you play most come first.
+- The map data has callout positions but no walls or heights, so every enemy is at your height and each spot gets a
+  piece of cover.
+- German texts.
+
+## 4.27.0
+- **Callouts** (*Practice › Callouts*): a quiz on the minimap. *Learn* shows every callout of a map, *Find it* names
+  one and you click where it is, *Name it* lights up a spot and you pick its name from four nearby ones (keys 1–4).
+  12 questions a round, faster answers score more, the callouts you get wrong come up more often. Per map: how many
+  you know, best scores per mode, the ones you miss most. The maps you play most come first.
+- German texts.
+
 ## 4.26.0
 - **KovaaK's is gone from the web pages**: no KovaaK's page, no KovaaK's routines in the Aim library or warm-up, no
   KovaaK's share codes in *Add a routine*, no KovaaK's question in *Ask the coach* (and the coach no longer gets your

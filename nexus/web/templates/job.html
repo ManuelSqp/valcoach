@@ -8,6 +8,7 @@
     <div class="ctx">{{ j.mode|mode_label }}, {{ j.vod_name or 'no VOD' }}{% if j.opts.no_llm %}, facts only{% endif %}, <span class="small">{{ j.match_id }}</span></div>
   </div>
   <div class="acts">
+    {% if j.vod_path %}<a class="btn sm" href="{{ url_for('vod_review', jid=j.id) }}">Review the recording together</a>{% endif %}
     <form method="post" action="{{ url_for('job_retry', jid=j.id) }}" id="retry" style="display:{{ 'inline' if j.status in ('error','done') else 'none' }}"><button class="btn sm">Run again</button></form>
     <form method="post" action="{{ url_for('job_delete', jid=j.id) }}" onsubmit="return confirm('Delete this report?')"><button class="btn sm danger ghost">Delete</button></form>
   </div>

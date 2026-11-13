@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Scrims · {{ t.name }} · Nexus{% endblock %}
+{% block head %}
+<style>
+.sc-top{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+@media(max-width:800px){.sc-top{grid-template-columns:1fr 1fr}}
+.sc-top div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.sc-top span{display:block;font-size:12.5px;color:var(--muted)}
+.sc-top b{font-family:var(--font-num);font-size:28px;font-weight:800;font-stretch:72%}
+.sc-form{display:flex;gap:4px}.sc-form i{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-size:11px;font-style:normal;font-weight:800}
+.sc-form .win{background:var(--win-soft);color:var(--win)}.sc-form .loss{background:rgba(220,70,70,.15);color:var(--red)}.sc-form .draw{background:var(--panel3);color:var(--muted)}
+.sc-tend{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.sc-tend li{border-left:3px solid var(--line2);background:var(--panel2);padding:9px 12px;border-radius:0 8px 8px 0;font-size:14px}
+.sc-tend li.bad{border-color:var(--red)}.sc-tend li.good{border-color:var(--win)}.sc-tend li.maps,.sc-tend li.side{border-color:var(--accent)}
+.sc-tend .it{display:inline-block;font-weight:650;margin-left:6px}
+.sc-tbl{width:100%;border-collapse:collapse;font-size:14px}
+.sc-tbl th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+.sc-tbl td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.sc-tbl td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar2{display:flex;height:8px;border-radius:99px;overflow:hidden;background:var(--panel3);min-width:80px}.bar2 i{background:var(--win)}
+.topic{display:grid;grid-template-columns:minmax(120px,1fr) 1fr;gap:4px 12px;align-items:center;font-size:13.5px;padding:5px 0;border-top:1px solid var(--line)}
+.topic:first-child{border-top:0}
+.tbar{display:flex;gap:2px;align-items:center}.tbar i{height:10px;border-radius:2px}.tbar .g{background:var(--win)}.tbar .b{background:var(--red)}
+.tbar span{font-size:12px;color:var(--muted);margin-left:6px}
+.scrim{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.scrim-h{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline}
+.scrim-h b{font-size:16px}.scrim-h .res{font-family:var(--font-num);font-size:20px;font-weight:800;font-stretch:72%}
+.scrim-h .res.win{color:var(--win)}.scrim-h .res.loss{color:var(--red)}
+.scrim .meta{font-size:12.5px;color:var(--muted)}
+.scrim .tags{margin-top:6px;display:flex;flex-wrap:wrap;gap:4px}
+.tg{font-size:12px;padding:1px 8px;border-radius:99px}.tg.g{background:var(--win-soft);color:var(--win)}.tg.b{background:rgba(220,70,70,.15);color:var(--red)}
+.scrim .txt{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;font-size:13.5px}
+@media(max-width:700px){.scrim .txt{grid-template-columns:1fr}}
+.scrim .txt p{margin:2px 0 0;white-space:pre-wrap}.scrim .txt small{color:var(--muted)}
+.scrim .acts{display:flex;gap:6px;margin-top:8px}.scrim form{display:inline}
+.addf{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 14px}
+.addf .full{grid-column:1/-1}
+.addf label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);margin:0}
+.addf .two{display:flex;gap:6px;align-items:center}.addf .two input{width:70px}
+.chk{display:flex;flex-wrap:wrap;gap:6px}
+.chk label{flex-direction:row;align-items:center;gap:5px;font-size:13px;color:var(--text);padding:4px 10px;border:1px solid var(--line2);border-radius:99px;cursor:pointer}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.filters select{width:auto}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+
+{% if n_all %}
+<form class="filters" method="get">
+  <select name="map" aria-label="Map" onchange="this.form.submit()"><option value="">All maps</option>{% for m in maps %}<option {{ 'selected' if m == f_map }} translate="no">{{ m }}</option>{% endfor %}</select>
+  <select name="opp" aria-label="Opponent" onchange="this.form.submit()"><option value="">All opponents</option>{% for o in opponents %}<option value="{{ o }}" {{ 'selected' if o|lower == f_opp|lower }} translate="no">{{ o }}</option>{% endfor %}</select>
+  {% if f_map or f_opp %}<a class="small" href="{{ url_for('team_scrims', tid=t.id) }}">Show all</a>{% endif %}
+</form>
+<div class="sc-top">
+  <div><span>Scrims</span><b>{{ sm.all.n }}</b></div>
+  <div><span>Won · lost{% if sm.all.d %} · drawn{% endif %}</span><b>{{ sm.all.w }}–{{ sm.all.l }}{% if sm.all.d %}–{{ sm.all.d }}{% endif %}</b></div>
+  <div><span>Rounds won</span><b>{% if sm.all.rshare is not none %}{{ (sm.all.rshare * 100)|round|int }}%{% else %}–{% endif %}</b></div>
+  <div><span>Last {{ sm.form|length }}</span><div class="sc-form" style="margin-top:8px">{% for r in sm.form %}<i class="{{ r }}" title="{{ r }}">{{ 'W' if r == 'win' else ('L' if r == 'loss' else 'D') }}</i>{% endfor %}</div></div>
+</div>
+
+<div class="grid2" style="align-items:start">
+  <section class="card">
+    <h2>What the scrims show</h2>
+    {% if tend %}<ul class="sc-tend">{% for x in tend %}<li class="{{ x.kind }}">{{ x.label }}:{% for it in x['items'] %}<span class="it">{{ it }}</span>{{ ',' if not loop.last }}{% endfor %}</li>{% endfor %}</ul>
+    {% else %}<p class="muted small" style="margin:0">Tick what went well and what didn't on a few more scrims: what keeps coming up shows here.</p>{% endif %}
+    {% if sm.topics %}<h3 style="margin:16px 0 6px">Topics</h3>
+    <div>{% for x in sm.topics %}<div class="topic"><span>{{ x.name }}</span>
+      <span class="tbar">{% if x.good %}<i class="g" style="width:{{ x.good * 10 }}px" title="went well {{ x.good }}×"></i>{% endif %}{% if x.bad %}<i class="b" style="width:{{ x.bad * 10 }}px" title="went badly {{ x.bad }}×"></i>{% endif %}<span>{{ x.good }} good · {{ x.bad }} bad</span></span></div>{% endfor %}</div>{% endif %}
+  </section>
+  <section class="card">
+    <h2>Maps</h2>
+    <table class="sc-tbl"><thead><tr><th>Map</th><th>Scrims</th><th>W–L</th><th>Rounds won</th></tr></thead>
+      <tbody>{% for m in sm.maps %}<tr><td><a href="{{ url_for('team_scrims', tid=t.id, map=m.map) }}" translate="no">{{ m.map }}</a></td><td class="n">{{ m.n }}</td><td class="n">{{ m.w }}–{{ m.l }}{% if m.d %}–{{ m.d }}{% endif %}</td>
+        <td><span class="bar2" title="{{ m.rounds[0] }}–{{ m.rounds[1] }}"><i style="width:{{ ((m.rshare or 0) * 100)|round|int }}%"></i></span></td></tr>{% endfor %}</tbody></table>
+    {% if sm.sides.attack.played or sm.sides.defense.played %}
+    <p class="small muted" style="margin:10px 0 0"><span>Rounds won by side (scrims with the first half written down):</span>
+      <span>Attack {% if sm.sides.attack.rate is not none %}{{ (sm.sides.attack.rate * 100)|round|int }}%{% else %}–{% endif %}</span> ·
+      <span>Defense {% if sm.sides.defense.rate is not none %}{{ (sm.sides.defense.rate * 100)|round|int }}%{% else %}–{% endif %}</span></p>{% endif %}
+    <h2 style="margin-top:16px">Opponents</h2>
+    <table class="sc-tbl"><thead><tr><th>Team</th><th>Scrims</th><th>W–L</th><th>Last</th></tr></thead>
+      <tbody>{% for o in sm.opps %}<tr><td><a href="{{ url_for('team_scrims', tid=t.id, opp=o.name) }}" translate="no">{{ o.name }}</a></td><td class="n">{{ o.n }}</td><td class="n">{{ o.w }}–{{ o.l }}{% if o.d %}–{{ o.d }}{% endif %}</td><td class="n">{{ o.last }}</td></tr>{% endfor %}</tbody></table>
+  </section>
+</div>
+{% endif %}
+
+<section class="card" id="add">
+  <h2>{{ 'Change the scrim' if edit else 'Add a scrim' }}</h2>
+  {% set e = edit or {} %}
+  <form method="post" class="addf">
+    {% if edit %}<input type="hidden" name="id" value="{{ edit.id }}">{% endif %}
+    <label>Date<input type="date" name="date" value="{{ e.date or today }}"></label>
+    <label>Opponent<input type="text" name="opponent" maxlength="40" required value="{{ e.opponent or '' }}" list="sc-opps" placeholder="Team name"></label>
+    <datalist id="sc-opps">{% for o in opponents %}<option value="{{ o }}">{% endfor %}</datalist>
+    <label>Map<select name="map" required>{% for m in maps %}<option {{ 'selected' if m == e.map }} translate="no">{{ m }}</option>{% endfor %}</select></label>
+    <label>Score (us – them)<span class="two"><input type="number" name="us" min="0" max="30" required value="{{ e.us if e.us is defined else '' }}" aria-label="Rounds we won"> – <input type="number" name="them" min="0" max="30" required value="{{ e.them if e.them is defined else '' }}" aria-label="Rounds they won"></span></label>
+    <label>We started on<select name="side"><option value="">Don't know</option>{% for k, v in sides.items() %}<option value="{{ k }}" {{ 'selected' if e.side == k }}>{{ v }}</option>{% endfor %}</select></label>
+    <label>First half (optional)<span class="two"><input type="number" name="h_us" min="0" max="15" value="{{ e.half[0] if e.half else '' }}" aria-label="First half, we"> – <input type="number" name="h_them" min="0" max="15" value="{{ e.half[1] if e.half else '' }}" aria-label="First half, they"></span></label>
+    <div class="full"><span class="small muted">Went well</span><div class="chk">{% for k, v in topics.items() %}<label><input type="checkbox" name="good" value="{{ k }}" {{ 'checked' if k in (e.good or []) }}> {{ v }}</label>{% endfor %}</div></div>
+    <div class="full"><span class="small muted">Went badly</span><div class="chk">{% for k, v in topics.items() %}<label><input type="checkbox" name="bad" value="{{ k }}" {{ 'checked' if k in (e.bad or []) }}> {{ v }}</label>{% endfor %}</div></div>
+    <label class="full">What worked<textarea name="worked" rows="2" maxlength="1200" placeholder="e.g. B split with the Sova dart, fast A hits after a slow default">{{ e.worked or '' }}</textarea></label>
+    <label class="full">What didn't<textarea name="didnt" rows="2" maxlength="1200" placeholder="e.g. Lost every retake on A, nobody played for the Viper wall">{{ e.didnt or '' }}</textarea></label>
+    <div class="full" style="display:flex;gap:8px"><button class="btn primary">{{ 'Save' if edit else 'Add the scrim' }}</button>{% if edit %}<a class="btn ghost" href="{{ url_for('team_scrims', tid=t.id) }}">Cancel</a>{% endif %}</div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Scrims {% if scrims %}<span class="muted" style="font-weight:400">{{ scrims|length }}</span>{% endif %}</h2>
+  {% for s in scrims %}{% set r = result(s) %}
+  <div class="scrim">
+    <div class="scrim-h"><span class="res {{ r }}">{{ s.us }}–{{ s.them }}</span><b translate="no">{{ s.opponent }}</b><span translate="no">{{ s.map }}</span>
+      <span class="meta">{{ s.date }}{% if s.side %} · <span>Started on {{ sides[s.side] }}</span>{% endif %}{% if s.half %} · <span>First half {{ s.half[0] }}–{{ s.half[1] }}</span>{% endif %} · <span translate="no">{{ s.by }}</span></span></div>
+    {% if s.good or s.bad %}<div class="tags">{% for k in s.good %}<span class="tg g">{{ topics[k] }}</span>{% endfor %}{% for k in s.bad %}<span class="tg b">{{ topics[k] }}</span>{% endfor %}</div>{% endif %}
+    {% if s.worked or s.didnt %}<div class="txt">
+      {% if s.worked %}<div><small>What worked</small><p>{{ s.worked }}</p></div>{% endif %}
+      {% if s.didnt %}<div><small>What didn't</small><p>{{ s.didnt }}</p></div>{% endif %}</div>{% endif %}
+    {% if s.uid == user.id or g.team_owner %}<div class="acts"><a class="btn sm ghost" href="{{ url_for('team_scrims', tid=t.id, edit=s.id) }}#add">Change</a>
+      <form method="post" action="{{ url_for('team_scrim_delete', tid=t.id, sid=s.id) }}" data-q="Remove this scrim?" onsubmit="return confirm(this.dataset.q)"><button class="btn sm ghost danger">Remove</button></form></div>{% endif %}
+  </div>
+  {% else %}<p class="muted small" style="margin:0">{{ 'No scrims for this filter.' if n_all else 'No scrims yet. Add the first one above: score, map, and what went well and what didn\'t.' }}</p>{% endfor %}
+</section>
+{% endblock %}
