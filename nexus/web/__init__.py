@@ -98,6 +98,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
     uploads = Uploads(store.data_dir / "tmp")
 
     app = Flask(__name__)
+    from .speed import install as install_speed
+    install_speed(app)                                       # gzip + caching; first, so it runs after every other hook
     app.secret_key = store.get("secret_key")
     app.config.update(
         MAX_CONTENT_LENGTH=MAX_REQUEST_BYTES,  # VODs come in chunks (uploads.py)

@@ -11,6 +11,7 @@ from flask import abort, g, jsonify, render_template, request, url_for
 
 from ..stats import aim as am
 from ..stats import aim_insights as ai
+from ..stats import trainingeffect as te
 from ..stats import mapangles as ma
 from ..stats import sandbox as sbx
 from ..stats import trainer as tr
@@ -146,8 +147,10 @@ def register(app, store, sr, view_profile, filter_rows, known_maps: list[str] = 
         res = ai.build(runs, setup)
         names = {k: v["name"] for k, v in tr.SCENARIOS.items()}
         trends = [s for s in tr.summary(runs) if s["runs"] >= 2]
+        effect = te.check(runs, filter_rows(sr.games(pid).rows(), "everything"))
         return render_template("aim_insights.html", p=p, active_pid=pid, can_save=can_save(p, can_edit), setup=setup,
-                               ins=res, names=names, trends=trends, grips=tr.GRIPS, days=ai.DAYS, n_runs=len(runs))
+                               ins=res, names=names, trends=trends, grips=tr.GRIPS, days=ai.DAYS, n_runs=len(runs),
+                               effect=effect, te=te)
 
     @app.get("/profiles/<int:pid>/gear")
     def gear_check(pid: int):

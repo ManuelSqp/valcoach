@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.38.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.39.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -194,7 +194,7 @@ tracking per direction (on target, behind or ahead, catching up after a directio
 side and where the crosshair waited. What stands out comes with tips for your hand and grip (set on the page) and
 scenarios to play, next to charts (skill profile, a flick wheel, a miss map) and a *Focus training* that also appears
 on the trainer page. Only rounds played since 4.8 are measured this way.
-*Practice › Mouse & monitor* measures the real DPI of your mouse (move it a known distance along a ruler), its polling
+*Aim insights › Does training help?* puts each trainer skill next to the match number it should move (one taps → headshots, flicks → first duels, …), week by week, and says how many weeks are still missing before it can tell. *Practice › Mouse & monitor* measures the real DPI of your mouse (move it a known distance along a ruler), its polling
 rate, your screen's refresh rate and worn buttons that double-click, and works out eDPI and cm per 360°. A browser
 can't fully measure 2000–8000 Hz mice, and the page says so.
 

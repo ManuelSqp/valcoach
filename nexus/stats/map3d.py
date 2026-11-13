@@ -74,28 +74,42 @@ def rebuild(mi, replays: list[dict], name: str = "") -> dict:
     fr = Frame(mi)
     heights: dict[tuple[int, int], list[float]] = {}
     n = 0
+    # the hot loop (millions of samples): Frame.to_m and the cell lookup inlined, same arithmetic
+    xm, xa, ym, ya, per_m = mi.x_mult, mi.x_add, mi.y_mult, mi.y_add, fr.per_m
+    floor, hypot, get = math.floor, math.hypot, heights.get
+    step_m = CELL * 0.7
 
     def put(mx: float, mz: float, h: float) -> None:
-        heights.setdefault((math.floor(mx / CELL), math.floor(mz / CELL)), []).append(h)
+        key = (floor(mx / CELL), floor(mz / CELL))
+        lst = get(key)
+        if lst is None:
+            heights[key] = [h]
+        else:
+            lst.append(h)
 
     for rep in replays:
         for pts in (rep.get("pos") or {}).values():
-            prev = None
+            pt = px = pz = ph = None
             for p in pts:
-                t, x, y, z = p[0], p[1], p[2], p[3] if len(p) > 3 else 0.0
-                mx, mz = fr.to_m(x, y)
+                t, x, y = p[0], p[1], p[2]
+                z = p[3] if len(p) > 3 else 0.0
+                mx, mz = (y * xm + xa) / per_m, (x * ym + ya) / per_m
                 h = ((z or 0.0) - FOOT_CM) / 100
-                put(mx, mz, h)
+                key = (floor(mx / CELL), floor(mz / CELL))
+                lst = get(key)
+                if lst is None:
+                    heights[key] = [h]
+                else:
+                    lst.append(h)
                 n += 1
-                if prev is not None:                     # the path between two samples
-                    pt, px, pz, ph = prev
-                    d = math.hypot(mx - px, mz - pz)
+                if pt is not None:                       # the path between two samples
+                    d = hypot(mx - px, mz - pz)
                     if 0 < d <= PATH_GAP and t - pt <= 400 and abs(h - ph) < 1.0:
-                        steps = int(d / (CELL * 0.7))
+                        steps = int(d / step_m)
                         for k in range(1, steps):
                             f = k / steps
                             put(px + (mx - px) * f, pz + (mz - pz) * f, ph + (h - ph) * f)
-                prev = (t, mx, mz, h)
+                pt, px, pz, ph = t, mx, mz, h
     levels = {c: _levels(hs) for c, hs in heights.items()}
     _spread(levels)
     _fill(levels)

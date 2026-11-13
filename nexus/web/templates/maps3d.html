@@ -9,7 +9,13 @@
 .m3-maps button span{font-size:11.5px;margin-left:4px;opacity:.8}
 .m3-stage{position:relative;aspect-ratio:16/9;width:100%;background:#8c9eb8;border-radius:12px;overflow:hidden}
 .m3-stage:fullscreen{border-radius:0;aspect-ratio:auto}
-.m3-stage canvas{position:absolute;inset:0;width:100%;height:100%}
+.m3-stage canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.m3-stage.touch .k-only,.m3-stage:not(.touch) .t-only{display:none}
+.m3-jump{position:absolute;right:14px;bottom:14px;width:64px;height:64px;border-radius:50%;border:2px solid rgba(255,255,255,.55);background:rgba(10,14,20,.5);color:#fff;font-weight:700;font-size:13px;touch-action:none}
+.m3-jump[hidden]{display:none}
+.m3-stick{position:absolute;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;border:2px solid rgba(255,255,255,.45);pointer-events:none}
+.m3-stick i{position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:rgba(255,255,255,.55)}
+@media (max-width:700px){.m3-stage{aspect-ratio:4/5}.m3-help{font-size:11px;right:90px}#m3-radar{width:120px;height:120px;left:10px;top:10px}}
 #m3-over{pointer-events:none}
 #m3-radar{position:absolute;left:14px;top:14px;width:200px;height:200px;border-radius:10px;border:1px solid rgba(255,255,255,.18);pointer-events:none}
 .m3-cross{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;pointer-events:none}
@@ -36,10 +42,12 @@
   <canvas id="m3-canvas"></canvas><canvas id="m3-over"></canvas><canvas id="m3-radar" width="400" height="400"></canvas>
   <div class="m3-cross"></div>
   <div class="m3-pos" id="m3-pos" translate="no"></div>
-  <div class="m3-start" id="m3-start"><b>Click to walk around</b><span class="small">Esc to stop</span></div>
+  <div class="m3-start" id="m3-start"><span class="k-only"><b>Click to walk around</b><span class="small">Esc to stop</span></span>
+    <span class="t-only"><b>Tap to walk around</b><span class="small">Left thumb moves, right thumb looks around.</span></span></div>
   <div class="m3-msg" id="m3-msg" hidden></div>
-  <div class="m3-help" id="m3-help"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Shift</kbd> walk · <kbd>Ctrl</kbd> crouch · <kbd>Space</kbd> jump ·
-    <kbd>F</kbd> fly · <kbd>C</kbd> callouts · <kbd>R</kbd> radar · <kbd>H</kbd> this help</div>
+  <button type="button" class="m3-jump t-only" id="m3-jump" hidden>Jump</button>
+  <div class="m3-help" id="m3-help"><span class="t-only">Left half: drag to move · right half: drag to look</span><span class="k-only"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Shift</kbd> walk · <kbd>Ctrl</kbd> crouch · <kbd>Space</kbd> jump ·
+    <kbd>F</kbd> fly · <kbd>C</kbd> callouts · <kbd>R</kbd> radar · <kbd>H</kbd> this help</span></div>
 </div>
 <div class="m3-bar">
   <label><input type="checkbox" id="m3-labels"> Callouts</label>
