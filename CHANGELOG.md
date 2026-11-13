@@ -4,6 +4,13 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.27.0
+- **Callouts** (*Practice › Callouts*): a quiz on the minimap. *Learn* shows every callout of a map, *Find it* names
+  one and you click where it is, *Name it* lights up a spot and you pick its name from four nearby ones (keys 1–4).
+  12 questions a round, faster answers score more, the callouts you get wrong come up more often. Per map: how many
+  you know, best scores per mode, the ones you miss most. The maps you play most come first.
+- German texts.
+
 ## 4.26.0
 - **KovaaK's is gone from the web pages**: no KovaaK's page, no KovaaK's routines in the Aim library or warm-up, no
   KovaaK's share codes in *Add a routine*, no KovaaK's question in *Ask the coach* (and the coach no longer gets your

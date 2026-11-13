@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.26.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.27.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -196,6 +196,11 @@ on the trainer page. Only rounds played since 4.8 are measured this way.
 *Practice › Mouse & monitor* measures the real DPI of your mouse (move it a known distance along a ruler), its polling
 rate, your screen's refresh rate and worn buttons that double-click, and works out eDPI and cm per 360°. A browser
 can't fully measure 2000–8000 Hz mice, and the page says so.
+
+**Callouts:** *Practice › Callouts* is a quiz on the minimap of every map (the callouts come from valorant-api.com,
+like on the strat board). *Learn* shows them all, *Find it* names a callout and you click where it is, *Name it* lights
+up a spot and you pick its name from four nearby ones. A round is 12 questions; the ones you get wrong come up more
+often, and the page shows per map how many you know, your best scores and the callouts you miss most.
 
 **Ask the coach:** *Practice › Ask the coach* is a chat with the coach about one player. It knows the player's stats,
 habits, aim and KovaaK's scores and remembers the conversation (per user and player).

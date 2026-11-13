@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% import "_ui.html" as vc %}
+{% block title %}Callouts · {{ p.riot_id }} · Nexus{% endblock %}
+{% block head %}<style>
+.co-top{display:grid;grid-template-columns:minmax(0,640px) minmax(260px,1fr);gap:18px;align-items:start}
+@media(max-width:960px){.co-top{grid-template-columns:1fr}}
+.co-maps{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.co-maps a{font-size:13px;padding:5px 11px;border-radius:99px;border:1px solid var(--line2);color:var(--muted);text-decoration:none}
+.co-maps a.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:650}
+.co-maps a.pl::after{content:"•";margin-left:5px;color:var(--win)}
+.co-maps a.on.pl::after{color:var(--accent-ink)}
+.co-board{position:relative;aspect-ratio:1/1;width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:12px;overflow:hidden;user-select:none}
+.co-board img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:.9;pointer-events:none}
+.co-board svg{position:absolute;inset:0;width:100%;height:100%}
+.co-board.ask{cursor:crosshair}
+.co-dot{fill:var(--panel3);stroke:var(--line2);stroke-width:1.5}
+.co-dot.hot{fill:var(--accent);stroke:#fff;stroke-width:2.5}
+.co-dot.ok{fill:var(--win);stroke:#fff;stroke-width:2.5}
+.co-dot.bad{fill:var(--red);stroke:#fff;stroke-width:2.5}
+.co-dot.weak{stroke:var(--red);stroke-width:2.5}
+.co-lbl{font-size:13px;font-weight:650;fill:#fff;paint-order:stroke;stroke:rgba(0,0,0,.85);stroke-width:3.5px;pointer-events:none}
+.co-lbl.small{font-size:11px;font-weight:600}
+.co-ring{fill:none;stroke:var(--accent);stroke-width:2.5;animation:co-pulse 1.1s ease-out infinite}
+@keyframes co-pulse{from{r:9;opacity:1}to{r:26;opacity:0}}
+.co-line{stroke:var(--red);stroke-width:2;stroke-dasharray:5 4}
+.co-panel{display:grid;gap:12px}
+.co-modes{display:flex;gap:6px;flex-wrap:wrap}
+.co-modes button{font:inherit;font-size:13.5px;padding:6px 12px;border-radius:99px;border:1px solid var(--line2);background:transparent;color:var(--muted);cursor:pointer}
+.co-modes button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:650}
+.co-q{font-family:var(--font-head);font-size:clamp(24px,3vw,34px);font-weight:850;font-stretch:72%;line-height:1.05;min-height:1.1em;margin:0}
+.co-sub{font-size:13.5px;color:var(--muted);margin:0}
+.co-bar{height:6px;border-radius:99px;background:var(--panel2);overflow:hidden}.co-bar div{height:100%;width:0;background:var(--accent);transition:width .2s}
+.co-opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.co-opts button{font:inherit;font-size:14.5px;font-weight:600;text-align:left;padding:10px 12px;border-radius:10px;border:1px solid var(--line2);background:var(--panel2);color:var(--text);cursor:pointer}
+.co-opts button:hover{border-color:var(--accent)}
+.co-opts button.ok{background:var(--win-soft);border-color:var(--win)}
+.co-opts button.bad{background:rgba(220,70,70,.15);border-color:var(--red)}
+.co-opts kbd{font-size:11px;color:var(--faint);margin-right:6px}
+.co-big{font-family:var(--font-num);font-size:44px;font-weight:800;font-stretch:72%;line-height:1}
+.co-res dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0}
+.co-res dl div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.co-res dt{font-size:12px;color:var(--muted)}.co-res dd{margin:0;font-size:20px;font-weight:750}
+.co-wrong{margin:6px 0 0;padding-left:18px;font-size:13.5px}
+.co-tbl{width:100%;border-collapse:collapse;font-size:14px}
+.co-tbl th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+.co-tbl td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.co-tbl td.n{font-variant-numeric:tabular-nums}
+.co-weak{font-size:12.5px;color:var(--muted)}
+</style>{% endblock %}
+{% block content %}
+{{ vc.pagehead('Callouts', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+   'Learn the callouts of every map: find them on the minimap or name the spot') }}
+
+{% if not maps %}
+<section class="card"><p class="muted" style="margin:0">No map data yet: the callouts come from valorant-api.com and haven't been loaded. Try again once the server is online.</p></section>
+{% else %}
+<div class="co-maps" role="tablist" aria-label="Map">{% for m in maps %}<a href="{{ url_for('callouts', pid=p.id, map=m) }}" class="{{ 'on' if m == cur }} {{ 'pl' if m in played }}" translate="no">{{ m }}</a>{% endfor %}</div>
+<div class="co-top">
+  <div class="co-board" id="co-board">
+    <img id="co-img" alt="" src="/map-image/{{ cur|urlencode }}" onerror="this.remove()">
+    <svg id="co-svg" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Minimap"></svg>
+  </div>
+  <section class="card co-panel" style="margin:0">
+    <div class="co-modes" id="co-modes">
+      <button type="button" data-m="learn" class="on">Learn</button>
+      <button type="button" data-m="find">Find it</button>
+      <button type="button" data-m="name">Name it</button>
+    </div>
+    <div id="co-play">
+      <p class="co-sub">Every callout of this map. Red rings: the ones you get wrong most.</p>
+    </div>
+    <div class="co-bar" id="co-bar" hidden><div></div></div>
+    <div class="co-opts" id="co-opts" hidden></div>
+    <div class="co-res" id="co-res" hidden></div>
+    <div><button type="button" class="btn primary" id="co-start" hidden>Start · {{ boot.questions }} questions</button></div>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px">
+  <h2>Your maps</h2>
+  {% if not n_runs %}<p class="small muted" style="margin:-4px 0 10px">Nothing played yet. A round is {{ boot.questions }} questions; the callouts you get wrong come up more often.</p>{% endif %}
+  <table class="co-tbl">
+    <thead><tr><th>Map</th><th>Callouts known</th>{% for k, v in modes.items() %}<th>{{ v }}: best</th>{% endfor %}<th>Most often wrong</th></tr></thead>
+    <tbody>{% for s in summary %}<tr>
+      <td><a href="{{ url_for('callouts', pid=p.id, map=s.map) }}" translate="no">{{ s.map }}</a></td>
+      <td class="n">{{ s.known }}/{{ s.n }}</td>
+      {% for k in modes %}{% set x = s.modes[k] %}<td class="n">{% if x.best is not none %}{{ x.best }} <span class="muted small">({{ (x.acc * 100)|round|int }}% correct)</span>{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}
+      <td class="co-weak">{% for w in s.weak %}<span translate="no">{{ w.label }}</span> {{ w.wrong }}/{{ w.asked }}{{ ', ' if not loop.last }}{% else %}–{% endfor %}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+</section>
+<script>window.NEXUS_CALLOUTS = {{ boot|tojson }};</script>
+<script src="{{ url_for('static', filename='callouts.js') }}?v={{ app_version }}"></script>
+{% endif %}
+{% endblock %}
