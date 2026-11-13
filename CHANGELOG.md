@@ -4,6 +4,15 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.29.0
+- **Sound** (*Practice › Sound*): hear where a sound comes from (headphones). Footsteps, a reload or a beep play once
+  from somewhere around you, in 3D (the browser's HRTF panner); click the direction on a radar. Modes: *Direction*,
+  *Distance* (also near or far) and *Height* (also above, same floor or below). 15 sounds a round, the closer the more
+  points. Shows how far off you are on average, front/back mix-ups, and a wheel of how far off you are by direction.
+  *Test the sound* checks left and right.
+- The sounds are made in the browser, not Valorant's: what's trained is hearing the direction.
+- German texts.
+
 ## 4.28.0
 - **Map angles** in the aim trainer (above the library, and as a scenario in *Duels*): pick a map and where you stand
   (hold a site facing its main, or take it from main facing the site). Enemy models peek from behind cover at the
