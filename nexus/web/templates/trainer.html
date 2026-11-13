@@ -216,6 +216,11 @@
     chips.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
     document.querySelectorAll('[data-skp]').forEach(p => { p.hidden = p.dataset.skp !== b.dataset.sk; });
   });
+  window.addEventListener('DOMContentLoaded', () => {        // ?plan=skill_<id>_<min> (e.g. from the Aim page): that skill
+    const st = (window.NEXUS_TRAINER || {}).start || '', m = /^skill_([a-z]+)_/.exec(st);
+    const b = m && chips.querySelector(`[data-sk="${m[1]}"]`);
+    if (b) { b.click(); document.getElementById('tr-skills').scrollIntoView({block: 'start'}); }
+  });
 })();
 </script>
 

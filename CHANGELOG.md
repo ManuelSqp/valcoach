@@ -4,6 +4,17 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.37.0
+- **This week in the aim trainer** (Aim page): runs, minutes and days this week, every skill rating with its change
+  since last week, new bests, and what to train next (a skill that went down, else your weakest) with a button that
+  opens a 20-minute session of it.
+- **Aim board** (*Team › Practice › Aim board*): everyone's skill ratings side by side with the change since last week
+  and this week's training, and a **weekly challenge**: one scenario for the whole team (the owner picks it, a team
+  sandbox scenario too, or it rotates by itself) with a leaderboard of everyone's best normal round this week.
+  *Play it* opens it in your trainer.
+- The aim board is posted to Discord with the weekly focus (same day and hour), or by hand from the board.
+- German texts.
+
 ## 4.36.0
 - **The warm-up follows your weakest skill**: still three 30 s rounds, grid flicks first, then the two easiest
   scenarios of the skill with your lowest rating (once two skills have a rating; until then grid, head-line and micro

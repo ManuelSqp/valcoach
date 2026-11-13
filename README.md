@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.36.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.37.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -215,6 +215,13 @@ value.
 scenarios of your weakest skill, once two skills have a rating. *Map prep* (trainer page, and a button on the match
 screen with the week's map) is about 10 minutes for one map: one taps, every spot of the map from *Map angles*, a round
 of your weakest skill, and at the end the callouts quiz of that map.
+
+**Your aim week and the team's aim board:** the Aim page shows *This week in the aim trainer*: runs, minutes and days,
+every skill rating with its change since last week, new bests, and the skill to train next (one that went down, else
+the weakest) with a button for a 20-minute session. *Team › Practice › Aim board* puts everyone's skill ratings side
+by side with this week's training, and runs a weekly challenge: one scenario (picked by the owner, a team sandbox one
+too, or rotating by itself) with a leaderboard of everyone's best round. It goes to Discord with the weekly focus, or
+by hand.
 
 **Map angles:** above the trainer's library, pick a map and where you stand (holding a site and facing its main, or
 coming out of main facing the site). Enemy models peek from the callouts in front of you, at their real direction and

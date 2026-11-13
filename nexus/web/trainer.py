@@ -133,7 +133,8 @@ def register(app, store, sr, view_profile, filter_rows, known_maps: list[str] = 
                                groups=tr.GROUPS, part_names=tr.PARTS, rec=rec, step=tr.sens_step(setup.get("sens"), rec["sens"]) if rec else None,
                                chart=sens_chart(rec) if rec else None,
                                scenarios=tr.scenario_list(), summary=tr.summary(runs), plans=pl, levels=tr.LEVELS,
-                               start=start if start in pl or start in skill_plans or start in prep_plans else "", play=play if play in tr.SCENARIOS else "", setup=setup, numbers=tr.numbers(setup),
+                               start=start if start in pl or start in skill_plans or start in prep_plans else "",
+                               play=play if play in tr.SCENARIOS or play in extra else "", setup=setup, numbers=tr.numbers(setup),
                                n_runs=len(runs), today=sum(1 for r in runs if r.get("d") == date.today().isoformat()))
 
     @app.get("/profiles/<int:pid>/trainer/insights")

@@ -21,6 +21,7 @@ from flask import abort, flash, g, jsonify, redirect, render_template, request, 
 
 from ..coach import websearch as ws
 from ..stats import aim as am
+from ..stats import aimweek as aw
 from ..stats import kovaaks as kv
 from .urls import local_path
 
@@ -209,7 +210,8 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         # the coach's KovaaK's playlists only show among the routines for someone who plays KovaaK's (or has one as
         # warm-up); everyone else finds them on the KovaaK's page
         shown = [r for r in lib if r["kind"] != "kovaaksfile" or runs or (warm and warm["id"] == r["id"])]
-        return render_template("aim.html", page=page, p=p, active_pid=pid, tab="aim", can_edit=can_edit, can_log=can_log(p, can_edit, uid),
+        week = aw.report(_read(player_path(pid).with_name("trainer.json"), {}).get("runs", [])) if page == "main" else None
+        return render_template("aim.html", page=page, week=week, p=p, active_pid=pid, tab="aim", can_edit=can_edit, can_log=can_log(p, can_edit, uid),
                                lib=shown, need=need, picks=am.pick(shown, need), warm=warm, mine_warm=pdata.get("warmup"),
                                done=done, effect=am.effect(rows, log, kv.run_days(runs)), recent=recent, names=names, teams=teams, team_warm=team_warm,
                                plans=[plan(pid, uid, k, rows) for k in kv.KINDS], kstats=kv.summary(runs)[:16], kruns=len(runs),

@@ -1667,7 +1667,7 @@
     const b = document.querySelector(`[data-plan="${C.start}"]`);
     if (b) b.scrollIntoView({block: 'center'});
   }
-  if (C.play && C.scenarios.some(s => s.id === C.play)) {                 // from Aim insights: "Play …"
+  if (C.play && byId[C.play]) {                           // also a sandbox scenario (the team's weekly challenge)                 // from Aim insights: "Play …"
     try { const u = new URL(location.href); u.searchParams.delete('play'); history.replaceState(null, '', u); } catch (e) { /* only the address bar */ }
     open(C.play);
   }
