@@ -33,7 +33,7 @@ def test_runs_keep_where():
                         "escaped": 3, "where": "Ascent ·  Hold B Site, facing B Main"})
     assert run["w"] == "Ascent · Hold B Site, facing B Main" and run["escaped"] == 3
     assert "w" not in tr.clean_run({"scenario": "grid", "score": 1, "seconds": 30, "hits": 1, "shots": 1, "where": "x"})
-    assert "map_angles: mapspots(" in JS and "body.where = st.where" in JS
+    assert "map_angles: B.mapspots(" in JS and "body.where = st.where" in JS
 
 
 def test_trainer_page_has_the_card(app):  # noqa: F811 (fixture)

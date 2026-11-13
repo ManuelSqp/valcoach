@@ -4,6 +4,19 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.32.0
+- **Train one skill** (aim trainer): pick tracking, snappy flicks, one taps, micro-adjusting, target switching,
+  reaction or peeks and angles, and 10, 20 or 30 minutes. A session walks up that skill's ladder of scenarios (easy to
+  hard) from the first one you aren't steady at yet, two 40 s rounds each, after a warm-up round.
+- **Adaptive rounds**: after every round of a session the next one gets harder (targets 8% smaller, 7% faster) when it
+  went well, easier when it didn't; the results screen says which. These rounds don't count for your bests.
+- **Skill ratings** (0–100): per skill from your last 12 runs of its scenarios (accuracy, time on target, speed, how
+  hard the scenario and the round were), with a chart by day. They compare you with yourself.
+- **One taps**: 7 new scenarios where only the first shot counts, a miss and the target is gone: heads at head
+  height near, far and close, three at once, quick ones, peeks from cover, and the doorway with an enemy model.
+  108 scenarios in all.
+- German texts.
+
 ## 4.31.0
 - **VOD review**: watch a match recording together. *Review the recording together* on a report with a recording,
   or *Team › Practice › Recordings* for all of the team's recordings (with how many comments each has). Pause, draw

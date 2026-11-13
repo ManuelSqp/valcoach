@@ -247,8 +247,26 @@ SCENARIOS.update({
 SCENARIOS["map_angles"] = _sc("Map angles", "click", "duels", 2, ["peeking", "crosshair", "reaction"],
                               "Stand on a real site (pick the map and the spot above the library). Enemies peek from the "
                               "callouts in front of you, at their real direction and distance. Only a headshot kills.", 60)
+# 4.32: one taps. Head-sized targets at head height and only the first shot counts: a miss and the target is gone.
+SCENARIOS.update({
+    "onetap_heads": _sc("One taps", "click", "onetap", 1, ["crosshair", "flicks"],
+                        "A head at head height, 10–14 m away. One shot each: hit it and the next comes, miss and it's gone."),
+    "onetap_close": _sc("One taps: close", "click", "onetap", 2, ["crosshair", "flicks", "reaction"],
+                        "Heads close to you and far to the side. Turn, stop, one clean click."),
+    "onetap_far": _sc("One taps: far", "click", "onetap", 3, ["crosshair", "micro"],
+                      "Small heads 22–28 m away, like a long angle. Slow down enough that the one shot lands."),
+    "onetap_multi": _sc("One taps: three heads", "click", "onetap", 2, ["crosshair", "switching"],
+                        "Three heads at once. One shot each, then the next head: a miss costs you that one."),
+    "onetap_timed": _sc("One taps: quick", "click", "onetap", 3, ["crosshair", "reaction"],
+                        "Heads that are gone after a moment. Fast and clean, one shot each."),
+    "onetap_peek": _sc("One taps: peeks", "click", "onetap", 2, ["peeking", "crosshair", "reaction"],
+                       "Heads peek out from behind cover. One shot while they're out: a miss and they're back in cover."),
+    "onetap_angle": _sc("One taps: hold the angle", "click", "onetap", 3, ["peeking", "crosshair", "reaction"],
+                        "The doorway with an enemy model, and one shot: the head kills, a body shot or a miss and he's gone."),
+})
 GROUPS = {"flicks": "Flicks", "switching": "Switching", "moving": "Moving targets", "reflex": "Reflex",
-          "precision": "Precision", "duels": "Duels", "tracking": "Tracking", "trackswitch": "Switch tracking"}
+          "precision": "Precision", "duels": "Duels", "onetap": "One taps", "tracking": "Tracking",
+          "trackswitch": "Switch tracking"}
 LEVELS = {1: "Easy", 2: "Medium", 3: "Hard"}
 _OLD = {"grid": ("switching", 1), "headline": ("flicks", 1), "micro": ("precision", 2), "peek": ("duels", 1),
         "flick_close": ("flicks", 2), "flick_far": ("precision", 2), "holdangle": ("duels", 2), "track": ("tracking", 1),
@@ -332,6 +350,9 @@ def clean_run(d: dict) -> dict | None:
         if on is None:
             return None
         out["on"] = on
+    k = d.get("k")                                   # a skill session made it harder or easier: [size, speed]
+    if isinstance(k, list) and len(k) == 2 and all(_num(v, 0.5, 1.6, 3) is not None for v in k) and k != [1, 1]:
+        out["k"] = [_num(k[0], 0.5, 1.6, 3), _num(k[1], 0.5, 1.6, 3)]
     x = clean_detail(d.get("detail"))                   # what Aim insights needs (see trainer.js ixNew)
     if x:
         out["x"] = x
@@ -349,6 +370,7 @@ def add_run(data: dict, run: dict) -> dict:
 
 def summary(runs: list[dict]) -> list[dict]:
     """Per scenario (in the scenarios' order): runs, best, last, recent scores, trend, steady at best."""
+    runs = [r for r in runs if not r.get("k")]       # skill-session rounds made harder or easier don't set bests
     by = {x["name"]: x for x in kv.summary(runs)}
     out = []
     for sid, sc in SCENARIOS.items():
@@ -663,3 +685,101 @@ def sens_step(current: float | None, rec: float) -> dict:
         return {"change": round(change, 3), "steps": [rec]}
     n = math.ceil(abs(math.log(rec / current)) / math.log(1.1))
     return {"change": round(change, 3), "steps": [round(current * (rec / current) ** (i / n), 3) for i in range(1, n + 1)]}
+
+
+# ------------------------------------------------------------------ 4.32: train one skill
+# Per skill: the scenarios from easy to hard. A session walks up the ladder from where you are, two rounds each,
+# and the page makes each round a bit harder or easier from how the last one went (sizes and speeds, "k").
+SKILLS = {
+    "tracking": {"name": "Tracking", "about": "Stay on a moving target: smooth strafes, then curves, stops and dodges.",
+                 "ladder": ["track_smooth", "line_trace", "track", "track_long", "arc_track", "track_close", "circle_track",
+                            "track_tiny", "track_react", "blink_track", "track_fast", "track_zigzag", "orbit_fast"]},
+    "flicks": {"name": "Snappy flicks", "about": "Fast, clean flicks: big targets first, then wide, vertical, behind you and small.",
+               "ladder": ["flick_speed", "flick_mid", "spider", "flick_close", "reflex", "flick_wide", "flick_vert",
+                          "flick_far", "spider_180", "flick_180", "flick_precise"]},
+    "onetap": {"name": "One taps", "about": "One shot, one head: crosshair at head height, stop, click. A miss costs the target.",
+               "ladder": ["onetap_heads", "headline", "onetap_close", "onetap_multi", "onetap_peek", "headline_far",
+                          "onetap_far", "onetap_timed", "onetap_angle"]},
+    "micro": {"name": "Micro-adjusting", "about": "Tiny, calm corrections on small targets far away.",
+              "ladder": ["micro", "micro_spider", "tiny_switch", "flick_tiny", "burst_micro", "star_micro", "pinpoint", "spider_far"]},
+    "switching": {"name": "Target switching", "about": "Several targets: clear one, go straight to the next.",
+                  "ladder": ["grid_speed", "six_shot", "grid", "wide_three", "close_switch", "burst", "double_tap",
+                             "tswitch", "wide_five", "tswitch_fast", "tswitch_evasive"]},
+    "reaction": {"name": "Reaction", "about": "See it, hit it: targets that pop up and vanish, decoys you mustn't shoot.",
+                 "ladder": ["popups", "reflex", "reflex_close", "side_vision", "friend_foe", "reflex_small", "reflex_head",
+                            "friend_foe_fast"]},
+    "peeks": {"name": "Peeks and angles", "about": "Hold an angle and win the duel: wide swings, jiggles, runners, real map angles.",
+              "ladder": ["peek", "angle_wide", "holdangle", "peek_far", "angle_close", "map_angles", "angle_jiggle",
+                         "peek_fast", "angle_long", "angle_runners"]},
+}
+SESSION_MINUTES = (10, 20, 30)
+ROUND_S = 40
+
+
+def skill_of(sid: str) -> list[str]:
+    return [k for k, v in SKILLS.items() if sid in v["ladder"]]
+
+
+def plan_skill(skill: str, minutes: int, runs: list[dict]) -> dict:
+    """A session for one skill: a warm-up round on the easiest, then up the ladder from the first scenario you aren't
+    steady at yet, two rounds each (40 s, and every round adapts). -> a plan like plan()'s, kind "skill:<id>"."""
+    sk = SKILLS[skill]
+    ladder = [s for s in sk["ladder"] if s in SCENARIOS]
+    steady = {x["id"] for x in summary(runs) if x["steady"]}
+    played = {r["s"] for r in runs}
+    start = next((i for i, s in enumerate(ladder) if s not in steady), len(ladder) - 1)
+    start = max(0, min(start, len(ladder) - 2))
+    if ladder[start] not in played and start > 0 and ladder[start - 1] not in played:
+        start = 0
+    items = [{"id": ladder[0], "name": SCENARIOS[ladder[0]]["name"], "seconds": 30, "why": "warm-up"}] if start else []
+    budget, i = minutes * 60 - (35 if start else 0), start
+    while budget >= 2 * (ROUND_S + 5):
+        sid = ladder[i % len(ladder)]
+        for _ in range(2):
+            items.append({"id": sid, "name": SCENARIOS[sid]["name"], "seconds": ROUND_S, "why": sk["name"].lower()})
+        budget -= 2 * (ROUND_S + 5)
+        i += 1
+        if i >= len(ladder):                     # past the hardest: from the middle up again
+            i = len(ladder) // 2
+    return {"kind": f"skill:{skill}", "name": sk["name"], "minutes": math.ceil(sum(x["seconds"] + 5 for x in items) / 60),
+            "items": items, "adaptive": True, "skill": skill}
+
+
+def _run_value(r: dict) -> float | None:
+    """How well one run went, 0..1-ish, the same way for every scenario of a kind (for the skill ratings)."""
+    if "on" in r:
+        v = r["on"]
+    elif "acc" in r:
+        if r.get("shots", 0) < 3:
+            return None
+        v = r["acc"]
+        hits, gone = r.get("hits", 0), r.get("escaped", 0) + r.get("body", 0)
+        if "escaped" in r or "body" in r:
+            v *= hits / (hits + gone) if hits + gone else 0
+        elif r.get("ms"):
+            v *= min(1.0, 450 / r["ms"]) ** 0.5
+    else:
+        return None
+    lvl = SCENARIOS.get(r["s"], {}).get("level", 2)
+    v *= {1: 0.85, 2: 1.0, 3: 1.15}[lvl]
+    if r.get("k"):
+        v *= (1 / r["k"][0]) ** 0.5 * r["k"][1] ** 0.5
+    return v
+
+
+def skill_ratings(runs: list[dict]) -> dict[str, dict]:
+    """Per skill: a rating 0–100 from your last 12 runs of its scenarios (accuracy, time on target, speed, how hard
+    the scenario and the round were), and one value per day for the last 30 days. It compares you with yourself."""
+    out = {}
+    for k, sk in SKILLS.items():
+        rs = [r for r in runs if r["s"] in sk["ladder"]]
+        vals = [(r, v) for r in rs if (v := _run_value(r)) is not None]
+        last = [v for _, v in vals[-12:]]
+        days: dict[str, list] = {}
+        for r, v in vals:
+            days.setdefault(r["d"], []).append(v)
+        series = [(d, round(min(100, 100 * sum(x) / len(x)))) for d, x in sorted(days.items())][-30:]
+        out[k] = {"name": sk["name"], "about": sk["about"], "rating": round(min(100, 100 * sum(last) / len(last))) if last else None,
+                  "runs": len(vals), "days": series,
+                  "change": series[-1][1] - series[0][1] if len(series) >= 2 else None}
+    return out

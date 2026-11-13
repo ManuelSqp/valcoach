@@ -7,6 +7,19 @@
 {%- endif -%}
 {%- endmacro %}
 {% block head %}<style>
+.tr-skills{margin-bottom:22px}
+.tr-sk-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.tr-sk-chips button{font:inherit;display:flex;gap:8px;align-items:baseline;padding:7px 12px;border-radius:10px;border:1px solid var(--line2);background:var(--panel);color:var(--text);cursor:pointer}
+.tr-sk-chips button.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.tr-sk-chips b{font-family:var(--font-num);font-size:17px;font-weight:800}.tr-sk-chips span{font-size:13.5px}
+.tr-sk{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,320px);gap:16px;align-items:start}
+@media(max-width:860px){.tr-sk{grid-template-columns:1fr}}
+.tr-sk .big{font-family:var(--font-num);font-size:44px;font-weight:800;font-stretch:72%;line-height:1}
+.tr-sk .chg{font-size:13px;font-weight:650;margin-left:8px}.tr-sk .chg.up{color:var(--win)}.tr-sk .chg.down{color:var(--red)}
+.tr-sk ol{margin:6px 0 0;padding-left:20px;font-size:13.5px}.tr-sk li span{color:var(--muted)}
+.tr-sk-go{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.tr-sk svg{width:100%;height:70px}.tr-sk polyline{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke}
+.tr-adapt{font-size:13px;margin:8px 0 0;color:#cfd6e2}.tr-adapt span{color:#9aa6b8;margin-left:6px}
 .tr-ang-row{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end}
 .tr-ang-row label{display:grid;gap:4px;font-size:12.5px;color:var(--muted)}
 .tr-ang-row select{width:auto;min-width:160px}
@@ -151,6 +164,45 @@
   </section>
   {% endfor %}
 </div>
+
+<section class="card tr-skills" id="tr-skills">
+  <h2>Train one skill</h2>
+  <p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Pick what you want to get better at. A session starts where you are on that
+    skill's ladder (easy to hard), two rounds per scenario, and every round adapts: targets get smaller and faster when it
+    goes well, bigger and slower when it doesn't. The rating compares you with yourself: your last 12 runs of that skill.</p>
+  <div class="tr-sk-chips" id="tr-sk-chips">{% for k, x in skills.items() %}<button type="button" data-sk="{{ k }}" class="{{ 'on' if loop.first }}"><span>{{ x.name }}</span><b>{{ x.rating if x.rating is not none else '–' }}</b></button>{% endfor %}</div>
+  {% for k, x in skills.items() %}
+  <div class="tr-sk" data-skp="{{ k }}" {{ '' if loop.first else 'hidden' }}>
+    <div>
+      <h3 style="margin:0 0 4px">{{ x.name }}</h3>
+      <p class="small muted" style="margin:0">{{ x.about }}</p>
+      {% set pl = skill_plans['skill_' ~ k ~ '_' ~ minutes[0]] %}
+      <ol>{% for it in pl['items'][:9] %}{% if loop.first or it.id != pl['items'][loop.index0 - 1].id %}<li>{{ it.name }} <span>{{ 'warm-up' if it.why == 'warm-up' else '2 × ' ~ it.seconds ~ ' s' }}</span></li>{% endif %}{% endfor %}</ol>
+      <div class="tr-sk-go">{% for m in minutes %}<button type="button" class="btn {{ 'primary' if loop.first }}" data-plan="skill_{{ k }}_{{ m }}">{{ m }} min</button>{% endfor %}</div>
+    </div>
+    <div>
+      <div class="small muted">Your {{ x.name|lower }} rating</div>
+      <div><span class="big">{{ x.rating if x.rating is not none else '–' }}</span>{% if x.change is not none and x.change != 0 %}<span class="chg {{ 'up' if x.change > 0 else 'down' }}"><span>{{ '%+d'|format(x.change) }}</span> <span>since</span> <span>{{ x.days[0][0] }}</span></span>{% endif %}</div>
+      {% if x.days|length >= 2 %}{% set vals = x.days|map(attribute=1)|list %}{% set lo = vals|min %}{% set hi = vals|max %}{% set span = (hi - lo) or 1 %}
+      <svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-label="Rating by day"><polyline points="{% for v in vals %}{{ (loop.index0 * 100 / (vals|length - 1))|round(1) }},{{ (36 - (v - lo) * 32 / span)|round(1) }} {% endfor %}"/></svg>
+      <div class="small muted">{{ x.days|length }} days · {{ x.runs }} runs</div>
+      {% elif x.runs %}<div class="small muted">{{ x.runs }} runs so far: the chart starts on the second day.</div>
+      {% else %}<div class="small muted">No runs of this skill yet.</div>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</section>
+<script>
+(function () {
+  const chips = document.getElementById('tr-sk-chips');
+  if (!chips) return;
+  chips.addEventListener('click', e => {
+    const b = e.target.closest('[data-sk]'); if (!b) return;
+    chips.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('[data-skp]').forEach(p => { p.hidden = p.dataset.skp !== b.dataset.sk; });
+  });
+})();
+</script>
 
 <section class="tr-sens" id="sens">
   <div>
@@ -338,7 +390,7 @@
 
 <script>
 window.NEXUS_TRAINER = {{ {
-  'scenarios': scenarios, 'plans': plans, 'start': start, 'play': play, 'can_save': can_save, 'scale': setup.scale or 1,
+  'scenarios': scenarios, 'plans': dict(plans, **skill_plans), 'start': start, 'play': play, 'can_save': can_save, 'scale': setup.scale or 1,
   'summary': summary, 'angles': angles,
   'sens_base': setup.sens or 0.4, 'dpi': setup.get('dpi'), 'crosshair': setup.get('crosshair'), 'sens_rec': rec.sens if rec and rec.edge else None,
   'urls': {'sens': url_for('trainer_sens', pid=p.id), 'run': url_for('trainer_run', pid=p.id), 'setup': url_for('trainer_setup', pid=p.id), 'aim': url_for('aim', pid=p.id)}

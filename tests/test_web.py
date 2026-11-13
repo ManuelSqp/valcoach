@@ -2897,7 +2897,8 @@ def test_trainer_scenarios_hold_the_angle_and_the_long_sens_finder(app):
     page = c.get(f"/profiles/{pid}/trainer").data.decode()
     for name in ("Close flicks", "Far flicks", "Close tracking", "Far tracking", "Reactive tracking", "Hold the angle"):
         assert name in page
-    assert page.index(">Flicks<") < page.index(">Duels<") < page.index(">Tracking<")              # grouped
+    lib = page[page.index('id="tr-lib"'):]                                                     # the library
+    assert lib.index(">Flicks<") < lib.index(">Duels<") < lib.index(">Tracking<")                  # grouped
     assert {s["group"] for s in tr.scenario_list()} == set(tr.GROUPS)
     # hold the angle: headshots are hits, body shots and enemies that got away are kept
     r = c.post(f"/profiles/{pid}/trainer/runs", json={"scenario": "holdangle", "score": 1500, "seconds": 60, "hits": 12,

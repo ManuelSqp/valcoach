@@ -86,11 +86,13 @@ def register(app, store, sr, view_profile, filter_rows, known_maps: list[str] = 
         play = request.args.get("play")
         rec = tr.recommend(d.get("sensfind", []))
         pl = plans(pid, runs, setup)
+        skill_plans = {f"skill_{k}_{m}": tr.plan_skill(k, m, runs) for k in tr.SKILLS for m in tr.SESSION_MINUTES}
         return render_template("trainer.html", p=p, active_pid=pid, can_save=can_save(p, can_edit), angles=angle_maps(pid),
+                               skills=tr.skill_ratings(runs), skill_plans=skill_plans, minutes=tr.SESSION_MINUTES,
                                groups=tr.GROUPS, part_names=tr.PARTS, rec=rec, step=tr.sens_step(setup.get("sens"), rec["sens"]) if rec else None,
                                chart=sens_chart(rec) if rec else None,
                                scenarios=tr.scenario_list(), summary=tr.summary(runs), plans=pl, levels=tr.LEVELS,
-                               start=start if start in pl else "", play=play if play in tr.SCENARIOS else "", setup=setup, numbers=tr.numbers(setup),
+                               start=start if start in pl or start in skill_plans else "", play=play if play in tr.SCENARIOS else "", setup=setup, numbers=tr.numbers(setup),
                                n_runs=len(runs), today=sum(1 for r in runs if r.get("d") == date.today().isoformat()))
 
     @app.get("/profiles/<int:pid>/trainer/insights")

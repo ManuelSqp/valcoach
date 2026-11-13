@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.31.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.32.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -196,6 +196,13 @@ on the trainer page. Only rounds played since 4.8 are measured this way.
 *Practice › Mouse & monitor* measures the real DPI of your mouse (move it a known distance along a ruler), its polling
 rate, your screen's refresh rate and worn buttons that double-click, and works out eDPI and cm per 360°. A browser
 can't fully measure 2000–8000 Hz mice, and the page says so.
+
+**Train one skill:** on the trainer page, pick a skill (tracking, snappy flicks, one taps, micro-adjusting, target
+switching, reaction, peeks and angles) and 10, 20 or 30 minutes. Each skill has a ladder of scenarios from easy to
+hard; a session starts at the first one you aren't steady at yet, plays two 40 s rounds each and adapts every round
+(targets smaller and faster when it goes well, bigger and slower when it doesn't). A rating per skill (0–100, from
+your last 12 runs of it, with a chart by day) compares you with yourself. *One taps* are new scenarios where only
+the first shot counts: a miss and the target is gone.
 
 **Map angles:** above the trainer's library, pick a map and where you stand (holding a site and facing its main, or
 coming out of main facing the site). Enemy models peek from the callouts in front of you, at their real direction and
