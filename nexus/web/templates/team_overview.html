@@ -6,9 +6,24 @@
 {% block head %}
 <style>
 .ai{border-radius:50%;vertical-align:middle;background:var(--ink);object-fit:cover;flex:none}
-.ogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
-.ocard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px}
-.ocard h3{margin:0;font-size:17px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+/* 4.41: the cards of a row share their rows (subgrid), so every section starts on the same line in every card */
+.ogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px 12px}
+.ocard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;
+  grid-row:span 8;grid-template-rows:subgrid;row-gap:14px;align-content:start;min-width:0}
+.ocard > *{min-width:0}
+.ocard > .osect{border-top:1px solid var(--line);padding-top:10px}
+.ocard > .ohead{padding-bottom:0}
+.ocard h3{margin:0;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ostats{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.oline{display:flex;gap:6px;align-items:center;flex-wrap:nowrap;overflow:hidden;white-space:nowrap;min-height:22px}
+.oempty{color:var(--muted);font-size:12.5px}
+.ocard .nogames{grid-row:span 7}
+.legend4{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:6px;font-size:11.5px;color:var(--muted)}
+.legend4 span{display:flex;flex-direction:column;line-height:1.3;min-width:0}
+.legend4 span.zero{opacity:.4}
+.legend4 em{font-style:normal;color:var(--text);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:650}
+.legend4 b{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:0}
+.chip.more{background:var(--panel3);color:var(--muted)}
 .osec{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
 .alist{display:flex;flex-direction:column;gap:4px}
 .arow{display:grid;grid-template-columns:24px 1fr auto auto;gap:8px;align-items:center;font-size:13px}
@@ -26,7 +41,8 @@ table.duos tr.early td{opacity:.55}
 .r-Duelist{background:#ff4655}.r-Initiator{background:#f5a524}.r-Controller{background:#6c8cff}.r-Sentinel{background:#2ec4a6}
 .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:5px}
 .legend b{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle}
-.dims{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;font-size:12.5px}
+.dims{display:grid;grid-template-columns:96px 1fr 40px;gap:4px 8px;align-items:center;font-size:12.5px;margin-top:8px}
+.dims .muted{text-align:right;font-variant-numeric:tabular-nums}
 .dbar{height:7px;border-radius:99px;background:var(--line);position:relative;overflow:hidden}
 .dbar i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:99px}
 .chip{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:99px;background:var(--win-soft);color:var(--win)}
@@ -76,49 +92,53 @@ table.duos tr.early td{opacity:.55}
   <div class="ogrid">
     {% for p in plist %}
     <div class="ocard">
-      <h3>{{ p.label }}
-        {% if p.games %}<span class="muted small" style="font-weight:400">{{ p.games }} games · <span class="{{ wrc(p.wr) }}">{{ pct(p.wr) }}</span> won · ACS {{ p.acs|round|int }}</span>{% endif %}</h3>
-      {% if not p.games %}<p class="muted small" style="margin:0">No games yet: "Update everyone's stats" on the comps page.</p>{% else %}
-      <div>
+      <div class="ohead"><h3 title="{{ p.label }}">{{ p.label }}</h3>
+        <div class="ostats">{% if p.games %}{{ p.games }} games · <span class="{{ wrc(p.wr) }}">{{ pct(p.wr) }}</span> won · ACS {{ p.acs|round|int }}{% else %}&nbsp;{% endif %}</div></div>
+      {% if not p.games %}<p class="muted small nogames" style="margin:0">No games yet: "Update everyone's stats" on the comps page.</p>{% else %}
+      <div class="osect">
         <div class="osec">Role</div>
         {% set tr = p.team_role %}
-        {% if tr.role %}<span class="chip {{ 'sug' if tr.suggested }}" tabindex="0" data-tip="{{ 'Suggested from the data: the role this player fits best in the lineup. Set it for good on the Roles page.' if tr.suggested else 'Assigned on the Roles page.' }}">{{ tr.role }}{% if tr.suggested %}<span translate="no"> ?</span>{% endif %}</span>{% if tr.score is not none %} <span class="muted small">fit {{ tr.score }}/100</span>{% endif %}{% else %}<span class="muted small">not enough round data yet</span>{% endif %}
-        {% for h in tr.hats %}<span class="chip hat {{ 'sug' if h.suggested }}" tabindex="0" data-tip="{% if not h.suggested %}Assigned on the Roles page.{% elif h.hat == 'IGL' and h.votes %}Named as the caller in {{ h.votes.votes }} of {{ h.votes.total }} post-match check-ins (Match day › Check-in).{% elif h.hat == 'IGL' %}Suggested from the data. Calling can't be measured (no voice comms): it's a guess from who stays alive late in rounds and plays controller or initiator.{% else %}Suggested from the data: buys and gets kills with the Operator.{% endif %}">{{ h.hat }}{% if h.suggested %}<span translate="no"> ?</span>{% endif %}</span>{% endfor %}
+        <div class="oline">{% if tr.role %}<span class="chip {{ 'sug' if tr.suggested }}" tabindex="0" data-tip="{{ 'Suggested from the data: the role this player fits best in the lineup. Set it for good on the Roles page.' if tr.suggested else 'Assigned on the Roles page.' }}">{{ tr.role }}{% if tr.suggested %}<span translate="no"> ?</span>{% endif %}</span>{% if tr.score is not none %} <span class="muted small">fit {{ tr.score }}/100</span>{% endif %}{% else %}<span class="oempty">not enough round data yet</span>{% endif %}
+        {% for h in tr.hats %}<span class="chip hat {{ 'sug' if h.suggested }}" tabindex="0" data-tip="{% if not h.suggested %}Assigned on the Roles page.{% elif h.hat == 'IGL' and h.votes %}Named as the caller in {{ h.votes.votes }} of {{ h.votes.total }} post-match check-ins (Match day › Check-in).{% elif h.hat == 'IGL' %}Suggested from the data. Calling can't be measured (no voice comms): it's a guess from who stays alive late in rounds and plays controller or initiator.{% else %}Suggested from the data: buys and gets kills with the Operator.{% endif %}">{{ h.hat }}{% if h.suggested %}<span translate="no"> ?</span>{% endif %}</span>{% endfor %}</div>
       </div>
-      <div>
+      <div class="osect">
         <div class="osec">Most played agents</div>
         <div class="alist">{% for a in p.top %}
           <div class="arow">{{ ai(a.agent, 24) }}<span>{{ a.agent }} <span class="muted small">{{ a.role }}</span></span>
             <span class="n">{{ a.games }} · {{ pct(a.share) }}</span><span class="w {{ wrc(a.wr) }}" title="won">{{ pct(a.wr) }}</span></div>{% endfor %}
         </div>
-        {% if p.agents|length > 5 %}<a class="small" href="{{ url_for('team_overview', tid=t.id, view='all') }}">+ {{ p.agents|length - 5 }} more agents</a>{% endif %}
+        {% if p.agents|length > 5 %}<div class="small" style="margin-top:4px"><a href="{{ url_for('team_overview', tid=t.id, view='all') }}">+ {{ p.agents|length - 5 }} more agents</a></div>{% endif %}
       </div>
-      <div>
+      <div class="osect">
         <div class="osec">Agent roles</div>
         <div class="split">{% for s in p.role_split if s.share %}<i class="r-{{ s.role }}" style="width:{{ (s.share * 100)|round(1) }}%" title="{{ s.role }} {{ pct(s.share) }}"></i>{% endfor %}</div>
-        <div class="legend">{% for s in p.role_split if s.share %}<span><b class="r-{{ s.role }}"></b>{{ s.role }} {{ pct(s.share) }}</span>{% endfor %}</div>
+        <div class="legend4">{% for r in ['Duelist', 'Initiator', 'Controller', 'Sentinel'] %}{% set sp = (p.role_split or [])|selectattr('role', 'equalto', r)|first %}{% set v = sp.share if sp else 0 %}
+          <span class="{{ 'zero' if not v }}"><span><b class="r-{{ r }}"></b>{{ r }}</span><em>{{ pct(v) }}</em></span>{% endfor %}</div>
       </div>
-      <div>
+      <div class="osect">
         <div class="osec">Playstyle</div>
-        {% if p.style.labels %}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">{% for l in p.style.labels %}<span class="chip style" tabindex="0" data-tip="{{ l.why }} · {{ l.confidence }}, {{ l.rounds }} rounds">{{ l.label }}{% if l.confidence == 'early sign' %}<span class="early" aria-label="early sign">*</span>{% endif %}</span>{% endfor %}</div>
-        {% elif not p.style.full_games %}<div class="muted small" style="margin-bottom:6px">Needs games with round data for the playstyle.</div>{% endif %}
+        <div class="oline">{% if p.style.labels %}{% for l in p.style.labels[:2] %}<span class="chip style" tabindex="0" data-tip="{{ l.why }} · {{ l.confidence }}, {{ l.rounds }} rounds">{{ l.label }}{% if l.confidence == 'early sign' %}<span class="early" aria-label="early sign">*</span>{% endif %}</span>{% endfor %}
+          {% if p.style.labels|length > 2 %}<span class="chip more" tabindex="0" data-tip="{% for l in p.style.labels[2:] %}{{ l.label }}{{ ', ' if not loop.last }}{% endfor %}">+{{ p.style.labels|length - 2 }}</span>{% endif %}
+          {% elif not p.style.full_games %}<span class="oempty">Needs games with round data.</span>{% else %}<span class="oempty">no clear label yet</span>{% endif %}</div>
         <div class="dims">
           {% for k, lbl in (('opening', 'Opening duels'), ('kills', 'Kills'), ('assists', 'Assists'), ('survive', 'Survival')) %}
           <span>{{ lbl }}</span><span class="dbar"><i style="width:{{ ((p.style.dims[k] or 0) * 100)|round(1) }}%"></i></span><span class="muted small">{{ pct(p.style.dims[k] or 0) }}</span>
           {% endfor %}
         </div>
-        {% if p.pro %}<div class="small muted" style="margin-top:2px">Plays most like {{ p.pro }}</div>{% endif %}
+        <div class="small muted" style="margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{% if p.pro %}Plays most like {{ p.pro }}{% else %}&nbsp;{% endif %}</div>
       </div>
-      {% if p.thrives or p.struggles %}<div>
+      <div class="osect">
         <div class="osec">Thrives in</div>
-        <div class="sit">{% for s in p.thrives %}<div><span class="up">▲</span> <b>{{ s.label|capitalize }}</b> <span class="t">{{ s.text }}</span> <span class="conf {{ 'early' if s.confidence == 'early sign' }}">{{ s.confidence }}</span></div>{% else %}<div class="muted small">nothing stands out yet</div>{% endfor %}</div>
-        {% if p.struggles %}<div class="osec" style="margin-top:8px">Struggles in</div>
-        <div class="sit">{% for s in p.struggles %}<div><span class="down">▼</span> <b>{{ s.label|capitalize }}</b> <span class="t">{{ s.text }}</span> <span class="conf {{ 'early' if s.confidence == 'early sign' }}">{{ s.confidence }}</span></div>{% endfor %}</div>{% endif %}
-      </div>{% endif %}
-      {% if p.best_maps %}<div>
+        <div class="sit">{% for s in p.thrives or [] %}<div><span class="up">▲</span> <b>{{ s.label|capitalize }}</b> <span class="t">{{ s.text }}</span> <span class="conf {{ 'early' if s.confidence == 'early sign' }}">{{ s.confidence }}</span></div>{% else %}<div class="oempty">nothing stands out yet</div>{% endfor %}</div>
+      </div>
+      <div class="osect">
+        <div class="osec">Struggles in</div>
+        <div class="sit">{% for s in p.struggles or [] %}<div><span class="down">▼</span> <b>{{ s.label|capitalize }}</b> <span class="t">{{ s.text }}</span> <span class="conf {{ 'early' if s.confidence == 'early sign' }}">{{ s.confidence }}</span></div>{% else %}<div class="oempty">nothing stands out yet</div>{% endfor %}</div>
+      </div>
+      <div class="osect">
         <div class="osec">Best maps</div>
-        <div class="small">{% for m in p.best_maps %}<b>{{ m.map }}</b> <span class="{{ wrc(m.wr) }}">{{ pct(m.wr) }}</span> <span class="muted">({{ m.games }})</span>{{ ' · ' if not loop.last }}{% endfor %}</div>
-      </div>{% endif %}
+        <div class="small">{% for m in p.best_maps or [] %}<b>{{ m.map }}</b> <span class="{{ wrc(m.wr) }}">{{ pct(m.wr) }}</span> <span class="muted">({{ m.games }})</span>{{ ' · ' if not loop.last }}{% else %}<span class="oempty">not enough games per map yet</span>{% endfor %}</div>
+      </div>
       {% endif %}
     </div>
     {% endfor %}

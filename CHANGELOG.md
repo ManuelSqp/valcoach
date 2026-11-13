@@ -4,6 +4,14 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.41.0
+- **Player overview easier to compare**: the lineup cards now line up section by section, every *Agent roles*,
+  *Playstyle*, *Thrives in* … starts on the same line in every card of a row, whatever is above it. The agent-role
+  legend always shows all four roles in the same places (0 % faded), the playstyle chips fit on one line (two, then
+  "+N" with the rest on hover), *Struggles in* and *Best maps* are always there ("nothing stands out yet"), name and
+  numbers each on one line, and the playstyle bars all have the same length.
+- German texts.
+
 ## 4.40.0
 - **Replay files page** (*Performance › Matches › Replay files*, or *Upload replays* on the matches page): upload
   replay files of any match without starting a coaching run. Several at once (pick them or drag them in), one after
