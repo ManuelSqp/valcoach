@@ -319,11 +319,13 @@ def _num(v, lo: float, hi: float, digits: int = 2) -> float | None:
     return round(float(v), digits)
 
 
-def clean_run(d: dict) -> dict | None:
-    """One finished run as the page sends it -> what's stored, or None if it doesn't add up."""
-    if not isinstance(d, dict) or d.get("scenario") not in SCENARIOS:
+def clean_run(d: dict, extra: dict | None = None) -> dict | None:
+    """One finished run as the page sends it -> what's stored, or None if it doesn't add up. extra: the player's
+    sandbox scenarios (id -> {kind, ...}), which count like the built-in ones."""
+    known = dict(SCENARIOS, **(extra or {}))
+    if not isinstance(d, dict) or d.get("scenario") not in known:
         return None
-    sc = SCENARIOS[d["scenario"]]
+    sc = known[d["scenario"]]
     seconds = _num(d.get("seconds"), 10, 600, 1)
     score = _num(d.get("score"), 0, 100000, 0)
     if seconds is None or score is None:
@@ -368,15 +370,17 @@ def add_run(data: dict, run: dict) -> dict:
     return {"best_before": max(before) if before else None, "is_best": not before or run["score"] > max(before)}
 
 
-def summary(runs: list[dict]) -> list[dict]:
-    """Per scenario (in the scenarios' order): runs, best, last, recent scores, trend, steady at best."""
+def summary(runs: list[dict], extra: dict | None = None) -> list[dict]:
+    """Per scenario (in the scenarios' order, then the sandbox ones in extra): runs, best, last, recent scores, trend,
+    steady at best."""
     runs = [r for r in runs if not r.get("k")]       # skill-session rounds made harder or easier don't set bests
     by = {x["name"]: x for x in kv.summary(runs)}
     out = []
-    for sid, sc in SCENARIOS.items():
+    for sid, sc in dict(SCENARIOS, **(extra or {})).items():
         x = by.get(sid)
         acc = [r["acc"] for r in runs if r["s"] == sid and "acc" in r][-10:]
-        out.append({"id": sid, "name": sc["name"], "focus": sc["focus"], "group": sc["group"], "runs": x["runs"] if x else 0,
+        out.append({"id": sid, "name": sc["name"], "focus": sc.get("focus", []), "group": sc.get("group", "sandbox"),
+                    "runs": x["runs"] if x else 0,
                     "best": x["best"] if x else None, "last": x["last"] if x else None,
                     "spark": x["spark"] if x else [], "trend": x["trend"] if x else None,
                     "steady": bool(x and x["mastered"]), "last_day": x["last_day"] if x else None,
@@ -720,23 +724,29 @@ def skill_of(sid: str) -> list[str]:
     return [k for k, v in SKILLS.items() if sid in v["ladder"]]
 
 
-def plan_skill(skill: str, minutes: int, runs: list[dict]) -> dict:
+def plan_skill(skill: str, minutes: int, runs: list[dict], extra: dict | None = None) -> dict:
     """A session for one skill: a warm-up round on the easiest, then up the ladder from the first scenario you aren't
     steady at yet, two rounds each (40 s, and every round adapts). -> a plan like plan()'s, kind "skill:<id>"."""
     sk = SKILLS[skill]
     ladder = [s for s in sk["ladder"] if s in SCENARIOS]
-    steady = {x["id"] for x in summary(runs) if x["steady"]}
+    names = {k: v["name"] for k, v in SCENARIOS.items()}
+    for cid, c in (extra or {}).items():             # your sandbox scenarios for this skill join at their level
+        if c.get("skill") == skill:
+            at = max((i + 1 for i, s in enumerate(ladder) if SCENARIOS[s]["level"] <= c.get("level", 2)), default=0)
+            ladder.insert(at, cid)
+            names[cid] = c["name"]
+    steady = {x["id"] for x in summary(runs, extra) if x["steady"]}
     played = {r["s"] for r in runs}
     start = next((i for i, s in enumerate(ladder) if s not in steady), len(ladder) - 1)
     start = max(0, min(start, len(ladder) - 2))
     if ladder[start] not in played and start > 0 and ladder[start - 1] not in played:
         start = 0
-    items = [{"id": ladder[0], "name": SCENARIOS[ladder[0]]["name"], "seconds": 30, "why": "warm-up"}] if start else []
+    items = [{"id": ladder[0], "name": names[ladder[0]], "seconds": 30, "why": "warm-up"}] if start else []
     budget, i = minutes * 60 - (35 if start else 0), start
     while budget >= 2 * (ROUND_S + 5):
         sid = ladder[i % len(ladder)]
         for _ in range(2):
-            items.append({"id": sid, "name": SCENARIOS[sid]["name"], "seconds": ROUND_S, "why": sk["name"].lower()})
+            items.append({"id": sid, "name": names[sid], "seconds": ROUND_S, "why": sk["name"].lower()})
         budget -= 2 * (ROUND_S + 5)
         i += 1
         if i >= len(ladder):                     # past the hardest: from the middle up again
@@ -760,19 +770,20 @@ def _run_value(r: dict) -> float | None:
             v *= min(1.0, 450 / r["ms"]) ** 0.5
     else:
         return None
-    lvl = SCENARIOS.get(r["s"], {}).get("level", 2)
+    lvl = SCENARIOS.get(r["s"], {}).get("level", 2) if r["s"] in SCENARIOS else 2
     v *= {1: 0.85, 2: 1.0, 3: 1.15}[lvl]
     if r.get("k"):
         v *= (1 / r["k"][0]) ** 0.5 * r["k"][1] ** 0.5
     return v
 
 
-def skill_ratings(runs: list[dict]) -> dict[str, dict]:
+def skill_ratings(runs: list[dict], extra: dict | None = None) -> dict[str, dict]:
     """Per skill: a rating 0–100 from your last 12 runs of its scenarios (accuracy, time on target, speed, how hard
     the scenario and the round were), and one value per day for the last 30 days. It compares you with yourself."""
     out = {}
     for k, sk in SKILLS.items():
-        rs = [r for r in runs if r["s"] in sk["ladder"]]
+        mine = {cid for cid, c in (extra or {}).items() if c.get("skill") == k}
+        rs = [r for r in runs if r["s"] in sk["ladder"] or r["s"] in mine]
         vals = [(r, v) for r in rs if (v := _run_value(r)) is not None]
         last = [v for _, v in vals[-12:]]
         days: dict[str, list] = {}

@@ -4,6 +4,17 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.33.0
+- **Sandbox** (bottom of the aim trainer page): make your own scenarios from the trainer's 14 building blocks (flicks,
+  targets that vanish, several on a wall, spider, bursts, moving targets, pop-ups, one taps, strafe tracking, path
+  tracking, around you, switch tracking, peeks, hold the angle). Sliders and switches for every setting, *Try it*
+  before saving, save for yourself or a team, change or remove your own (the team owner can remove the team's).
+- Share a scenario as a code (`NX1-…`); pasting one adds the same scenario. Only settings are stored, never code, and
+  the server checks every value against its range.
+- Your scenarios keep scores like the built-in ones, and tagged with a skill they join that skill's sessions (at their
+  difficulty) and its rating.
+- German texts.
+
 ## 4.32.0
 - **Train one skill** (aim trainer): pick tracking, snappy flicks, one taps, micro-adjusting, target switching,
   reaction or peeks and angles, and 10, 20 or 30 minutes. A session walks up that skill's ladder of scenarios (easy to

@@ -1,3 +1,3 @@
 """Nexus v2 - match-data-first Valorant coach."""
 
-__version__ = "4.32.0"
+__version__ = "4.33.0"

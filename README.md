@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.32.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.33.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -203,6 +203,13 @@ hard; a session starts at the first one you aren't steady at yet, plays two 40 s
 (targets smaller and faster when it goes well, bigger and slower when it doesn't). A rating per skill (0–100, from
 your last 12 runs of it, with a chart by day) compares you with yourself. *One taps* are new scenarios where only
 the first shot counts: a miss and the target is gone.
+
+**Sandbox:** at the bottom of the trainer page, make your own scenarios from the same building blocks as the library
+(flicks, targets that vanish, several on a wall, spider, bursts, moving targets, pop-ups, one taps, strafe and path
+tracking, around you, switch tracking, peeks, hold the angle). Pick a type, set its numbers with sliders and switches,
+try it, save it for yourself or one of your teams. Tagged with a skill, it joins that skill's sessions. Share one as a
+code (`NX1-…`): pasting it adds the same scenario. Only numbers are saved, never code, and the server checks every
+value.
 
 **Map angles:** above the trainer's library, pick a map and where you stand (holding a site and facing its main, or
 coming out of main facing the site). Enemy models peek from the callouts in front of you, at their real direction and

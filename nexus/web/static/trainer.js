@@ -1094,6 +1094,14 @@
     hit(st, tg) { st.seg.h.hit(st, tg); },
   };
   for (const [id, sc] of Object.entries(SC)) if (!byId[id]) byId[id] = {id, name: id, kind: sc.kind, seconds: 45, about: ''};
+  // 4.33: sandbox scenarios: {id, name, kind, seconds, builder, o} -> a handler made by the same builders
+  function addCustom(c) {
+    if (!c || !BUILD[c.builder]) return false;
+    custom[c.id] = Object.assign(BUILD[c.builder](Object.assign({}, c.o)), {_b: c.builder, _o: Object.assign({}, c.o)});
+    byId[c.id] = {id: c.id, name: c.name, kind: c.kind, seconds: c.seconds, about: c.about || '', group: 'sandbox'};
+    return true;
+  }
+  for (const c of (C.sandbox && C.sandbox.items) || []) addCustom(c);
 
   // ------------------------------------------------------------------ what Aim insights needs from each run
   // Compact sums, no raw samples (stats/trainer.py clean_detail checks the shape):
@@ -1215,11 +1223,11 @@
   function newRun(id) {
     const sc = byId[id], seconds = plan ? plan.items[plan.i].seconds : finder ? finder.mode.secs : sc.seconds;
     firing = false;
-    st = {id, kind: SC[id].kind || sc.kind, seconds, t: 0, phase: 'ready', targets: [], covers: null, hits: 0, shots: 0,
+    st = {id, kind: (custom[id] || SC[id]).kind || sc.kind, seconds, t: 0, phase: 'ready', targets: [], covers: null, hits: 0, shots: 0,
           points: 0, times: [], lastHit: 0, on: 0, stalls: [], ix: finder ? null : ixNew(), from: {y: 0, p: 0}};
     yaw = 0; pitch = 0;
     if (finder) st.segs = finder.mode.segs;
-    if (plan && plan.adaptive) { st.k = Object.assign({}, plan.k); st.h = scaled(SC[id], st.k); }   // a skill session
+    if (plan && plan.adaptive) { st.k = Object.assign({}, plan.k); st.h = scaled(custom[id] || SC[id], st.k); }   // a skill session
     else if (custom[id]) st.h = custom[id];                                                       // a sandbox scenario
     (st.h || SC[id]).setup(st);
   }
@@ -1721,5 +1729,5 @@
     $('tr-ang-play').addEventListener('click', () => { choose(); open('map_angles'); });
     fill();
   })();
-  window.nexusTrainer = {open, startFinder, xParse, xCode, crosshair: () => xh, finder: () => finder, state: () => st, aim: (y, p) => { yaw = y; pitch = p; }, shoot, score, step};   // for tests
+  window.nexusTrainer = {addCustom, play: id => { plan = null; open(id); }, open, startFinder, xParse, xCode, crosshair: () => xh, finder: () => finder, state: () => st, aim: (y, p) => { yaw = y; pitch = p; }, shoot, score, step};   // for tests
 })();
