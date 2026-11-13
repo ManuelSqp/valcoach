@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% import "_ui.html" as vc %}
+{% block title %}Today · {{ p.riot_id }} · Nexus{% endblock %}
+{% block head %}<style>
+.td{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:16px}
+.td .card{margin:0;display:flex;flex-direction:column;gap:8px}
+.td .card h2{margin:0}
+.td .big{font-family:var(--font-head);font-size:clamp(22px,2.6vw,30px);font-weight:850;font-stretch:72%;line-height:1.05}
+.td .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:4px}
+.td .done{font-size:13px;font-weight:700;color:var(--win);background:var(--win-soft);padding:3px 10px;border-radius:99px;align-self:flex-start}
+.td .card.first{border-color:var(--accent)}
+.tools{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.tool{display:block;text-decoration:none;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.tool:hover{border-color:var(--accent)}
+.tool b{display:block;font-size:15px}.tool span{font-size:12.5px;color:var(--muted)}
+.wkline{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13.5px}
+.wkline .up{color:var(--win);font-weight:650}.wkline .down{color:var(--red);font-weight:650}
+</style>{% endblock %}
+{% block content %}
+{{ vc.pagehead('Today', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+   'What to practise today, in order') }}
+
+<div class="td">
+  <section class="card {{ 'first' if not warm.done }}">
+    <div class="small muted">1 · <span>Warm up</span></div>
+    {% if warm.warm %}
+    <div class="big">{{ warm.warm.name }}</div>
+    <div class="small muted">{{ warm.warm.minutes }} min</div>
+    <div class="btns">{% if warm.done %}<span class="done">Done today</span>{% endif %}
+      {% if warm.warm.kind == 'trainer' %}<a class="btn {{ 'primary' if not warm.done }}" href="{{ warm.warm.url }}">Open the trainer</a>
+      {% elif warm.warm.kind in ('aimlabs', 'link') and warm.warm.url %}<a class="btn {{ 'primary' if not warm.done }}" href="{{ warm.warm.url }}" target="_blank" rel="noopener noreferrer nofollow">Open</a>{% endif %}
+      <a class="btn ghost" href="{{ url_for('aim', pid=p.id) }}#warmup">Warm-up & routines</a></div>
+    {% else %}<p class="small muted" style="margin:0">No warm-up yet.</p>
+    <div class="btns"><a class="btn" href="{{ url_for('trainer', pid=p.id, plan='warmup') }}">Trainer warm-up</a></div>{% endif %}
+  </section>
+
+  {% for x in prep %}
+  <section class="card {{ 'first' if warm.done and loop.first }}">
+    <div class="small muted">2 · {% if x.week %}<span>This week's Premier map</span>{% else %}<span>First map in the team's pool</span>{% endif %} · <span translate="no">{{ x.team }}</span></div>
+    <div class="big"><span>Map prep:</span> <span translate="no">{{ x.map }}</span></div>
+    <div class="small muted">About 10 minutes: one taps, every spot of the map, your weakest skill, the callouts quiz.</div>
+    <div class="btns"><a class="btn primary" href="{{ x.url }}">Start map prep</a><a class="btn ghost" href="{{ url_for('callouts', pid=p.id, map=x.map) }}">Callouts</a></div>
+  </section>
+  {% endfor %}
+
+  <section class="card">
+    <div class="small muted">{{ 3 if prep else 2 }} · <span>Train a skill</span></div>
+    {% if week.next %}
+    <div class="big">{{ week.next.name }}</div>
+    <div class="small muted">{% if week.next.why == 'dropped' %}It went down this week.{% elif week.next.why == 'weakest' %}Your weakest skill right now.{% else %}You haven't tried it yet.{% endif %}</div>
+    <div class="btns"><a class="btn" href="{{ url_for('trainer', pid=p.id, plan='skill_' ~ week.next.id ~ '_20') }}#tr-skills">20 minutes</a>
+      <a class="btn ghost" href="{{ url_for('trainer', pid=p.id, plan='skill_' ~ week.next.id ~ '_10') }}#tr-skills">10 minutes</a></div>
+    {% else %}<p class="small muted" style="margin:0">Play a few rounds in the aim trainer: then this says which skill needs it most.</p>
+    <div class="btns"><a class="btn" href="{{ url_for('trainer', pid=p.id) }}#tr-skills">Aim trainer</a></div>{% endif %}
+  </section>
+
+  {% if quiz_n %}
+  <section class="card">
+    <div class="small muted">{{ 4 if prep else 3 }} · <span>Quiz</span></div>
+    <div class="big">{{ quiz_n }} questions waiting</div>
+    <div class="small muted">Decisions from your own rounds.</div>
+    <div class="btns"><a class="btn" href="{{ url_for('quiz', pid=p.id) }}">Play the quiz</a></div>
+  </section>
+  {% endif %}
+
+  {% if own %}
+  <section class="card">
+    <div class="small muted">Your focus this week</div>
+    <div class="big" style="font-size:20px">{{ own.focus }}</div>
+    {% if own.why %}<div class="small muted">{{ own.why }}</div>{% endif %}
+    <div class="btns"><a class="btn ghost" href="{{ url_for('training', pid=p.id) }}">Training</a></div>
+  </section>
+  {% endif %}
+</div>
+
+<section class="card">
+  <h2>This week</h2>
+  <div class="wkline">{% if week.runs %}<span>{{ week.runs }} run{{ 's' if week.runs != 1 }} · {{ week.minutes }} min · {{ week.days }} day{{ 's' if week.days != 1 }}</span>{% else %}<span class="muted">Nothing in the aim trainer yet this week.</span>{% endif %}
+    {% for s in week.skills if s.change %}<span><span>{{ s.name }}</span> <span class="{{ 'up' if s.change > 0 else 'down' }}">{{ '%+d'|format(s.change) }}</span></span>{% endfor %}</div>
+</section>
+
+<h2 style="margin:22px 0 10px">Everything else</h2>
+<div class="tools">{% for e, name, sub in tools %}<a class="tool" href="{{ url_for(e, pid=p.id) }}"><b>{{ name }}</b><span>{{ sub }}</span></a>{% endfor %}</div>
+{% endblock %}

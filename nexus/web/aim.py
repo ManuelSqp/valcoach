@@ -117,6 +117,12 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         played = "k-warmup" if pdata.get("kovaaks") and kv.WEB else ("t-warmup" if trainer_played(pid) else None)
         return am.warmup_for(lib, pdata.get("warmup"), tw or played)
 
+    def today_warmup(pid: int, uid: int) -> dict:
+        """For the Today page (4.38): your warm-up and whether it's done today."""
+        w = warmup_of(pid, uid)
+        return {"warm": w, "done": bool(w and done_today(pid, w["id"]))}
+    app.extensions["nexus"]["aim_today"] = today_warmup
+
     def trainer_played(pid: int) -> bool:
         return bool(_read(player_path(pid).with_name("trainer.json"), {}).get("runs"))
 

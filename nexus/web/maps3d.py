@@ -60,6 +60,18 @@ def register(app, store, sr, view_profile, known_maps: list[str]) -> None:
             f.write_text(json.dumps(d, separators=(",", ":")))
         return d
 
+    warmed: dict[str, list[str]] = {}
+
+    def warm() -> None:
+        """Every 5 minutes (the scheduler): rebuild a map whose replays changed, so the page doesn't wait for it
+        (a few seconds per map with several full replays)."""
+        for name, ids in m3.replays_by_map(replays_dir, map_of).items():
+            if warmed.get(name) != sorted(ids):
+                built(name, ids)
+                warmed[name] = sorted(ids)
+    app.extensions["nexus"].setdefault("ticks", []).append(warm)
+    app.extensions["nexus"]["maps3d_warm"] = warm          # for tests
+
     @app.get("/profiles/<int:pid>/maps3d")
     def maps3d(pid: int):
         p, can_edit = view_profile(pid)

@@ -98,6 +98,8 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
     uploads = Uploads(store.data_dir / "tmp")
 
     app = Flask(__name__)
+    from .speed import install as install_speed
+    install_speed(app)                                       # gzip + caching; first, so it runs after every other hook
     app.secret_key = store.get("secret_key")
     app.config.update(
         MAX_CONTENT_LENGTH=MAX_REQUEST_BYTES,  # VODs come in chunks (uploads.py)
@@ -633,14 +635,19 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             seen.add(p.id)
             add("player", p.riot_id, url_for("stats", pid=p.id), "stats & maps")
             for ep, lbl in (("agents_roles", "agents & roles"), ("rounds_page", "rounds & economy"), ("teammates_page", "teammates"), ("habits", "habits"), ("aim", "aim & warm-up"), ("ask_coach", "ask the coach"), ("progress", "rank & progress"), ("training", "training"),
-                            ("quiz", "quiz"), ("pros", "pros & videos"), ("profile", "matches & reports")):
+                            ("quiz", "quiz"), ("pros", "pros & videos"), ("profile", "matches & reports"), ("today", "today"),
+                            ("trainer", "aim trainer"), ("aim_insights", "aim insights"), ("gear_check", "mouse & monitor"),
+                            ("callouts", "callouts"), ("maps3d", "3d maps"), ("sound_trainer", "sound")):
+                if ep not in app.view_functions:
+                    continue
                 add("player", f"{p.name} · {lbl}", url_for(ep, pid=p.id))
         for t in store.teams_for_user(g.user.id):
             tabs = [("team", "comps"), ("team_sheet", "comp sheet"), ("team_premier", "this week"), ("team_availability", "availability"), ("team_brief", "match-day brief"),
                     ("team_division", "opponents"), ("team_replay_prep", "replay scouting"), ("team_economy", "team economy"), ("team_match", "match screen"), ("team_practice", "practice plan"), ("team_evening", "review evening"), ("team_drafts", "drafts"),
                     ("team_plans", "game plans"), ("team_strats", "strat book"), ("team_lineups", "lineups"),
                     ("team_focus", "weekly focus"), ("team_overview", "player overview"), ("team_roles_page", "roles"),
-                    ("team_notes", "notes")]
+                    ("team_notes", "notes"), ("team_checkin", "check-in"), ("team_scrims", "scrims"),
+                    ("team_recordings", "recordings"), ("team_aimboard", "aim board")]
             if t.owner_id == g.user.id:
                 tabs.append(("team_settings", "members, maps & discord"))
             add("team", t.name, url_for("team", tid=t.id), "comps")

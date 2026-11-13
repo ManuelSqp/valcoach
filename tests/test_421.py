@@ -73,7 +73,7 @@ def test_economy_page_and_replays_on_match_day(app, monkeypatch):  # noqa: F811 
         _wait_stats(app, f"import:{m['pid']}")
     page = c.get(f"/teams/{tid}/economy").data.decode()
     assert 'id="econ"' in page and "How your buys go" in page and "Lobbies" in page and "Buying with the team" in page
-    assert "Economy" in c.get(f"/teams/{tid}/overview").data.decode()                  # in the menu
+    assert f'href="/teams/{tid}/economy"' in c.get(f"/teams/{tid}/plans").data.decode()   # a tab of Plans & strats (4.38)
 
     # scout the division, then replay files of matches against the scouted team (Blue)
     c.post(f"/teams/{tid}/premier/scout", data={"division": "1"})

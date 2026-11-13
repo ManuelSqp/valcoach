@@ -51,6 +51,18 @@
 .ai-focus ol{margin:0;padding-left:20px;font-size:13.5px;flex:1;min-width:220px}
 .ai-more summary{cursor:pointer;color:var(--muted);font-size:13.5px;margin:2px 0 10px}
 .ai-none{background:var(--panel);border:1px dashed var(--line2);border-radius:var(--radius);padding:22px;text-align:center;margin-bottom:24px}
+.te{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:24px}
+.te-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.te-card h3{margin:0;font-size:15.5px}.te-card .te-why{font-size:12px;color:var(--muted)}
+.te-v{font-size:12.5px;font-weight:700;padding:2px 9px;border-radius:99px;align-self:flex-start;background:var(--panel3);color:var(--muted)}
+.te-v.helps{background:var(--win-soft);color:var(--win)}.te-v.worse{background:var(--red-soft,var(--panel3));color:var(--red)}
+.te-card p{margin:0;font-size:13px}
+.te-svg{width:100%;height:auto;max-width:360px}
+.te-svg *{stroke:none}.te-svg .bar{fill:var(--line2)}.te-svg .r{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round}.te-svg .r-d{fill:var(--accent)}
+.te-svg .m{fill:none;stroke:var(--win);stroke-width:2;stroke-dasharray:4 3;stroke-linejoin:round}.te-svg .m-d{fill:var(--win)}
+.te-svg text{fill:var(--muted);font-size:9.5px;font-family:var(--font)}
+.te-key{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--muted)}
+.te-key i{display:inline-block;width:12px;height:3px;margin-right:5px;vertical-align:3px}
 @media (max-width:640px){.ai-find{grid-template-columns:1fr}.ai-play{grid-row:auto;grid-column:1;flex-direction:row;flex-wrap:wrap;align-items:center}}
 </style>{% endblock %}
 {% block content %}
@@ -228,6 +240,46 @@
   {% for s in trends %}
   <div class="ai-trend"><b>{{ s.name }}</b>{{ spark(s.spark) }}
     <span>best {{ s.best|int }} · last {{ s.last|int }} · {{ s.runs }} runs</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2 id="effect">Does training help?</h2>
+<p class="ai-lead"><span>Each skill next to the number from your matches it should move, week by week.</span>
+  <span>Last {{ effect.weeks }} weeks: {{ effect.game_weeks }} with games, {{ effect.train_weeks }} with training.</span>
+  <span>Two checks: weeks you trained a skill (at least {{ te.TRAINED_RUNS }} rounds) against weeks without it, and whether
+  the rating and the match number go up and down together.</span> <span>A few weeks are noisy, and moving together isn't
+  proof that one causes the other.</span></p>
+{% set shown = effect.skills|selectattr('trained_runs')|list %}
+{% if not shown %}
+<div class="ai-none"><p class="muted" style="max-width:62ch;margin:0 auto"><span>Nothing to compare yet.</span> <span>Train a skill in the aim
+  trainer for a few weeks and keep playing matches: after {{ te.MIN_TRAINED }} weeks with training and {{ te.MIN_UNTRAINED }}
+  without (both with games) this shows whether your matches changed.</span></p></div>
+{% else %}
+<div class="te">
+  {% for s in shown %}{% set c = s.compare %}{% set t = s.together %}{% set g = s.chart %}
+  <section class="te-card" data-skill="{{ s.id }}">
+    <h3><span>{{ s.name }}</span> → <span>{{ s.metric_label }}</span></h3>
+    <div class="te-why">{{ s.why|capitalize }}</div>
+    <span class="te-v {{ s.verdict or '' }}">{% if s.verdict == 'helps' %}Looks like it helps{% elif s.verdict == 'worse' %}Weeks with training were worse{% elif s.verdict == 'no_link' %}No clear difference{% else %}Not enough data yet{% endif %}</span>
+    <svg class="te-svg" viewBox="0 0 {{ g.w }} {{ g.h }}" role="img" aria-label="{{ s.name }}">
+      {% for x, bh, bw in g.bars %}<rect class="bar" x="{{ x }}" y="{{ g.h - 12 - bh }}" width="{{ bw }}" height="{{ bh }}" rx="1"/>{% endfor %}
+      {% for part in g.rating %}<polyline class="r" points="{{ part }}"/>{% for pt in part.split(' ') %}<circle class="r-d" cx="{{ pt.split(',')[0] }}" cy="{{ pt.split(',')[1] }}" r="2.2"/>{% endfor %}{% endfor %}
+      {% for part in g.value %}<polyline class="m" points="{{ part }}"/>{% for pt in part.split(' ') %}<circle class="m-d" cx="{{ pt.split(',')[0] }}" cy="{{ pt.split(',')[1] }}" r="2.2"/>{% endfor %}{% endfor %}
+      <text x="0" y="{{ g.h - 1 }}" translate="no">{{ g.first }}</text><text x="{{ g.w }}" y="{{ g.h - 1 }}" text-anchor="end" translate="no">{{ g.last }}</text>
+    </svg>
+    <div class="te-key"><span><i style="background:var(--accent)"></i>Rating</span><span><i style="background:var(--win)"></i>{{ s.metric_label }}</span><span><i style="background:var(--line2);height:8px;vertical-align:0"></i>Rounds trained</span></div>
+    {% if c.trained_txt %}
+    <p><span>Weeks you trained it:</span> <b>{{ c.trained_txt }}</b> · <span>weeks without:</span> <b>{{ c.untrained_txt }}</b> <span class="muted">({{ c.diff_txt }})</span></p>
+    {% else %}
+    <p class="muted"><span>Weeks with training and games: {{ c.trained_weeks }} of {{ te.MIN_TRAINED }}</span> · <span>without it, with games: {{ c.untrained_weeks }} of {{ te.MIN_UNTRAINED }}</span></p>
+    {% endif %}
+    {% if t.words %}
+    <p><span>Rating vs.</span> <span>{{ s.metric_label }}</span>: <b>{{ t.words }}</b> <span class="muted">(<span>over {{ t.weeks }} weeks</span>, r = {{ '%.2f'|format(t.r) }})</span></p>
+    {% elif t.missing %}
+    <p class="muted">Moving together: {{ t.missing }} more week{{ 's' if t.missing != 1 }} with a rating and games.</p>
+    {% endif %}
+  </section>
   {% endfor %}
 </div>
 {% endif %}

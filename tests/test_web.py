@@ -2159,10 +2159,10 @@ def test_home_today_nav_and_tabs(app):
     # one menu in groups; the team and player it works on are the last ones opened
     page = c.get(f"/teams/{tid}").data.decode()
     assert "Match day" in page and "Roster &amp; setup" in page and page.index(">This week<") < page.index(">Comps<")
-    assert f'href="/teams/{tid}/strats"' in page and f'href="/profiles/{pids[1]}/stats"' in page
+    assert f'href="/teams/{tid}/plans"' in page and f'href="/profiles/{pids[1]}/stats"' in page   # 4.38: a topic opens its first page
     c.get(f"/profiles/{pids[2]}/stats")
     page = c.get("/").data.decode()
-    assert f'href="/profiles/{pids[2]}/training"' in page and "<b>P2</b>" in page
+    assert f'href="/profiles/{pids[2]}/today"' in page and "<b>P2</b>" in page
 
 
 def test_backups_and_discord_channels(app, tmp_path, monkeypatch):

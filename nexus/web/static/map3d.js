@@ -223,6 +223,7 @@
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - (last || now)) / 1000); last = now;
     if (document.pointerLockElement === canvas) step(dt);
+    else if (touch.on) step(dt, touchKeys());
     draw();
     $('m3-pos').textContent = M ? `${nearest()}${me.fly ? ' · ' + T('flying') : ''}` : '';
   }
@@ -269,6 +270,65 @@
     else if (e.code === 'KeyF') { me.fly = !me.fly; if (!me.fly) { const fl = floorAt(me.x, me.z, me.y + 50); if (fl !== null && fl <= me.y + STEP) { me.ground = false; } } }
   });
   document.addEventListener('keyup', e => keys.delete(e.code));
+  // ---------------------------------------------------------------- touch: left thumb moves, right thumb looks
+  const touch = {on: false, move: null, look: null, jump: false};
+  const DEAD = 12;
+  function touchKeys() {
+    const k = new Set();
+    if (touch.move) {
+      const {dx, dy} = touch.move;
+      if (dy < -DEAD) k.add('KeyW'); if (dy > DEAD) k.add('KeyS');
+      if (dx > DEAD) k.add('KeyD'); if (dx < -DEAD) k.add('KeyA');
+      if (Math.hypot(dx, dy) < 34) k.add('ShiftLeft');                // a short push walks
+    }
+    if (touch.jump) { k.add('Space'); touch.jump = false; }
+    return k;
+  }
+  const stick = document.createElement('div'); stick.className = 'm3-stick'; stick.hidden = true;
+  stick.innerHTML = '<i></i>'; stage.appendChild(stick);
+  function touchStart(e) {
+    if (!M) return;
+    e.preventDefault();
+    if (!touch.on) { touch.on = true; $('m3-start').hidden = true; $('m3-jump').hidden = false; }
+    const r = stage.getBoundingClientRect();
+    for (const t of e.changedTouches) {
+      const x = t.clientX - r.left, y = t.clientY - r.top;
+      if (x < r.width / 2 && !touch.move) {
+        touch.move = {id: t.identifier, x0: x, y0: y, dx: 0, dy: 0};
+        stick.hidden = false; stick.style.left = x + 'px'; stick.style.top = y + 'px'; stick.firstChild.style.transform = '';
+      } else if (!touch.look) touch.look = {id: t.identifier, x: t.clientX, y: t.clientY};
+    }
+  }
+  function touchMove(e) {
+    if (!touch.on) return;
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    for (const t of e.changedTouches) {
+      if (touch.move && t.identifier === touch.move.id) {
+        let dx = t.clientX - r.left - touch.move.x0, dy = t.clientY - r.top - touch.move.y0;
+        const l = Math.hypot(dx, dy); if (l > 42) { dx *= 42 / l; dy *= 42 / l; }
+        touch.move.dx = dx; touch.move.dy = dy; stick.firstChild.style.transform = `translate(${dx}px,${dy}px)`;
+      } else if (touch.look && t.identifier === touch.look.id) {
+        const k = 0.35 * D2R;                       // degrees per pixel dragged
+        me.yaw += (t.clientX - touch.look.x) * k;
+        me.pitch = Math.max(-1.5, Math.min(1.5, me.pitch - (t.clientY - touch.look.y) * k));
+        touch.look.x = t.clientX; touch.look.y = t.clientY;
+      }
+    }
+  }
+  function touchEnd(e) {
+    for (const t of e.changedTouches) {
+      if (touch.move && t.identifier === touch.move.id) { touch.move = null; stick.hidden = true; }
+      if (touch.look && t.identifier === touch.look.id) touch.look = null;
+    }
+  }
+  canvas.addEventListener('touchstart', touchStart, {passive: false});
+  $('m3-start').addEventListener('touchstart', touchStart, {passive: false});
+  canvas.addEventListener('touchmove', touchMove, {passive: false});
+  canvas.addEventListener('touchend', touchEnd); canvas.addEventListener('touchcancel', touchEnd);
+  $('m3-jump').addEventListener('touchstart', e => { e.preventDefault(); touch.jump = true; }, {passive: false});
+  $('m3-jump').addEventListener('click', () => { touch.jump = true; });
+  if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) stage.classList.add('touch');
   document.querySelectorAll('[data-map]').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('[data-map]').forEach(x => x.classList.toggle('on', x === b));
     load(b.dataset.map);
@@ -279,5 +339,5 @@
   $('m3-full').addEventListener('click', () => { if (stage.requestFullscreen) stage.requestFullscreen().catch(() => {}); });
   const first = document.querySelector('[data-map]:not([disabled])');
   if (first) first.click();
-  window.nexusMap3D = {state: () => ({me, opt, loaded: !!M, cells: M ? M.cells.length : 0, mesh: mesh ? mesh.n : 0}), use, step: (dt, ks) => step(dt, new Set(ks)), draw, floorAt};   // for tests
+  window.nexusMap3D = {state: () => ({me, opt, loaded: !!M, cells: M ? M.cells.length : 0, mesh: mesh ? mesh.n : 0, touch: touch.on}), use, step: (dt, ks) => step(dt, new Set(ks)), draw, floorAt, touchKeys: () => [...touchKeys()]};   // for tests
 })();

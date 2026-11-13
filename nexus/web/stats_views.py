@@ -1007,6 +1007,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     register_callouts(app, store, sr, view_profile, filter_rows, KNOWN_MAPS)
     from .sound import register as register_sound
     register_sound(app, store, sr, view_profile)
+    from .today import register as register_today
+    register_today(app, store, sr, view_profile)
     from .maps3d import register as register_maps3d
     register_maps3d(app, store, sr, view_profile, KNOWN_MAPS)
     from .askcoach import register as register_ask

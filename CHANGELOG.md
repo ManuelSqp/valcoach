@@ -4,6 +4,35 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.39.0
+- **Does training help?** (*Practice › Aim › Aim insights*): each trainer skill next to the match number it should
+  move: one taps and micro-adjusting → headshots, flicks, peeks and reaction → first duels won, target switching →
+  kills per round, tracking → K/D. Week by week for the last 12 weeks: weeks you trained the skill (3+ rounds) against
+  weeks without it, and whether the rating and the match number go up and down together. Until there are enough weeks
+  (3 trained and 2 without, both with games; 5 weeks for "together") it says how many are still missing, and it never
+  claims more than the numbers show.
+- **Faster pages**: pages, data and scripts go out gzipped (the aim trainer page: 240 KB → 31 KB, its script 106 KB →
+  33 KB), and scripts and styles of a version are cached by the browser instead of being checked on every page.
+- **3D maps on the phone**: left thumb moves, right thumb looks around, a jump button; smaller radar on small screens.
+  A map is now rebuilt in the background (every 5 minutes) when its replays change, so the page doesn't wait, and the
+  rebuild itself is faster.
+- Mobile: the scrims page showed its cards as a dark layer over the page on phones (fixed); tabs wrap onto a second
+  line on small screens instead of hiding off the edge.
+- German texts.
+
+## 4.38.0
+- **Fewer menu entries, grouped by topic.** The sidebar now lists topics, the pages of a topic are tabs at the top of
+  the page: *Match day* (This week, Opponents), *Strategy* (Comps, Plans & strats), *Performance* (Matches, Stats),
+  *Practice* (Today, Aim, Game sense, Ask the coach), *Team practice* (Practice, Review: review evening, recordings,
+  scrims) and *Roster & setup* (Team, Player & playbook). Tabs you can't open (team settings for a non-owner) aren't
+  shown. The player picker keeps you on the same page for the other player.
+- **Today** (*Practice › Today*): what to practise today, in order: the warm-up (marked done once you played it),
+  map prep for this week's Premier map of each of your teams, the skill to train next (20 or 10 minutes), waiting quiz
+  questions, your focus of the week, this week's numbers, and links to the other tools.
+- Ctrl+K also finds Today, the aim trainer, aim insights, mouse & monitor, callouts, 3D maps, sound, check-in, scrims,
+  recordings and the aim board.
+- German texts.
+
 ## 4.37.0
 - **This week in the aim trainer** (Aim page): runs, minutes and days this week, every skill rating with its change
   since last week, new bests, and what to train next (a skill that went down, else your weakest) with a button that
