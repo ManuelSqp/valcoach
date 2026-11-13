@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.37.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.38.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -126,10 +126,11 @@ Then in the browser:
 ### Finding your way
 
 One menu on the left (☰ on a phone). At the top you pick the **team** and the **player** it works on; opening a team
-or player page picks it for you. Below: *Match day* (This week, Availability, Match-day brief, Opponents, Replay scouting),
-*Strategy* (Comps, Drafts, Game plans, Strat book, Lineups), *Performance* (Matches & reports, Stats & maps,
-Agents & roles, Rounds & economy, Teammates, Rank & progress), *Practice* (Training, Habits, Aim, Ask the coach, Practice plan, Review evening, Weekly focus, Quiz, Pros & videos) and *Roster & setup* (Roles, Team notes,
-Player & playbook, Team settings). Ctrl+K searches everything. *Home* shows what's up today. The look (10 styles,
+or player page picks it for you. Below, each entry is a topic; its pages are tabs at the top of the page:
+*Match day* (This week, Opponents), *Strategy* (Comps, Plans & strats), *Performance* (Matches, Stats), *Practice*
+(Today, Aim, Game sense, Ask the coach), *Team practice* (Practice, Review) and *Roster & setup* (Team, Player &
+playbook). **Today** is the player's practice for the day in order: warm-up, map prep for this week's map, a skill to
+train, the quiz, and this week's focus. Ctrl+K searches everything. *Home* shows what's up today. The look (10 styles,
 light or dark, menu on the left or at the top, centred or full width) is under Account.
 
 **Deutsch / English:** every user picks the interface language under Account › Look & feel (the login page

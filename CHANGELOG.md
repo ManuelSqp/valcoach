@@ -4,6 +4,19 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.38.0
+- **Fewer menu entries, grouped by topic.** The sidebar now lists topics, the pages of a topic are tabs at the top of
+  the page: *Match day* (This week, Opponents), *Strategy* (Comps, Plans & strats), *Performance* (Matches, Stats),
+  *Practice* (Today, Aim, Game sense, Ask the coach), *Team practice* (Practice, Review: review evening, recordings,
+  scrims) and *Roster & setup* (Team, Player & playbook). Tabs you can't open (team settings for a non-owner) aren't
+  shown. The player picker keeps you on the same page for the other player.
+- **Today** (*Practice › Today*): what to practise today, in order: the warm-up (marked done once you played it),
+  map prep for this week's Premier map of each of your teams, the skill to train next (20 or 10 minutes), waiting quiz
+  questions, your focus of the week, this week's numbers, and links to the other tools.
+- Ctrl+K also finds Today, the aim trainer, aim insights, mouse & monitor, callouts, 3D maps, sound, check-in, scrims,
+  recordings and the aim board.
+- German texts.
+
 ## 4.37.0
 - **This week in the aim trainer** (Aim page): runs, minutes and days this week, every skill rating with its change
   since last week, new bests, and what to train next (a skill that went down, else your weakest) with a button that
