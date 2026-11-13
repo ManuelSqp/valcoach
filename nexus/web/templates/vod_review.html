@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Review {{ j.map }} · Nexus{% endblock %}
+{% block head %}<style>
+.vr{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media(max-width:1100px){.vr{grid-template-columns:1fr}}
+.vr-stage{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}
+.vr-stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+.vr-stage canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.vr-stage.draw canvas{cursor:crosshair}
+.vr-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.vr-ctl .time{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:14px;min-width:110px}
+.vr-ctl select{width:auto}
+.vr-tl{position:relative;height:38px;margin-top:10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;cursor:pointer;user-select:none}
+.vr-tl .pos{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);pointer-events:none}
+.vr-tl .rd{position:absolute;top:0;height:14px;border-left:1px solid var(--line2);font-size:10px;color:var(--faint);padding-left:2px;pointer-events:none}
+.vr-tl .rd.w{color:var(--win)}.vr-tl .rd.l{color:var(--red)}
+.vr-tl .nt{position:absolute;bottom:4px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--accent);border:2px solid var(--panel);pointer-events:none}
+.vr-tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}
+.vr-tools button.tool{font:inherit;font-size:13px;padding:5px 11px;border-radius:99px;border:1px solid var(--line2);background:transparent;color:var(--muted);cursor:pointer}
+.vr-tools button.tool.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:650}
+.vr-tools .col{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.vr-tools .col.on{border-color:var(--text)}
+.vr-add{display:flex;gap:8px;margin-top:10px}
+.vr-add input{flex:1}
+.vr-notes{display:grid;gap:8px;max-height:calc(100vh - 160px);overflow:auto}
+.vr-note{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;cursor:pointer}
+.vr-note.on{border-color:var(--accent)}
+.vr-note .h{display:flex;gap:8px;align-items:baseline;font-size:12.5px;color:var(--muted)}
+.vr-note .h b{font-family:var(--font-num);color:var(--accent);font-size:14px}
+.vr-note p{margin:4px 0 0;font-size:14px;white-space:pre-wrap}
+.vr-note .del{margin-left:auto;background:none;border:0;color:var(--faint);cursor:pointer;font-size:15px}
+.vr-note .del:hover{color:var(--red)}
+.vr-note .dr{font-size:12px;color:var(--muted)}
+.kb{font-size:12px;color:var(--muted)}
+.kb kbd{font-size:11px;padding:0 4px;border:1px solid var(--line2);border-radius:4px}
+</style>{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div>{% if p %}<div class="crumbs"><a href="{{ url_for('index') }}#players">Players</a> / <a href="{{ url_for('profile', pid=p.id) }}" translate="no">{{ p.name }}#{{ p.tag }}</a></div>{% endif %}
+    <h1>Review: <span translate="no">{{ j.map or 'match' }}</span>{% if j.score %} {{ j.score }}{% endif %}</h1>
+    <div class="ctx">Pause, draw on the frame and comment: everyone in the team sees it at that moment of the video.</div></div>
+  {% if owner and j.status == 'done' %}<div class="acts"><a class="btn sm ghost" href="{{ url_for('job_report', jid=j.id) }}" target="_blank">Open report</a></div>{% endif %}
+</div>
+<div class="vr">
+  <div>
+    <div class="vr-stage" id="vr-stage"><video id="vr-video" preload="metadata" playsinline></video><canvas id="vr-canvas"></canvas></div>
+    <div class="vr-ctl">
+      <button type="button" class="btn sm primary" id="vr-play">Play</button>
+      <button type="button" class="btn sm ghost" data-skip="-5" title="5 s back">−5 s</button>
+      <button type="button" class="btn sm ghost" data-skip="-0.0333" title="One frame back">‹</button>
+      <button type="button" class="btn sm ghost" data-skip="0.0333" title="One frame on">›</button>
+      <button type="button" class="btn sm ghost" data-skip="5" title="5 s on">+5 s</button>
+      <span class="time" id="vr-time">0:00 / 0:00</span>
+      <select id="vr-rate" aria-label="Speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
+      <select id="vr-round" aria-label="Round" hidden><option value="">Jump to a round</option></select>
+    </div>
+    <div class="vr-tl" id="vr-tl" title="Click to jump"><div class="pos" id="vr-pos"></div></div>
+    <div class="vr-tools">
+      <button type="button" class="tool on" data-k="pen">Pen</button>
+      <button type="button" class="tool" data-k="arrow">Arrow</button>
+      <button type="button" class="tool" data-k="circle">Circle</button>
+      <span id="vr-cols"></span>
+      <button type="button" class="btn sm ghost" id="vr-undo">Undo</button>
+      <button type="button" class="btn sm ghost" id="vr-clear">Clear</button>
+    </div>
+    <div class="vr-add"><input type="text" id="vr-text" maxlength="600" placeholder="What should happen here? (drawing pauses the video)" aria-label="Comment">
+      <button type="button" class="btn primary" id="vr-save">Comment at <span id="vr-at">0:00</span></button></div>
+    <p class="kb" style="margin-top:8px"><kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> 5 s · <kbd>,</kbd><kbd>.</kbd> one frame · <kbd>Enter</kbd> in the box: comment</p>
+  </div>
+  <section class="card" style="margin:0">
+    <h2>Comments <span class="muted" id="vr-count" style="font-weight:400"></span></h2>
+    <div class="vr-notes" id="vr-notes"></div>
+  </section>
+</div>
+<script>window.NEXUS_VR = {{ boot|safe }};</script>
+<script src="{{ url_for('static', filename='vodreview.js') }}?v={{ app_version }}"></script>
+{% endblock %}

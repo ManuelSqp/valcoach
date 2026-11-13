@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.30.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.31.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -218,6 +218,13 @@ started on and the first half if you have them, what went well and what didn't (
 trades or pistols). Over all scrims: the record, rounds won per map and per opponent, the last ten results, rounds won
 per side, and the topics that keep coming up as problems or keep working. Everyone in the team adds scrims; whoever
 wrote one and the team owner can change or remove it.
+
+**VOD review:** a match recording a coaching report was made with (uploaded, or cut from Medal by the Nexus app) can
+be watched together: *Review the recording together* on the report's page, or *Team › Practice › Recordings* for all
+of the team's. Pause, draw on the frame (pen, arrow, circle, five colours) and comment at that moment; the drawing
+shows at its time in the video, the timeline marks the rounds (won or lost) and the comments, and new comments from
+teammates come in while you watch. Everyone in a team with that player can watch and comment; whoever wrote a comment
+and the report's owner can remove it.
 
 **Ask the coach:** *Practice › Ask the coach* is a chat with the coach about one player. It knows the player's stats,
 habits, aim and KovaaK's scores and remembers the conversation (per user and player).

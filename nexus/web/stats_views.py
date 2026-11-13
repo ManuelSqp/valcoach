@@ -979,6 +979,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     register_practice(app, store, sr, get_team)
     from .scrims import register as register_scrims
     register_scrims(app, store, sr, get_team, KNOWN_MAPS)
+    from .vodreview import register as register_vodreview
+    register_vodreview(app, store, sr, get_team)
     from .evening import register as register_evening
     register_evening(app, store, sr, get_team)
     from .prep_views import register as register_prep

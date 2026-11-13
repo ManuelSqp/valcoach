@@ -4,6 +4,16 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.31.0
+- **VOD review**: watch a match recording together. *Review the recording together* on a report with a recording,
+  or *Team › Practice › Recordings* for all of the team's recordings (with how many comments each has). Pause, draw
+  on the frame (pen, arrow, circle, five colours), comment at that moment; each drawing shows at its time in the
+  video. The timeline marks the rounds (won or lost, from the report) and the comments; jump to a round, slow down
+  to 0.25×, step frame by frame. Teammates' new comments come in while you watch.
+- Everyone in a team with that player can watch and comment (the recording too, not the rest of the report);
+  whoever wrote a comment and the report's owner can remove it.
+- German texts.
+
 ## 4.30.0
 - **Scrims** (*Team › Practice › Scrims*): the team's scrim log. Per scrim: date, opponent, map, score, the side you
   started on and the first half (optional), what went well and what didn't, in words and as topics (retakes, trades,
