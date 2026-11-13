@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.34.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.35.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -215,6 +215,12 @@ value.
 coming out of main facing the site). Enemy models peek from the callouts in front of you, at their real direction and
 distance on that map, and the callout's name shows when one appears. The positions come from valorant-api.com's
 callouts, which have no walls or heights: each spot gets a piece of cover and everyone is at your height.
+
+**3D maps:** *Practice › 3D maps* rebuilds a map from the replay files on the server, not from the game's files: every
+spot a player stood on is floor at that height (ramps, Heaven over Market, boxes people stand on), everything else is
+a wall. Walk around it like in the game (WASD, Shift walk, Ctrl crouch, Space jump, F to fly), with a radar (R) and
+callout names (C) you switch on and off. Colours are per area of the map, not the game's textures. The more replays of
+a map, the more complete it gets; with one or two, corners nobody walked into are missing.
 
 **Callouts:** *Practice › Callouts* is a quiz on the minimap of every map (the callouts come from valorant-api.com,
 like on the strat board). *Learn* shows them all, *Find it* names a callout and you click where it is, *Name it* lights
