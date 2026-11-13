@@ -84,8 +84,8 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         """Today's warm-up and training in Nexus's own aim trainer (Practice › Aim trainer), as routines."""
         return [{"id": "t-warmup", "name": "Nexus trainer warm-up", "kind": "trainer", "minutes": 2,
                  "focus": ["warmup", "flicks", "crosshair", "micro"], "code": "",
-                 "steps": "Three short scenarios in the browser: grid flicks, head-line flicks, micro taps. "
-                          "Ticked off by itself when you finish it.",
+                 "steps": "Three short scenarios in the browser: grid flicks, then two easy ones of your weakest skill "
+                          "(grid, head-line and micro taps until you have ratings). Ticked off by itself when you finish it.",
                  "url": f"/profiles/{int(pid)}/trainer?plan=warmup"},
                 {"id": "t-training", "name": "Nexus trainer training", "kind": "trainer", "minutes": 6,
                  "focus": ["flicks", "micro", "tracking", "peeking", "reaction", "crosshair", "switching"], "code": "",

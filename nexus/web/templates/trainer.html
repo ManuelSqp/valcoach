@@ -173,6 +173,7 @@
     <div class="small muted">about {{ pl.minutes }} min · {{ pl['items']|length }} rounds{% if k == 'training' %} · picked from your matches{% endif %}</div>
     <ol>{% for it in pl['items'] %}<li>{{ it.name }} <span>{{ it.seconds }} s</span></li>{% endfor %}</ol>
     {% if k == 'training' %}<div class="small muted"><span>Why:</span> <span>{{ pl['items'][0].why }}</span></div>{% endif %}
+    {% if k == 'warmup' and pl.weak %}<div class="small muted"><span>Built on your weakest skill:</span> <span>{{ pl.weak }}</span></div>{% endif %}
     <button type="button" class="btn {{ 'primary' if k == 'warmup' }}" data-plan="{{ k }}">Start {{ 'warm-up' if k == 'warmup' else 'training' }}</button>
     {% endif %}
   </section>
@@ -277,6 +278,29 @@
   </div>
 </section>
 
+
+{% if prep_plans %}
+<section class="card tr-prep" id="tr-prep">
+  <h2>Map prep</h2>
+  <p class="small muted" style="margin:-4px 0 12px;max-width:80ch">About 10 minutes before a match on that map: one taps to warm up, then every
+    spot of the map you can stand on (map angles), one round of your weakest skill, and at the end the callouts quiz of
+    that map. The match-day page links here with the week's map.</p>
+  <div class="tr-ang-row">
+    <label>Map<select id="tr-prep-map">{% for k, pl in prep_plans.items() %}<option value="{{ k }}" {{ 'selected' if pl.map == prep_map }} translate="no">{{ pl.map }}</option>{% endfor %}</select></label>
+    <button type="button" class="btn primary" id="tr-prep-go" data-plan="prep_{{ prep_map }}">Start map prep</button>
+  </div>
+  <div class="small muted" id="tr-prep-list" style="margin-top:8px"></div>
+</section>
+<script>
+(function () {
+  const sel = document.getElementById('tr-prep-map'), go = document.getElementById('tr-prep-go'), list = document.getElementById('tr-prep-list');
+  if (!sel) return;
+  const P = window.NEXUS_TRAINER_PREP || {};
+  const show = () => { go.dataset.plan = sel.value; const p = P[sel.value]; list.textContent = p ? p.minutes + ' min · ' + p.items.map(i => i.name).join(' · ') : ''; };
+  sel.addEventListener('change', show); window.addEventListener('DOMContentLoaded', show); show();
+})();
+</script>
+{% endif %}
 
 {% if angles %}
 <section class="card tr-angles" id="tr-angles">
@@ -441,11 +465,12 @@
 </div>
 
 <script>
+window.NEXUS_TRAINER_PREP = {{ prep_plans|tojson }};
 window.NEXUS_TRAINER = {{ {
-  'scenarios': scenarios, 'plans': dict(plans, **skill_plans), 'start': start, 'play': play, 'can_save': can_save, 'scale': setup.scale or 1,
+  'scenarios': scenarios, 'plans': all_plans, 'start': start, 'play': play, 'can_save': can_save, 'scale': setup.scale or 1,
   'summary': summary, 'angles': angles, 'sandbox': sandbox,
   'sens_base': setup.sens or 0.4, 'dpi': setup.get('dpi'), 'crosshair': setup.get('crosshair'), 'sens_rec': rec.sens if rec and rec.edge else None,
-  'urls': {'sens': url_for('trainer_sens', pid=p.id), 'run': url_for('trainer_run', pid=p.id), 'setup': url_for('trainer_setup', pid=p.id), 'aim': url_for('aim', pid=p.id)}
+  'urls': {'sens': url_for('trainer_sens', pid=p.id), 'run': url_for('trainer_run', pid=p.id), 'setup': url_for('trainer_setup', pid=p.id), 'aim': url_for('aim', pid=p.id), 'callouts': url_for('callouts', pid=p.id)}
 }|tojson }};
 </script>
 <script src="{{ url_for('static', filename='trainer.js') }}?v={{ app_version }}"></script>

@@ -107,6 +107,11 @@ def register(app, store, sr, view_profile, filter_rows, known_maps: list[str] = 
         play = request.args.get("play")
         rec = tr.recommend(d.get("sensfind", []))
         pl = plans(pid, runs, setup)
+        amaps = angle_maps(pid)
+        prep_plans = {f"prep_{m}": tr.plan_prep(m, ps, runs) for m, ps in amaps.items()}
+        prep_map = request.args.get("map", "")
+        if start == "prep" and f"prep_{prep_map}" in prep_plans:
+            start = f"prep_{prep_map}"
         cs = customs()
         extra = extra_of(cs)
         skill_plans = {f"skill_{k}_{m}": tr.plan_skill(k, m, runs, extra) for k in tr.SKILLS for m in tr.SESSION_MINUTES}
@@ -121,13 +126,14 @@ def register(app, store, sr, view_profile, filter_rows, known_maps: list[str] = 
                    "teams": [{"id": t.id, "name": t.name} for t in my_teams().values()],
                    "save": url_for("trainer_sandbox_save", pid=pid), "skills": [[k, v["name"]] for k, v in tr.SKILLS.items()],
                    "skill_names": {k: v["name"] for k, v in tr.SKILLS.items()}}
-        return render_template("trainer.html", p=p, active_pid=pid, can_save=can_save(p, can_edit), angles=angle_maps(pid),
+        return render_template("trainer.html", p=p, active_pid=pid, can_save=can_save(p, can_edit), angles=amaps,
+                               prep_plans=prep_plans, all_plans={**pl, **skill_plans, **prep_plans}, prep_map=prep_map if f"prep_{prep_map}" in prep_plans else next(iter(amaps), ""),
                                skills=tr.skill_ratings(runs, extra), skill_plans=skill_plans, minutes=tr.SESSION_MINUTES,
                                sandbox=sandbox,
                                groups=tr.GROUPS, part_names=tr.PARTS, rec=rec, step=tr.sens_step(setup.get("sens"), rec["sens"]) if rec else None,
                                chart=sens_chart(rec) if rec else None,
                                scenarios=tr.scenario_list(), summary=tr.summary(runs), plans=pl, levels=tr.LEVELS,
-                               start=start if start in pl or start in skill_plans else "", play=play if play in tr.SCENARIOS else "", setup=setup, numbers=tr.numbers(setup),
+                               start=start if start in pl or start in skill_plans or start in prep_plans else "", play=play if play in tr.SCENARIOS else "", setup=setup, numbers=tr.numbers(setup),
                                n_runs=len(runs), today=sum(1 for r in runs if r.get("d") == date.today().isoformat()))
 
     @app.get("/profiles/<int:pid>/trainer/insights")

@@ -289,7 +289,7 @@ def plan(kind: str, need: list[dict], runs: list[dict]) -> dict:
     (stats/aim.py needs()), the one that's furthest below its best first, two rounds each.
     -> {kind, name, minutes, items: [{id, name, seconds, why}]}"""
     if kind == "warmup":
-        items = [{"id": s, "name": SCENARIOS[s]["name"], "seconds": sec, "why": "warm-up"} for s, sec in WARMUP]
+        items = warmup_items(runs)
     else:
         weight: dict[str, float] = {}
         why: dict[str, str] = {}
@@ -309,8 +309,11 @@ def plan(kind: str, need: list[dict], runs: list[dict]) -> dict:
         picked.sort(key=lambda s: -gap.get(s, 0))
         items = [{"id": s, "name": SCENARIOS[s]["name"], "seconds": SCENARIOS[s]["seconds"],
                   "why": why.get(s, "a bit of everything")} for s in picked for _ in range(2)]
-    return {"kind": kind, "name": PLANS[kind], "minutes": math.ceil(sum(i["seconds"] + 5 for i in items) / 60),
-            "items": items}
+    out = {"kind": kind, "name": PLANS[kind], "minutes": math.ceil(sum(i["seconds"] + 5 for i in items) / 60),
+           "items": items}
+    if kind == "warmup" and (weak := weakest_skill(runs)):
+        out["weak"] = SKILLS[weak]["name"]
+    return out
 
 
 def _num(v, lo: float, hi: float, digits: int = 2) -> float | None:
@@ -794,3 +797,45 @@ def skill_ratings(runs: list[dict], extra: dict | None = None) -> dict[str, dict
                   "runs": len(vals), "days": series,
                   "change": series[-1][1] - series[0][1] if len(series) >= 2 else None}
     return out
+
+
+# ------------------------------------------------------------------ 4.36: the warm-up follows your weakest skill
+WARMUP_MIN_RUNS = 3          # a skill counts once it has this many runs
+
+
+def weakest_skill(runs: list[dict]) -> str | None:
+    """The skill with the lowest rating, among those with enough runs to have one."""
+    r = skill_ratings(runs)
+    rated = [(v["rating"], k) for k, v in r.items() if v["rating"] is not None and v["runs"] >= WARMUP_MIN_RUNS]
+    return min(rated)[1] if len(rated) >= 2 else None
+
+
+def warmup_items(runs: list[dict]) -> list[dict]:
+    """Three 30 s rounds: grid flicks to get going, then the two easiest scenarios of your weakest skill. Until two
+    skills have a rating: grid flicks, head-line flicks, micro taps (the same every day)."""
+    weak = weakest_skill(runs)
+    if not weak:
+        return [{"id": s, "name": SCENARIOS[s]["name"], "seconds": sec, "why": "warm-up"} for s, sec in WARMUP]
+    ladder = [x for x in SKILLS[weak]["ladder"] if x != "grid"][:2]
+    why = f"warm-up · your weakest skill: {SKILLS[weak]['name'].lower()}"
+    return [{"id": s, "name": SCENARIOS[s]["name"], "seconds": 30, "why": why} for s in ["grid", *ladder]]
+
+
+# ------------------------------------------------------------------ 4.36: map prep before a match
+PREP_ANGLES = 4              # at most this many spots of the map
+
+
+def plan_prep(map_name: str, positions: list[dict], runs: list[dict]) -> dict:
+    """About 10 minutes for one map: one taps to warm up, every spot of the map (map angles, 60 s each, up to
+    PREP_ANGLES), one round of your weakest skill. Then the page offers the callouts quiz of that map.
+    positions: stats/mapangles.positions() of the map."""
+    items = [{"id": "onetap_heads", "name": SCENARIOS["onetap_heads"]["name"], "seconds": 45, "why": "warm-up"}]
+    for p in positions[:PREP_ANGLES]:
+        items.append({"id": "map_angles", "name": f"{map_name}: {p['name']}", "seconds": 60, "why": map_name,
+                      "angle": {"map": map_name, "id": p["id"]}})
+    weak = weakest_skill(runs)
+    if weak:
+        sid = SKILLS[weak]["ladder"][min(2, len(SKILLS[weak]["ladder"]) - 1)]
+        items.append({"id": sid, "name": SCENARIOS[sid]["name"], "seconds": 45, "why": SKILLS[weak]["name"].lower()})
+    return {"kind": "prep", "name": f"Map prep: {map_name}", "map": map_name,
+            "minutes": math.ceil(sum(x["seconds"] + 5 for x in items) / 60), "items": items}

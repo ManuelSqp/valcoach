@@ -4,6 +4,16 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.36.0
+- **The warm-up follows your weakest skill**: still three 30 s rounds, grid flicks first, then the two easiest
+  scenarios of the skill with your lowest rating (once two skills have a rating; until then grid, head-line and micro
+  taps). The warm-up card says which skill.
+- **Map prep** (trainer page): about 10 minutes for one map: one taps to warm up, every spot of that map from *Map
+  angles* (up to four, 60 s each), a round of your weakest skill, and a button to the callouts quiz of the map at the
+  end. The match screen links to it with the week's map, next to the warm-up.
+- The match screen's warm-up card now has *Open the trainer* when your warm-up is the Nexus trainer.
+- German texts.
+
 ## 4.35.0
 - **3D maps** (*Practice › 3D maps*), first step: a map rebuilt from the replay files on the server. Every spot a player
   stood on is floor at that height (also a second floor above, like Heaven over Market), the gaps between paths close
