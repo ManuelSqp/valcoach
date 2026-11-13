@@ -77,6 +77,10 @@
     <span class="muted small">When on, the comps page (every mode, drafts, Discord prep) leaves out agents a player won't play, prefers agents he ranked high and also picks agents he added.</span>
   </form>
   {% elif follow_pools %}<p class="small" style="margin:10px 0 0"><span class="pill done">Comps follow these pools</span></p>{% endif %}
+  {% if not is_owner and not players|selectattr('can_edit')|list %}
+  <p class="small" style="margin:10px 0 0;max-width:80ch"><span class="pill">Not linked</span> <span>To edit your own pool, Nexus needs to know which player you are:</span>
+    <span>put your Riot ID (Name#TAG) as the in-game name under</span> <a href="{{ url_for('account') }}">Account</a>, <span>or ask the team owner to link you in Team settings › Teammates with access.</span></p>
+  {% endif %}
   {% set longest = players|map(attribute='agents')|map('length')|max %}
   {% if longest > 8 %}<div class="row" style="justify-content:flex-end;margin-top:8px"><button type="button" class="btn sm ghost" data-allpools>Show all agents</button></div>{% endif %}
   <div class="pools" style="margin-top:8px">

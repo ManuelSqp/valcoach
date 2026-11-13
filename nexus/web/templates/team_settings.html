@@ -104,9 +104,15 @@
 <section class="card" id="access" style="margin-top:22px">
   <h2>Teammates with access</h2>
   <p class="small muted" style="margin-top:-4px">People you add here see this team (comps, roles, game plans, weekly focus, notes) and their teammates' stats,
-    and can add notes. Only you change members, maps and settings. Each of them picks "which one is you" on the team page;
-    an in-game name that matches a player links them automatically.</p>
+    and can add notes. Only you change members, maps and settings. Plays as links an account to its player: that
+    teammate can then edit their own pool on the comp sheet. An in-game name (Account) that matches a player's Riot ID links
+    them by itself.</p>
   {% if access %}<table>{% for u in access %}<tr><td><b>{{ u.label }}</b> <span class="muted small">{{ u.username }}</span></td>
+    <td><form method="post" action="{{ url_for('team_access_edit', tid=t.id) }}" class="row" style="gap:6px"><input type="hidden" name="link" value="{{ u.id }}">
+      <label class="small muted" for="pa-{{ u.id }}">Plays as</label>
+      <select id="pa-{{ u.id }}" name="pid" style="width:auto" onchange="this.form.submit()"><option value="">Nobody yet</option>
+        {% for p in own if kinds.get(p.id) %}<option value="{{ p.id }}" {{ 'selected' if plays_as.get(u.id) == p.id }} translate="no">{{ p.name }}#{{ p.tag }}</option>{% endfor %}</select>
+      <noscript><button class="btn sm">Save</button></noscript></form></td>
     <td style="text-align:right"><form method="post" action="{{ url_for('team_access_edit', tid=t.id) }}"><button class="btn sm ghost danger" name="remove" value="{{ u.id }}">Remove</button></form></td></tr>{% endfor %}</table>
   {% else %}<p class="muted">Nobody yet.</p>{% endif %}
   {% if others %}

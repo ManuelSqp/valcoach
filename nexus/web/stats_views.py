@@ -730,10 +730,11 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
             flash("Team saved.", "ok")
             return redirect(url_for("team", tid=tid))
         access = store.team_access(tid)
+        plays_as = {m.get("user_id"): m["pid"] for m in t.member_list if m.get("user_id")}
         others = [u for u in store.users() if u.id != t.owner_id and u.id not in {a.id for a in access} and not u.disabled]
         return render_template(
             "team_settings.html", t=t, premier_status=sr.status(f"premier:{tid}"), own=own, kinds={m["pid"]: m["kind"] for m in c["members"]},
-            access=access, others=others, discord=t.discord_info,
+            access=access, others=others, discord=t.discord_info, plays_as=plays_as,
             games={pid: len(rs) for pid, rs in c["rows_by"].items()},
             map_choices=sorted(set(KNOWN_MAPS) | set(c["seen_maps"])), meta_example=META_EXAMPLE,
             comp_methods=COMP_METHODS, follow_pools=pools_followed(t),
@@ -958,6 +959,19 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
                     m["user_id"] = u.id
             store.update_team(tid, members=members)
             flash(f"{u.label} can now open this team.", "ok")
+        elif f.get("link"):                         # 4.34: the owner says which player a teammate is
+            uid = int(f["link"]) if f["link"].isdigit() else 0
+            if not store.has_team_access(tid, uid):
+                abort(400)
+            pid = f.get("pid", "")
+            members = []
+            for m in t.member_list:
+                m = {k: v for k, v in m.items() if not (k == "user_id" and v == uid)}
+                if str(m["pid"]) == pid:
+                    m["user_id"] = uid
+                members.append(m)
+            store.update_team(tid, members=members)
+            flash("Linked." if pid else "Not linked to a player any more.", "ok")
         elif f.get("remove"):
             uid = int(f["remove"])
             store.remove_team_access(tid, uid)

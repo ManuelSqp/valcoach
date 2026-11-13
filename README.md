@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.33.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.34.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -570,10 +570,11 @@ Record as **MP4 with H.264**, because browsers can't play every MKV.
 
 ### Replay files
 
-Since patch 11.06 VALORANT can download a replay of a **Competitive or Premier** match (*Career › Match history* ›
+Since patch 11.06 VALORANT can download a replay of an **Unrated, Competitive, Swiftplay or Premier** match (not Custom
+games, Deathmatch or Team Deathmatch) (*Career › Match history* ›
 the match › download the replay). It is saved as a `.vrf` file in `%LOCALAPPDATA%\VALORANT\Saved\Demos` and holds
 the server's own data: **every player's position all round long**, plus the round starts and every death. Nexus
-reads it with [vrfkit](https://github.com/yakisoba0728/vrfkit) (Apache-2.0), keeps a compact copy (4 positions per
+reads it with [vrfkit](https://github.com/yakisoba0728/vrfkit) (Apache-2.0), keeps a compact copy (10 positions per
 second per player) and lines it up with the HenrikDev match data by the kills. The round coaching then gets the
 real positions of both teams per 10 s (setups, stacks, rotations, timings), and the report's replay draws all ten
 players' paths instead of estimating them between kills. No recording is needed for that; a VOD is still used for
@@ -750,8 +751,8 @@ match). Deleting a report also deletes its uploaded VOD.
   round coaching leaves utility out; match totals are still used.
 - Without a VOD or a replay file, positions are only known at kills, plants and defuses; the round
   replay estimates everything in between.
-- Replay files exist only for Competitive and Premier, only if someone downloaded the replay in the game, and
-  the game deletes them at the next patch. vrfkit reads the builds listed in its README; a brand-new build may
+- Replay files exist for Unrated, Competitive, Swiftplay and Premier, only if someone downloaded the replay in the
+  game, and the game deletes them at the next patch (the copy uploaded to Nexus stays). vrfkit reads the builds listed in its README; a brand-new build may
   need a vrfkit update. The replay-file path is tested on vrfkit's public sample replays (builds 12.08–13.01, short
   custom games) and on synthetic full matches; check the first real match against what you remember.
 - The map rules for comps come from the maps' layout and the agents' kits, not from live meta data; edit them
