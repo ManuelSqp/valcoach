@@ -2475,7 +2475,8 @@ def test_kovaaks_playlists_scores_and_scenarios(app):
     c = setup_admin(app)
     store = app.extensions["nexus"]["store"]
     pid = add_profile(c)
-    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    page = c.get(f"/profiles/{pid}/aim/kovaaks").data.decode()
+    assert "KovaaK's playlists from the coach" not in c.get(f"/profiles/{pid}/aim").data.decode()   # 4.25: its own page
     assert "KovaaK's playlists from the coach" in page and "Download for KovaaK's" in page
     r = c.get(f"/profiles/{pid}/aim/kovaaks/warmup.json")
     assert r.status_code == 200 and "nexus_warmup_" in r.headers["Content-Disposition"]
@@ -2489,14 +2490,15 @@ def test_kovaaks_playlists_scores_and_scenarios(app):
         {"scenario_name": "Tile Frenzy", "play_Count": 1}, {"scenario_name": "Totally New Scenario", "play_Count": 2}]})
     c.post(f"/profiles/{pid}/aim", data={"action": "k_import_playlist", "as_routine": "1", "scope": "me",
                                          "files": (_io.BytesIO(pl.encode()), "friend.json")}, content_type="multipart/form-data")
-    page = c.get(f"/profiles/{pid}/aim").data.decode()
-    assert "Totally New Scenario" in page and "KovaaKsFriendList" in page
+    page = c.get(f"/profiles/{pid}/aim/kovaaks").data.decode()
+    assert "Totally New Scenario" in page                                  # the coach's scenario list (KovaaK's page)
+    assert "KovaaKsFriendList" in c.get(f"/profiles/{pid}/aim").data.decode()    # the routine (Aim page library)
     # add one by hand, then remove it
     c.post(f"/profiles/{pid}/aim", data={"action": "k_add_scenario", "name": "Hand Added", "level": "3", "scope": "me"})
-    assert "Hand Added" in c.get(f"/profiles/{pid}/aim").data.decode()
+    assert "Hand Added" in c.get(f"/profiles/{pid}/aim/kovaaks").data.decode()
     c.post(f"/profiles/{pid}/aim", data={"action": "k_remove_scenario", "name": "Hand Added", "scope": "me"})
-    c.get(f"/profiles/{pid}/aim")                                  # the "Removed" message
-    assert "Hand Added" not in c.get(f"/profiles/{pid}/aim").data.decode()
+    c.get(f"/profiles/{pid}/aim/kovaaks")                                  # the "Removed" message
+    assert "Hand Added" not in c.get(f"/profiles/{pid}/aim/kovaaks").data.decode()
     # scores from a zipped stats folder (twice: nothing is counted double)
     buf = _io.BytesIO()
     with _zip.ZipFile(buf, "w") as z:
@@ -2508,10 +2510,10 @@ def test_kovaaks_playlists_scores_and_scenarios(app):
                content_type="multipart/form-data")
     aim = json.loads((store.data_dir / "profiles" / str(pid) / "stats" / "aim.json").read_text())
     assert len(aim["kovaaks"]) == 6
-    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    page = c.get(f"/profiles/{pid}/aim/kovaaks").data.decode()
     assert "Found In Stats" in page and "6 runs" in page
     # someone who plays KovaaK's gets the coach's KovaaK's warm-up by default
-    assert "KovaaK&#39;s warm-up from the coach" in page.split('id="warmup"')[1][:600]
+    assert "KovaaK&#39;s warm-up from the coach" in c.get(f"/profiles/{pid}/aim").data.decode().split('id="warmup"')[1][:600]
     # teammates see the page but can't import into this player's scores
     mate = make_user(app, c, "mate")
     tid = store.create_team(store.user_by_name("manuel").id, "Squad")
@@ -2632,11 +2634,11 @@ def test_kovaaks_community_playlists(app, monkeypatch):
     from nexus.coach import websearch as ws
     c = setup_admin(app)
     pid = add_profile(c)
-    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    page = c.get(f"/profiles/{pid}/aim/kovaaks").data.decode()
     assert "Playlists from the community" in page and "KovaaKsTeleportingJebaitedBuystation" in page
     assert "Search the web" not in page                                           # no web search set up
     c.post(f"/profiles/{pid}/aim", data={"action": "k_add_shared", "code": "KovaaKsAcingShamrockLowground"})
-    page = c.get(f"/profiles/{pid}/aim").data.decode()
+    page = c.get(f"/profiles/{pid}/aim/kovaaks").data.decode()
     assert "Voltaic Iron" in page and "in your routines" in page
     r = c.post(f"/profiles/{pid}/aim", data={"action": "k_add_shared", "code": "KovaaKsAcingShamrockLowground"}, follow_redirects=True)
     assert "already in" in r.data.decode()

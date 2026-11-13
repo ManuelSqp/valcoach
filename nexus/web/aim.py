@@ -169,6 +169,14 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
     # ------------------------------------------------------------------ page
     @app.route("/profiles/<int:pid>/aim", methods=["GET", "POST"])
     def aim(pid: int):
+        return aim_page(pid, "main")
+
+    # 4.25: KovaaK's on its own page (Aim › KovaaK's), so the Aim page is about the warm-up and the routines
+    @app.route("/profiles/<int:pid>/aim/kovaaks", methods=["GET", "POST"])
+    def aim_kovaaks_page(pid: int):
+        return aim_page(pid, "kovaaks")
+
+    def aim_page(pid: int, page: str):
         p, can_edit = view_profile(pid)
         uid = g.user.id
         if request.method == "POST":
@@ -194,8 +202,11 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         by_focus: dict[str, list] = {}
         for s in sorted(scen, key=lambda s: (s["level"], s["name"].lower())):
             by_focus.setdefault(s["focus"][0] if s.get("focus") else "flicks", []).append(s)
-        return render_template("aim.html", p=p, active_pid=pid, tab="aim", can_edit=can_edit, can_log=can_log(p, can_edit, uid),
-                               lib=lib, need=need, picks=am.pick(lib, need), warm=warm, mine_warm=pdata.get("warmup"),
+        # the coach's KovaaK's playlists only show among the routines for someone who plays KovaaK's (or has one as
+        # warm-up); everyone else finds them on the KovaaK's page
+        shown = [r for r in lib if r["kind"] != "kovaaksfile" or runs or (warm and warm["id"] == r["id"])]
+        return render_template("aim.html", page=page, p=p, active_pid=pid, tab="aim", can_edit=can_edit, can_log=can_log(p, can_edit, uid),
+                               lib=shown, need=need, picks=am.pick(shown, need), warm=warm, mine_warm=pdata.get("warmup"),
                                done=done, effect=am.effect(rows, log, kv.run_days(runs)), recent=recent, names=names, teams=teams, team_warm=team_warm,
                                plans=[plan(pid, uid, k, rows) for k in kv.KINDS], kstats=kv.summary(runs)[:16], kruns=len(runs),
                                scen_by_focus=by_focus, n_scen=len(scen), addable=am.ADDABLE,
@@ -331,7 +342,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
 
     def kovaaks_post(p, can_edit: bool, uid: int, act: str, teams: dict):
         f = request.form
-        back_to = redirect(url_for("aim", pid=p.id) + "#kovaaks")
+        back_to = redirect(url_for("aim_kovaaks_page", pid=p.id) + "#kovaaks")
         with _lock:
             if act == "k_add_scenario":
                 name = kv.clean_name(f.get("name"))
@@ -399,7 +410,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                 known = {x["code"].lower(): x for x in kv.shared()}
                 if not am.CODE_RE.fullmatch(code) or not code.lower().startswith("kovaaks"):
                     flash("That isn't a KovaaK's share code.", "error")
-                    return redirect(url_for("aim", pid=p.id) + "#kshared")
+                    return redirect(url_for("aim_kovaaks_page", pid=p.id) + "#kshared")
                 base = known.get(code.lower())
                 name = (base["name"] if base else " ".join((f.get("name") or "").split())[:60]) or code
                 focus = base["focus"] if base else (kv.guess(name)[0] or ["flicks"])
@@ -407,10 +418,10 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                 d = _read(path, {})
                 if any((r.get("code") or "").lower() == code.lower() for r in d.get("routines", [])):
                     flash(f"{name} is already in {where}.", "error")
-                    return redirect(url_for("aim", pid=p.id) + "#kshared")
+                    return redirect(url_for("aim_kovaaks_page", pid=p.id) + "#kshared")
                 if len(d.get("routines", [])) >= MAX_ROUTINES:
                     flash(f"{where} already has {MAX_ROUTINES} routines: remove one first.", "error")
-                    return redirect(url_for("aim", pid=p.id) + "#kshared")
+                    return redirect(url_for("aim_kovaaks_page", pid=p.id) + "#kshared")
                 src = f.get("url", "").strip()
                 steps = (f"By {base['author']}. " if base else "") + "In KovaaK's: Sandbox › Online Playlists › Enter Share Code; it downloads every scenario."
                 if not base and src.startswith(("https://", "http://")):
@@ -421,7 +432,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
                     "added_by": uid, "by": g.user.display_name or g.user.username})
                 _write(path, d)
                 flash(f"Added {name} to {where.replace('scenarios', 'routines')}.", "ok")
-                return redirect(url_for("aim", pid=p.id) + "#kshared")
+                return redirect(url_for("aim_kovaaks_page", pid=p.id) + "#kshared")
             if not can_log(p, can_edit, uid):
                 abort(403)
             if act == "k_import_stats":

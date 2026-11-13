@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.24.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.25.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -157,7 +157,7 @@ notes there are just for you, the strat board goes to your team's strat book and
 older reports get them too.
 *Practice › Aim* keeps aim routines (Aimlabs share links, KovaaK's codes, steps for the Range), picks the ones that fit
 your matches and sets your warm-up, which shows on the match screen, in the practice plan and as a push before the match.
-For KovaaK's the coach writes the playlists itself: download one (dated DD-MM-YYYY in its name), save it in
+KovaaK's has its own page (*Aim › KovaaK's*, linked at the bottom of the Aim page): the coach writes the playlists itself, download one (dated DD-MM-YYYY in its name), save it in
 `FPSAimTrainer/Saved/SaveGames/Playlists` and it shows up under *Local Playlists*. Import your KovaaK's scores (the `.csv` files in `FPSAimTrainer/stats`, or the
 folder as a zip) and it moves you to harder scenarios once you're steady at your best. More scenarios: import any
 playlist file, add one by hand, or let them come in with your scores. *Playlists from the community* suggests public
