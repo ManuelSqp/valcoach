@@ -79,6 +79,10 @@
 .shadd select{width:auto;max-width:150px;font-size:13px;padding:5px 26px 5px 8px;min-height:0;height:auto}
 .shl{margin:0;padding-left:18px;font-size:13.5px}.shl li{margin:5px 0}
 .shl code{font-size:12px;padding:1px 6px;border-radius:5px;background:var(--panel2);border:1px solid var(--line);user-select:all;overflow-wrap:anywhere}
+.wk{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:6px 0 12px}
+.wk div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.wk span{display:block;font-size:12px;color:var(--muted)}.wk b{font-size:20px;font-family:var(--font-num);font-weight:800}
+.wk .up{color:var(--win);font-size:12.5px;font-weight:650;margin-left:4px}.wk .down{color:var(--red);font-size:12.5px;font-weight:650;margin-left:4px}
 .kmore{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
 .linkcopy{background:none;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:12.5px;padding:0 4px}
 </style>
@@ -160,6 +164,18 @@
     <ul class="log">{% for x in recent %}<li><b>{{ x.name }}</b><span>{{ x.date }}{% if x.score is not none %} · score {{ '%g'|format(x.score) }}{% endif %}</span></li>{% endfor %}</ul>{% endif %}
   </section>
 </div>
+
+<section class="card" id="week">
+  <h2>This week in the aim trainer <span class="muted small" style="font-weight:500">{{ week.week }}</span></h2>
+  {% if week.runs %}
+  <p class="small" style="margin:-4px 0 8px"><span>{{ week.runs }} run{{ 's' if week.runs != 1 }}</span> · <span>{{ week.minutes }} min</span> · <span>{{ week.days }} day{{ 's' if week.days != 1 }}</span></p>
+  {% else %}<p class="small muted" style="margin:-4px 0 8px">Nothing played this week yet.</p>{% endif %}
+  <div class="wk">{% for s in week.skills if s.now is not none %}<div><span>{{ s.name }}</span><b>{{ s.now }}</b>{% if s.change %}<span class="{{ 'up' if s.change > 0 else 'down' }}" style="display:inline">{{ '%+d'|format(s.change) }}</span>{% endif %}</div>{% endfor %}</div>
+  {% if week.bests %}<p class="small" style="margin:0 0 8px"><span>New bests:</span> {% for b in week.bests %}<b>{{ b.name }}</b> {{ b.best|round|int }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+  {% if week.next %}<div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">
+    <span class="small">{% if week.next.why == 'dropped' %}<span>Went down this week:</span>{% elif week.next.why == 'weakest' %}<span>Your weakest skill:</span>{% else %}<span>Not tried yet:</span>{% endif %} <b>{{ week.next.name }}</b></span>
+    <a class="btn sm primary" href="{{ url_for('trainer', pid=p.id, plan='skill_' ~ week.next.id ~ '_20') }}#tr-skills">Train it · 20 min</a></div>{% endif %}
+</section>
 
 <section class="card" id="library">
   <h2>Library</h2>

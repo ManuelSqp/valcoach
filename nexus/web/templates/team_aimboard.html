@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Aim board · {{ t.name }} · Nexus{% endblock %}
+{% block head %}
+<style>
+.ab-ch{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,360px);gap:16px;align-items:start}
+@media(max-width:900px){.ab-ch{grid-template-columns:1fr}}
+.ab-name{font-family:var(--font-head);font-size:clamp(26px,3vw,36px);font-weight:850;font-stretch:72%;line-height:1;margin:2px 0 8px}
+.ab-lb{list-style:none;margin:0;padding:0}
+.ab-lb li{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line)}
+.ab-lb li:first-child{border-top:0}
+.ab-lb .pl{font-family:var(--font-num);font-weight:800;width:24px}
+.ab-lb .sc{margin-left:auto;font-family:var(--font-num);font-weight:800;font-size:18px}
+.ab-lb .ab-me{color:var(--accent)}
+.ab-tbl{width:100%;border-collapse:collapse;font-size:14px}
+.ab-tbl th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.ab-tbl td{padding:8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ab-tbl td.r b{font-size:16px}
+.ab-tbl .up{color:var(--win);font-size:12px;font-weight:650;margin-left:4px}.ab-tbl .down{color:var(--red);font-size:12px;font-weight:650;margin-left:4px}
+.ab-tbl tr.ab-me td:first-child{color:var(--accent);font-weight:650}
+.ab-wrap{overflow-x:auto}
+</style>
+{% endblock %}
+{% block content %}
+{% include "_team_head.html" %}
+
+<section class="card">
+  <div class="ab-ch">
+    <div>
+      <div class="small muted">Challenge of the week {{ week }}</div>
+      <div class="ab-name">{{ ch_name }}</div>
+      <p class="small muted" style="margin:0 0 10px;max-width:70ch">Everyone plays it in the aim trainer this week; your best normal round counts
+        (not skill-session rounds, which change sizes and speeds). The table resets on Monday.</p>
+      {% if mine %}<a class="btn primary" href="{{ url_for('trainer', pid=mine, play=b.challenge) }}">Play it</a>{% endif %}
+      {% if g.team_owner %}
+      <form method="post" class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap">
+        <select name="challenge" style="width:auto;max-width:320px" aria-label="Challenge">
+          <option value="">Rotates by itself</option>
+          {% for k, n in choices %}<option value="{{ k }}" {{ 'selected' if k == picked }}>{{ n }}</option>{% endfor %}
+        </select>
+        <button class="btn">Set for this week</button>
+      </form>
+      {% if discord %}<form method="post" style="margin-top:8px"><input type="hidden" name="post" value="1"><button class="btn sm ghost">Post the board to Discord</button>
+        <span class="small muted">It also goes out on its own with the weekly focus.</span></form>{% endif %}
+      {% endif %}
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px">Leaderboard</h3>
+      {% if b.leaderboard %}<ol class="ab-lb">{% for x in b.leaderboard %}<li class="{{ 'ab-me' if x.pid == mine }}"><span class="pl">{{ loop.index }}</span>
+        <b translate="no">{{ x.name }}</b> <span class="small muted">{{ x.tries }}×</span><span class="sc">{{ x.best|round|int }}</span></li>{% endfor %}</ol>
+      {% else %}<p class="muted small" style="margin:0">Nobody has played it yet this week.</p>{% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Skills</h2>
+  <p class="small muted" style="margin:-4px 0 10px;max-width:80ch">Each player's skill ratings from the aim trainer (their last 12 runs of each skill;
+    they compare a player with themselves, not with each other), the change since last week, and how much they trained this week.</p>
+  <div class="ab-wrap"><table class="ab-tbl">
+    <thead><tr><th>Player</th>{% for k, s in skills.items() %}<th>{{ s.name }}</th>{% endfor %}<th>This week</th></tr></thead>
+    <tbody>{% for r in b.rows %}<tr class="{{ 'ab-me' if r.pid == mine }}"><td translate="no">{{ r.name }}</td>
+      {% for k in skills %}{% set s = r.skills[k] %}<td class="r">{% if s.now is not none %}<b>{{ s.now }}</b>{% if s.change %}<span class="{{ 'up' if s.change > 0 else 'down' }}">{{ '%+d'|format(s.change) }}</span>{% endif %}{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}
+      <td>{% if r.runs %}<span>{{ r.minutes }} min</span> · <span>{{ r.days }} day{{ 's' if r.days != 1 }}</span>{% else %}<span class="muted">–</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endblock %}

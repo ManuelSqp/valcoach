@@ -1368,6 +1368,8 @@ def register_team_extras(app, store, sr: StatsRunner, helpers: dict) -> None:
             sr.submit_focus(t.id, week_id(), items, language(t), post=True, llm_choice=sr.AUTO)
 
     app.extensions["nexus"]["weekly_job"] = weekly_job
+    from .aimboard import register as register_aimboard       # wraps weekly_job: the aim board goes out with it
+    register_aimboard(app, store, sr, get_team)
 
     from .premier_views import register as register_premier
     register_premier(app, store, sr, {"get_team": get_team, "team_data": team_data, "build": build, "known_maps": KNOWN_MAPS,

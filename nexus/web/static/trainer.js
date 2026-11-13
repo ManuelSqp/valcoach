@@ -1227,6 +1227,11 @@
           points: 0, times: [], lastHit: 0, on: 0, stalls: [], ix: finder ? null : ixNew(), from: {y: 0, p: 0}};
     yaw = 0; pitch = 0;
     if (finder) st.segs = finder.mode.segs;
+    const item = plan ? plan.items[plan.i] : null;
+    if (item && item.angle && C.angles && C.angles[item.angle.map]) {         // map prep: this round's spot of the map
+      const pos = C.angles[item.angle.map].find(x => x.id === item.angle.id);
+      if (pos) C.angles.current = Object.assign({map: item.angle.map}, pos);
+    }
     if (plan && plan.adaptive) { st.k = Object.assign({}, plan.k); st.h = scaled(custom[id] || SC[id], st.k); }   // a skill session
     else if (custom[id]) st.h = custom[id];                                                       // a sandbox scenario
     (st.h || SC[id]).setup(st);
@@ -1482,10 +1487,10 @@
       ? `<div><dt>On target</dt><dd>${Math.round(100 * st.on / st.seconds)}%</dd></div><div><dt>While firing</dt><dd>${st.fire ? Math.round(100 * st.on / st.fire) : 0}%</dd></div>${st.kills !== undefined ? `<div><dt>Targets down</dt><dd>${st.kills}</dd></div>` : `<div><dt>Seconds</dt><dd>${st.seconds}</dd></div>`}`
       : `<div><dt>Hits</dt><dd>${st.hits}/${st.shots}</dd></div><div><dt>Accuracy</dt><dd>${st.shots ? Math.round(100 * st.hits / st.shots) : 0}%</dd></div><div><dt>Avg time</dt><dd>${avg !== null ? avg + ' ms' : '–'}</dd></div>${st.wrong ? `<div><dt>Blue ones hit</dt><dd>${st.wrong}</dd></div>` : ''}`;
     const more = plan && plan.i < plan.items.length - 1;
-    const nextName = more ? byId[plan.items[plan.i + 1].id].name : '';
+    const nextName = more ? (plan.items[plan.i + 1].name || byId[plan.items[plan.i + 1].id].name) : '';
     setPanel(`${planStep()}<h2>${esc(sc.name)}</h2><div class="tr-big">${s}</div><div class="tr-best" id="tr-best"></div><dl>${cells}</dl>${adaptNote}${stallNote(st.stalls)}
       <div class="tr-btns">${more ? `<button type="button" class="btn primary" data-a="next">Next: ${esc(nextName)}</button>`
-        : (plan ? `<button type="button" class="btn primary" data-a="quit">Done · ${plan.total} points</button>` : `<button type="button" class="btn primary" data-a="restart">Again</button>`)}
+        : (plan ? `<button type="button" class="btn primary" data-a="quit">Done · ${plan.total} points</button>${plan.map && C.urls.callouts ? ` <a class="btn" href="${C.urls.callouts}?map=${encodeURIComponent(plan.map)}">Callouts quiz: ${esc(plan.map)}</a>` : ''}` : `<button type="button" class="btn primary" data-a="restart">Again</button>`)}
       ${plan ? '' : '<button type="button" class="btn ghost" data-a="quit">Back</button>'}${xhBtn()}</div>`);
     if (!C.can_save) { $('tr-best').textContent = 'Not saved (only the player or their owner can).'; return; }
     try {
@@ -1654,7 +1659,7 @@
   document.querySelectorAll('[data-play]').forEach(b => b.addEventListener('click', () => { plan = null; open(b.dataset.play); }));
   document.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', () => {
     const p = C.plans[b.dataset.plan];
-    plan = {kind: p.kind, name: p.name, items: p.items, i: 0, total: 0, adaptive: !!p.adaptive, k: {size: 1, speed: 1}};
+    plan = {kind: p.kind, name: p.name, items: p.items, i: 0, total: 0, adaptive: !!p.adaptive, k: {size: 1, speed: 1}, map: p.map || ''};
     open(p.items[0].id);
   }));
   document.querySelectorAll('[data-finder]').forEach(b => b.addEventListener('click', () => startFinder(b.dataset.finder)));
@@ -1662,7 +1667,7 @@
     const b = document.querySelector(`[data-plan="${C.start}"]`);
     if (b) b.scrollIntoView({block: 'center'});
   }
-  if (C.play && C.scenarios.some(s => s.id === C.play)) {                 // from Aim insights: "Play …"
+  if (C.play && byId[C.play]) {                           // also a sandbox scenario (the team's weekly challenge)                 // from Aim insights: "Play …"
     try { const u = new URL(location.href); u.searchParams.delete('play'); history.replaceState(null, '', u); } catch (e) { /* only the address bar */ }
     open(C.play);
   }
