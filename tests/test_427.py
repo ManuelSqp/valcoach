@@ -23,7 +23,7 @@ def payload(name="Ascent"):
     # spread them over the minimap: world (x, y) from uv through the synthetic transform
     pts = []
     for i, (s, r) in enumerate(NAMES):
-        u, v = 0.1 + 0.8 * (i % 4) / 3, 0.1 + 0.8 * (i // 4) / 3
+        u, v = 0.3 + 0.4 * (i % 4) / 3, 0.3 + 0.4 * (i // 4) / 3
         pts.append({"regionName": r, "superRegionName": s,
                     "location": {"x": (v - synth.Y_ADD) / synth.Y_MULT, "y": (u - synth.X_ADD) / synth.X_MULT}})
     m["callouts"] = pts

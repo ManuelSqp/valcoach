@@ -4,6 +4,15 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.28.0
+- **Map angles** in the aim trainer (above the library, and as a scenario in *Duels*): pick a map and where you stand
+  (hold a site facing its main, or take it from main facing the site). Enemy models peek from behind cover at the
+  callouts in front of you, at their real direction and distance on the map; the callout's name shows when one
+  appears. Only headshots kill. The maps you play most come first.
+- The map data has callout positions but no walls or heights, so every enemy is at your height and each spot gets a
+  piece of cover.
+- German texts.
+
 ## 4.27.0
 - **Callouts** (*Practice › Callouts*): a quiz on the minimap. *Learn* shows every callout of a map, *Find it* names
   one and you click where it is, *Name it* lights up a spot and you pick its name from four nearby ones (keys 1–4).

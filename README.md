@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.27.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.28.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -196,6 +196,11 @@ on the trainer page. Only rounds played since 4.8 are measured this way.
 *Practice › Mouse & monitor* measures the real DPI of your mouse (move it a known distance along a ruler), its polling
 rate, your screen's refresh rate and worn buttons that double-click, and works out eDPI and cm per 360°. A browser
 can't fully measure 2000–8000 Hz mice, and the page says so.
+
+**Map angles:** above the trainer's library, pick a map and where you stand (holding a site and facing its main, or
+coming out of main facing the site). Enemy models peek from the callouts in front of you, at their real direction and
+distance on that map, and the callout's name shows when one appears. The positions come from valorant-api.com's
+callouts, which have no walls or heights: each spot gets a piece of cover and everyone is at your height.
 
 **Callouts:** *Practice › Callouts* is a quiz on the minimap of every map (the callouts come from valorant-api.com,
 like on the strat board). *Learn* shows them all, *Find it* names a callout and you click where it is, *Name it* lights

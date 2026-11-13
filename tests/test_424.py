@@ -20,7 +20,7 @@ NEW = ["bounce_shot", "jink", "hops", "horde", "shrinking", "flick_180", "spider
 def test_hundred_scenarios_both_halves():
     body = JS[JS.index("const SC = {"):JS.index("const PART = {")]
     in_js = set(re.findall(r"^    (\w+): ", body, re.M)) - {"kind"}
-    assert in_js == set(tr.SCENARIOS) and len(tr.SCENARIOS) == 100
+    assert in_js == set(tr.SCENARIOS) and len(tr.SCENARIOS) >= 100
     assert set(NEW) <= set(tr.SCENARIOS)
     for b in ("bounce", "burst", "popups", "glide", "tswitch"):
         assert f"function {b}(o)" in JS, b
@@ -53,6 +53,6 @@ def test_library_page_shows_all(app):  # noqa: F811 (fixture)
     c = setup_admin(app)
     pid = add_profile(c)
     page = c.get(f"/profiles/{pid}/trainer").data.decode()
-    assert page.count('class="tr-card"') == 100
+    assert page.count('class="tr-card"') == len(tr.SCENARIOS)
     assert 'data-v="moving">Moving targets <span>' in page and 'data-v="trackswitch">Switch tracking <span>' in page
     assert 'data-play="friend_foe"' in page and 'data-play="tswitch_float"' in page

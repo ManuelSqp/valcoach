@@ -243,6 +243,10 @@ SCENARIOS.update({
     "tswitch_float": _sc("Floating switch tracking", "track", "trackswitch", 2, ["tracking", "switching"],
                          "Targets moving up and down as well as sideways. Switch and track in two directions."),
 })
+# 4.28: holding a real map's angles (stats/mapangles.py: where you stand and the spots come from the callouts)
+SCENARIOS["map_angles"] = _sc("Map angles", "click", "duels", 2, ["peeking", "crosshair", "reaction"],
+                              "Stand on a real site (pick the map and the spot above the library). Enemies peek from the "
+                              "callouts in front of you, at their real direction and distance. Only a headshot kills.", 60)
 GROUPS = {"flicks": "Flicks", "switching": "Switching", "moving": "Moving targets", "reflex": "Reflex",
           "precision": "Precision", "duels": "Duels", "tracking": "Tracking", "trackswitch": "Switch tracking"}
 LEVELS = {1: "Easy", 2: "Medium", 3: "Hard"}
@@ -316,6 +320,9 @@ def clean_run(d: dict) -> dict | None:
         ms = _num(d.get("ms"), 0, 5000, 0)
         if ms is not None and hits:
             out["ms"] = int(ms)
+        where = d.get("where")                           # map angles: the map and the spot ("Ascent · Hold A Site")
+        if d["scenario"] == "map_angles" and isinstance(where, str) and where.strip():
+            out["w"] = " ".join(where.split())[:80]
         for k in ("body", "escaped"):                    # hold the angle: body shots, enemies that got away
             v = _num(d.get(k), 0, 5000, 0)
             if v is not None and k in d:

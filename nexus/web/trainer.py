@@ -11,6 +11,7 @@ from flask import abort, g, jsonify, render_template, request
 
 from ..stats import aim as am
 from ..stats import aim_insights as ai
+from ..stats import mapangles as ma
 from ..stats import trainer as tr
 from .aim import MAX_LOG, _lock, _read, _write
 
@@ -42,7 +43,18 @@ def sens_chart(rec: dict, w: int = 560, h: int = 200) -> dict:
             "base": h - pad}
 
 
-def register(app, store, sr, view_profile, filter_rows) -> None:
+def register(app, store, sr, view_profile, filter_rows, known_maps: list[str] = ()) -> None:
+    from collections import Counter
+
+    from ..maps import MapRegistry
+    reg = MapRegistry(store.data_dir / "cache")
+
+    def angle_maps(pid: int) -> dict:
+        """Map angles: the maps with positions, the ones this player plays most first."""
+        played = Counter(r.get("map") for r in filter_rows(sr.games(pid).rows(), "everything"))
+        order = sorted(set(known_maps) | {m for m in played if m}, key=lambda m: (-played.get(m, 0), m))
+        return ma.for_maps(reg, order)
+
     def path(pid: int) -> Path:
         return sr.games(pid).path.parent / "trainer.json"
 
@@ -74,7 +86,7 @@ def register(app, store, sr, view_profile, filter_rows) -> None:
         play = request.args.get("play")
         rec = tr.recommend(d.get("sensfind", []))
         pl = plans(pid, runs, setup)
-        return render_template("trainer.html", p=p, active_pid=pid, can_save=can_save(p, can_edit),
+        return render_template("trainer.html", p=p, active_pid=pid, can_save=can_save(p, can_edit), angles=angle_maps(pid),
                                groups=tr.GROUPS, part_names=tr.PARTS, rec=rec, step=tr.sens_step(setup.get("sens"), rec["sens"]) if rec else None,
                                chart=sens_chart(rec) if rec else None,
                                scenarios=tr.scenario_list(), summary=tr.summary(runs), plans=pl, levels=tr.LEVELS,

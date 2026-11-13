@@ -787,6 +787,64 @@
       },
     };
   }
+  // ---- 4.28: map angles. You stand where C.angles.current says (a callout of a real site), looking at another
+  // callout; enemies peek out from behind cover at the other callouts in front of you, at their real direction
+  // (yaw, right positive) and distance (stats/mapangles.py). The callout's name shows when one appears.
+  // Only the head kills; a body shot counts but the enemy keeps going.
+  function mapspots(o) {
+    o = Object.assign({win: 0.85, min: 0.45, out: 0.16}, o);
+    return {
+      kind: 'click', heads: true,
+      setup(st) {
+        let cur = (C.angles && C.angles.current) || null;
+        if (!cur && C.angles) {                       // played from the library card: the first map and spot
+          const m = Object.keys(C.angles)[0];
+          if (m) cur = C.angles.current = Object.assign({map: m}, C.angles[m][0]);
+        }
+        if (!cur) setTimeout(() => cue('No map data yet'), 50);
+        st.where = cur ? `${cur.map} · ${cur.name}` : '';
+        st.spots = (cur ? cur.spots : []).map(s => {
+          const a = s.yaw * D2R, d = clamp(s.d, 3, 33);
+          const f = [Math.sin(a), -Math.cos(a)], side = [Math.cos(a), Math.sin(a)];        // forward, to the right
+          const c = [f[0] * d, f[1] * d], sgn = Math.random() < 0.5 ? -1 : 1;             // which side it peeks from
+          const box = [c[0] + side[0] * sgn * 0.75, c[1] + side[1] * sgn * 0.75];
+          return {label: s.label, sgn, hide: [box[0], 0, box[1]], show: [c[0] - side[0] * sgn * 0.35, 0, c[1] - side[1] * sgn * 0.35],
+                  cover: {min: [box[0] - 0.7, 0, box[1] - 0.7], max: [box[0] + 0.7, 2.3, box[1] + 0.7]}};
+        });
+        st.covers = st.spots.map(s => s.cover);
+        st.window = o.win; st.targets = []; st.next = st.t + rand(0.6, 1.2); st.escaped = 0; st.body = 0; st.lastSpot = -1;
+      },
+      update(st, dt) {
+        let tg = st.targets[0];
+        if (!tg && st.t >= st.next && st.spots.length) {
+          let i; do { i = Math.floor(Math.random() * st.spots.length); } while (st.spots.length > 1 && i === st.lastSpot);
+          st.lastSpot = i;
+          const s = st.spots[i];
+          tg = {agent: true, c: s.hide.slice(), born: Infinity, side: s.sgn, spot: s, phase: 'out', t0: st.t};
+          st.targets = [tg];
+          return;
+        }
+        if (!tg) return;
+        const s = tg.spot, k = Math.min(1, (st.t - tg.t0) / o.out);
+        const lerp = (a, b, x) => [a[0] + (b[0] - a[0]) * x, 0, a[2] + (b[2] - a[2]) * x];
+        if (tg.phase === 'out') {
+          tg.c = lerp(s.hide, s.show, k);
+          if (tg.born === Infinity && k > 0.55) { tg.born = st.t; cue(s.label); }        // the head is out: the clock starts
+          if (k >= 1) { tg.phase = 'stay'; tg.t0 = st.t; }
+        } else if (tg.phase === 'stay') {
+          if (st.t - tg.t0 >= st.window) { tg.phase = 'in'; tg.t0 = st.t; }
+        } else {
+          tg.c = lerp(s.show, s.hide, k);
+          if (k >= 1) { st.targets = []; st.escaped++; st.window = Math.min(o.win + 0.1, st.window + 0.03); st.next = st.t + rand(0.5, 1.3); }
+        }
+      },
+      hit(st, tg, head) {
+        if (!head) { st.body++; return false; }
+        st.targets = []; st.window = Math.max(o.min, st.window - 0.02); st.next = st.t + rand(0.5, 1.3);
+        return true;
+      },
+    };
+  }
   const GRID_X = [-2.4, -1.2, 0, 1.2, 2.4], GRID_Y = [0.75, 1.65, 2.55, 3.45];
   const SC = {
     grid: {
@@ -923,6 +981,7 @@
     tswitch_wide: tswitch({n: 3, w: 60, pmin: -4, pmax: 14, d: 7, r: 0.34, hp: 0.5, smin: 2, smax: 4, fmin: 0.6, fmax: 1.5}),
     tswitch_small: tswitch({n: 3, w: 20, pmin: -2, pmax: 10, d: 14, r: 0.2, hp: 0.6, smin: 1.5, smax: 3, fmin: 0.6, fmax: 1.6}),
     tswitch_float: tswitch({n: 3, w: 25, pmin: -4, pmax: 16, d: 10, r: 0.32, hp: 0.5, smin: 1.5, smax: 3.5, vy: 2.5, fmin: 0.5, fmax: 1.3}),
+    map_angles: mapspots({}),
   };
   // The sens finder's test: parts of the same scenarios back to back, without breaks (switching seamlessly, the
   // trackers starting at the crosshair). quick: flicks (close and far in turn), then tracking. 15 and 30 minutes:
@@ -1318,6 +1377,7 @@
     if (st.kind === 'track') body.on_target = Math.round(1000 * st.on / st.seconds) / 1000;
     else Object.assign(body, {hits: st.hits, shots: st.shots, ms: avg || 0});
     if (SC[st.id].heads) Object.assign(body, {body: st.body || 0, escaped: st.escaped || 0});
+    if (st.where) body.where = st.where;
     if (st.ix) body.detail = ixRound(st.ix);
     if (plan) { plan.total += s; if (plan.i === plan.items.length - 1) Object.assign(body, {plan_done: plan.kind, plan_score: plan.total}); }
     const cells = SC[st.id].heads
@@ -1554,5 +1614,24 @@
     if (SC[st.id].update) SC[st.id].update(st, dt);
     if (st.kind === 'track' && fire && aimed()) st.on += dt;
   }
+  // ---- 4.28: the Map angles card above the library: pick a map and where you stand, then play "map_angles"
+  (function () {
+    const A = C.angles, mapSel = $('tr-ang-map'), posSel = $('tr-ang-pos'), list = $('tr-ang-spots');
+    if (!A || !mapSel) return;
+    const T = s => (window.vcT ? window.vcT(s) : s);
+    const choose = () => {
+      const m = mapSel.value, ps = A[m] || [], p = ps.find(x => x.id === posSel.value) || ps[0];
+      A.current = p ? Object.assign({map: m}, p) : null;
+      if (list) list.textContent = p ? T('Spots in front of you:') + ' ' + p.spots.map(s => `${s.label} (${Math.round(s.d)} m)`).join(', ') : '';
+    };
+    const fill = () => {
+      posSel.innerHTML = '';
+      for (const p of A[mapSel.value] || []) { const o = document.createElement('option'); o.value = p.id; o.textContent = T(p.name); posSel.appendChild(o); }
+      choose();
+    };
+    mapSel.addEventListener('change', fill); posSel.addEventListener('change', choose);
+    $('tr-ang-play').addEventListener('click', () => { choose(); open('map_angles'); });
+    fill();
+  })();
   window.nexusTrainer = {open, startFinder, xParse, xCode, crosshair: () => xh, finder: () => finder, state: () => st, aim: (y, p) => { yaw = y; pitch = p; }, shoot, score, step};   // for tests
 })();

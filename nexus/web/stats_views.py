@@ -984,7 +984,7 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
     from .aim import register as register_aim
     register_aim(app, store, sr, view_profile, filter_rows)
     from .trainer import register as register_trainer
-    register_trainer(app, store, sr, view_profile, filter_rows)
+    register_trainer(app, store, sr, view_profile, filter_rows, KNOWN_MAPS)
     from .callouts import register as register_callouts
     register_callouts(app, store, sr, view_profile, filter_rows, KNOWN_MAPS)
     from .askcoach import register as register_ask
