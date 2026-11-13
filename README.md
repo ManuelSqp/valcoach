@@ -1,6 +1,6 @@
 # Nexus
 
-**Version 4.29.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
+**Version 4.30.0** · what changed in each version: [CHANGELOG.md](CHANGELOG.md) · the running version is shown
 next to the logo in the web app, in *Settings*, at the top of every report, and in `nexus --version`.
 
 Local Valorant coach for **your team (IGL / macro)** and **you individually**,
@@ -212,6 +212,12 @@ a beep, made in the browser with its 3D HRTF panner, not taken from Valorant) pl
 you click the direction on a radar. *Distance* also asks near or far, *Height* above, same floor or below. The page
 shows how far off you are on average, how often you mix up in front and behind, and in which direction you hear
 worst.
+
+**Scrims:** *Team › Practice › Scrims* is the team's scrim log. Per scrim: date, opponent, map, score, the side you
+started on and the first half if you have them, what went well and what didn't (in words and as topics like retakes,
+trades or pistols). Over all scrims: the record, rounds won per map and per opponent, the last ten results, rounds won
+per side, and the topics that keep coming up as problems or keep working. Everyone in the team adds scrims; whoever
+wrote one and the team owner can change or remove it.
 
 **Ask the coach:** *Practice › Ask the coach* is a chat with the coach about one player. It knows the player's stats,
 habits, aim and KovaaK's scores and remembers the conversation (per user and player).

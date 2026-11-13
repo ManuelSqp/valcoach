@@ -4,6 +4,15 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.30.0
+- **Scrims** (*Team › Practice › Scrims*): the team's scrim log. Per scrim: date, opponent, map, score, the side you
+  started on and the first half (optional), what went well and what didn't, in words and as topics (retakes, trades,
+  pistol rounds, comms and more). Over all scrims: won–lost, rounds won, the last ten results, per map and per
+  opponent, rounds won per side, and *What the scrims show*: the topics that keep coming up as a problem or keep
+  working, the best and worst map, the weaker side. Filter by map or opponent.
+- Everyone in the team adds scrims; whoever wrote one and the team owner can change or remove it.
+- German texts.
+
 ## 4.29.0
 - **Sound** (*Practice › Sound*): hear where a sound comes from (headphones). Footsteps, a reload or a beep play once
   from somewhere around you, in 3D (the browser's HRTF panner); click the direction on a radar. Modes: *Direction*,
