@@ -68,6 +68,8 @@ def register(app, store, sr: StatsRunner, get_profile) -> None:
                 return p, False
         abort(404)
 
+    app.extensions["nexus"]["view_profile"] = view_profile      # 4.40: the Replay files page (replays.py)
+
     @app.template_filter("pct")
     def pct(v) -> str:
         return "–" if v is None else f"{v * 100:.0f}%"

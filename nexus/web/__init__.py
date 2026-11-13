@@ -637,7 +637,7 @@ def create_app(data_dir: Path, config_seed: Path | None = None, start_workers: b
             for ep, lbl in (("agents_roles", "agents & roles"), ("rounds_page", "rounds & economy"), ("teammates_page", "teammates"), ("habits", "habits"), ("aim", "aim & warm-up"), ("ask_coach", "ask the coach"), ("progress", "rank & progress"), ("training", "training"),
                             ("quiz", "quiz"), ("pros", "pros & videos"), ("profile", "matches & reports"), ("today", "today"),
                             ("trainer", "aim trainer"), ("aim_insights", "aim insights"), ("gear_check", "mouse & monitor"),
-                            ("callouts", "callouts"), ("maps3d", "3d maps"), ("sound_trainer", "sound")):
+                            ("callouts", "callouts"), ("maps3d", "3d maps"), ("sound_trainer", "sound"), ("replay_files", "replay files · upload")):
                 if ep not in app.view_functions:
                     continue
                 add("player", f"{p.name} · {lbl}", url_for(ep, pid=p.id))

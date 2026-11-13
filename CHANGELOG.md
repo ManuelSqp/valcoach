@@ -4,6 +4,16 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.40.0
+- **Replay files page** (*Performance › Matches › Replay files*, or *Upload replays* on the matches page): upload
+  replay files of any match without starting a coaching run. Several at once (pick them or drag them in), one after
+  another with progress; each says whether it's one of your matches (and which map) or another match (kept for that
+  one). Teammates can upload for a shared player too. The page lists your matches that have a replay (with *Coach this
+  match*) and your last 15 matches without one, so you see what's still worth uploading before the next patch
+  deletes it. It warns when the server can't read replays (vrfkit missing).
+- 3D maps without replays link straight to it; Ctrl+K finds it.
+- German texts.
+
 ## 4.39.0
 - **Does training help?** (*Practice › Aim › Aim insights*): each trainer skill next to the match number it should
   move: one taps and micro-adjusting → headshots, flicks, peeks and reaction → first duels won, target switching →

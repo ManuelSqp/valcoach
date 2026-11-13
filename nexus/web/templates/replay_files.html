@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% import "_ui.html" as vc %}
+{% block title %}Replay files · {{ p.riot_id }} · Nexus{% endblock %}
+{% block head %}<style>
+.rf-drop{border:2px dashed var(--line2);border-radius:var(--radius);padding:26px 18px;text-align:center;background:var(--panel);transition:border-color .15s,background .15s}
+.rf-drop.over{border-color:var(--accent);background:var(--panel2)}
+.rf-drop h2{margin:0 0 6px}
+.rf-drop p{margin:0 auto 14px;max-width:62ch;color:var(--muted);font-size:13.5px}
+.rf-drop input{display:none}
+.rf-list{display:grid;gap:6px;margin-top:14px;text-align:left}
+.rf-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13.5px}
+.rf-item .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.rf-item .st{font-size:12.5px;color:var(--muted);grid-column:1 / -1}
+.rf-item.ok{border-left:4px solid var(--win)}.rf-item.err{border-left:4px solid var(--red)}
+.rf-bar{grid-column:1 / -1;height:4px;border-radius:2px;background:var(--panel3);overflow:hidden}
+.rf-bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.rf-item.err .rf-bar{display:none}.rf-item.ok .rf-bar i{background:var(--win)}
+.rf-list > a.btn{justify-self:center;margin-top:4px}
+.rf-warn{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:13.5px}
+.rf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:18px}
+.rf-grid .card{margin:0}
+.rf-grid table{width:100%;font-size:13.5px}
+.rf-grid td{padding:6px 6px 6px 0;vertical-align:middle}
+.rf-grid td.r{text-align:right;white-space:nowrap}
+.res-w{color:var(--win);font-weight:700}.res-l{color:var(--red);font-weight:700}
+</style>{% endblock %}
+{% block content %}
+{{ vc.pagehead('Replay files', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+   'Upload replays of any match: for the 3D maps, the replay stats and later coaching') }}
+
+{% if problem %}<div class="rf-warn"><b>Replay files can't be read on this server right now.</b> <span>{{ problem }}</span></div>{% endif %}
+
+<section class="rf-drop" id="rf-drop">
+  <h2>Upload replay files</h2>
+  <p><span>Drop one or more .vrf files here, or pick them.</span> <span>Valorant keeps them in VALORANT › Saved › Demos and deletes them with the next patch; on the server they stay.</span>
+    <span>Any mode with a replay (Unrated, Competitive, Swiftplay, Premier), your matches or your teammates'.</span> <span>Up to {{ max_mb }} MB per file.</span></p>
+  <input type="file" id="rf-file" accept=".vrf" multiple>
+  <button type="button" class="btn primary" id="rf-pick">Choose replay files</button>
+  <div class="rf-list" id="rf-list" aria-live="polite"></div>
+</section>
+
+<div class="rf-grid">
+  <section class="card">
+    <h2>Your matches with a replay</h2>
+    {% if with_replay %}
+    <table>{% for r in with_replay[:30] %}
+      <tr><td class="small muted">{{ r.started_at|localtime }}</td><td translate="no">{{ r.map }}</td><td translate="no">{{ r.agent }}</td>
+        <td class="{{ 'res-w' if r.won == 1 else 'res-l' if r.won == 0 else '' }}" translate="no">{{ r.score }}</td>
+        <td class="r">{% if can_edit %}<a class="btn sm ghost" href="{{ url_for('coach', pid=p.id, match_id=r.match_id) }}">Coach this match</a>{% endif %}</td></tr>
+    {% endfor %}</table>
+    {% if with_replay|length > 30 %}<p class="small muted">{{ with_replay|length - 30 }} more.</p>{% endif %}
+    {% else %}<p class="muted small" style="margin:0">None yet.</p>{% endif %}
+    <p class="small muted" style="margin:10px 0 0"><span>Replay files on the server: {{ total }}</span>{% if others %} · <span>{{ others }} from other matches</span>{% endif %}</p>
+  </section>
+  <section class="card">
+    <h2>Recent matches without a replay</h2>
+    {% if missing %}
+    <p class="small muted" style="margin-top:0">Your last {{ recent }} matches that have no replay file yet: if Valorant still has them, upload them.</p>
+    <table>{% for r in missing %}
+      <tr><td class="small muted">{{ r.started_at|localtime }}</td><td translate="no">{{ r.map }}</td><td translate="no">{{ r.agent }}</td>
+        <td class="{{ 'res-w' if r.won == 1 else 'res-l' if r.won == 0 else '' }}" translate="no">{{ r.score }}</td><td class="small muted">{{ r.queue|capitalize }}</td></tr>
+    {% endfor %}</table>
+    {% else %}<p class="muted small" style="margin:0">{% if with_replay %}Every recent match has one.{% else %}No matches loaded yet.{% endif %}</p>{% endif %}
+  </section>
+</div>
+
+<script>
+(() => {
+  const T = s => (window.vcT ? window.vcT(s) : s);
+  const drop = document.getElementById('rf-drop'), input = document.getElementById('rf-file'), list = document.getElementById('rf-list');
+  const BEGIN = "{{ url_for('replay_upload_begin') }}", PUT = "{{ url_for('upload_begin') }}", STORE = "/api/replays/", PID = {{ p.id }};
+  let queue = Promise.resolve(), stored = 0;
+  function row(file) {
+    const el = document.createElement('div'); el.className = 'rf-item';
+    el.innerHTML = '<span class="nm" translate="no"></span><span class="sz small muted"></span><span class="rf-bar"><i></i></span><span class="st"></span>';
+    el.querySelector('.nm').textContent = file.name;
+    el.querySelector('.sz').textContent = (file.size / 1048576).toFixed(1) + ' MB';
+    list.appendChild(el);
+    return {el, st: el.querySelector('.st'), bar: el.querySelector('.rf-bar i')};
+  }
+  async function upload(file, ui) {
+    if (!/\.vrf$/i.test(file.name)) throw new Error(T("That isn't a replay file (.vrf)."));
+    let r = await fetch(BEGIN, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: file.name, size: file.size})});
+    const u = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(u.error || `Error ${r.status}`);
+    for (let offset = 0; offset < file.size;) {
+      r = await fetch(`${PUT}/${u.id}?offset=${offset}`, {method: 'PUT', headers: {'Content-Type': 'application/octet-stream'}, body: file.slice(offset, offset + u.chunk)});
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok && !(r.status === 409 && d.received != null)) throw new Error(d.error || `Error ${r.status}`);
+      offset = d.received;
+      ui.bar.style.width = Math.round(offset / file.size * 100) + '%';
+      ui.st.textContent = T('Uploading') + ` ${Math.round(offset / file.size * 100)} %`;
+    }
+    ui.st.textContent = T('Reading the replay …');
+    r = await fetch(`${STORE}${encodeURIComponent(u.id)}/store?pid=${PID}`, {method: 'POST'});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `Error ${r.status}`);
+    return d;
+  }
+  function add(files) {
+    for (const file of files) {
+      const ui = row(file);
+      ui.st.textContent = T('Waiting');
+      queue = queue.then(async () => {                      // one after another: the server reads one at a time anyway
+        try {
+          const d = await upload(file, ui);
+          ui.el.classList.add('ok'); ui.bar.style.width = '100%'; stored++;
+          const what = d.mine ? (d.map ? `${T('One of your matches')}: ${d.map}` : T('One of your matches'))
+                              : T('A match that isn\'t in your match list (kept for that match)');
+          ui.st.textContent = `${T('Stored')} · ${what} · ${d.rounds} ${T('rounds')}, ${d.players} ${T('players')}`;
+        } catch (e) {
+          ui.el.classList.add('err'); ui.st.textContent = `${T('Failed')}: ${e.message}`;
+        }
+      });
+    }
+    queue = queue.then(() => { if (stored && !list.querySelector('.rf-item:not(.ok):not(.err)')) {
+      const b = document.createElement('a'); b.className = 'btn sm'; b.href = location.pathname; b.textContent = T('Refresh the lists');
+      if (!list.querySelector('a.btn')) list.appendChild(b);
+    } });
+  }
+  document.getElementById('rf-pick').addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { add([...input.files]); input.value = ''; });
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => add([...e.dataTransfer.files]));
+  window.nexusReplayUpload = {add};                          // for tests
+})();
+</script>
+{% endblock %}

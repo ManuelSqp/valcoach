@@ -1,4 +1,5 @@
-"""Replay files (.vrf) on the server (4.9): upload on the coach page or from the Nexus app.
+"""Replay files (.vrf) on the server (4.9): upload on the coach page, on the Replay files page (4.40, any match,
+several at once) or from the Nexus app.
 
 A replay is uploaded in pieces like a VOD (uploads.py), then vrfkit reads it once: the compact data and the
 file are kept as data/replays/<match id>.json.gz and .vrf (see nexus/replayfile.py). One file serves every
@@ -11,7 +12,7 @@ import os
 import threading
 from pathlib import Path
 
-from flask import abort, g, jsonify, request
+from flask import abort, g, jsonify, render_template, request
 
 from .. import pipeline, replayfile
 from .uploads import CHUNK_BYTES, UploadError
@@ -69,3 +70,45 @@ def register(app, store, uploads, get_profile) -> None:
             return jsonify(ok=False, match_id=info["match_id"],
                            error="This replay file is from another match. It was kept for that match."), 409
         return jsonify(ok=True, **info)
+
+    # ------------------------------------------------------------------ 4.40: Replay files page, upload any replay
+    @app.post("/api/replays/<upload_id>/store")
+    def replay_store(upload_id: str):
+        """A finished upload is a replay of whichever match it is: no coaching run needed. -> the summary, the map
+        if the match is known, and whether it's one of this player's matches (?pid=)."""
+        info = ingest_upload(store, uploads, g.user.id, upload_id)
+        mine = None
+        pid = request.args.get("pid", type=int)
+        if pid:
+            app.extensions["nexus"]["view_profile"](pid)
+            rows = {r.get("match_id", "").lower(): r for r in _rows(app, pid)}
+            r = rows.get(info["match_id"])
+            mine = bool(r)
+            if r:
+                info["map"] = r.get("map") or ""
+                info["started_at"] = r.get("started_at") or ""
+        return jsonify(ok=True, mine=mine, **info)
+
+    @app.get("/profiles/<int:pid>/replays")
+    def replay_files(pid: int):
+        """Upload replay files (several at once, any match) and see which of your matches have one."""
+        p, can_edit = app.extensions["nexus"]["view_profile"](pid)     # yours, or a teammate's: a replay is the match's
+        d = replays_dir(store)
+        have = set(replayfile.stored(d))
+        rows = sorted(_rows(app, pid), key=lambda r: r.get("started_at") or "", reverse=True)
+        with_replay = [r for r in rows if (r.get("match_id") or "").lower() in have]
+        recent_missing = [r for r in rows[:RECENT] if (r.get("match_id") or "").lower() not in have]
+        problem = replayfile.check_vrfkit(replayfile.vrfkit_path(store.get("vrfkit_path") or ""))
+        return render_template("replay_files.html", p=p, active_pid=pid, can_edit=can_edit, with_replay=with_replay,
+                               missing=recent_missing, total=len(have), others=len(have) - len(with_replay),
+                               problem=problem, max_mb=replayfile.MAX_VRF_BYTES // 1024 ** 2, recent=RECENT)
+
+
+RECENT = 15                         # the Replay files page lists your last this-many matches without a replay
+
+
+def _rows(app, pid: int) -> list[dict]:
+    try:
+        return list(app.extensions["nexus"]["stats"].games(pid).rows())
+    except Exception:                                    # no stats yet
+        return []
