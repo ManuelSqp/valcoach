@@ -7,6 +7,33 @@
 {%- endif -%}
 {%- endmacro %}
 {% block head %}<style>
+.sb-list{display:grid;gap:8px;margin-bottom:12px}
+.sb-item{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.sb-acts{display:flex;gap:6px;flex-wrap:wrap}
+.sb-form{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.sb-form summary{cursor:pointer;font-weight:650}
+.sb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 14px;margin-top:12px}
+.sb-grid label,.sb-params label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted);margin:0}
+.sb-grid .full{grid-column:1/-1}
+.sb-params{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px 18px}
+.sb-params label b{color:var(--text);font-variant-numeric:tabular-nums;margin-left:4px}
+.sb-params .sb-bool{flex-direction:row;align-items:center;gap:8px;color:var(--text);font-size:13.5px}
+.sb-params input[type=range]{width:100%}
+.sb-btns{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.sb-import{display:flex;gap:8px}.sb-import input{flex:1}
+.tr-skills{margin-bottom:22px}
+.tr-sk-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.tr-sk-chips button{font:inherit;display:flex;gap:8px;align-items:baseline;padding:7px 12px;border-radius:10px;border:1px solid var(--line2);background:var(--panel);color:var(--text);cursor:pointer}
+.tr-sk-chips button.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.tr-sk-chips b{font-family:var(--font-num);font-size:17px;font-weight:800}.tr-sk-chips span{font-size:13.5px}
+.tr-sk{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,320px);gap:16px;align-items:start}
+@media(max-width:860px){.tr-sk{grid-template-columns:1fr}}
+.tr-sk .big{font-family:var(--font-num);font-size:44px;font-weight:800;font-stretch:72%;line-height:1}
+.tr-sk .chg{font-size:13px;font-weight:650;margin-left:8px}.tr-sk .chg.up{color:var(--win)}.tr-sk .chg.down{color:var(--red)}
+.tr-sk ol{margin:6px 0 0;padding-left:20px;font-size:13.5px}.tr-sk li span{color:var(--muted)}
+.tr-sk-go{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.tr-sk svg{width:100%;height:70px}.tr-sk polyline{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke}
+.tr-adapt{font-size:13px;margin:8px 0 0;color:#cfd6e2}.tr-adapt span{color:#9aa6b8;margin-left:6px}
 .tr-ang-row{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end}
 .tr-ang-row label{display:grid;gap:4px;font-size:12.5px;color:var(--muted)}
 .tr-ang-row select{width:auto;min-width:160px}
@@ -152,6 +179,45 @@
   {% endfor %}
 </div>
 
+<section class="card tr-skills" id="tr-skills">
+  <h2>Train one skill</h2>
+  <p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Pick what you want to get better at. A session starts where you are on that
+    skill's ladder (easy to hard), two rounds per scenario, and every round adapts: targets get smaller and faster when it
+    goes well, bigger and slower when it doesn't. The rating compares you with yourself: your last 12 runs of that skill.</p>
+  <div class="tr-sk-chips" id="tr-sk-chips">{% for k, x in skills.items() %}<button type="button" data-sk="{{ k }}" class="{{ 'on' if loop.first }}"><span>{{ x.name }}</span><b>{{ x.rating if x.rating is not none else '–' }}</b></button>{% endfor %}</div>
+  {% for k, x in skills.items() %}
+  <div class="tr-sk" data-skp="{{ k }}" {{ '' if loop.first else 'hidden' }}>
+    <div>
+      <h3 style="margin:0 0 4px">{{ x.name }}</h3>
+      <p class="small muted" style="margin:0">{{ x.about }}</p>
+      {% set pl = skill_plans['skill_' ~ k ~ '_' ~ minutes[0]] %}
+      <ol>{% for it in pl['items'][:9] %}{% if loop.first or it.id != pl['items'][loop.index0 - 1].id %}<li>{{ it.name }} <span>{{ 'warm-up' if it.why == 'warm-up' else '2 × ' ~ it.seconds ~ ' s' }}</span></li>{% endif %}{% endfor %}</ol>
+      <div class="tr-sk-go">{% for m in minutes %}<button type="button" class="btn {{ 'primary' if loop.first }}" data-plan="skill_{{ k }}_{{ m }}">{{ m }} min</button>{% endfor %}</div>
+    </div>
+    <div>
+      <div class="small muted">Your {{ x.name|lower }} rating</div>
+      <div><span class="big">{{ x.rating if x.rating is not none else '–' }}</span>{% if x.change is not none and x.change != 0 %}<span class="chg {{ 'up' if x.change > 0 else 'down' }}"><span>{{ '%+d'|format(x.change) }}</span> <span>since</span> <span>{{ x.days[0][0] }}</span></span>{% endif %}</div>
+      {% if x.days|length >= 2 %}{% set vals = x.days|map(attribute=1)|list %}{% set lo = vals|min %}{% set hi = vals|max %}{% set span = (hi - lo) or 1 %}
+      <svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-label="Rating by day"><polyline points="{% for v in vals %}{{ (loop.index0 * 100 / (vals|length - 1))|round(1) }},{{ (36 - (v - lo) * 32 / span)|round(1) }} {% endfor %}"/></svg>
+      <div class="small muted">{{ x.days|length }} days · {{ x.runs }} runs</div>
+      {% elif x.runs %}<div class="small muted">{{ x.runs }} runs so far: the chart starts on the second day.</div>
+      {% else %}<div class="small muted">No runs of this skill yet.</div>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</section>
+<script>
+(function () {
+  const chips = document.getElementById('tr-sk-chips');
+  if (!chips) return;
+  chips.addEventListener('click', e => {
+    const b = e.target.closest('[data-sk]'); if (!b) return;
+    chips.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('[data-skp]').forEach(p => { p.hidden = p.dataset.skp !== b.dataset.sk; });
+  });
+})();
+</script>
+
 <section class="tr-sens" id="sens">
   <div>
     <h2>Sens finder</h2>
@@ -259,6 +325,44 @@
 {% endfor %}
 <p class="muted small" id="tr-none" hidden>No scenario fits these filters.</p>
 </div>
+
+<section class="card sb" id="sandbox" style="margin-top:22px">
+  <h2>Sandbox: your own scenarios <span class="muted" style="font-weight:400">{{ sandbox['items']|length }}</span></h2>
+  <p class="small muted" style="margin:-4px 0 12px;max-width:80ch">Make a scenario from the same building blocks as the library: pick a type,
+    set its numbers, try it, save it for yourself or a team. Tag it with a skill and it joins that skill's sessions.
+    Share one as a code (NX1-…): whoever pastes it gets the same scenario.</p>
+  <div class="sb-list" id="sb-list">
+    {% for c in sandbox['items'] %}
+    <div class="sb-item" data-id="{{ c.id }}">
+      <div><b translate="no">{{ c.name }}</b> <span class="muted small"><span>{{ sandbox.types[c.type].label }}</span>{% if c.skill %} · <span>{{ sandbox.skill_names[c.skill] }}</span>{% endif %}
+        · <span>{{ c.seconds }} s</span>{% if c.team %} · <span translate="no">{{ c.team }}</span>{% endif %}{% if c.by and not c.mine %} · <span translate="no">{{ c.by }}</span>{% endif %}</span>
+        {% if c.about %}<div class="small muted" translate="no">{{ c.about }}</div>{% endif %}
+        <div class="small">{% if c.best is not none %}<span>Best</span> {{ c.best|round|int }} · {{ c.runs }} <span>runs</span>{% else %}<span class="muted">Not played yet</span>{% endif %}</div></div>
+      <div class="sb-acts"><button type="button" class="btn sm primary" data-a="play">Play</button>
+        {% if c.can_edit %}<button type="button" class="btn sm ghost" data-a="edit">Change</button>{% endif %}
+        <button type="button" class="btn sm ghost" data-a="code">Copy code</button>
+        {% if c.can_edit %}<button type="button" class="btn sm ghost danger" data-a="del">Remove</button>{% endif %}</div>
+    </div>
+    {% else %}<p class="muted small" style="margin:0 0 8px">None yet: make one below, or paste a code someone sent you.</p>{% endfor %}
+  </div>
+  <details id="sb-form" class="sb-form">
+    <summary>Make a scenario</summary>
+    <div class="sb-grid">
+      <label><span>Type</span><select id="sb-type"></select></label>
+      <label><span>Name</span><input type="text" id="sb-name" maxlength="40" placeholder="e.g. Fast heads on B site"></label>
+      <label><span>Seconds</span><input type="number" id="sb-seconds" min="15" max="120" value="45"></label>
+      <label><span>Skill (for skill sessions)</span><select id="sb-skill"><option value="">None</option></select></label>
+      <label><span>Difficulty</span><select id="sb-level"><option value="1">Easy</option><option value="2" selected>Medium</option><option value="3">Hard</option></select></label>
+      <label><span>Save for</span><select id="sb-scope"><option value="me">Only me</option></select></label>
+      <label class="full"><span>What it trains (optional)</span><input type="text" id="sb-about" maxlength="200"></label>
+    </div>
+    <p class="small muted" id="sb-about-type" style="margin:10px 0 6px"></p>
+    <div class="sb-params" id="sb-params"></div>
+    <div class="sb-btns"><button type="button" class="btn" id="sb-try">Try it</button><button type="button" class="btn primary" id="sb-save">Save</button>
+      <button type="button" class="btn ghost" id="sb-new">Start over</button></div>
+  </details>
+  <div class="sb-import"><input type="text" id="sb-code" placeholder="Paste a scenario code (NX1-…)" aria-label="Scenario code"><button type="button" class="btn" id="sb-import">Add</button></div>
+</section>
 <script>
 (function () {
   const lib = document.getElementById('tr-lib');
@@ -338,11 +442,12 @@
 
 <script>
 window.NEXUS_TRAINER = {{ {
-  'scenarios': scenarios, 'plans': plans, 'start': start, 'play': play, 'can_save': can_save, 'scale': setup.scale or 1,
-  'summary': summary, 'angles': angles,
+  'scenarios': scenarios, 'plans': dict(plans, **skill_plans), 'start': start, 'play': play, 'can_save': can_save, 'scale': setup.scale or 1,
+  'summary': summary, 'angles': angles, 'sandbox': sandbox,
   'sens_base': setup.sens or 0.4, 'dpi': setup.get('dpi'), 'crosshair': setup.get('crosshair'), 'sens_rec': rec.sens if rec and rec.edge else None,
   'urls': {'sens': url_for('trainer_sens', pid=p.id), 'run': url_for('trainer_run', pid=p.id), 'setup': url_for('trainer_setup', pid=p.id), 'aim': url_for('aim', pid=p.id)}
 }|tojson }};
 </script>
 <script src="{{ url_for('static', filename='trainer.js') }}?v={{ app_version }}"></script>
+<script src="{{ url_for('static', filename='sandbox.js') }}?v={{ app_version }}"></script>
 {% endblock %}

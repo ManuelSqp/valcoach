@@ -551,6 +551,11 @@
         }
       },
       hit(st) { st.targets = []; st.window = Math.max(o.min, st.window - 0.025); st.next = st.t + rand(0.35, 0.9); },
+      miss: o.oneshot ? function (st) {          // one taps: a miss and it's back behind cover
+        const tg = st.targets[0];
+        if (tg && tg.phase !== 'in') { tg.phase = 'in'; tg.t0 = st.t; }
+      } : undefined,
+      oneshot: !!o.oneshot,
     };
   }
     // Hold the angle: a doorway in front of you, an enemy model comes out of the left or right side: a wide swing
@@ -603,10 +608,12 @@
       },
       gone(st) { st.targets = []; st.escaped++; st.window = Math.min(o.win + 0.1, st.window + 0.03); st.next = st.t + rand(0.5, 1.3); },
       hit(st, tg, head) {
-        if (!head) { st.body++; return false; }                    // keeps going
+        if (!head) { st.body++; if (o.oneshot) { st.escaped--; this.gone(st); } return false; }   // keeps going
         st.targets = []; st.window = Math.max(o.min, st.window - 0.02); st.next = st.t + rand(0.5, 1.3);
         return true;
       },
+      miss: o.oneshot ? function (st) { const tg = st.targets[0]; if (tg && tg.born !== Infinity) this.gone(st); } : undefined,
+      oneshot: !!o.oneshot,
     };
   }
   // ---- 4.24: the drill types the big aim trainers are known for, in our own versions
@@ -845,6 +852,57 @@
       },
     };
   }
+  // ---- 4.32: one taps. Head-sized targets at head height (pitch pmin..pmax, ±w° around the middle, dmin..dmax m);
+  // only the first shot counts: a miss and the target you were nearest to is gone (counted as got away). n at a time,
+  // a new one gap[0]..gap[1] s after; life: gone after that many seconds if not shot.
+  function onetap(o) {
+    o = Object.assign({n: 1, w: 30, pmin: -0.5, pmax: 0.5, gap: [0.25, 0.6], r: 0.15}, o);
+    return {
+      kind: 'click', oneshot: true,
+      setup(st) { st.targets = []; st.escaped = 0; st.next = st.t + 0.4; },
+      spawn(st) {
+        let a, b, k = 0;
+        do { a = rand(-o.w, o.w); b = rand(o.pmin, o.pmax); k++; }
+        while (k < 30 && st.targets.some(t => Math.abs(t.a - a) < 7));
+        st.targets.push({c: place(a * D2R, b * D2R, rand(o.dmin, o.dmax), o.r), r: o.r, born: st.t, a});
+      },
+      update(st) {
+        for (const tg of [...st.targets]) if (o.life && st.t - tg.born > o.life) { st.targets.splice(st.targets.indexOf(tg), 1); st.escaped++; }
+        if (st.targets.length < o.n && st.t >= st.next) { this.spawn(st); st.next = st.t + rand(...o.gap); }
+      },
+      hit(st, tg) { st.targets.splice(st.targets.indexOf(tg), 1); st.next = Math.max(st.next, st.t + rand(...o.gap)); },
+      miss(st) {                                  // the one you were going for: nearest to the crosshair
+        if (!st.targets.length) return;
+        const d = aimDir();
+        let best = null, bd = Infinity;
+        for (const tg of st.targets) {
+          const v = [tg.c[0], tg.c[1] - EYE, tg.c[2]], n = Math.hypot(...v);
+          const ang = Math.acos(clamp((v[0] * d[0] + v[1] * d[1] + v[2] * d[2]) / n, -1, 1));
+          if (ang < bd) { bd = ang; best = tg; }
+        }
+        st.targets.splice(st.targets.indexOf(best), 1); st.escaped++;
+        st.next = Math.max(st.next, st.t + rand(...o.gap));
+      },
+    };
+  }
+  // 4.32: every scenario remembers how it was made (builder and options): a skill session makes a harder or easier
+  // copy of it (scaled), the sandbox (4.33) makes new ones from the same builders
+  const BUILD = {flicks, tracker, multi, timed, spider, orbit, strafer, peeks, angle, bounce, burst, popups, glide, tswitch, mapspots, onetap};
+  const B = Object.fromEntries(Object.entries(BUILD).map(([n, f]) => [n, o => Object.assign(f(o), {_b: n, _o: o})]));
+  const custom = {};             // 4.33: sandbox scenarios, id -> handler
+  const SIZE_KEYS = ['r'], SPEED_KEYS = ['vmin', 'vmax', 'smin', 'smax', 'wmin', 'wmax', 'fast'], TIME_KEYS = ['life', 'win', 'min', 'out'];
+  // k: {size, speed}: targets k.size times as big, moving k.speed times as fast, staying 1/k.speed as long
+  function scaled(h, k) {
+    if (!h || !h._b || !k || (k.size === 1 && k.speed === 1)) return h;
+    const o = Object.assign({}, h._o);
+    for (const x of SIZE_KEYS) if (typeof o[x] === 'number') o[x] *= k.size;
+    if (o.r === undefined && ['onetap', 'peeks'].includes(h._b)) o.r = (h._b === 'onetap' ? 0.15 : 0.26) * k.size;
+    for (const x of SPEED_KEYS) if (typeof o[x] === 'number') o[x] *= k.speed;
+    if (['angle', 'mapspots'].includes(h._b)) o.fast = (o.fast || 1) * k.speed;
+    for (const x of TIME_KEYS) if (typeof o[x] === 'number') o[x] /= k.speed;
+    for (const x of ['jink', 'every', 'gap']) if (Array.isArray(o[x])) o[x] = o[x].map(v => v / k.speed);
+    return Object.assign(BUILD[h._b](o), {_b: h._b, _o: o});
+  }
   const GRID_X = [-2.4, -1.2, 0, 1.2, 2.4], GRID_Y = [0.75, 1.65, 2.55, 3.45];
   const SC = {
     grid: {
@@ -880,108 +938,115 @@
       hit(st) { this.spawn(st); },
     },
     // close: big targets 6–8 m away, far around you (an enemy in your face). far: small ones 22–30 m away
-    flick_close: flicks({dmin: 6, dmax: 8, r: 0.32, amin: 35, amax: 85, pmin: -8, pmax: 12, vert: 0.3}),
-    flick_far: flicks({dmin: 22, dmax: 30, r: 0.2, amin: 6, amax: 28, pmin: -3, pmax: 5, vert: 0.25}),
-    peek: peeks({}),
-    holdangle: angle({}),
-    track: tracker({d: 9, r: 0.38, y: 1.35, bob: 0.06, vmin: 2.4, vmax: 5.2, fmin: 0.25, fmax: 1.1, bound: 5}),
+    flick_close: B.flicks({dmin: 6, dmax: 8, r: 0.32, amin: 35, amax: 85, pmin: -8, pmax: 12, vert: 0.3}),
+    flick_far: B.flicks({dmin: 22, dmax: 30, r: 0.2, amin: 6, amax: 28, pmin: -3, pmax: 5, vert: 0.25}),
+    peek: B.peeks({}),
+    holdangle: B.angle({}),
+    track: B.tracker({d: 9, r: 0.38, y: 1.35, bob: 0.06, vmin: 2.4, vmax: 5.2, fmin: 0.25, fmax: 1.1, bound: 5}),
     // close: an enemy 4.5 m away, fast across the screen. far: small, 20 m away. reactive: short ADAD strafes
     // with sudden stops, like a player dodging
-    track_close: tracker({d: 4.5, r: 0.34, y: 1.4, bob: 0.05, vmin: 3.4, vmax: 6.2, fmin: 0.25, fmax: 0.8, bound: 2.8, acc: 32}),
-    track_far: tracker({d: 20, r: 0.24, y: 1.45, bob: 0.04, vmin: 2.0, vmax: 4.2, fmin: 0.5, fmax: 1.5, bound: 9}),
-    track_react: tracker({d: 9, r: 0.36, y: 1.4, vmin: 4.2, vmax: 6.2, fmin: 0.12, fmax: 0.45, bound: 4.5, acc: 60, stop: 0.3}),
+    track_close: B.tracker({d: 4.5, r: 0.34, y: 1.4, bob: 0.05, vmin: 3.4, vmax: 6.2, fmin: 0.25, fmax: 0.8, bound: 2.8, acc: 32}),
+    track_far: B.tracker({d: 20, r: 0.24, y: 1.45, bob: 0.04, vmin: 2.0, vmax: 4.2, fmin: 0.5, fmax: 1.5, bound: 9}),
+    track_react: B.tracker({d: 9, r: 0.36, y: 1.4, vmin: 4.2, vmax: 6.2, fmin: 0.12, fmax: 0.45, bound: 4.5, acc: 60, stop: 0.3}),
     // ---- 4.23: the library (names and texts in stats/trainer.py)
-    flick_mid: flicks({dmin: 12, dmax: 16, r: 0.26, amin: 15, amax: 45}),
-    flick_wide: flicks({dmin: 8, dmax: 11, r: 0.3, amin: 50, amax: 70, vert: 0.2}),
-    flick_vert: flicks({dmin: 10, dmax: 14, r: 0.26, amin: 10, amax: 28, vert: 0.95, pmin: -8, pmax: 16}),
-    flick_tiny: flicks({dmin: 14, dmax: 18, r: 0.12, amin: 8, amax: 30, pmin: -3, pmax: 6}),
-    spider: spider({dmin: 8, dmax: 9, r: 0.3, amin: 20, amax: 45}),
-    spider_far: spider({dmin: 18, dmax: 22, r: 0.16, amin: 6, amax: 18}),
-    six_shot: multi({n: 6, w: 20, pmin: -4, pmax: 12, dmin: 12, dmax: 12, r: 0.28, sep: 6}),
-    head_switch: multi({n: 4, w: 35, head: true, dmin: 13, dmax: 16, r: 0.2, sep: 9}),
-    close_switch: multi({n: 3, w: 65, pmin: -6, pmax: 10, dmin: 5, dmax: 7, r: 0.32, sep: 25}),
-    tiny_switch: multi({n: 5, w: 15, pmin: -3, pmax: 6, dmin: 18, dmax: 20, r: 0.13, sep: 4}),
-    double_tap: multi({n: 3, w: 25, pmin: -3, pmax: 8, dmin: 10, dmax: 14, r: 0.3, hp: 2, sep: 8}),
-    reflex: timed({dmin: 10, dmax: 13, r: 0.3, amin: 10, amax: 40, life: 1.1, min: 0.45}),
-    reflex_small: timed({dmin: 14, dmax: 18, r: 0.17, amin: 5, amax: 25, life: 1.0, min: 0.5}),
-    reflex_wide: timed({dmin: 7, dmax: 9, r: 0.3, amin: 40, amax: 70, life: 1.2, min: 0.55, vert: 0.2}),
-    pinpoint: multi({n: 1, w: 10, pmin: -2, pmax: 3, dmin: 24, dmax: 28, r: 0.1, sep: 2}),
-    headline_far: flicks({dmin: 24, dmax: 30, r: 0.16, amin: 4, amax: 20, vert: 0.03, pmin: -0.5, pmax: 0.5}),
-    micro_spider: spider({dmin: 16, dmax: 18, r: 0.12, amin: 1.5, amax: 5}),
-    peek_far: peeks({z: 28, spread: 7, r: 0.2, win: 0.9, min: 0.45}),
-    peek_fast: peeks({win: 0.6, min: 0.25, out: 0.08}),
-    angle_close: angle({dmin: 5, dmax: 8, wmin: 2.2, wmax: 3}),
-    angle_long: angle({dmin: 24, dmax: 32, wmin: 2, wmax: 3, win: 0.7}),
-    angle_jiggle: angle({swing: 0.15, jiggle: 0.7}),
-    angle_wide: angle({swing: 1, jiggle: 0, win: 0.75, wmin: 3.5, wmax: 5}),
-    angle_runners: angle({swing: 0, jiggle: 0, fast: 1.25}),
-    track_smooth: tracker({d: 11, r: 0.4, y: 1.4, bob: 0.04, vmin: 1.5, vmax: 2.8, fmin: 0.8, fmax: 2, bound: 5}),
-    track_fast: tracker({d: 7, r: 0.32, y: 1.4, vmin: 5.5, vmax: 7.5, fmin: 0.2, fmax: 0.6, bound: 3.8, acc: 45}),
-    track_tiny: tracker({d: 14, r: 0.18, y: 1.45, bob: 0.03, vmin: 2, vmax: 4, fmin: 0.4, fmax: 1.2, bound: 6}),
-    track_jump: strafer({d: 8, r: 0.34, y: 1.4, vmin: 3, vmax: 5, fmin: 0.3, fmax: 0.9, bound: 4, jump: true}),
-    track_crouch: strafer({d: 8, r: 0.34, y: 1.45, vmin: 3, vmax: 5, fmin: 0.3, fmax: 0.9, bound: 4, duck: true}),
-    orbit: orbit({d: 7, r: 0.36, y: 1.4, wmin: 25, wmax: 60, fmin: 0.6, fmax: 1.6, span: 75}),
-    orbit_air: orbit({d: 9, r: 0.34, y: 1.4, wmin: 20, wmax: 45, fmin: 0.5, fmax: 1.4, jump: true}),
-    orbit_vert: orbit({d: 8, r: 0.34, y: 1.6, wmin: 10, wmax: 30, fmin: 0.5, fmax: 1.2, vy: 2.2}),
+    flick_mid: B.flicks({dmin: 12, dmax: 16, r: 0.26, amin: 15, amax: 45}),
+    flick_wide: B.flicks({dmin: 8, dmax: 11, r: 0.3, amin: 50, amax: 70, vert: 0.2}),
+    flick_vert: B.flicks({dmin: 10, dmax: 14, r: 0.26, amin: 10, amax: 28, vert: 0.95, pmin: -8, pmax: 16}),
+    flick_tiny: B.flicks({dmin: 14, dmax: 18, r: 0.12, amin: 8, amax: 30, pmin: -3, pmax: 6}),
+    spider: B.spider({dmin: 8, dmax: 9, r: 0.3, amin: 20, amax: 45}),
+    spider_far: B.spider({dmin: 18, dmax: 22, r: 0.16, amin: 6, amax: 18}),
+    six_shot: B.multi({n: 6, w: 20, pmin: -4, pmax: 12, dmin: 12, dmax: 12, r: 0.28, sep: 6}),
+    head_switch: B.multi({n: 4, w: 35, head: true, dmin: 13, dmax: 16, r: 0.2, sep: 9}),
+    close_switch: B.multi({n: 3, w: 65, pmin: -6, pmax: 10, dmin: 5, dmax: 7, r: 0.32, sep: 25}),
+    tiny_switch: B.multi({n: 5, w: 15, pmin: -3, pmax: 6, dmin: 18, dmax: 20, r: 0.13, sep: 4}),
+    double_tap: B.multi({n: 3, w: 25, pmin: -3, pmax: 8, dmin: 10, dmax: 14, r: 0.3, hp: 2, sep: 8}),
+    reflex: B.timed({dmin: 10, dmax: 13, r: 0.3, amin: 10, amax: 40, life: 1.1, min: 0.45}),
+    reflex_small: B.timed({dmin: 14, dmax: 18, r: 0.17, amin: 5, amax: 25, life: 1.0, min: 0.5}),
+    reflex_wide: B.timed({dmin: 7, dmax: 9, r: 0.3, amin: 40, amax: 70, life: 1.2, min: 0.55, vert: 0.2}),
+    pinpoint: B.multi({n: 1, w: 10, pmin: -2, pmax: 3, dmin: 24, dmax: 28, r: 0.1, sep: 2}),
+    headline_far: B.flicks({dmin: 24, dmax: 30, r: 0.16, amin: 4, amax: 20, vert: 0.03, pmin: -0.5, pmax: 0.5}),
+    micro_spider: B.spider({dmin: 16, dmax: 18, r: 0.12, amin: 1.5, amax: 5}),
+    peek_far: B.peeks({z: 28, spread: 7, r: 0.2, win: 0.9, min: 0.45}),
+    peek_fast: B.peeks({win: 0.6, min: 0.25, out: 0.08}),
+    angle_close: B.angle({dmin: 5, dmax: 8, wmin: 2.2, wmax: 3}),
+    angle_long: B.angle({dmin: 24, dmax: 32, wmin: 2, wmax: 3, win: 0.7}),
+    angle_jiggle: B.angle({swing: 0.15, jiggle: 0.7}),
+    angle_wide: B.angle({swing: 1, jiggle: 0, win: 0.75, wmin: 3.5, wmax: 5}),
+    angle_runners: B.angle({swing: 0, jiggle: 0, fast: 1.25}),
+    track_smooth: B.tracker({d: 11, r: 0.4, y: 1.4, bob: 0.04, vmin: 1.5, vmax: 2.8, fmin: 0.8, fmax: 2, bound: 5}),
+    track_fast: B.tracker({d: 7, r: 0.32, y: 1.4, vmin: 5.5, vmax: 7.5, fmin: 0.2, fmax: 0.6, bound: 3.8, acc: 45}),
+    track_tiny: B.tracker({d: 14, r: 0.18, y: 1.45, bob: 0.03, vmin: 2, vmax: 4, fmin: 0.4, fmax: 1.2, bound: 6}),
+    track_jump: B.strafer({d: 8, r: 0.34, y: 1.4, vmin: 3, vmax: 5, fmin: 0.3, fmax: 0.9, bound: 4, jump: true}),
+    track_crouch: B.strafer({d: 8, r: 0.34, y: 1.45, vmin: 3, vmax: 5, fmin: 0.3, fmax: 0.9, bound: 4, duck: true}),
+    orbit: B.orbit({d: 7, r: 0.36, y: 1.4, wmin: 25, wmax: 60, fmin: 0.6, fmax: 1.6, span: 75}),
+    orbit_air: B.orbit({d: 9, r: 0.34, y: 1.4, wmin: 20, wmax: 45, fmin: 0.5, fmax: 1.4, jump: true}),
+    orbit_vert: B.orbit({d: 8, r: 0.34, y: 1.6, wmin: 10, wmax: 30, fmin: 0.5, fmax: 1.2, vy: 2.2}),
     // ---- 4.24: the drill types from the big aim trainers, our own versions (names and texts in stats/trainer.py)
-    bounce_shot: bounce({n: 3, w: 28, pmin: -4, pmax: 14, d: 12, r: 0.3, smin: 2, smax: 4}),
-    bounce_fast: bounce({n: 3, w: 28, pmin: -4, pmax: 14, d: 12, r: 0.26, smin: 4.5, smax: 7}),
-    bounce_close: bounce({n: 2, w: 55, pmin: -8, pmax: 16, d: 6, r: 0.32, smin: 3, smax: 5}),
-    bounce_tiny: bounce({n: 4, w: 20, pmin: -3, pmax: 10, d: 14, r: 0.15, smin: 1.5, smax: 3}),
-    jink: bounce({n: 1, w: 25, pmin: -3, pmax: 14, d: 10, r: 0.28, smin: 4, smax: 6, jink: [0.35, 0.9]}),
-    jink_small: bounce({n: 1, w: 22, pmin: -3, pmax: 12, d: 13, r: 0.16, smin: 3.5, smax: 5.5, jink: [0.3, 0.8]}),
-    hops: bounce({n: 2, w: 25, pmin: -6, pmax: 16, d: 10, r: 0.3, smin: 1, smax: 2.5, grav: 9, hop: 7}),
-    hops_small: bounce({n: 2, w: 25, pmin: -6, pmax: 16, d: 12, r: 0.17, smin: 1.5, smax: 3, grav: 11, hop: 8}),
-    motion_shot: bounce({n: 1, w: 30, pmin: -4, pmax: 14, d: 10, r: 0.32, smin: 2, smax: 3.5}),
-    motion_far: bounce({n: 1, w: 18, pmin: -2, pmax: 8, d: 22, r: 0.22, smin: 2, smax: 3.5}),
-    strafe_shot: bounce({n: 3, w: 30, pmin: -3, pmax: 12, d: 11, r: 0.28, smin: 2.5, smax: 5, horiz: true}),
-    strafe_heads: bounce({n: 2, w: 30, pmin: -0.4, pmax: 0.4, d: 13, r: 0.19, smin: 3, smax: 5, horiz: true}),
-    horde: bounce({n: 6, w: 35, pmin: -3, pmax: 8, d: 28, r: 0.3, smin: 2.5, smax: 4, toward: true, near: 5}),
-    horde_fast: bounce({n: 8, w: 40, pmin: -3, pmax: 8, d: 28, r: 0.28, smin: 4, smax: 6.5, toward: true, near: 5}),
-    shrinking: bounce({n: 3, w: 25, pmin: -3, pmax: 12, d: 12, r: 0.36, smin: 0.6, smax: 1.4, life: 1.8, shrink: 0.3}),
-    flick_180: flicks({dmin: 7, dmax: 9, r: 0.34, amin: 90, amax: 175, vert: 0.12, back: true}),
-    spider_180: spider({dmin: 8, dmax: 9, r: 0.34, amin: 60, amax: 170, flat: 0.08}),
-    flick_speed: flicks({dmin: 9, dmax: 11, r: 0.42, amin: 10, amax: 40}),
-    flick_precise: flicks({dmin: 12, dmax: 14, r: 0.14, amin: 10, amax: 40}),
-    flick_low: flicks({dmin: 9, dmax: 13, r: 0.26, amin: 10, amax: 40, vert: 0.2, pmin: -14, pmax: -4}),
-    flick_high: flicks({dmin: 9, dmax: 13, r: 0.26, amin: 10, amax: 40, vert: 0.2, pmin: 10, pmax: 22}),
-    grid_speed: multi({n: 4, w: 14, pmin: -2, pmax: 10, dmin: 10, dmax: 10, r: 0.42, sep: 7}),
-    grid_precise: multi({n: 3, w: 14, pmin: -2, pmax: 10, dmin: 10, dmax: 10, r: 0.17, sep: 6}),
-    six_precise: multi({n: 6, w: 20, pmin: -4, pmax: 12, dmin: 12, dmax: 12, r: 0.16, sep: 6}),
-    wide_three: multi({n: 3, w: 55, pmin: -4, pmax: 12, dmin: 10, dmax: 10, r: 0.28, sep: 30}),
-    wide_five: multi({n: 5, w: 60, pmin: -4, pmax: 12, dmin: 10, dmax: 10, r: 0.24, sep: 20}),
-    heads_range: multi({n: 3, w: 40, head: true, dmin: 8, dmax: 26, r: 0.16, sep: 8}),
-    triple_tap: multi({n: 2, w: 25, pmin: -3, pmax: 8, dmin: 10, dmax: 14, r: 0.32, hp: 3, sep: 10}),
-    burst: burst({k: 3, spread: 3, amin: 20, amax: 50, d: 12, r: 0.24}),
-    burst_wide: burst({k: 4, spread: 5, amin: 40, amax: 80, d: 9, r: 0.28}),
-    burst_micro: burst({k: 3, spread: 1.5, amin: 8, amax: 25, d: 18, r: 0.12}),
-    side_vision: popups({w: 75, pmin: -5, pmax: 15, dmin: 8, dmax: 12, r: 0.3, every: [0.5, 1.0], life: 1.5, max: 3}),
-    friend_foe: popups({w: 30, pmin: -3, pmax: 12, dmin: 10, dmax: 13, r: 0.28, every: [0.35, 0.7], life: 1.3, bad: 0.4}),
-    friend_foe_fast: popups({w: 35, pmin: -3, pmax: 12, dmin: 11, dmax: 14, r: 0.24, every: [0.25, 0.5], life: 0.8, bad: 0.5, max: 5}),
-    popups: popups({w: 35, pmin: -3, pmax: 12, dmin: 10, dmax: 13, r: 0.3, every: [0.35, 0.7], life: 1.1}),
-    reflex_close: timed({dmin: 5, dmax: 6, r: 0.34, amin: 30, amax: 90, life: 1.0, min: 0.45, vert: 0.25}),
-    reflex_head: timed({dmin: 12, dmax: 16, r: 0.18, amin: 6, amax: 35, life: 0.9, min: 0.45, vert: 0.03, pmin: -0.5, pmax: 0.5}),
-    line_trace: glide({path: 'line', w: 25, pmin: -2, pmax: 14, d: 10, r: 0.32, smin: 2.5, smax: 4}),
-    line_trace_small: glide({path: 'line', w: 20, pmin: -2, pmax: 12, d: 14, r: 0.18, smin: 2.5, smax: 4}),
-    arc_track: glide({path: 'arc', w: 25, pmin: -2, pmax: 14, d: 10, r: 0.32, smin: 3, smax: 4.5, bmin: 90, bmax: 200}),
-    star_track: glide({path: 'star', w: 18, pmin: -3, pmax: 14, d: 10, r: 0.3, smin: 3.5, smax: 5}),
-    star_micro: glide({path: 'star', w: 5, pmin: -2, pmax: 3, d: 16, r: 0.14, smin: 1.2, smax: 1.8}),
-    circle_track: glide({path: 'circle', w: 22, pmin: -2, pmax: 14, d: 10, r: 0.3, smin: 3, smax: 4.5, R: 1.5}),
-    circle_small: glide({path: 'circle', w: 18, pmin: -2, pmax: 10, d: 13, r: 0.18, smin: 2, smax: 3, R: 0.7}),
-    blink_track: glide({path: 'line', w: 30, pmin: -3, pmax: 14, d: 10, r: 0.3, smin: 2.5, smax: 4, blink: [1.1, 2]}),
-    track_above: tracker({d: 9, r: 0.34, y: 4.2, bob: 0.08, vmin: 2.4, vmax: 5, fmin: 0.3, fmax: 1.1, bound: 5}),
-    track_below: tracker({d: 7, r: 0.34, y: 0.6, bob: 0.04, vmin: 2.4, vmax: 5, fmin: 0.3, fmax: 1.1, bound: 4}),
-    track_long: tracker({d: 10, r: 0.36, y: 1.4, bob: 0.04, vmin: 3, vmax: 5, fmin: 1.4, fmax: 3, bound: 7}),
-    track_close_long: tracker({d: 5, r: 0.34, y: 1.4, bob: 0.04, vmin: 3.5, vmax: 5.5, fmin: 1.2, fmax: 2.5, bound: 4.5}),
-    track_zigzag: tracker({d: 9, r: 0.32, y: 1.4, vmin: 4, vmax: 6, fmin: 0.12, fmax: 0.28, bound: 3, acc: 70}),
-    orbit_fast: orbit({d: 7, r: 0.34, y: 1.4, wmin: 50, wmax: 90, fmin: 0.4, fmax: 1.2, span: 80}),
-    tswitch: tswitch({n: 3, w: 25, pmin: -3, pmax: 12, d: 10, r: 0.34, hp: 0.6, smin: 1.5, smax: 3, fmin: 0.6, fmax: 1.6}),
-    tswitch_fast: tswitch({n: 3, w: 25, pmin: -3, pmax: 12, d: 10, r: 0.32, hp: 0.4, smin: 3, smax: 5, fmin: 0.4, fmax: 1.1}),
-    tswitch_evasive: tswitch({n: 3, w: 25, pmin: -3, pmax: 12, d: 10, r: 0.32, hp: 0.6, smin: 3, smax: 5, fmin: 0.5, fmax: 1.3, evade: 3}),
-    tswitch_wide: tswitch({n: 3, w: 60, pmin: -4, pmax: 14, d: 7, r: 0.34, hp: 0.5, smin: 2, smax: 4, fmin: 0.6, fmax: 1.5}),
-    tswitch_small: tswitch({n: 3, w: 20, pmin: -2, pmax: 10, d: 14, r: 0.2, hp: 0.6, smin: 1.5, smax: 3, fmin: 0.6, fmax: 1.6}),
-    tswitch_float: tswitch({n: 3, w: 25, pmin: -4, pmax: 16, d: 10, r: 0.32, hp: 0.5, smin: 1.5, smax: 3.5, vy: 2.5, fmin: 0.5, fmax: 1.3}),
-    map_angles: mapspots({}),
+    bounce_shot: B.bounce({n: 3, w: 28, pmin: -4, pmax: 14, d: 12, r: 0.3, smin: 2, smax: 4}),
+    bounce_fast: B.bounce({n: 3, w: 28, pmin: -4, pmax: 14, d: 12, r: 0.26, smin: 4.5, smax: 7}),
+    bounce_close: B.bounce({n: 2, w: 55, pmin: -8, pmax: 16, d: 6, r: 0.32, smin: 3, smax: 5}),
+    bounce_tiny: B.bounce({n: 4, w: 20, pmin: -3, pmax: 10, d: 14, r: 0.15, smin: 1.5, smax: 3}),
+    jink: B.bounce({n: 1, w: 25, pmin: -3, pmax: 14, d: 10, r: 0.28, smin: 4, smax: 6, jink: [0.35, 0.9]}),
+    jink_small: B.bounce({n: 1, w: 22, pmin: -3, pmax: 12, d: 13, r: 0.16, smin: 3.5, smax: 5.5, jink: [0.3, 0.8]}),
+    hops: B.bounce({n: 2, w: 25, pmin: -6, pmax: 16, d: 10, r: 0.3, smin: 1, smax: 2.5, grav: 9, hop: 7}),
+    hops_small: B.bounce({n: 2, w: 25, pmin: -6, pmax: 16, d: 12, r: 0.17, smin: 1.5, smax: 3, grav: 11, hop: 8}),
+    motion_shot: B.bounce({n: 1, w: 30, pmin: -4, pmax: 14, d: 10, r: 0.32, smin: 2, smax: 3.5}),
+    motion_far: B.bounce({n: 1, w: 18, pmin: -2, pmax: 8, d: 22, r: 0.22, smin: 2, smax: 3.5}),
+    strafe_shot: B.bounce({n: 3, w: 30, pmin: -3, pmax: 12, d: 11, r: 0.28, smin: 2.5, smax: 5, horiz: true}),
+    strafe_heads: B.bounce({n: 2, w: 30, pmin: -0.4, pmax: 0.4, d: 13, r: 0.19, smin: 3, smax: 5, horiz: true}),
+    horde: B.bounce({n: 6, w: 35, pmin: -3, pmax: 8, d: 28, r: 0.3, smin: 2.5, smax: 4, toward: true, near: 5}),
+    horde_fast: B.bounce({n: 8, w: 40, pmin: -3, pmax: 8, d: 28, r: 0.28, smin: 4, smax: 6.5, toward: true, near: 5}),
+    shrinking: B.bounce({n: 3, w: 25, pmin: -3, pmax: 12, d: 12, r: 0.36, smin: 0.6, smax: 1.4, life: 1.8, shrink: 0.3}),
+    flick_180: B.flicks({dmin: 7, dmax: 9, r: 0.34, amin: 90, amax: 175, vert: 0.12, back: true}),
+    spider_180: B.spider({dmin: 8, dmax: 9, r: 0.34, amin: 60, amax: 170, flat: 0.08}),
+    flick_speed: B.flicks({dmin: 9, dmax: 11, r: 0.42, amin: 10, amax: 40}),
+    flick_precise: B.flicks({dmin: 12, dmax: 14, r: 0.14, amin: 10, amax: 40}),
+    flick_low: B.flicks({dmin: 9, dmax: 13, r: 0.26, amin: 10, amax: 40, vert: 0.2, pmin: -14, pmax: -4}),
+    flick_high: B.flicks({dmin: 9, dmax: 13, r: 0.26, amin: 10, amax: 40, vert: 0.2, pmin: 10, pmax: 22}),
+    grid_speed: B.multi({n: 4, w: 14, pmin: -2, pmax: 10, dmin: 10, dmax: 10, r: 0.42, sep: 7}),
+    grid_precise: B.multi({n: 3, w: 14, pmin: -2, pmax: 10, dmin: 10, dmax: 10, r: 0.17, sep: 6}),
+    six_precise: B.multi({n: 6, w: 20, pmin: -4, pmax: 12, dmin: 12, dmax: 12, r: 0.16, sep: 6}),
+    wide_three: B.multi({n: 3, w: 55, pmin: -4, pmax: 12, dmin: 10, dmax: 10, r: 0.28, sep: 30}),
+    wide_five: B.multi({n: 5, w: 60, pmin: -4, pmax: 12, dmin: 10, dmax: 10, r: 0.24, sep: 20}),
+    heads_range: B.multi({n: 3, w: 40, head: true, dmin: 8, dmax: 26, r: 0.16, sep: 8}),
+    triple_tap: B.multi({n: 2, w: 25, pmin: -3, pmax: 8, dmin: 10, dmax: 14, r: 0.32, hp: 3, sep: 10}),
+    burst: B.burst({k: 3, spread: 3, amin: 20, amax: 50, d: 12, r: 0.24}),
+    burst_wide: B.burst({k: 4, spread: 5, amin: 40, amax: 80, d: 9, r: 0.28}),
+    burst_micro: B.burst({k: 3, spread: 1.5, amin: 8, amax: 25, d: 18, r: 0.12}),
+    side_vision: B.popups({w: 75, pmin: -5, pmax: 15, dmin: 8, dmax: 12, r: 0.3, every: [0.5, 1.0], life: 1.5, max: 3}),
+    friend_foe: B.popups({w: 30, pmin: -3, pmax: 12, dmin: 10, dmax: 13, r: 0.28, every: [0.35, 0.7], life: 1.3, bad: 0.4}),
+    friend_foe_fast: B.popups({w: 35, pmin: -3, pmax: 12, dmin: 11, dmax: 14, r: 0.24, every: [0.25, 0.5], life: 0.8, bad: 0.5, max: 5}),
+    popups: B.popups({w: 35, pmin: -3, pmax: 12, dmin: 10, dmax: 13, r: 0.3, every: [0.35, 0.7], life: 1.1}),
+    reflex_close: B.timed({dmin: 5, dmax: 6, r: 0.34, amin: 30, amax: 90, life: 1.0, min: 0.45, vert: 0.25}),
+    reflex_head: B.timed({dmin: 12, dmax: 16, r: 0.18, amin: 6, amax: 35, life: 0.9, min: 0.45, vert: 0.03, pmin: -0.5, pmax: 0.5}),
+    line_trace: B.glide({path: 'line', w: 25, pmin: -2, pmax: 14, d: 10, r: 0.32, smin: 2.5, smax: 4}),
+    line_trace_small: B.glide({path: 'line', w: 20, pmin: -2, pmax: 12, d: 14, r: 0.18, smin: 2.5, smax: 4}),
+    arc_track: B.glide({path: 'arc', w: 25, pmin: -2, pmax: 14, d: 10, r: 0.32, smin: 3, smax: 4.5, bmin: 90, bmax: 200}),
+    star_track: B.glide({path: 'star', w: 18, pmin: -3, pmax: 14, d: 10, r: 0.3, smin: 3.5, smax: 5}),
+    star_micro: B.glide({path: 'star', w: 5, pmin: -2, pmax: 3, d: 16, r: 0.14, smin: 1.2, smax: 1.8}),
+    circle_track: B.glide({path: 'circle', w: 22, pmin: -2, pmax: 14, d: 10, r: 0.3, smin: 3, smax: 4.5, R: 1.5}),
+    circle_small: B.glide({path: 'circle', w: 18, pmin: -2, pmax: 10, d: 13, r: 0.18, smin: 2, smax: 3, R: 0.7}),
+    blink_track: B.glide({path: 'line', w: 30, pmin: -3, pmax: 14, d: 10, r: 0.3, smin: 2.5, smax: 4, blink: [1.1, 2]}),
+    track_above: B.tracker({d: 9, r: 0.34, y: 4.2, bob: 0.08, vmin: 2.4, vmax: 5, fmin: 0.3, fmax: 1.1, bound: 5}),
+    track_below: B.tracker({d: 7, r: 0.34, y: 0.6, bob: 0.04, vmin: 2.4, vmax: 5, fmin: 0.3, fmax: 1.1, bound: 4}),
+    track_long: B.tracker({d: 10, r: 0.36, y: 1.4, bob: 0.04, vmin: 3, vmax: 5, fmin: 1.4, fmax: 3, bound: 7}),
+    track_close_long: B.tracker({d: 5, r: 0.34, y: 1.4, bob: 0.04, vmin: 3.5, vmax: 5.5, fmin: 1.2, fmax: 2.5, bound: 4.5}),
+    track_zigzag: B.tracker({d: 9, r: 0.32, y: 1.4, vmin: 4, vmax: 6, fmin: 0.12, fmax: 0.28, bound: 3, acc: 70}),
+    orbit_fast: B.orbit({d: 7, r: 0.34, y: 1.4, wmin: 50, wmax: 90, fmin: 0.4, fmax: 1.2, span: 80}),
+    tswitch: B.tswitch({n: 3, w: 25, pmin: -3, pmax: 12, d: 10, r: 0.34, hp: 0.6, smin: 1.5, smax: 3, fmin: 0.6, fmax: 1.6}),
+    tswitch_fast: B.tswitch({n: 3, w: 25, pmin: -3, pmax: 12, d: 10, r: 0.32, hp: 0.4, smin: 3, smax: 5, fmin: 0.4, fmax: 1.1}),
+    tswitch_evasive: B.tswitch({n: 3, w: 25, pmin: -3, pmax: 12, d: 10, r: 0.32, hp: 0.6, smin: 3, smax: 5, fmin: 0.5, fmax: 1.3, evade: 3}),
+    tswitch_wide: B.tswitch({n: 3, w: 60, pmin: -4, pmax: 14, d: 7, r: 0.34, hp: 0.5, smin: 2, smax: 4, fmin: 0.6, fmax: 1.5}),
+    tswitch_small: B.tswitch({n: 3, w: 20, pmin: -2, pmax: 10, d: 14, r: 0.2, hp: 0.6, smin: 1.5, smax: 3, fmin: 0.6, fmax: 1.6}),
+    tswitch_float: B.tswitch({n: 3, w: 25, pmin: -4, pmax: 16, d: 10, r: 0.32, hp: 0.5, smin: 1.5, smax: 3.5, vy: 2.5, fmin: 0.5, fmax: 1.3}),
+    map_angles: B.mapspots({}),
+    onetap_heads: B.onetap({dmin: 10, dmax: 14, w: 30}),
+    onetap_close: B.onetap({dmin: 5, dmax: 7, w: 65, r: 0.17}),
+    onetap_far: B.onetap({dmin: 22, dmax: 28, w: 18, r: 0.13}),
+    onetap_multi: B.onetap({n: 3, dmin: 10, dmax: 16, w: 35, gap: [0.1, 0.3]}),
+    onetap_timed: B.onetap({dmin: 10, dmax: 15, w: 35, life: 0.9}),
+    onetap_peek: B.peeks({r: 0.15, oneshot: true}),
+    onetap_angle: B.angle({oneshot: true}),
   };
   // The sens finder's test: parts of the same scenarios back to back, without breaks (switching seamlessly, the
   // trackers starting at the crosshair). quick: flicks (close and far in turn), then tracking. 15 and 30 minutes:
@@ -1029,6 +1094,14 @@
     hit(st, tg) { st.seg.h.hit(st, tg); },
   };
   for (const [id, sc] of Object.entries(SC)) if (!byId[id]) byId[id] = {id, name: id, kind: sc.kind, seconds: 45, about: ''};
+  // 4.33: sandbox scenarios: {id, name, kind, seconds, builder, o} -> a handler made by the same builders
+  function addCustom(c) {
+    if (!c || !BUILD[c.builder]) return false;
+    custom[c.id] = Object.assign(BUILD[c.builder](Object.assign({}, c.o)), {_b: c.builder, _o: Object.assign({}, c.o)});
+    byId[c.id] = {id: c.id, name: c.name, kind: c.kind, seconds: c.seconds, about: c.about || '', group: 'sandbox'};
+    return true;
+  }
+  for (const c of (C.sandbox && C.sandbox.items) || []) addCustom(c);
 
   // ------------------------------------------------------------------ what Aim insights needs from each run
   // Compact sums, no raw samples (stats/trainer.py clean_detail checks the shape):
@@ -1146,14 +1219,25 @@
     return best ? {tg: best, head} : null;
   }
   function aimed() { const h = aimedHit(); return h ? h.tg : null; }
+  function H() { return st && (st.h || SC[st.id]); }        // the running scenario (a scaled copy in skill sessions)
   function newRun(id) {
     const sc = byId[id], seconds = plan ? plan.items[plan.i].seconds : finder ? finder.mode.secs : sc.seconds;
     firing = false;
-    st = {id, kind: SC[id].kind || sc.kind, seconds, t: 0, phase: 'ready', targets: [], covers: null, hits: 0, shots: 0,
+    st = {id, kind: (custom[id] || SC[id]).kind || sc.kind, seconds, t: 0, phase: 'ready', targets: [], covers: null, hits: 0, shots: 0,
           points: 0, times: [], lastHit: 0, on: 0, stalls: [], ix: finder ? null : ixNew(), from: {y: 0, p: 0}};
     yaw = 0; pitch = 0;
     if (finder) st.segs = finder.mode.segs;
-    SC[id].setup(st);
+    if (plan && plan.adaptive) { st.k = Object.assign({}, plan.k); st.h = scaled(custom[id] || SC[id], st.k); }   // a skill session
+    else if (custom[id]) st.h = custom[id];                                                       // a sandbox scenario
+    (st.h || SC[id]).setup(st);
+  }
+  // how the round went for a skill session: 1 harder next, -1 easier, 0 the same
+  function adapt(st) {
+    if (st.kind === 'track') { const p = st.on / st.seconds; return p >= 0.62 ? 1 : p < 0.38 ? -1 : 0; }
+    const gone = (st.escaped || 0) + (st.body || 0);
+    const rate = (H().heads || H().oneshot) ? st.hits / Math.max(1, st.hits + gone) : st.shots ? st.hits / st.shots : 0;
+    if (st.hits < 3) return -1;
+    return rate >= 0.85 ? 1 : rate < 0.6 ? -1 : 0;
   }
   function score() {
     if (!st) return 0;
@@ -1167,17 +1251,17 @@
     const part = st.seg ? st.parts[st.seg.type] : null;
     st.shots++; if (part) part.shots++;
     const h = aimedHit();
-    if (!h) { ixMiss(st); return; }
+    if (!h) { ixMiss(st); if (H().miss) H().miss(st); return; }     // one taps: a miss and that target is gone
     const {tg, head} = h;
     if (tg.bad) {                                  // a blue one: shouldn't have shot it
-      SC[st.id].hit(st, tg, head); st.wrong = (st.wrong || 0) + 1; st.points = Math.max(0, st.points - 150); tick(300); return;
+      H().hit(st, tg, head); st.wrong = (st.wrong || 0) + 1; st.points = Math.max(0, st.points - 150); tick(300); return;
     }
-    const since = SC[st.id].since ? Math.max(tg.born, SC[st.id].since(st)) : tg.born;
+    const since = H().since ? Math.max(tg.born, H().since(st)) : tg.born;
     const ms = Math.max(0, (st.t - (isFinite(since) ? since : st.t)) * 1000);
     if (!head && tg.agent) { if (st.ix) st.ix.p.body++; }
     else if (st.ix && tg.from) { const pk = st.ix.p[tg.from]; pk[0]++; pk[1] += ms; pk[2]++; }
     else ixFlick(st, tg, ms);
-    const res = SC[st.id].hit(st, tg, head);
+    const res = H().hit(st, tg, head);
     if (res === false) { tick(520); return; }                                // a body shot: counted, not a kill
     if (res === 'hp') { st.hits++; if (part) part.hits++; tick(900); return; } // a hit that doesn't kill yet (double tap)
     st.from = {y: yaw, p: pitch};
@@ -1203,7 +1287,7 @@
     let onTarget = null;
     if (st && st.phase === 'run') {
       st.t += dt;
-      if (SC[st.id].update) SC[st.id].update(st, dt);
+      if (H().update) H().update(st, dt);
       if (st.kind === 'track') { onTarget = aimed(); if (firing && onTarget) st.on += dt; if (firing) st.fire = (st.fire || 0) + dt; }
       else if (st.tracking) onTarget = aimed();
       if (st.kind === 'track' || st.tracking) ixTrack(st, dt, !!onTarget);
@@ -1245,7 +1329,7 @@
     $('tr-score').textContent = score();
     if (st.tracking) { $('tr-l3').textContent = 'On target'; $('tr-acc').textContent = st.trackT ? Math.round(100 * st.trackOn / st.trackT) + '%' : '–'; }
     else if (st.kind === 'track') { $('tr-l3').textContent = 'On target'; $('tr-acc').textContent = st.t ? Math.round(100 * st.on / Math.max(st.t, 0.01)) + '%' : '–'; }
-    else { $('tr-l3').textContent = SC[st.id].heads ? 'Headshots' : 'Accuracy'; $('tr-acc').textContent = st.shots ? Math.round(100 * st.hits / st.shots) + '%' : '–'; }
+    else { $('tr-l3').textContent = H().heads ? 'Headshots' : 'Accuracy'; $('tr-acc').textContent = st.shots ? Math.round(100 * st.hits / st.shots) + '%' : '–'; }
   }
 
   // ------------------------------------------------------------------ mouse and pointer lock
@@ -1376,18 +1460,30 @@
     const body = {scenario: st.id, score: s, seconds: st.seconds};
     if (st.kind === 'track') body.on_target = Math.round(1000 * st.on / st.seconds) / 1000;
     else Object.assign(body, {hits: st.hits, shots: st.shots, ms: avg || 0});
-    if (SC[st.id].heads) Object.assign(body, {body: st.body || 0, escaped: st.escaped || 0});
+    if (H().heads || H().oneshot) Object.assign(body, {body: st.body || 0, escaped: st.escaped || 0});
     if (st.where) body.where = st.where;
+    let adaptNote = '';
+    if (plan && plan.adaptive) {                // skill session: this round's size and speed, then the next one adapts
+      if (st.k && (st.k.size !== 1 || st.k.speed !== 1)) body.k = [+st.k.size.toFixed(3), +st.k.speed.toFixed(3)];
+      const step = adapt(st);
+      plan.k = {size: clamp(plan.k.size * (step > 0 ? 0.92 : step < 0 ? 1.08 : 1), 0.6, 1.4),
+                speed: clamp(plan.k.speed * (step > 0 ? 1.07 : step < 0 ? 0.94 : 1), 0.75, 1.35)};
+      const pct = x => Math.round(100 * x);
+      adaptNote = `<div class="tr-adapt">${step > 0 ? 'Next round: a bit harder.' : step < 0 ? 'Next round: a bit easier.' : 'Next round: the same.'}
+        <span>Targets ${pct(plan.k.size)}% size, ${pct(plan.k.speed)}% speed.</span></div>`;
+    }
     if (st.ix) body.detail = ixRound(st.ix);
     if (plan) { plan.total += s; if (plan.i === plan.items.length - 1) Object.assign(body, {plan_done: plan.kind, plan_score: plan.total}); }
-    const cells = SC[st.id].heads
+    const cells = H().oneshot && !H().heads
+      ? `<div><dt>Hits</dt><dd>${st.hits}/${st.hits + (st.escaped || 0)}</dd></div><div><dt>Missed or gone</dt><dd>${st.escaped || 0}</dd></div><div><dt>Avg time</dt><dd>${avg !== null ? avg + ' ms' : '–'}</dd></div>`
+      : H().heads
       ? `<div><dt>Headshots</dt><dd>${st.hits}/${st.shots}</dd></div><div><dt>Body shots · got away</dt><dd>${st.body || 0} · ${st.escaped || 0}</dd></div><div><dt>Reaction</dt><dd>${avg !== null ? avg + ' ms' : '–'}</dd></div>`
       : st.kind === 'track'
       ? `<div><dt>On target</dt><dd>${Math.round(100 * st.on / st.seconds)}%</dd></div><div><dt>While firing</dt><dd>${st.fire ? Math.round(100 * st.on / st.fire) : 0}%</dd></div>${st.kills !== undefined ? `<div><dt>Targets down</dt><dd>${st.kills}</dd></div>` : `<div><dt>Seconds</dt><dd>${st.seconds}</dd></div>`}`
       : `<div><dt>Hits</dt><dd>${st.hits}/${st.shots}</dd></div><div><dt>Accuracy</dt><dd>${st.shots ? Math.round(100 * st.hits / st.shots) : 0}%</dd></div><div><dt>Avg time</dt><dd>${avg !== null ? avg + ' ms' : '–'}</dd></div>${st.wrong ? `<div><dt>Blue ones hit</dt><dd>${st.wrong}</dd></div>` : ''}`;
     const more = plan && plan.i < plan.items.length - 1;
     const nextName = more ? byId[plan.items[plan.i + 1].id].name : '';
-    setPanel(`${planStep()}<h2>${esc(sc.name)}</h2><div class="tr-big">${s}</div><div class="tr-best" id="tr-best"></div><dl>${cells}</dl>${stallNote(st.stalls)}
+    setPanel(`${planStep()}<h2>${esc(sc.name)}</h2><div class="tr-big">${s}</div><div class="tr-best" id="tr-best"></div><dl>${cells}</dl>${adaptNote}${stallNote(st.stalls)}
       <div class="tr-btns">${more ? `<button type="button" class="btn primary" data-a="next">Next: ${esc(nextName)}</button>`
         : (plan ? `<button type="button" class="btn primary" data-a="quit">Done · ${plan.total} points</button>` : `<button type="button" class="btn primary" data-a="restart">Again</button>`)}
       ${plan ? '' : '<button type="button" class="btn ghost" data-a="quit">Back</button>'}${xhBtn()}</div>`);
@@ -1558,7 +1654,7 @@
   document.querySelectorAll('[data-play]').forEach(b => b.addEventListener('click', () => { plan = null; open(b.dataset.play); }));
   document.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', () => {
     const p = C.plans[b.dataset.plan];
-    plan = {kind: p.kind, name: p.name, items: p.items, i: 0, total: 0};
+    plan = {kind: p.kind, name: p.name, items: p.items, i: 0, total: 0, adaptive: !!p.adaptive, k: {size: 1, speed: 1}};
     open(p.items[0].id);
   }));
   document.querySelectorAll('[data-finder]').forEach(b => b.addEventListener('click', () => startFinder(b.dataset.finder)));
@@ -1611,7 +1707,7 @@
   function step(dt, fire) {
     if (!st) return;
     st.t += dt; firing = !!fire;
-    if (SC[st.id].update) SC[st.id].update(st, dt);
+    if (H().update) H().update(st, dt);
     if (st.kind === 'track' && fire && aimed()) st.on += dt;
   }
   // ---- 4.28: the Map angles card above the library: pick a map and where you stand, then play "map_angles"
@@ -1633,5 +1729,5 @@
     $('tr-ang-play').addEventListener('click', () => { choose(); open('map_angles'); });
     fill();
   })();
-  window.nexusTrainer = {open, startFinder, xParse, xCode, crosshair: () => xh, finder: () => finder, state: () => st, aim: (y, p) => { yaw = y; pitch = p; }, shoot, score, step};   // for tests
+  window.nexusTrainer = {addCustom, play: id => { plan = null; open(id); }, open, startFinder, xParse, xCode, crosshair: () => xh, finder: () => finder, state: () => st, aim: (y, p) => { yaw = y; pitch = p; }, shoot, score, step};   // for tests
 })();

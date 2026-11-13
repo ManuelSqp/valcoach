@@ -7,11 +7,12 @@ import time
 from datetime import date
 from pathlib import Path
 
-from flask import abort, g, jsonify, render_template, request
+from flask import abort, g, jsonify, render_template, request, url_for
 
 from ..stats import aim as am
 from ..stats import aim_insights as ai
 from ..stats import mapangles as ma
+from ..stats import sandbox as sbx
 from ..stats import trainer as tr
 from .aim import MAX_LOG, _lock, _read, _write
 
@@ -68,6 +69,26 @@ def register(app, store, sr, view_profile, filter_rows, known_maps: list[str] = 
         return any(m["pid"] == p.id and m.get("user_id") == g.user.id
                    for t in store.teams_for_user(g.user.id) for m in t.member_list)
 
+    # ---- 4.33: the sandbox. Your scenarios and your teams' (data/sandbox/user-<uid>.json, teams/<tid>/sandbox.json)
+    def sb_path(scope: str) -> Path:
+        if scope.startswith("team:"):
+            return store.data_dir / "teams" / scope[5:] / "sandbox.json"
+        return store.data_dir / "sandbox" / f"user-{int(g.user.id)}.json"
+
+    def my_teams() -> dict:
+        return {t.id: t for t in store.teams_for_user(g.user.id)}
+
+    def customs() -> list[dict]:
+        """Every sandbox scenario this user can play: their own, then their teams'."""
+        out = [dict(x, scope="me") for x in _read(sb_path("me"), {}).get("items", [])]
+        for tid, t in my_teams().items():
+            out += [dict(x, scope=f"team:{tid}", tid=tid, team=t.name) for x in _read(sb_path(f"team:{tid}"), {}).get("items", [])]
+        return out
+
+    def extra_of(cs: list[dict]) -> dict:
+        return {c["id"]: {"name": c["name"], "kind": c["kind"], "skill": c.get("skill", ""), "level": c.get("level", 2),
+                          "focus": [], "group": "sandbox"} for c in cs}
+
     def plans(pid: int, runs: list[dict], setup: dict) -> dict:
         need = am.needs(filter_rows(sr.games(pid).rows(), "everything"))
         out = {k: tr.plan(k, need, runs) for k in tr.PLANS}
@@ -86,11 +107,27 @@ def register(app, store, sr, view_profile, filter_rows, known_maps: list[str] = 
         play = request.args.get("play")
         rec = tr.recommend(d.get("sensfind", []))
         pl = plans(pid, runs, setup)
+        cs = customs()
+        extra = extra_of(cs)
+        skill_plans = {f"skill_{k}_{m}": tr.plan_skill(k, m, runs, extra) for k in tr.SKILLS for m in tr.SESSION_MINUTES}
+        csum = {x["id"]: x for x in tr.summary(runs, extra) if x["id"] in extra}
+        sandbox = {"types": {k: {"label": v["label"], "kind": v["kind"], "about": v["about"],      # lists: the page keeps the order
+                                 "params": [[pk, *pv] for pk, pv in v["params"].items()]} for k, v in sbx.TYPES.items()},
+                   "order": list(sbx.TYPES),
+                   "items": [dict(sbx.to_page(c), code=sbx.code(c), mine=c["uid"] == g.user.id,
+                                  can_edit=c["uid"] == g.user.id or (c.get("tid") and my_teams()[c["tid"]].owner_id == g.user.id),
+                                  team=c.get("team", ""), best=(csum.get(c["id"]) or {}).get("best"),
+                                  runs=(csum.get(c["id"]) or {}).get("runs", 0)) for c in cs],
+                   "teams": [{"id": t.id, "name": t.name} for t in my_teams().values()],
+                   "save": url_for("trainer_sandbox_save", pid=pid), "skills": [[k, v["name"]] for k, v in tr.SKILLS.items()],
+                   "skill_names": {k: v["name"] for k, v in tr.SKILLS.items()}}
         return render_template("trainer.html", p=p, active_pid=pid, can_save=can_save(p, can_edit), angles=angle_maps(pid),
+                               skills=tr.skill_ratings(runs, extra), skill_plans=skill_plans, minutes=tr.SESSION_MINUTES,
+                               sandbox=sandbox,
                                groups=tr.GROUPS, part_names=tr.PARTS, rec=rec, step=tr.sens_step(setup.get("sens"), rec["sens"]) if rec else None,
                                chart=sens_chart(rec) if rec else None,
                                scenarios=tr.scenario_list(), summary=tr.summary(runs), plans=pl, levels=tr.LEVELS,
-                               start=start if start in pl else "", play=play if play in tr.SCENARIOS else "", setup=setup, numbers=tr.numbers(setup),
+                               start=start if start in pl or start in skill_plans else "", play=play if play in tr.SCENARIOS else "", setup=setup, numbers=tr.numbers(setup),
                                n_runs=len(runs), today=sum(1 for r in runs if r.get("d") == date.today().isoformat()))
 
     @app.get("/profiles/<int:pid>/trainer/insights")
@@ -118,7 +155,8 @@ def register(app, store, sr, view_profile, filter_rows, known_maps: list[str] = 
         if not can_save(p, can_edit):
             abort(403)
         b = request.get_json(silent=True) or {}
-        run = tr.clean_run(b)
+        extra = extra_of(customs())
+        run = tr.clean_run(b, extra)
         if run is None:
             return jsonify(error="That run doesn't add up."), 400
         with _lock:
@@ -137,7 +175,7 @@ def register(app, store, sr, view_profile, filter_rows, known_maps: list[str] = 
                             "score": total, "t": time.time()})
                 del log[:-MAX_LOG]
                 _write(aim_path(pid), a)
-        row = next(x for x in tr.summary(d["runs"]) if x["id"] == run["s"])
+        row = next(x for x in tr.summary(d["runs"], extra) if x["id"] == run["s"])
         return jsonify(ok=True, **res, best=row["best"], runs=row["runs"])
 
     @app.post("/profiles/<int:pid>/trainer/sens")
@@ -174,3 +212,70 @@ def register(app, store, sr, view_profile, filter_rows, known_maps: list[str] = 
             setup["t"] = time.time()
             _write(path(pid), d)
         return jsonify(ok=True, setup=setup, numbers=tr.numbers(setup))
+
+
+    # ---- 4.33: sandbox saves and removals (from the trainer page; the scenario belongs to the user or a team)
+    def sb_scope(scope: str) -> str:
+        if scope.startswith("team:") and scope[5:].isdigit() and int(scope[5:]) in my_teams():
+            return scope
+        if scope not in ("", "me"):
+            abort(403)
+        return "me"
+
+    def sb_can_change(item: dict, scope: str) -> bool:
+        if item["uid"] == g.user.id:
+            return True
+        return scope.startswith("team:") and my_teams()[int(scope[5:])].owner_id == g.user.id
+
+    @app.post("/profiles/<int:pid>/trainer/sandbox")
+    def trainer_sandbox_save(pid: int):
+        view_profile(pid)
+        b = request.get_json(silent=True) or {}
+        if b.get("code"):
+            sc, err = sbx.decode(b["code"])
+        else:
+            sc, err = sbx.clean(b)
+        if sc is None:
+            return jsonify(error=err), 400
+        scope = sb_scope(str(b.get("scope") or "me"))
+        if b.get("dry"):                                   # "Try it": checked and built, not saved
+            item = dict(sc, id="c_try", uid=g.user.id, by="")
+            return jsonify(ok=True, item=dict(sbx.to_page(item), code=sbx.code(item), scope=scope))
+        sid = str(b.get("id") or "")
+        old_scope = sb_scope(str(b.get("from") or scope)) if sid else scope
+        with _lock:
+            if sid and old_scope != scope:            # moved (e.g. shared with a team): out of the old place
+                od = _read(sb_path(old_scope), {})
+                it = next((x for x in od.get("items", []) if x["id"] == sid), None)
+                if it is None or not sb_can_change(it, old_scope):
+                    abort(404)
+                od["items"] = [x for x in od["items"] if x["id"] != sid]
+                _write(sb_path(old_scope), od)
+                sid_keep, sid = sid, ""
+            else:
+                sid_keep = ""
+            d = _read(sb_path(scope), {})
+            if sid:
+                it = next((x for x in d.get("items", []) if x["id"] == sid), None)
+                if it is None or not sb_can_change(it, scope):
+                    abort(404)
+            elif len(d.get("items", [])) >= sbx.MAX_ITEMS:
+                return jsonify(error=f"That list already has {sbx.MAX_ITEMS} scenarios: remove one first."), 400
+            item = sbx.add(d, sc, g.user.id, g.user.display_name or g.user.username, sid)
+            if sid_keep:                                 # keep its id, so its runs stay with it
+                item["id"] = sid_keep
+            _write(sb_path(scope), d)
+        return jsonify(ok=True, item=dict(sbx.to_page(item), code=sbx.code(item), scope=scope))
+
+    @app.post("/profiles/<int:pid>/trainer/sandbox/<sid>/delete")
+    def trainer_sandbox_delete(pid: int, sid: str):
+        view_profile(pid)
+        scope = sb_scope(str((request.get_json(silent=True) or {}).get("scope") or "me"))
+        with _lock:
+            d = _read(sb_path(scope), {})
+            it = next((x for x in d.get("items", []) if x["id"] == sid), None)
+            if it is None or not sb_can_change(it, scope):
+                abort(404)
+            d["items"] = [x for x in d["items"] if x["id"] != sid]
+            _write(sb_path(scope), d)
+        return jsonify(ok=True)
