@@ -376,7 +376,7 @@
       spawn(st) {
         const a = rand(o.amin, o.amax) * D2R, side = Math.random() < 0.5 ? -1 : 1, up = rand(-1, 1) * (o.vert || 0.35);
         let ty = yaw + side * a * Math.sqrt(1 - Math.min(0.9, up * up)), tp = clamp(pitch + up * a, (o.pmin || -6) * D2R, (o.pmax || 10) * D2R);
-        if (Math.abs(ty) > 70 * D2R) ty = yaw - side * a;                  // keep it in front, not behind you
+        if (!o.back && Math.abs(ty) > 70 * D2R) ty = yaw - side * a;                  // keep it in front, not behind you
         const d = rand(o.dmin, o.dmax), c = place(ty, tp, d, o.r);
         st.targets = [{c, r: o.r, born: st.t}];
       },
@@ -461,7 +461,7 @@
         const d = rand(o.dmin, o.dmax);
         if (!st.out) { st.targets = [{c: place(0, 0, d, o.r), r: o.r, born: st.t}]; return; }
         const ang = Math.random() * 2 * Math.PI, a = rand(o.amin, o.amax);
-        st.targets = [{c: place(Math.cos(ang) * a * D2R, Math.sin(ang) * a * 0.55 * D2R, d, o.r), r: o.r, born: st.t}];
+        st.targets = [{c: place(Math.cos(ang) * a * D2R, Math.sin(ang) * a * (o.flat || 0.55) * D2R, d, o.r), r: o.r, born: st.t}];
       },
       hit(st) { pathHit(st); this.spawn(st); },
     };
@@ -609,6 +609,184 @@
       },
     };
   }
+  // ---- 4.24: the drill types the big aim trainers are known for, in our own versions
+  // a wall of space in front of you at distance d: x within ±tan(w°)·d, y between pitch pmin° and pmax°
+  function wallBox(o, r) {
+    const X = Math.tan(o.w * D2R) * o.d;
+    const lo = Math.max(r + 0.25, EYE + Math.tan(o.pmin * D2R) * o.d), hi = Math.min(ROOM.h - 1.5 - r, EYE + Math.tan(o.pmax * D2R) * o.d);
+    return {X, lo, hi: Math.max(hi, lo + 0.2)};
+  }
+  // moving targets to click: n at a time, each flying at smin..smax m/s and bouncing off the edges of the box.
+  // jink: changes direction every jink[0]..jink[1] s. grav: falls and hops up again. horiz: only sideways.
+  // toward: comes at you and is gone (got away) once it's closer than `near` m. life: shrinks to r·shrink, then gone.
+  function bounce(o) {
+    return {
+      kind: 'click',
+      setup(st) { st.targets = []; st.escaped = 0; for (let i = 0; i < o.n; i++) this.spawn(st); },
+      spawn(st) {
+        const B = wallBox(o, o.r);
+        let x, y, k = 0;
+        do { x = rand(-B.X, B.X); y = rand(B.lo, B.hi); k++; }
+        while (k < 30 && st.targets.some(t => Math.hypot(t.c[0] - x, t.c[1] - y) < o.r * 5));
+        const ang = Math.random() * 2 * Math.PI, s = rand(o.smin, o.smax);
+        const v = [Math.cos(ang) * s, o.horiz || o.toward ? 0 : Math.sin(ang) * s, o.toward ? s : 0];
+        if (o.horiz || o.toward) v[0] = (Math.random() < 0.5 ? -1 : 1) * s * (o.toward ? 0.3 : 1);
+        if (o.grav) v[1] = rand(o.hop * 0.6, o.hop);
+        st.targets.push({c: [x, y, -o.d], r: o.r, born: st.t, v, turn: st.t + (o.jink ? rand(...o.jink) : 1e9)});
+      },
+      update(st, dt) {
+        for (const tg of [...st.targets]) {
+          const B = wallBox(o, tg.r), v = tg.v;
+          if (st.t >= tg.turn) {
+            const s = Math.hypot(v[0], v[1]), ang = Math.random() * 2 * Math.PI;
+            v[0] = Math.cos(ang) * s; v[1] = Math.sin(ang) * s; tg.turn = st.t + rand(...o.jink);
+          }
+          if (o.grav) v[1] -= o.grav * dt;
+          tg.c[0] += v[0] * dt; tg.c[1] += v[1] * dt; tg.c[2] += v[2] * dt;
+          const X = o.toward ? B.X * -tg.c[2] / o.d : B.X;
+          if (Math.abs(tg.c[0]) > X) { tg.c[0] = Math.sign(tg.c[0]) * X; v[0] = -v[0]; }
+          if (tg.c[1] < B.lo) { tg.c[1] = B.lo; v[1] = o.grav ? rand(o.hop * 0.6, o.hop) : Math.abs(v[1]); }
+          if (tg.c[1] > B.hi) { tg.c[1] = B.hi; v[1] = -Math.abs(v[1]); }
+          let gone = o.toward && tg.c[2] > -o.near;
+          if (o.life) {
+            const k = (st.t - tg.born) / o.life;
+            tg.r = o.r * (1 - (1 - o.shrink) * Math.min(1, k));
+            gone = gone || k >= 1;
+          }
+          if (gone) { st.targets.splice(st.targets.indexOf(tg), 1); st.escaped++; this.spawn(st); }
+        }
+      },
+      hit(st, tg) { st.targets.splice(st.targets.indexOf(tg), 1); this.spawn(st); },
+    };
+  }
+  // a group of k targets close together (spread°), amin..amax° away from the last group: flick there, clear it
+  function burst(o) {
+    return {
+      kind: 'click',
+      setup(st) { st.at = {a: 0, b: 0}; st.targets = []; this.spawn(st); },
+      spawn(st) {
+        const ang = Math.random() * 2 * Math.PI, a = rand(o.amin, o.amax);
+        let ya = st.at.a + Math.cos(ang) * a, pa = clamp(st.at.b + Math.sin(ang) * a * 0.35, -4, 12);
+        if (Math.abs(ya) > 60) ya = st.at.a - Math.cos(ang) * a;
+        st.at = {a: clamp(ya, -65, 65), b: pa};
+        for (let i = 0; i < o.k; i++) {
+          let a2, b2, n = 0;
+          do { a2 = st.at.a + rand(-o.spread, o.spread); b2 = st.at.b + rand(-o.spread, o.spread) * 0.7; n++; }
+          while (n < 30 && st.targets.some(t => Math.hypot(t.a - a2, t.b - b2) < o.spread * 0.6));
+          st.targets.push({c: place(a2 * D2R, b2 * D2R, o.d, o.r), r: o.r, born: st.t, a: a2, b: b2});
+        }
+      },
+      hit(st, tg) { st.targets.splice(st.targets.indexOf(tg), 1); if (!st.targets.length) this.spawn(st); },
+      since(st) { return st.lastHit; },
+    };
+  }
+  // targets pop up on their own every every[0]..every[1] s, anywhere in ±w° x pmin..pmax°, and stay for `life` s.
+  // bad: share of them in blue, which you must not shoot (a hit on one costs points).
+  const BAD = [0.3, 0.62, 0.95];
+  function popups(o) {
+    return {
+      kind: 'click',
+      setup(st) { st.targets = []; st.escaped = 0; st.next = st.t + 0.4; },
+      update(st) {
+        for (const tg of [...st.targets]) {
+          if (st.t - tg.born > o.life) { st.targets.splice(st.targets.indexOf(tg), 1); if (!tg.bad) st.escaped++; }
+        }
+        if (st.t >= st.next && st.targets.length < (o.max || 4)) {
+          let a, b, k = 0;
+          do { a = rand(-o.w, o.w); b = rand(o.pmin, o.pmax); k++; }
+          while (k < 30 && st.targets.some(t => Math.hypot(t.a - a, t.b - b) < 8));
+          const bad = Math.random() < (o.bad || 0), d = rand(o.dmin, o.dmax);
+          st.targets.push({c: place(a * D2R, b * D2R, d, o.r), r: o.r, born: st.t, a, b, bad, col: bad ? BAD : null});
+          st.next = st.t + rand(...o.every);
+        }
+      },
+      hit(st, tg) { st.targets.splice(st.targets.indexOf(tg), 1); },
+    };
+  }
+  // one target gliding over a wall (tracking). path: line (straight lines between random points), arc (curves that
+  // bend one way, then the other), star (out from the middle and back), circle (circles around a point that drifts).
+  // blink: jumps somewhere else every blink[0]..blink[1] s: find it again.
+  function glide(o) {
+    return {
+      kind: 'track',
+      setup(st, here) {
+        const B = wallBox(o, o.r), mid = [0, (B.lo + B.hi) / 2];
+        let p = here ? [clamp(Math.tan(yaw) * o.d, -B.X, B.X), clamp(EYE + Math.tan(pitch) * o.d, B.lo, B.hi)] : mid.slice();
+        st.targets = [{c: [p[0], p[1], -o.d], r: o.r, born: st.t}];
+        st.g = {B, mid, to: null, dir: Math.random() * 2 * Math.PI, bend: 0, flip: st.t, out: true, ang: 0, cw: 1,
+                blink: st.t + (o.blink ? rand(...o.blink) : 1e9), s: rand(o.smin, o.smax)};
+        st.mv = {v: 0, goal: 0};
+      },
+      update(st, dt) {
+        const tg = st.targets[0], g = st.g, B = g.B;
+        if (!tg) return;
+        const x0 = tg.c[0];
+        if (st.t >= g.blink) {
+          tg.c[0] = rand(-B.X, B.X) * 0.8; tg.c[1] = rand(B.lo, B.hi); g.to = null; g.blink = st.t + rand(...o.blink);
+        }
+        if (o.path === 'circle') {
+          if (!g.c || st.t >= g.flip) { g.c = g.c || [tg.c[0] - o.R, tg.c[1]]; g.cw = Math.random() < 0.5 ? -1 : 1; g.flip = st.t + rand(1.5, 3); g.s = rand(o.smin, o.smax); }
+          g.c[0] = clamp(g.c[0] + Math.sin(st.t * 0.7) * 0.6 * dt, -B.X + o.R, B.X - o.R);
+          g.c[1] = clamp(g.c[1] + Math.cos(st.t * 0.5) * 0.3 * dt, B.lo + o.R, Math.max(B.lo + o.R, B.hi - o.R));
+          g.ang += g.cw * g.s / o.R * dt;
+          tg.c[0] = g.c[0] + Math.cos(g.ang) * o.R; tg.c[1] = g.c[1] + Math.sin(g.ang) * o.R;
+        } else if (o.path === 'arc') {
+          if (st.t >= g.flip) { g.bend = (Math.random() < 0.5 ? -1 : 1) * rand(o.bmin, o.bmax) * D2R; g.flip = st.t + rand(0.5, 1.3); g.s = rand(o.smin, o.smax); }
+          g.dir += g.bend * dt;
+          tg.c[0] += Math.cos(g.dir) * g.s * dt; tg.c[1] += Math.sin(g.dir) * g.s * dt;
+          if (Math.abs(tg.c[0]) > B.X) { tg.c[0] = Math.sign(tg.c[0]) * B.X; g.dir = Math.PI - g.dir; }
+          if (tg.c[1] < B.lo || tg.c[1] > B.hi) { tg.c[1] = clamp(tg.c[1], B.lo, B.hi); g.dir = -g.dir; }
+        } else {                                 // line and star: straight to the next point
+          if (!g.to) {
+            if (o.path === 'star') { g.out = !g.out; g.to = g.out ? g.mid.slice() : [rand(-B.X, B.X), rand(B.lo, B.hi)]; }
+            else g.to = [rand(-B.X, B.X), rand(B.lo, B.hi)];
+            if (o.path === 'star' && !g.out) {
+              const a = Math.random() * 2 * Math.PI, R = Math.min(B.X, (B.hi - B.lo) / 2) * rand(0.7, 1);
+              g.to = [g.mid[0] + Math.cos(a) * R * (B.X / Math.min(B.X, (B.hi - B.lo) / 2)) * 0.9, g.mid[1] + Math.sin(a) * R];
+            }
+            g.s = rand(o.smin, o.smax);
+          }
+          const dx = g.to[0] - tg.c[0], dy = g.to[1] - tg.c[1], dist = Math.hypot(dx, dy), stepLen = g.s * dt;
+          if (dist <= stepLen) { tg.c[0] = g.to[0]; tg.c[1] = g.to[1]; g.to = null; }
+          else { tg.c[0] += dx / dist * stepLen; tg.c[1] += dy / dist * stepLen; }
+        }
+        const v = dt ? (tg.c[0] - x0) / dt : 0;                // for Aim insights: which way it's going
+        st.mv.v = Math.abs(v) < 20 ? v : 0; st.mv.goal = Math.abs(v) > 0.8 ? Math.sign(v) : st.mv.goal;
+      },
+    };
+  }
+  // switch tracking: n targets moving on a wall, each needs hp seconds of fire on it; then the next one comes.
+  // vy: also up and down. evade: dodges (turns around) while you're on it.
+  function tswitch(o) {
+    return {
+      kind: 'track',
+      setup(st) { st.targets = []; st.kills = 0; for (let i = 0; i < o.n; i++) this.spawn(st); },
+      spawn(st) {
+        const B = wallBox(o, o.r);
+        let x, y, k = 0;
+        do { x = rand(-B.X, B.X); y = rand(B.lo, B.hi); k++; }
+        while (k < 30 && st.targets.some(t => Math.hypot(t.c[0] - x, t.c[1] - y) < 2));
+        st.targets.push({c: [x, y, -o.d], r: o.r, born: st.t, hp: o.hp, v: this.vel(), flip: st.t + rand(o.fmin, o.fmax)});
+      },
+      vel() { return [(Math.random() < 0.5 ? -1 : 1) * rand(o.smin, o.smax), o.vy ? rand(-o.vy, o.vy) : 0]; },
+      update(st, dt) {
+        const on = firing ? aimed() : null;
+        for (const tg of [...st.targets]) {
+          const B = wallBox(o, tg.r);
+          if (st.t >= tg.flip) { const v = this.vel(); tg.v = [-Math.sign(tg.v[0]) * Math.abs(v[0]), v[1]]; tg.flip = st.t + rand(o.fmin, o.fmax); }
+          if (o.evade && tg === on && Math.random() < o.evade * dt) { tg.v[0] = -tg.v[0]; tg.flip = st.t + rand(o.fmin, o.fmax); }
+          tg.c[0] += tg.v[0] * dt; tg.c[1] += tg.v[1] * dt;
+          if (Math.abs(tg.c[0]) > B.X) { tg.c[0] = Math.sign(tg.c[0]) * B.X; tg.v[0] = -tg.v[0]; }
+          if (tg.c[1] < B.lo || tg.c[1] > B.hi) { tg.c[1] = clamp(tg.c[1], B.lo, B.hi); tg.v[1] = -tg.v[1]; }
+          tg.r = o.r * (0.75 + 0.25 * tg.hp / o.hp);              // smaller while it takes damage
+        }
+        if (on) {
+          on.hp -= dt;
+          if (on.hp <= 0) { st.targets.splice(st.targets.indexOf(on), 1); st.kills++; this.spawn(st); tick(900); }
+        }
+      },
+    };
+  }
   const GRID_X = [-2.4, -1.2, 0, 1.2, 2.4], GRID_Y = [0.75, 1.65, 2.55, 3.45];
   const SC = {
     grid: {
@@ -687,6 +865,64 @@
     orbit: orbit({d: 7, r: 0.36, y: 1.4, wmin: 25, wmax: 60, fmin: 0.6, fmax: 1.6, span: 75}),
     orbit_air: orbit({d: 9, r: 0.34, y: 1.4, wmin: 20, wmax: 45, fmin: 0.5, fmax: 1.4, jump: true}),
     orbit_vert: orbit({d: 8, r: 0.34, y: 1.6, wmin: 10, wmax: 30, fmin: 0.5, fmax: 1.2, vy: 2.2}),
+    // ---- 4.24: the drill types from the big aim trainers, our own versions (names and texts in stats/trainer.py)
+    bounce_shot: bounce({n: 3, w: 28, pmin: -4, pmax: 14, d: 12, r: 0.3, smin: 2, smax: 4}),
+    bounce_fast: bounce({n: 3, w: 28, pmin: -4, pmax: 14, d: 12, r: 0.26, smin: 4.5, smax: 7}),
+    bounce_close: bounce({n: 2, w: 55, pmin: -8, pmax: 16, d: 6, r: 0.32, smin: 3, smax: 5}),
+    bounce_tiny: bounce({n: 4, w: 20, pmin: -3, pmax: 10, d: 14, r: 0.15, smin: 1.5, smax: 3}),
+    jink: bounce({n: 1, w: 25, pmin: -3, pmax: 14, d: 10, r: 0.28, smin: 4, smax: 6, jink: [0.35, 0.9]}),
+    jink_small: bounce({n: 1, w: 22, pmin: -3, pmax: 12, d: 13, r: 0.16, smin: 3.5, smax: 5.5, jink: [0.3, 0.8]}),
+    hops: bounce({n: 2, w: 25, pmin: -6, pmax: 16, d: 10, r: 0.3, smin: 1, smax: 2.5, grav: 9, hop: 7}),
+    hops_small: bounce({n: 2, w: 25, pmin: -6, pmax: 16, d: 12, r: 0.17, smin: 1.5, smax: 3, grav: 11, hop: 8}),
+    motion_shot: bounce({n: 1, w: 30, pmin: -4, pmax: 14, d: 10, r: 0.32, smin: 2, smax: 3.5}),
+    motion_far: bounce({n: 1, w: 18, pmin: -2, pmax: 8, d: 22, r: 0.22, smin: 2, smax: 3.5}),
+    strafe_shot: bounce({n: 3, w: 30, pmin: -3, pmax: 12, d: 11, r: 0.28, smin: 2.5, smax: 5, horiz: true}),
+    strafe_heads: bounce({n: 2, w: 30, pmin: -0.4, pmax: 0.4, d: 13, r: 0.19, smin: 3, smax: 5, horiz: true}),
+    horde: bounce({n: 6, w: 35, pmin: -3, pmax: 8, d: 28, r: 0.3, smin: 2.5, smax: 4, toward: true, near: 5}),
+    horde_fast: bounce({n: 8, w: 40, pmin: -3, pmax: 8, d: 28, r: 0.28, smin: 4, smax: 6.5, toward: true, near: 5}),
+    shrinking: bounce({n: 3, w: 25, pmin: -3, pmax: 12, d: 12, r: 0.36, smin: 0.6, smax: 1.4, life: 1.8, shrink: 0.3}),
+    flick_180: flicks({dmin: 7, dmax: 9, r: 0.34, amin: 90, amax: 175, vert: 0.12, back: true}),
+    spider_180: spider({dmin: 8, dmax: 9, r: 0.34, amin: 60, amax: 170, flat: 0.08}),
+    flick_speed: flicks({dmin: 9, dmax: 11, r: 0.42, amin: 10, amax: 40}),
+    flick_precise: flicks({dmin: 12, dmax: 14, r: 0.14, amin: 10, amax: 40}),
+    flick_low: flicks({dmin: 9, dmax: 13, r: 0.26, amin: 10, amax: 40, vert: 0.2, pmin: -14, pmax: -4}),
+    flick_high: flicks({dmin: 9, dmax: 13, r: 0.26, amin: 10, amax: 40, vert: 0.2, pmin: 10, pmax: 22}),
+    grid_speed: multi({n: 4, w: 14, pmin: -2, pmax: 10, dmin: 10, dmax: 10, r: 0.42, sep: 7}),
+    grid_precise: multi({n: 3, w: 14, pmin: -2, pmax: 10, dmin: 10, dmax: 10, r: 0.17, sep: 6}),
+    six_precise: multi({n: 6, w: 20, pmin: -4, pmax: 12, dmin: 12, dmax: 12, r: 0.16, sep: 6}),
+    wide_three: multi({n: 3, w: 55, pmin: -4, pmax: 12, dmin: 10, dmax: 10, r: 0.28, sep: 30}),
+    wide_five: multi({n: 5, w: 60, pmin: -4, pmax: 12, dmin: 10, dmax: 10, r: 0.24, sep: 20}),
+    heads_range: multi({n: 3, w: 40, head: true, dmin: 8, dmax: 26, r: 0.16, sep: 8}),
+    triple_tap: multi({n: 2, w: 25, pmin: -3, pmax: 8, dmin: 10, dmax: 14, r: 0.32, hp: 3, sep: 10}),
+    burst: burst({k: 3, spread: 3, amin: 20, amax: 50, d: 12, r: 0.24}),
+    burst_wide: burst({k: 4, spread: 5, amin: 40, amax: 80, d: 9, r: 0.28}),
+    burst_micro: burst({k: 3, spread: 1.5, amin: 8, amax: 25, d: 18, r: 0.12}),
+    side_vision: popups({w: 75, pmin: -5, pmax: 15, dmin: 8, dmax: 12, r: 0.3, every: [0.5, 1.0], life: 1.5, max: 3}),
+    friend_foe: popups({w: 30, pmin: -3, pmax: 12, dmin: 10, dmax: 13, r: 0.28, every: [0.35, 0.7], life: 1.3, bad: 0.4}),
+    friend_foe_fast: popups({w: 35, pmin: -3, pmax: 12, dmin: 11, dmax: 14, r: 0.24, every: [0.25, 0.5], life: 0.8, bad: 0.5, max: 5}),
+    popups: popups({w: 35, pmin: -3, pmax: 12, dmin: 10, dmax: 13, r: 0.3, every: [0.35, 0.7], life: 1.1}),
+    reflex_close: timed({dmin: 5, dmax: 6, r: 0.34, amin: 30, amax: 90, life: 1.0, min: 0.45, vert: 0.25}),
+    reflex_head: timed({dmin: 12, dmax: 16, r: 0.18, amin: 6, amax: 35, life: 0.9, min: 0.45, vert: 0.03, pmin: -0.5, pmax: 0.5}),
+    line_trace: glide({path: 'line', w: 25, pmin: -2, pmax: 14, d: 10, r: 0.32, smin: 2.5, smax: 4}),
+    line_trace_small: glide({path: 'line', w: 20, pmin: -2, pmax: 12, d: 14, r: 0.18, smin: 2.5, smax: 4}),
+    arc_track: glide({path: 'arc', w: 25, pmin: -2, pmax: 14, d: 10, r: 0.32, smin: 3, smax: 4.5, bmin: 90, bmax: 200}),
+    star_track: glide({path: 'star', w: 18, pmin: -3, pmax: 14, d: 10, r: 0.3, smin: 3.5, smax: 5}),
+    star_micro: glide({path: 'star', w: 5, pmin: -2, pmax: 3, d: 16, r: 0.14, smin: 1.2, smax: 1.8}),
+    circle_track: glide({path: 'circle', w: 22, pmin: -2, pmax: 14, d: 10, r: 0.3, smin: 3, smax: 4.5, R: 1.5}),
+    circle_small: glide({path: 'circle', w: 18, pmin: -2, pmax: 10, d: 13, r: 0.18, smin: 2, smax: 3, R: 0.7}),
+    blink_track: glide({path: 'line', w: 30, pmin: -3, pmax: 14, d: 10, r: 0.3, smin: 2.5, smax: 4, blink: [1.1, 2]}),
+    track_above: tracker({d: 9, r: 0.34, y: 4.2, bob: 0.08, vmin: 2.4, vmax: 5, fmin: 0.3, fmax: 1.1, bound: 5}),
+    track_below: tracker({d: 7, r: 0.34, y: 0.6, bob: 0.04, vmin: 2.4, vmax: 5, fmin: 0.3, fmax: 1.1, bound: 4}),
+    track_long: tracker({d: 10, r: 0.36, y: 1.4, bob: 0.04, vmin: 3, vmax: 5, fmin: 1.4, fmax: 3, bound: 7}),
+    track_close_long: tracker({d: 5, r: 0.34, y: 1.4, bob: 0.04, vmin: 3.5, vmax: 5.5, fmin: 1.2, fmax: 2.5, bound: 4.5}),
+    track_zigzag: tracker({d: 9, r: 0.32, y: 1.4, vmin: 4, vmax: 6, fmin: 0.12, fmax: 0.28, bound: 3, acc: 70}),
+    orbit_fast: orbit({d: 7, r: 0.34, y: 1.4, wmin: 50, wmax: 90, fmin: 0.4, fmax: 1.2, span: 80}),
+    tswitch: tswitch({n: 3, w: 25, pmin: -3, pmax: 12, d: 10, r: 0.34, hp: 0.6, smin: 1.5, smax: 3, fmin: 0.6, fmax: 1.6}),
+    tswitch_fast: tswitch({n: 3, w: 25, pmin: -3, pmax: 12, d: 10, r: 0.32, hp: 0.4, smin: 3, smax: 5, fmin: 0.4, fmax: 1.1}),
+    tswitch_evasive: tswitch({n: 3, w: 25, pmin: -3, pmax: 12, d: 10, r: 0.32, hp: 0.6, smin: 3, smax: 5, fmin: 0.5, fmax: 1.3, evade: 3}),
+    tswitch_wide: tswitch({n: 3, w: 60, pmin: -4, pmax: 14, d: 7, r: 0.34, hp: 0.5, smin: 2, smax: 4, fmin: 0.6, fmax: 1.5}),
+    tswitch_small: tswitch({n: 3, w: 20, pmin: -2, pmax: 10, d: 14, r: 0.2, hp: 0.6, smin: 1.5, smax: 3, fmin: 0.6, fmax: 1.6}),
+    tswitch_float: tswitch({n: 3, w: 25, pmin: -4, pmax: 16, d: 10, r: 0.32, hp: 0.5, smin: 1.5, smax: 3.5, vy: 2.5, fmin: 0.5, fmax: 1.3}),
   };
   // The sens finder's test: parts of the same scenarios back to back, without breaks (switching seamlessly, the
   // trackers starting at the crosshair). quick: flicks (close and far in turn), then tracking. 15 and 30 minutes:
@@ -874,6 +1110,9 @@
     const h = aimedHit();
     if (!h) { ixMiss(st); return; }
     const {tg, head} = h;
+    if (tg.bad) {                                  // a blue one: shouldn't have shot it
+      SC[st.id].hit(st, tg, head); st.wrong = (st.wrong || 0) + 1; st.points = Math.max(0, st.points - 150); tick(300); return;
+    }
     const since = SC[st.id].since ? Math.max(tg.born, SC[st.id].since(st)) : tg.born;
     const ms = Math.max(0, (st.t - (isFinite(since) ? since : st.t)) * 1000);
     if (!head && tg.agent) { if (st.ix) st.ix.p.body++; }
@@ -932,7 +1171,7 @@
         continue;
       }
       const on = tg === onTarget && (firing || st.tracking);
-      draw(meshes.sphere, model(tg.c[0], tg.c[1], tg.c[2], tg.r, tg.r, tg.r), on ? TARGET_ON : TARGET, 0, on ? 0.25 : 0.12);
+      draw(meshes.sphere, model(tg.c[0], tg.c[1], tg.c[2], tg.r, tg.r, tg.r), on && !tg.col ? TARGET_ON : tg.col || TARGET, 0, on ? 0.25 : 0.12);
     }
   }
   let cueT = null;
@@ -1084,8 +1323,8 @@
     const cells = SC[st.id].heads
       ? `<div><dt>Headshots</dt><dd>${st.hits}/${st.shots}</dd></div><div><dt>Body shots · got away</dt><dd>${st.body || 0} · ${st.escaped || 0}</dd></div><div><dt>Reaction</dt><dd>${avg !== null ? avg + ' ms' : '–'}</dd></div>`
       : st.kind === 'track'
-      ? `<div><dt>On target</dt><dd>${Math.round(100 * st.on / st.seconds)}%</dd></div><div><dt>While firing</dt><dd>${st.fire ? Math.round(100 * st.on / st.fire) : 0}%</dd></div><div><dt>Seconds</dt><dd>${st.seconds}</dd></div>`
-      : `<div><dt>Hits</dt><dd>${st.hits}/${st.shots}</dd></div><div><dt>Accuracy</dt><dd>${st.shots ? Math.round(100 * st.hits / st.shots) : 0}%</dd></div><div><dt>Avg time</dt><dd>${avg !== null ? avg + ' ms' : '–'}</dd></div>`;
+      ? `<div><dt>On target</dt><dd>${Math.round(100 * st.on / st.seconds)}%</dd></div><div><dt>While firing</dt><dd>${st.fire ? Math.round(100 * st.on / st.fire) : 0}%</dd></div>${st.kills !== undefined ? `<div><dt>Targets down</dt><dd>${st.kills}</dd></div>` : `<div><dt>Seconds</dt><dd>${st.seconds}</dd></div>`}`
+      : `<div><dt>Hits</dt><dd>${st.hits}/${st.shots}</dd></div><div><dt>Accuracy</dt><dd>${st.shots ? Math.round(100 * st.hits / st.shots) : 0}%</dd></div><div><dt>Avg time</dt><dd>${avg !== null ? avg + ' ms' : '–'}</dd></div>${st.wrong ? `<div><dt>Blue ones hit</dt><dd>${st.wrong}</dd></div>` : ''}`;
     const more = plan && plan.i < plan.items.length - 1;
     const nextName = more ? byId[plan.items[plan.i + 1].id].name : '';
     setPanel(`${planStep()}<h2>${esc(sc.name)}</h2><div class="tr-big">${s}</div><div class="tr-best" id="tr-best"></div><dl>${cells}</dl>${stallNote(st.stalls)}
@@ -1311,7 +1550,7 @@
   // step: advance a run by dt seconds without the screen (tests): the scenario moves, tracking counts while fire
   function step(dt, fire) {
     if (!st) return;
-    st.t += dt;
+    st.t += dt; firing = !!fire;
     if (SC[st.id].update) SC[st.id].update(st, dt);
     if (st.kind === 'track' && fire && aimed()) st.on += dt;
   }

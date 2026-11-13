@@ -4,6 +4,24 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.24.0
+- **57 more aim trainer scenarios, 100 in all**, modelled on the drill types KovaaK's and Aim Lab are known for
+  (our own versions, names and texts), in two new groups and the old ones:
+  - Moving targets: bouncing targets (normal, fast, close, tiny), a target that jinks, targets that hop up and fall,
+    a moving target that respawns (near and far), strafing targets and strafing heads, a horde walking at you
+    (normal and fast), shrinking targets.
+  - Switch tracking: three moving targets, each goes down after a moment of fire on it; also fast, evasive (they
+    dodge while you're on them), wide, small and floating.
+  - Flicks: behind you (up to 175°), spider 180, speed and precision versions, low and high flicks.
+  - Switching and precision: grid speed / precision, six shot precision, wide walls with three and five targets,
+    heads at any range, triple tap, burst flicks (a group of three or four, far from the last group: wide and micro).
+  - Reflex: side vision (far to the sides), pop-ups (several at once), friend or foe (don't shoot the blue ones, they
+    cost points; also fast), reflex close and at head height.
+  - Tracking: line tracing, arcs, stars (also micro), circles (also small), blink tracking (the target jumps away),
+    tracking above and below you, long strafes (also close), zig-zag, fast around you.
+- Results show the blue targets you hit (friend or foe) and the targets you took down (switch tracking).
+- German texts.
+
 ## 4.23.0
 - **Aim trainer scenario library**: 32 new scenarios, 43 in all, in six groups with a difficulty each:
   - Flicks: mid-range, wide (50–70°), vertical, tiny, spider (out and back to the middle).
