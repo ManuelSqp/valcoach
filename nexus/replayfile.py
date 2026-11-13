@@ -1,19 +1,19 @@
 """Positions from VALORANT's own replay files (.vrf), read with vrfkit (4.9).
 
-Since patch 11.06 the game can download a replay of a Competitive or Premier match from the match
-history. It is saved as <match id>.vrf in %LOCALAPPDATA%\\VALORANT\\Saved\\Demos and holds what the
+Since patch 11.06 the game can download a replay of an Unrated, Competitive, Swiftplay or Premier match
+(not Custom games, Deathmatch or Team Deathmatch) from the match history. It is saved as <match id>.vrf in %LOCALAPPDATA%\\VALORANT\\Saved\\Demos and holds what the
 server sent: every player's position about 128 times a second, where they looked, and the server's
 own timeline (round starts, deaths, plant, defuse). Nexus runs vrfkit
 (https://github.com/yakisoba0728/vrfkit, Apache-2.0) to turn the file into tables, keeps a compact
-copy (4 samples per second per player, data/replays/<match id>.json.gz) and lines it up with the
+copy (10 samples per second per player since 4.34, 4 before; data/replays/<match id>.json.gz) and lines it up with the
 HenrikDev match data by the kills: each kill is in both, so the time offset of every round is known.
 
 That gives all ten players for the whole round, not only what your own minimap showed, and it
 needs no recording. The VOD minimap tracking is still there: Settings › Replay files › Positions
 switches back to it, and it is used when a match has no replay file.
 
-Limits: a replay file only exists if someone downloaded it in the game, only for Competitive and
-Premier, and the game deletes them when the next patch arrives. vrfkit supports the builds listed in
+Limits: a replay file only exists if someone downloaded it in the game, and the game deletes them when
+the next patch arrives (the copy uploaded to Nexus stays). vrfkit supports the builds listed in
 its README; a newer build may fail to read until vrfkit is updated.
 """
 from __future__ import annotations
@@ -34,7 +34,8 @@ from .maps import MapInfo
 from .models import Match
 
 FORMAT = 1                     # version of the compact json.gz
-SAMPLE_MS = 250                # kept per player: one position every 250 ms
+SAMPLE_MS = 100                # kept per player: one position every 100 ms (250 before 4.34; the map rebuild
+                               # wants the heights and turns in more detail)
 OUT_HZ = 2.0                   # paths handed to the analysis and the report replay
 EXPORT_TIMEOUT_S = 600
 MIN_MATCHED_SHARE = 0.6        # share of the API's kills that must be found in the replay

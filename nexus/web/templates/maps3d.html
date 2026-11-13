@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% import "_ui.html" as vc %}
+{% block title %}3D maps · {{ p.riot_id }} · Nexus{% endblock %}
+{% block head %}<style>
+.m3-maps{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.m3-maps button{font:inherit;font-size:13px;padding:5px 11px;border-radius:99px;border:1px solid var(--line2);background:transparent;color:var(--muted);cursor:pointer}
+.m3-maps button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:650}
+.m3-maps button[disabled]{opacity:.45;cursor:default}
+.m3-maps button span{font-size:11.5px;margin-left:4px;opacity:.8}
+.m3-stage{position:relative;aspect-ratio:16/9;width:100%;background:#8c9eb8;border-radius:12px;overflow:hidden}
+.m3-stage:fullscreen{border-radius:0;aspect-ratio:auto}
+.m3-stage canvas{position:absolute;inset:0;width:100%;height:100%}
+#m3-over{pointer-events:none}
+#m3-radar{position:absolute;left:14px;top:14px;width:200px;height:200px;border-radius:10px;border:1px solid rgba(255,255,255,.18);pointer-events:none}
+.m3-cross{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;pointer-events:none}
+.m3-cross::before,.m3-cross::after{content:"";position:absolute;background:#7df9c3;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+.m3-cross::before{left:4px;top:0;width:2px;height:10px}.m3-cross::after{left:0;top:4px;width:10px;height:2px}
+.m3-start,.m3-msg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(10,14,20,.82);color:#fff;border-radius:12px;padding:14px 18px;text-align:center;max-width:80%}
+.m3-start b{display:block;font-size:17px;margin-bottom:4px}
+.m3-pos{position:absolute;right:14px;top:14px;background:rgba(10,14,20,.7);color:#fff;font-size:13px;font-weight:650;padding:4px 10px;border-radius:99px;pointer-events:none}
+.m3-help{position:absolute;left:14px;bottom:14px;background:rgba(10,14,20,.72);color:#e6ebf2;font-size:12px;line-height:1.6;padding:8px 12px;border-radius:10px;pointer-events:none}
+.m3-help kbd{font-size:11px;padding:0 4px;border:1px solid rgba(255,255,255,.35);border-radius:4px}
+.m3-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:10px;font-size:13.5px}
+.m3-bar label{display:flex;gap:6px;align-items:center}
+</style>{% endblock %}
+{% block content %}
+{{ vc.pagehead('3D maps', [('Players', url_for('index') ~ '#players'), (p.name ~ '#' ~ p.tag, url_for('profile', pid=p.id))],
+   'Walk around a map rebuilt from the replays on the server') }}
+
+<div class="m3-maps">{% for m in maps %}<button type="button" data-map="{{ m.name }}" {{ 'disabled' if not m.replays }} translate="no">{{ m.name }}<span>{{ m.replays }}</span></button>{% endfor %}</div>
+{% if not maps|selectattr('replays')|list %}
+<section class="card"><p class="muted" style="margin:0">No replay files on the server yet. A map appears here once a replay of it is uploaded
+  (the Nexus app sends them, or <i>Settings › Replay files</i>). Replays exist for Unrated, Competitive, Swiftplay and Premier.</p></section>
+{% endif %}
+<div class="m3-stage" id="m3-stage">
+  <canvas id="m3-canvas"></canvas><canvas id="m3-over"></canvas><canvas id="m3-radar" width="400" height="400"></canvas>
+  <div class="m3-cross"></div>
+  <div class="m3-pos" id="m3-pos" translate="no"></div>
+  <div class="m3-start" id="m3-start"><b>Click to walk around</b><span class="small">Esc to stop</span></div>
+  <div class="m3-msg" id="m3-msg" hidden></div>
+  <div class="m3-help" id="m3-help"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Shift</kbd> walk · <kbd>Ctrl</kbd> crouch · <kbd>Space</kbd> jump ·
+    <kbd>F</kbd> fly · <kbd>C</kbd> callouts · <kbd>R</kbd> radar · <kbd>H</kbd> this help</div>
+</div>
+<div class="m3-bar">
+  <label><input type="checkbox" id="m3-labels"> Callouts</label>
+  <label><input type="checkbox" id="m3-radar-t"> Radar</label>
+  <button type="button" class="btn sm ghost" id="m3-full">Fullscreen</button>
+  <span class="muted small" id="m3-info"></span>
+</div>
+<p class="small muted" style="margin-top:12px;max-width:90ch">This map is rebuilt from where players stood in the replays, not taken from the game:
+  every spot someone stood on is floor at that height, everything else is a wall. The more replays of a map on the server, the
+  more complete it gets; with one or two, corners nobody walked into are missing and some walls stand where the real map is
+  open. Colours are per area of the map, not the game's textures. Mouse speed: your Valorant sensitivity from the aim trainer.</p>
+<script>window.NEXUS_MAP3D = {{ boot|tojson }};</script>
+<script src="{{ url_for('static', filename='map3d.js') }}?v={{ app_version }}"></script>
+{% endblock %}

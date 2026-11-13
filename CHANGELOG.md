@@ -4,6 +4,27 @@ The running version is shown next to the logo in the web app, in *Settings*, at 
 every report, and with `nexus --version` (`valcoach --version` up to 4.4). Update: `git pull`, `pip install -e .`,
 `sudo systemctl restart nexus` (or `docker compose up -d --build`). `data/` and `config.toml` aren't touched.
 
+## 4.35.0
+- **3D maps** (*Practice › 3D maps*), first step: a map rebuilt from the replay files on the server. Every spot a player
+  stood on is floor at that height (also a second floor above, like Heaven over Market), the gaps between paths close
+  together are filled, everything else is a wall. Rebuilt again when new replays of the map come in.
+- Walk around it: WASD, Shift to walk, Ctrl to crouch, Space to jump, F to fly, your Valorant sensitivity for the
+  mouse. Steps and ramps are walked up, walls and boxes block you.
+- Radar in the corner (R) and callout names in the world (C), both switched on and off and remembered; colours per area
+  of the map (sites, mid, attacker and defender side) from a palette per map.
+- With one or two replays a map is incomplete: corners nobody walked into are missing, and walls stand where nobody
+  went. It gets better with every replay. The rebuild is tuned on test data so far and will be tuned on real replays.
+- German texts.
+
+## 4.34.0
+- **Plays as** (Team settings › Teammates with access): the owner links a teammate's account to their player, so they
+  can edit their own pool on the comp sheet even when their in-game name doesn't match the Riot ID.
+- The comp sheet tells a teammate who isn't linked yet how to get linked, instead of just not showing *Edit*.
+- Replay files: Nexus now keeps 10 positions per second per player from new uploads (was 4), for the 3D map rebuild
+  coming next. Corrected: replays exist for Unrated, Competitive, Swiftplay and Premier, not only Competitive and
+  Premier (Nexus never filtered by mode, only the texts were wrong).
+- German texts.
+
 ## 4.33.0
 - **Sandbox** (bottom of the aim trainer page): make your own scenarios from the trainer's 14 building blocks (flicks,
   targets that vanish, several on a wall, spider, bursts, moving targets, pop-ups, one taps, strafe tracking, path
